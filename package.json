@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "env:init": "node tools/init-env.js",
+    "env:check": "node tools/env-check.js",
+    "env:fill": "python3 tools/fill-env-from-docx.py",
+    "env:fill:templates": "node tools/fill-env-from-billing-templates.js",
+    "render:docs": "node tools/render-docs.js"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
