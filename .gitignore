@@ -1,0 +1,60 @@
+# macOS
+.DS_Store
+
+# Node / clasp / Apps Script
+node_modules/
+.clasp.json
+app/gas/.clasp.json
+app/gas/.cache/
+app/gas/.deployed.json
+
+# Docs attachments (binary sources)
+docs/*/attachments/
+docs/*/billing/
+docs/*/files/
+docs/*/images/
+docs/*/recordings/
+
+# Binary documents (may contain customer info, not editable via placeholder)
+*.docx
+*.xlsx
+*.pptx
+*.pdf
+
+# Rendered docs (local-only)
+_rendered/
+
+# Customer-specific materials (not for public)
+docs/references/
+docs/02_meetings/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.cursor/
+.idea/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.bak.*
+
+# Secrets / Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+token.json
+service-account*.json
+secrets.*
+*-secret.*
+
+# Claude Code
+.claude/

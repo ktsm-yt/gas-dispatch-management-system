@@ -1,0 +1,87 @@
+<!-- File: jobs_form.html -->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>案件登録</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; }
+    label { display:block; margin-top: 10px; }
+    input, select { width: 320px; padding: 6px; }
+    button { margin-top: 16px; padding: 8px 12px; }
+  </style>
+</head>
+<body>
+  <h1>案件登録</h1>
+
+  <form id="jobForm">
+    <!-- 日本語ラベル表示、nameは英語キー -->
+    <label>
+      <?= fieldLabelMap.client_id ?>
+      <select name="client_id" required>
+        <? for (var c of clients) { ?>
+          <option value="<?= c.client_id ?>"><?= c.client_name ?></option>
+        <? } ?>
+      </select>
+    </label>
+
+    <label>
+      <?= fieldLabelMap.site_name ?>
+      <input type="text" name="site_name" required>
+    </label>
+
+    <label>
+      <?= fieldLabelMap.site_address ?>
+      <input type="text" name="site_address">
+    </label>
+
+    <label>
+      <?= fieldLabelMap.work_date ?>
+      <input type="date" name="work_date" required>
+    </label>
+
+    <label>
+      <?= fieldLabelMap.work_time_from ?>
+      <input type="time" name="work_time_from">
+    </label>
+
+    <label>
+      <?= fieldLabelMap.work_time_to ?>
+      <input type="time" name="work_time_to">
+    </label>
+
+    <label>
+      <?= fieldLabelMap.work_type ?>
+      <input type="text" name="work_type">
+    </label>
+
+    <label>
+      <?= fieldLabelMap.rate_id ?>
+      <select name="rate_id">
+        <? for (var r of rates) { ?>
+          <option value="<?= r.rate_id ?>"><?= r.work_type ?>（¥<?= r.rate ?>）</option>
+        <? } ?>
+      </select>
+    </label>
+
+    <label>
+      <?= fieldLabelMap.drive_url ?>
+      <input type="url" name="drive_url" placeholder="https://...">
+    </label>
+
+    <button type="submit">登録</button>
+  </form>
+
+  <script>
+    const form = document.getElementById('jobForm');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(form).entries());
+      google.script.run.withSuccessHandler(() => {
+        alert('登録しました');
+        form.reset();
+      }).submitJob(data);
+    });
+  </script>
+</body>
+</html>
