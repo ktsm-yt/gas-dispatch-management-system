@@ -206,6 +206,64 @@ exportInvoice(customerId, ym, mode, options)
   4. PDF/xlsxへエクスポートしてDriveに保存
 - テンプレ詳細・転記セルの目安は `docs/references/billing_templates/README.md` を参照
 
+### PDF/Excelエクスポート実装（UrlFetchApp方式）
+
+GASでPDF/Excelをエクスポートする際、`UrlFetchApp.fetch()` でエクスポートURLを使用することで、印刷設定をパラメータで完全に制御できる。
+
+#### エクスポートURL形式
+
+```
+https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/export?format=pdf&...
+```
+
+#### 利用可能なパラメータ
+
+| パラメータ | 値 | 説明 |
+|-----------|-----|------|
+| `format` | `pdf` / `xlsx` | 出力形式 |
+| `gid` | シートID | 特定シートのみ出力 |
+| `portrait` | `true` / `false` | 縦向き / 横向き |
+| `papersize` | `0`=A4, `1`=Letter | 用紙サイズ |
+| `scale` | `1`=100%, `2`=200%, `3`=ページに合わせる | スケーリング |
+| `top_margin` | インチ単位（例: `0.2`） | 上余白 |
+| `bottom_margin` | インチ単位 | 下余白 |
+| `left_margin` | インチ単位 | 左余白 |
+| `right_margin` | インチ単位 | 右余白 |
+| `horizontal_alignment` | `CENTER` / `LEFT` / `RIGHT` | 水平位置 |
+| `vertical_alignment` | `CENTER` / `TOP` / `BOTTOM` | 垂直位置 |
+
+#### 実装例
+
+```javascript
+function exportToPdf(spreadsheetId, sheetId) {
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
+    `format=pdf` +
+    `&gid=${sheetId}` +
+    `&portrait=true` +              // A4縦
+    `&papersize=0` +                // A4
+    `&scale=3` +                    // ページに合わせる
+    `&top_margin=0.2` +             // 余白（狭い）
+    `&bottom_margin=0.2` +
+    `&left_margin=0.2` +
+    `&right_margin=0.2` +
+    `&horizontal_alignment=CENTER`; // 中央揃え
+
+  const response = UrlFetchApp.fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() }
+  });
+
+  return response.getBlob();
+}
+```
+
+#### 余白の目安（インチ単位）
+
+| 設定 | 値 |
+|-----|-----|
+| 狭い | `0.2` |
+| 標準 | `0.5` |
+| 広い | `0.75` |
+
 ### 様式1（{{FORMAT1_TYPE}}）の実装メモ
 
 - 参考テンプレ: `docs/references/billing_templates/【請求書】{{FORMAT1_TYPE}}_12月.xlsx`（シート名: `原本`）
