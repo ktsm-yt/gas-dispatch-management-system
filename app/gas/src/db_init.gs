@@ -214,7 +214,7 @@ function createSheet(ss, tableName, definition) {
  * ※本番環境では使用厳禁
  */
 function resetDevDatabase() {
-  if (!confirm('開発用 DB をリセットしますか？')) return;
+  Logger.log('開発用 DB をリセット中...');
 
   try {
     const prop = PropertiesService.getScriptProperties();
@@ -226,18 +226,43 @@ function resetDevDatabase() {
 
     const ss = SpreadsheetApp.openById(spreadsheetId);
 
-    // 既存のすべてのシートを削除
-    const sheets = ss.getSheets();
-    for (let i = sheets.length - 1; i >= 0; i--) {
-      ss.deleteSheet(sheets[i]);
-    }
+    // 既存のシート名を取得
+    const existingSheets = ss.getSheets().map(s => s.getName());
+    Logger.log(`既存シート: ${existingSheets.join(', ')}`);
 
     // 新しいシートを作成
     for (const [tableName, definition] of Object.entries(TABLE_DEFINITIONS)) {
+      // 同名のシートが存在する場合は削除してから作成
+      const existingSheet = ss.getSheetByName(definition.sheetName);
+      if (existingSheet) {
+        // 一時シートを作成（最後のシート削除防止）
+        let tempSheet = ss.getSheetByName('_temp_');
+        if (!tempSheet) {
+          tempSheet = ss.insertSheet('_temp_');
+        }
+        ss.deleteSheet(existingSheet);
+      }
       createSheet(ss, tableName, definition);
+      Logger.log(`✓ ${definition.sheetName} を作成`);
     }
 
-    Logger.log('✓ 開発用 DB をリセットしました');
+    // 一時シートを削除
+    const tempSheet = ss.getSheetByName('_temp_');
+    if (tempSheet) {
+      ss.deleteSheet(tempSheet);
+    }
+
+    // 不要なシートを削除（TABLE_DEFINITIONS に含まれないシート）
+    const validSheetNames = Object.values(TABLE_DEFINITIONS).map(d => d.sheetName);
+    const allSheets = ss.getSheets();
+    for (const sheet of allSheets) {
+      if (!validSheetNames.includes(sheet.getName())) {
+        ss.deleteSheet(sheet);
+        Logger.log(`✓ 不要シート削除: ${sheet.getName()}`);
+      }
+    }
+
+    Logger.log('\n✓ 開発用 DB をリセットしました');
 
   } catch (error) {
     Logger.log(`✗ エラー: ${error.message}`);
