@@ -144,16 +144,21 @@ function createDatabase(env = 'dev') {
     const spreadsheetId = ss.getId();
     Logger.log(`✓ Spreadsheet 作成: ${spreadsheetId}`);
 
-    // デフォルトシート（Sheet1）を削除
-    const defaultSheet = ss.getSheets()[0];
-    if (defaultSheet) {
-      ss.deleteSheet(defaultSheet);
-    }
-
     // 各テーブルのシートを作成
     for (const [tableName, definition] of Object.entries(TABLE_DEFINITIONS)) {
       createSheet(ss, tableName, definition);
       Logger.log(`✓ シート作成: ${definition.sheetName}`);
+    }
+
+    // デフォルトシート（Sheet1/シート1）を削除
+    const sheets = ss.getSheets();
+    for (const sheet of sheets) {
+      const name = sheet.getName();
+      if (name === 'Sheet1' || name === 'シート1') {
+        ss.deleteSheet(sheet);
+        Logger.log(`✓ デフォルトシート削除: ${name}`);
+        break;
+      }
     }
 
     // ScriptProperties に ID を登録
