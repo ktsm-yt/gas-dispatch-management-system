@@ -31,6 +31,9 @@ docs/
 
 ### [03_spec/](03_spec/) - 仕様
 実装者向けの技術仕様。API設計、データモデル、画面仕様など。
+- [diagrams/](03_spec/diagrams/) - ダイアグラム・図解
+  - [er_diagram.md](03_spec/diagrams/er_diagram.md) - ER図（11テーブル構成）
+  - [sequence_diagrams.md](03_spec/diagrams/sequence_diagrams.md) - シーケンス図（12パターン）
 - [10_implementation_risks.md](03_spec/10_implementation_risks.md) - 実装リスクと対策
 
 ### [04_adr/](04_adr/) - ADR
