@@ -1,0 +1,297 @@
+/**
+ * Audit Log Module
+ *
+ * KTSM-40: 監査ログ実装
+ *
+ * 全ての更新操作を T_AuditLog シートに記録する
+ */
+
+/**
+ * 操作アクションの定義
+ */
+const AUDIT_ACTIONS = {
+  CREATE: 'CREATE',
+  UPDATE: 'UPDATE',
+  DELETE: 'DELETE',
+  LOGIN: 'LOGIN',
+  EXPORT: 'EXPORT'
+};
+
+/**
+ * 監査ログシートを取得
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} ログシート
+ */
+function getAuditLogSheet() {
+  const prop = PropertiesService.getScriptProperties();
+  const env = prop.getProperty('ENV') || 'dev';
+  const spreadsheetId = env === 'prod'
+    ? prop.getProperty('SPREADSHEET_ID_PROD')
+    : prop.getProperty('SPREADSHEET_ID_DEV');
+
+  if (!spreadsheetId) {
+    throw new Error('DB Spreadsheet ID が設定されていません');
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('ログ');
+
+  if (!sheet) {
+    throw new Error('ログシートが見つかりません');
+  }
+
+  return sheet;
+}
+
+/**
+ * UUIDを生成
+ * @returns {string} UUID
+ */
+function generateUuid() {
+  return Utilities.getUuid();
+}
+
+/**
+ * 監査ログを記録
+ * @param {string} action - 操作（CREATE/UPDATE/DELETE/LOGIN/EXPORT）
+ * @param {string} tableName - 対象テーブル名
+ * @param {string} recordId - 対象レコードID
+ * @param {Object} beforeData - 変更前データ（省略可）
+ * @param {Object} afterData - 変更後データ（省略可）
+ * @returns {Object} 記録したログ情報
+ */
+function logToAudit(action, tableName, recordId, beforeData, afterData) {
+  try {
+    const sheet = getAuditLogSheet();
+    const user = Session.getActiveUser().getEmail() || 'system';
+    const timestamp = new Date().toISOString();
+    const logId = generateUuid();
+
+    const logEntry = [
+      logId,
+      timestamp,
+      user,
+      action,
+      tableName,
+      recordId,
+      beforeData ? JSON.stringify(beforeData) : '',
+      afterData ? JSON.stringify(afterData) : ''
+    ];
+
+    sheet.appendRow(logEntry);
+
+    return {
+      log_id: logId,
+      timestamp: timestamp,
+      user_email: user,
+      action: action,
+      table_name: tableName,
+      record_id: recordId
+    };
+
+  } catch (error) {
+    // ログ記録の失敗は本体処理に影響させない
+    Logger.log(`監査ログ記録エラー: ${error.message}`);
+    return null;
+  }
+}
+
+/**
+ * CREATE操作のログを記録
+ * @param {string} tableName - テーブル名
+ * @param {string} recordId - レコードID
+ * @param {Object} data - 作成したデータ
+ */
+function logCreate(tableName, recordId, data) {
+  return logToAudit(AUDIT_ACTIONS.CREATE, tableName, recordId, null, data);
+}
+
+/**
+ * UPDATE操作のログを記録
+ * @param {string} tableName - テーブル名
+ * @param {string} recordId - レコードID
+ * @param {Object} beforeData - 変更前データ
+ * @param {Object} afterData - 変更後データ
+ */
+function logUpdate(tableName, recordId, beforeData, afterData) {
+  return logToAudit(AUDIT_ACTIONS.UPDATE, tableName, recordId, beforeData, afterData);
+}
+
+/**
+ * DELETE操作のログを記録
+ * @param {string} tableName - テーブル名
+ * @param {string} recordId - レコードID
+ * @param {Object} data - 削除したデータ
+ */
+function logDelete(tableName, recordId, data) {
+  return logToAudit(AUDIT_ACTIONS.DELETE, tableName, recordId, data, null);
+}
+
+/**
+ * LOGIN操作のログを記録
+ */
+function logLogin() {
+  const user = Session.getActiveUser().getEmail();
+  return logToAudit(AUDIT_ACTIONS.LOGIN, 'SESSION', user, null, { login_time: new Date().toISOString() });
+}
+
+/**
+ * EXPORT操作のログを記録
+ * @param {string} exportType - エクスポート種別（PDF/EXCEL/CSV等）
+ * @param {string} targetInfo - 対象情報（請求書番号等）
+ */
+function logExport(exportType, targetInfo) {
+  return logToAudit(AUDIT_ACTIONS.EXPORT, exportType, targetInfo, null, { exported_at: new Date().toISOString() });
+}
+
+/**
+ * 監査ログを検索
+ * @param {Object} options - 検索オプション
+ * @param {string} options.action - 操作で絞り込み
+ * @param {string} options.tableName - テーブル名で絞り込み
+ * @param {string} options.userEmail - ユーザーで絞り込み
+ * @param {Date} options.fromDate - 開始日
+ * @param {Date} options.toDate - 終了日
+ * @param {number} options.limit - 取得件数（デフォルト100）
+ * @returns {Array} ログエントリの配列
+ */
+function searchAuditLogs(options = {}) {
+  const sheet = getAuditLogSheet();
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return []; // ヘッダーのみ
+  }
+
+  const headers = data[0];
+  let logs = data.slice(1).map(row => {
+    const log = {};
+    headers.forEach((header, index) => {
+      log[header] = row[index];
+    });
+    return log;
+  });
+
+  // フィルタリング
+  if (options.action) {
+    logs = logs.filter(log => log.action === options.action);
+  }
+
+  if (options.tableName) {
+    logs = logs.filter(log => log.table_name === options.tableName);
+  }
+
+  if (options.userEmail) {
+    logs = logs.filter(log => log.user_email === options.userEmail);
+  }
+
+  if (options.fromDate) {
+    const fromTime = new Date(options.fromDate).getTime();
+    logs = logs.filter(log => new Date(log.timestamp).getTime() >= fromTime);
+  }
+
+  if (options.toDate) {
+    const toTime = new Date(options.toDate).getTime();
+    logs = logs.filter(log => new Date(log.timestamp).getTime() <= toTime);
+  }
+
+  // 新しい順にソート
+  logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // 件数制限
+  const limit = options.limit || 100;
+  return logs.slice(0, limit);
+}
+
+/**
+ * 最新の監査ログを取得
+ * @param {number} count - 取得件数（デフォルト10）
+ * @returns {Array} ログエントリの配列
+ */
+function getRecentAuditLogs(count = 10) {
+  return searchAuditLogs({ limit: count });
+}
+
+/**
+ * 特定レコードの変更履歴を取得
+ * @param {string} tableName - テーブル名
+ * @param {string} recordId - レコードID
+ * @returns {Array} ログエントリの配列
+ */
+function getRecordHistory(tableName, recordId) {
+  const sheet = getAuditLogSheet();
+  const data = sheet.getDataRange().getValues();
+
+  if (data.length <= 1) {
+    return [];
+  }
+
+  const headers = data[0];
+  const logs = data.slice(1)
+    .filter(row => row[4] === tableName && row[5] === recordId)
+    .map(row => {
+      const log = {};
+      headers.forEach((header, index) => {
+        log[header] = row[index];
+      });
+      // JSONを解析
+      if (log.before_data) {
+        try { log.before_data = JSON.parse(log.before_data); } catch (e) {}
+      }
+      if (log.after_data) {
+        try { log.after_data = JSON.parse(log.after_data); } catch (e) {}
+      }
+      return log;
+    });
+
+  // 時系列順にソート（古い順）
+  logs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  return logs;
+}
+
+/**
+ * 監査ログのテスト
+ */
+function testAuditLog() {
+  Logger.log('=== 監査ログテスト ===');
+
+  // テストデータ
+  const testRecordId = 'test-' + generateUuid().substring(0, 8);
+
+  // CREATE
+  const createLog = logCreate('M_Customers', testRecordId, {
+    company_name: 'テスト株式会社',
+    created_at: new Date().toISOString()
+  });
+  Logger.log(`CREATE: ${JSON.stringify(createLog)}`);
+
+  // UPDATE
+  const updateLog = logUpdate('M_Customers', testRecordId,
+    { company_name: 'テスト株式会社' },
+    { company_name: 'テスト株式会社（更新）' }
+  );
+  Logger.log(`UPDATE: ${JSON.stringify(updateLog)}`);
+
+  // DELETE
+  const deleteLog = logDelete('M_Customers', testRecordId, {
+    company_name: 'テスト株式会社（更新）',
+    deleted_at: new Date().toISOString()
+  });
+  Logger.log(`DELETE: ${JSON.stringify(deleteLog)}`);
+
+  // 最新ログ取得
+  Logger.log('\n最新5件のログ:');
+  const recentLogs = getRecentAuditLogs(5);
+  recentLogs.forEach(log => {
+    Logger.log(`  ${log.timestamp} | ${log.action} | ${log.table_name} | ${log.user_email}`);
+  });
+
+  // レコード履歴取得
+  Logger.log(`\nレコード ${testRecordId} の履歴:`);
+  const history = getRecordHistory('M_Customers', testRecordId);
+  history.forEach(log => {
+    Logger.log(`  ${log.timestamp} | ${log.action}`);
+  });
+
+  Logger.log('\n✓ 監査ログテスト完了');
+}
