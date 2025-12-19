@@ -134,6 +134,8 @@ WebUI 請求書一覧
 | daily_rate_tobiage | NUMBER | - | 日給（鳶揚げ） |
 | daily_rate_half | NUMBER | - | 日給（ハーフ/半日） |
 | staff_type | STRING | ○ | 種別（regular/subcontract） |
+| employment_type | STRING | - | 雇用形態（employee/sole_proprietor）※2025/12/19追加 |
+| withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（employee=true、sole_proprietor=false）※2025/12/19追加 |
 | subcontractor_id | STRING | - | 外注先ID（外注の場合） |
 | notes | STRING | - | 備考 |
 | created_at | DATETIME | ○ | 作成日時 |
@@ -187,6 +189,18 @@ WebUI 請求書一覧
 >
 > **UI方針**: 基本項目は常に表示、安全書類項目は折りたたみ or 別タブで任意入力。
 > 統一様式が必要な案件では、未入力項目を入力促進する仕組みを検討。
+
+### 雇用形態と源泉徴収（2025/12/19追加）
+
+**employment_type 値**
+- `employee`: アルバイト（学生含む）。源泉徴収対象
+- `sole_proprietor`: 個人事業主（一人親方含む）。源泉徴収対象外
+
+**源泉徴収の運用**
+- `withholding_tax_applicable = true` のスタッフは給与支払時に源泉所得税を控除
+- 税額計算は給与額に応じた税額表（国税庁）に基づく
+- ロジックが複雑でなければシステムに組み込む予定（詳細は別途協議）
+- 扶養控除は対象外（アルバイトに扶養家族なし、個人事業主は対象外）
 
 ---
 
