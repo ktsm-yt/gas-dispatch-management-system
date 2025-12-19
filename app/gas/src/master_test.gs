@@ -276,6 +276,46 @@ function testCompanyCRUD() {
 }
 
 /**
+ * 既存スタッフにボードスキルを追加（サンプルデータ用）
+ */
+function addBoardSkillToSomeStaff() {
+  Logger.log('=== スタッフにボードスキル追加 ===\n');
+
+  const result = listStaff();
+  if (!result.ok) {
+    Logger.log('スタッフ一覧取得失敗');
+    return;
+  }
+
+  const staffList = result.data.items;
+  Logger.log(`スタッフ数: ${staffList.length}`);
+
+  // 最初の2人にボードスキルを追加
+  let updated = 0;
+  for (let i = 0; i < Math.min(2, staffList.length); i++) {
+    const staff = staffList[i];
+    let skills = staff.skills ? staff.skills.split(',').map(s => s.trim()) : [];
+
+    if (!skills.includes('ボード')) {
+      skills.push('ボード');
+      const updateResult = saveStaff({
+        staff_id: staff.staff_id,
+        skills: skills.join(',')
+      }, staff.updated_at);
+
+      if (updateResult.ok) {
+        Logger.log(`✓ ${staff.name}: ${updateResult.data.skills}`);
+        updated++;
+      } else {
+        Logger.log(`✗ ${staff.name}: ${updateResult.error.message}`);
+      }
+    }
+  }
+
+  Logger.log(`\n${updated}名にボードスキルを追加しました`);
+}
+
+/**
  * 全マスターテーブルのCRUDテストを実行
  */
 function testAllMasterCRUD() {

@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>スタッフマスター</title>
+  <style>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-warning: #FFC107;
+      --color-danger: #DC3545;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(90deg, #139BC4 0%, #172D90 100%);
+      color: white;
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-title {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .header-nav {
+      display: flex;
+      gap: var(--spacing-md);
+    }
+
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-sm);
+      opacity: 0.9;
+      position: relative;
+    }
+
+    .header-nav a:hover {
+      opacity: 1;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .header-nav > a.active,
+    .header-nav .nav-dropdown > a.active {
+      opacity: 1;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header-nav > a.active::after,
+    .header-nav .nav-dropdown > a.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -4px;
+      height: 2px;
+      background: white;
+      border-radius: 1px;
+    }
+
+    .nav-dropdown {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 120px;
+      z-index: 100;
+      margin-top: 4px;
+    }
+
+    .nav-dropdown-menu a {
+      display: block;
+      color: var(--text-primary);
+      padding: var(--spacing-sm) var(--spacing-md);
+      opacity: 1;
+    }
+
+    .nav-dropdown-menu a:hover {
+      background: var(--bg-hover);
+    }
+
+    .nav-dropdown.open .nav-dropdown-menu {
+      display: block;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      flex: 1;
+      max-width: 400px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    .filter-toggle {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .filter-toggle input {
+      cursor: pointer;
+    }
+
+    .type-filter-select {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .type-filter-select:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: var(--spacing-lg);
+    }
+
+    /* Table */
+    .table-container {
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: var(--spacing-sm) var(--spacing-md);
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .data-table th {
+      background: var(--bg-card);
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .data-table tbody tr {
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--bg-hover);
+    }
+
+    .data-table tbody tr.inactive {
+      opacity: 0.5;
+    }
+
+    .cell-name {
+      font-weight: 500;
+    }
+
+    .cell-kana {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .cell-price {
+      text-align: right;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    .cell-status {
+      text-align: center;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .status-active {
+      background: #D1FAE5;
+      color: #065F46;
+    }
+
+    .status-inactive {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .type-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .type-regular {
+      background: #DBEAFE;
+      color: #1E40AF;
+    }
+
+    .type-student {
+      background: #E0E7FF;
+      color: #4338CA;
+    }
+
+    .type-sole_proprietor {
+      background: #D1FAE5;
+      color: #065F46;
+    }
+
+    .type-subcontract {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .skill-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 500;
+      margin-right: 2px;
+    }
+
+    .skill-tobi { background: #E57373; color: white; }
+    .skill-age { background: #64B5F6; color: white; }
+    .skill-tobiage { background: #81C784; color: white; }
+    .skill-board { background: #BA68C8; color: white; }
+
+    /* Skeleton */
+    .data-table tbody tr.skeleton-row { cursor: default; }
+    .data-table tbody tr.skeleton-row:hover { background: transparent; }
+    .skeleton-line,
+    .skeleton-pill {
+      display: block;
+      background: linear-gradient(90deg, #eef1f4 0%, #f7f8fa 50%, #eef1f4 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite;
+    }
+    .skeleton-line { height: 12px; border-radius: 6px; }
+    .skeleton-pill { height: 14px; border-radius: 999px; }
+    .skeleton-w-20 { width: 20%; }
+    .skeleton-w-30 { width: 30%; }
+    .skeleton-w-40 { width: 40%; }
+    .skeleton-w-50 { width: 50%; }
+    .skeleton-w-60 { width: 60%; }
+    .skeleton-w-70 { width: 70%; }
+    .skeleton-w-80 { width: 80%; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      padding: var(--spacing-lg) * 2;
+    }
+
+    /* Add Button */
+    .add-btn {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .add-btn:hover {
+      background: var(--color-accent);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-primary);
+      color: white;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: none;
+      z-index: 1000;
+    }
+
+    .toast.show { display: block; }
+    .toast.error { background: var(--color-danger); }
+    .toast.success { background: var(--color-success); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: white;
+      border-radius: var(--radius-md);
+      width: 750px;
+      max-height: 90vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+    }
+
+    .modal-close:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      padding: var(--spacing-lg);
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-top: 1px solid var(--border-color);
+    }
+
+    .modal-footer-left {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .modal-footer-right {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    /* Form */
+    .form-section {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .form-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-md);
+      padding-bottom: var(--spacing-xs);
+      border-bottom: 2px solid var(--color-secondary);
+    }
+
+    .form-group {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: var(--spacing-xs);
+      color: var(--text-primary);
+    }
+
+    .form-group label .required {
+      color: var(--color-danger);
+      margin-left: 2px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .form-row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .form-row-4 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .checkbox-group {
+      display: flex;
+      gap: var(--spacing-md);
+      flex-wrap: wrap;
+    }
+
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      font-weight: normal;
+      cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-accent);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+    }
+
+    .btn-danger {
+      background: white;
+      color: var(--color-danger);
+      border: 1px solid var(--color-danger);
+    }
+
+    .btn-danger:hover {
+      background: #FEF2F2;
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: var(--spacing-lg);
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .stats-bar .count {
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> スタッフ</div>
+    <nav class="header-nav">
+      <a href="#" id="nav-dashboard">ダッシュボード</a>
+      <a href="#" id="nav-customers">顧客</a>
+      <a href="#" class="active" id="nav-staff">スタッフ</a>
+      <div class="nav-dropdown">
+        <a href="#" id="nav-settings">設定</a>
+        <div class="nav-dropdown-menu" id="settings-menu">
+          <a href="#" id="nav-subcontractors">外注先</a>
+          <a href="#" id="nav-transport">交通費</a>
+          <a href="#" id="nav-company">自社情報</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-box">
+      <input type="text" id="search-input" placeholder="氏名・電話番号・住所で検索...">
+    </div>
+    <div class="toolbar-actions">
+      <select id="type-filter" class="type-filter-select">
+        <option value="all">全種別</option>
+        <option value="regular">自社スタッフ</option>
+        <option value="student">学生アルバイト</option>
+        <option value="sole_proprietor">一人親方</option>
+        <option value="subcontract">外注</option>
+      </select>
+      <select id="rate-type" class="type-filter-select">
+        <option value="tobi">鳶日給</option>
+        <option value="age">揚げ日給</option>
+        <option value="tobiage">鳶揚げ日給</option>
+        <option value="half">ハーフ日給</option>
+      </select>
+      <label class="filter-toggle">
+        <input type="checkbox" id="show-inactive">
+        無効も表示
+      </label>
+      <div class="stats-bar">
+        <span>全 <span class="count" id="stats-total">-</span> 名</span>
+        <span>有効 <span class="count" id="stats-active">-</span> 名</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>氏名</th>
+            <th>種別</th>
+            <th>電話番号</th>
+            <th>住所</th>
+            <th>スキル</th>
+            <th id="rate-header">日給</th>
+            <th>状態</th>
+          </tr>
+        </thead>
+        <tbody id="staff-table-body">
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-70"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          </tr>
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          </tr>
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-70"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- Add Button -->
+  <button class="add-btn" id="add-staff-btn" title="スタッフ追加">+</button>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Staff Edit Modal -->
+  <div class="modal-overlay" id="staff-modal" style="display: none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title">スタッフ編集</h2>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="staff-form">
+          <input type="hidden" id="staff-id" name="staff_id">
+          <input type="hidden" id="staff-updated-at" name="updated_at">
+
+          <!-- 基本情報 -->
+          <div class="form-section">
+            <div class="form-section-title">基本情報</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="name">氏名<span class="required">*</span></label>
+                <input type="text" id="name" name="name" required placeholder="山田 太郎">
+              </div>
+              <div class="form-group">
+                <label for="name-kana">氏名カナ</label>
+                <input type="text" id="name-kana" name="name_kana" placeholder="ヤマダ タロウ">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="staff-type">種別<span class="required">*</span></label>
+                <select id="staff-type" name="staff_type" required>
+                  <option value="regular">自社スタッフ</option>
+                  <option value="student">学生アルバイト</option>
+                  <option value="sole_proprietor">個人事業主(一人親方)</option>
+                  <option value="subcontract">外注</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="subcontractor-id">外注先</label>
+                <select id="subcontractor-id" name="subcontractor_id">
+                  <option value="">選択してください</option>
+                  <!-- Loaded dynamically -->
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>スキル</label>
+              <div class="checkbox-group">
+                <label><input type="checkbox" id="skill-tobi" value="鳶"> 鳶</label>
+                <label><input type="checkbox" id="skill-age" value="揚げ"> 揚げ</label>
+                <label><input type="checkbox" id="skill-tobiage" value="鳶揚げ"> 鳶揚げ</label>
+                <label><input type="checkbox" id="skill-board" value="ボード"> ボード</label>
+              </div>
+            </div>
+          </div>
+
+          <!-- 連絡先 -->
+          <div class="form-section">
+            <div class="form-section-title">連絡先</div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label for="phone">電話番号</label>
+                <input type="tel" id="phone" name="phone" placeholder="090-1234-5678">
+              </div>
+              <div class="form-group">
+                <label for="line-id">LINE ID</label>
+                <input type="text" id="line-id" name="line_id" placeholder="line_id">
+              </div>
+              <div class="form-group">
+                <label for="emergency-contact">緊急連絡先</label>
+                <input type="tel" id="emergency-contact" name="emergency_contact" placeholder="03-1234-5678">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="postal-code">郵便番号</label>
+                <input type="text" id="postal-code" name="postal_code" placeholder="123-4567">
+              </div>
+              <div class="form-group">
+                <label for="address">住所</label>
+                <input type="text" id="address" name="address" placeholder="東京都〇〇区...">
+              </div>
+            </div>
+          </div>
+
+          <!-- 給与設定 -->
+          <div class="form-section">
+            <div class="form-section-title">日給設定</div>
+            <div class="form-row-4">
+              <div class="form-group">
+                <label for="daily-rate-tobi">鳶</label>
+                <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100" placeholder="15000">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-age">揚げ</label>
+                <input type="number" id="daily-rate-age" name="daily_rate_age" min="0" step="100" placeholder="13000">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-tobiage">鳶揚げ</label>
+                <input type="number" id="daily-rate-tobiage" name="daily_rate_tobiage" min="0" step="100" placeholder="16000">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-half">ハーフ</label>
+                <input type="number" id="daily-rate-half" name="daily_rate_half" min="0" step="100" placeholder="8000">
+              </div>
+            </div>
+          </div>
+
+          <!-- 個人情報 -->
+          <div class="form-section">
+            <div class="form-section-title">個人情報</div>
+            <div class="form-row-4">
+              <div class="form-group">
+                <label for="birth-date">生年月日</label>
+                <input type="date" id="birth-date" name="birth_date">
+              </div>
+              <div class="form-group">
+                <label for="gender">性別</label>
+                <select id="gender" name="gender">
+                  <option value="">選択してください</option>
+                  <option value="male">男性</option>
+                  <option value="female">女性</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="blood-type">血液型</label>
+                <select id="blood-type" name="blood_type">
+                  <option value="">選択してください</option>
+                  <option value="A">A型</option>
+                  <option value="B">B型</option>
+                  <option value="O">O型</option>
+                  <option value="AB">AB型</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="has-motorbike">バイク保有</label>
+                <select id="has-motorbike" name="has_motorbike">
+                  <option value="false">なし</option>
+                  <option value="true">あり</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="hire-date">雇入日</label>
+                <input type="date" id="hire-date" name="hire_date">
+              </div>
+              <div class="form-group">
+                <label for="job-title">職種</label>
+                <input type="text" id="job-title" name="job_title" placeholder="鳶職">
+              </div>
+            </div>
+          </div>
+
+          <!-- 資格・保険 -->
+          <div class="form-section">
+            <div class="form-section-title">資格・保険</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="ccus-id">技能者ID (CCUS)</label>
+                <input type="text" id="ccus-id" name="ccus_id" placeholder="1234567890">
+              </div>
+              <div class="form-group">
+                <label for="employment-insurance-no">雇用保険番号(下4桁)</label>
+                <input type="text" id="employment-insurance-no" name="employment_insurance_no" maxlength="4" placeholder="1234">
+              </div>
+            </div>
+            <div class="form-row-4">
+              <div class="form-group">
+                <label for="health-insurance-type">健康保険</label>
+                <select id="health-insurance-type" name="health_insurance_type">
+                  <option value="">選択してください</option>
+                  <option value="国民健康保険">国民健康保険</option>
+                  <option value="協会けんぽ">協会けんぽ</option>
+                  <option value="建設国保">建設国保</option>
+                  <option value="その他">その他</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="pension-type">年金</label>
+                <select id="pension-type" name="pension_type">
+                  <option value="">選択してください</option>
+                  <option value="国民年金">国民年金</option>
+                  <option value="厚生年金">厚生年金</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="kensetsu-kyosai">建退共</label>
+                <select id="kensetsu-kyosai" name="kensetsu_kyosai">
+                  <option value="">選択してください</option>
+                  <option value="有">有</option>
+                  <option value="無">無</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="chusho-kyosai">中退共</label>
+                <select id="chusho-kyosai" name="chusho_kyosai">
+                  <option value="">選択してください</option>
+                  <option value="有">有</option>
+                  <option value="無">無</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- その他 -->
+          <div class="form-section">
+            <div class="form-section-title">その他</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="is-active">状態</label>
+                <select id="is-active" name="is_active">
+                  <option value="true">有効</option>
+                  <option value="false">無効</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="foreigner-type">外国人区分</label>
+                <input type="text" id="foreigner-type" name="foreigner_type" placeholder="">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="ng-customers">NG顧客</label>
+              <input type="text" id="ng-customers" name="ng_customers" placeholder="カンマ区切りで顧客IDを入力">
+            </div>
+            <div class="form-group">
+              <label for="notes">備考</label>
+              <textarea id="notes" name="notes" rows="2"></textarea>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <div class="modal-footer-left">
+          <button type="button" class="btn btn-danger" id="delete-btn" onclick="deleteStaffMember()" style="display: none;">削除</button>
+        </div>
+        <div class="modal-footer-right">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="save-btn" onclick="saveStaffMember()">保存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let staffList = [];
+    let filteredStaff = [];
+    let currentStaff = null;
+    let subcontractors = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      loadStaff();
+      loadSubcontractors();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      // Navigation
+      document.getElementById('nav-dashboard').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('dashboard');
+      });
+      document.getElementById('nav-staff').addEventListener('click', (e) => {
+        e.preventDefault();
+        // Already on this page
+      });
+      document.getElementById('nav-customers').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('customers');
+      });
+
+      // Settings dropdown
+      const dropdown = document.querySelector('.nav-dropdown');
+      document.getElementById('nav-settings').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      document.addEventListener('click', () => dropdown.classList.remove('open'));
+
+      document.getElementById('nav-subcontractors').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('subcontractors');
+      });
+      document.getElementById('nav-transport').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('transportFees');
+      });
+      document.getElementById('nav-company').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('company');
+      });
+
+      // Search
+      document.getElementById('search-input').addEventListener('input', debounce(filterStaff, 300));
+
+      // Type filter
+      document.getElementById('type-filter').addEventListener('change', filterStaff);
+
+      // Rate type selector
+      document.getElementById('rate-type').addEventListener('change', () => {
+        updateRateHeader();
+        renderTable();
+      });
+
+      // Show inactive toggle
+      document.getElementById('show-inactive').addEventListener('change', filterStaff);
+
+      // Add button
+      document.getElementById('add-staff-btn').addEventListener('click', () => openModal(null));
+
+      // Staff type change - show/hide subcontractor select
+      document.getElementById('staff-type').addEventListener('change', (e) => {
+        const subcontractorGroup = document.getElementById('subcontractor-id').closest('.form-group');
+        subcontractorGroup.style.display = e.target.value === 'subcontract' ? 'block' : 'none';
+      });
+
+      // Modal close on overlay click
+      document.getElementById('staff-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'staff-modal') {
+          closeModal();
+        }
+      });
+
+      // Modal close on Escape key
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeModal();
+        }
+      });
+    }
+
+    function navigateTo(page) {
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url + '?page=' + page, '_top');
+        })
+        .getScriptUrl();
+    }
+
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+    function loadStaff() {
+      showTableLoading();
+
+      google.script.run
+        .withSuccessHandler(handleStaffData)
+        .withFailureHandler(handleError)
+        .listStaff({ includeDeleted: false });
+    }
+
+    function loadSubcontractors() {
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (response.ok) {
+            subcontractors = response.data.items || [];
+            populateSubcontractorSelect();
+          }
+        })
+        .withFailureHandler(handleError)
+        .listSubcontractors({ activeOnly: true });
+    }
+
+    function populateSubcontractorSelect() {
+      const select = document.getElementById('subcontractor-id');
+      select.innerHTML = '<option value="">選択してください</option>';
+      subcontractors.forEach(sub => {
+        const option = document.createElement('option');
+        option.value = sub.subcontractor_id;
+        option.textContent = sub.company_name;
+        select.appendChild(option);
+      });
+    }
+
+    function handleStaffData(response) {
+      if (!response.ok) {
+        showToast(response.error?.message || 'データの取得に失敗しました', 'error');
+        return;
+      }
+
+      staffList = response.data.items || [];
+      updateStats();
+      filterStaff();
+    }
+
+    function updateStats() {
+      const total = staffList.length;
+      const active = staffList.filter(s => s.is_active).length;
+      document.getElementById('stats-total').textContent = total;
+      document.getElementById('stats-active').textContent = active;
+    }
+
+    function filterStaff() {
+      const searchTerm = document.getElementById('search-input').value.toLowerCase();
+      const typeFilter = document.getElementById('type-filter').value;
+      const showInactive = document.getElementById('show-inactive').checked;
+
+      filteredStaff = staffList.filter(staff => {
+        // Filter by active status
+        if (!showInactive && !staff.is_active) {
+          return false;
+        }
+
+        // Filter by type
+        if (typeFilter !== 'all' && staff.staff_type !== typeFilter) {
+          return false;
+        }
+
+        // Filter by search term
+        if (searchTerm) {
+          const searchFields = [
+            staff.name,
+            staff.name_kana,
+            staff.phone,
+            staff.address
+          ].filter(Boolean).join(' ').toLowerCase();
+
+          if (!searchFields.includes(searchTerm)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('staff-table-body');
+
+      if (filteredStaff.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">スタッフデータがありません</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredStaff.map(staff => {
+        const skills = parseSkills(staff.skills);
+        const skillTags = skills.map(s => {
+          const clsMap = { '鳶': 'skill-tobi', '揚げ': 'skill-age', '鳶揚げ': 'skill-tobiage', 'ボード': 'skill-board' };
+          const cls = clsMap[s] || 'skill-tobi';
+          return `<span class="skill-tag ${cls}">${s}</span>`;
+        }).join('');
+
+        const typeLabels = { regular: '自社', student: '学生', sole_proprietor: '親方', subcontract: '外注' };
+        const typeLabel = typeLabels[staff.staff_type] || staff.staff_type;
+        const typeClass = 'type-' + staff.staff_type;
+
+        const rateType = document.getElementById('rate-type').value;
+        const rate = getRateByType(staff, rateType);
+
+        return `
+          <tr class="${staff.is_active ? '' : 'inactive'}" onclick="openModal('${staff.staff_id}')">
+            <td>
+              <div class="cell-name">${escapeHtml(staff.name)}</div>
+              ${staff.name_kana ? `<div class="cell-kana">${escapeHtml(staff.name_kana)}</div>` : ''}
+            </td>
+            <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+            <td>${escapeHtml(staff.phone) || '-'}</td>
+            <td>${escapeHtml(staff.address) || '-'}</td>
+            <td>${skillTags || '-'}</td>
+            <td class="cell-price">${formatPrice(rate)}</td>
+            <td class="cell-status">
+              <span class="status-badge ${staff.is_active ? 'status-active' : 'status-inactive'}">
+                ${staff.is_active ? '有効' : '無効'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function parseSkills(skillsStr) {
+      if (!skillsStr) return [];
+      return skillsStr.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
+    function showTableLoading() {
+      document.getElementById('staff-table-body').innerHTML = `
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-70"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+        </tr>
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+        </tr>
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-70"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+        </tr>
+      `;
+    }
+
+    function formatPrice(price) {
+      if (price === null || price === undefined || price === '') {
+        return '-';
+      }
+      return Number(price).toLocaleString() + '円';
+    }
+
+    function getRateByType(staff, rateType) {
+      switch (rateType) {
+        case 'tobi': return staff.daily_rate_tobi;
+        case 'age': return staff.daily_rate_age;
+        case 'tobiage': return staff.daily_rate_tobiage;
+        case 'half': return staff.daily_rate_half;
+        default: return staff.daily_rate_tobi;
+      }
+    }
+
+    function updateRateHeader() {
+      const rateType = document.getElementById('rate-type').value;
+      const labels = { tobi: '鳶日給', age: '揚げ日給', tobiage: '鳶揚げ日給', half: 'ハーフ日給' };
+      document.getElementById('rate-header').textContent = labels[rateType] || '日給';
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function openModal(staffId) {
+      const modal = document.getElementById('staff-modal');
+      const form = document.getElementById('staff-form');
+      const deleteBtn = document.getElementById('delete-btn');
+
+      // Reset form
+      form.reset();
+      document.getElementById('staff-id').value = '';
+      document.getElementById('staff-updated-at').value = '';
+
+      // Reset skill checkboxes
+      document.getElementById('skill-tobi').checked = false;
+      document.getElementById('skill-age').checked = false;
+      document.getElementById('skill-tobiage').checked = false;
+      document.getElementById('skill-board').checked = false;
+
+      // Show subcontractor select based on staff type
+      const subcontractorGroup = document.getElementById('subcontractor-id').closest('.form-group');
+
+      if (staffId) {
+        // Edit mode
+        document.getElementById('modal-title').textContent = 'スタッフ編集';
+        deleteBtn.style.display = 'inline-flex';
+        currentStaff = staffList.find(s => s.staff_id === staffId);
+
+        if (currentStaff) {
+          populateForm(currentStaff);
+          subcontractorGroup.style.display = currentStaff.staff_type === 'subcontract' ? 'block' : 'none';
+        }
+      } else {
+        // Create mode
+        document.getElementById('modal-title').textContent = '新規スタッフ';
+        deleteBtn.style.display = 'none';
+        currentStaff = null;
+
+        // Set defaults
+        document.getElementById('is-active').value = 'true';
+        document.getElementById('staff-type').value = 'regular';
+        document.getElementById('has-motorbike').value = 'false';
+        document.getElementById('gender').value = 'male';
+        subcontractorGroup.style.display = 'none';
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    function populateForm(staff) {
+      document.getElementById('staff-id').value = staff.staff_id || '';
+      document.getElementById('staff-updated-at').value = staff.updated_at || '';
+      document.getElementById('name').value = staff.name || '';
+      document.getElementById('name-kana').value = staff.name_kana || '';
+      document.getElementById('staff-type').value = staff.staff_type || 'regular';
+      document.getElementById('subcontractor-id').value = staff.subcontractor_id || '';
+      document.getElementById('phone').value = staff.phone || '';
+      document.getElementById('line-id').value = staff.line_id || '';
+      document.getElementById('emergency-contact').value = staff.emergency_contact || '';
+      document.getElementById('postal-code').value = staff.postal_code || '';
+      document.getElementById('address').value = staff.address || '';
+      document.getElementById('daily-rate-tobi').value = staff.daily_rate_tobi || '';
+      document.getElementById('daily-rate-age').value = staff.daily_rate_age || '';
+      document.getElementById('daily-rate-tobiage').value = staff.daily_rate_tobiage || '';
+      document.getElementById('daily-rate-half').value = staff.daily_rate_half || '';
+      document.getElementById('birth-date').value = staff.birth_date || '';
+      document.getElementById('gender').value = staff.gender || '';
+      document.getElementById('blood-type').value = staff.blood_type || '';
+      document.getElementById('has-motorbike').value = staff.has_motorbike ? 'true' : 'false';
+      document.getElementById('hire-date').value = staff.hire_date || '';
+      document.getElementById('job-title').value = staff.job_title || '';
+      document.getElementById('ccus-id').value = staff.ccus_id || '';
+      document.getElementById('employment-insurance-no').value = staff.employment_insurance_no || '';
+      document.getElementById('health-insurance-type').value = staff.health_insurance_type || '';
+      document.getElementById('pension-type').value = staff.pension_type || '';
+      document.getElementById('kensetsu-kyosai').value = staff.kensetsu_kyosai || '';
+      document.getElementById('chusho-kyosai').value = staff.chusho_kyosai || '';
+      document.getElementById('foreigner-type').value = staff.foreigner_type || '';
+      document.getElementById('ng-customers').value = staff.ng_customers || '';
+      document.getElementById('notes').value = staff.notes || '';
+      document.getElementById('is-active').value = staff.is_active ? 'true' : 'false';
+
+      // Set skill checkboxes
+      const skills = parseSkills(staff.skills);
+      document.getElementById('skill-tobi').checked = skills.includes('鳶');
+      document.getElementById('skill-age').checked = skills.includes('揚げ');
+      document.getElementById('skill-tobiage').checked = skills.includes('鳶揚げ');
+      document.getElementById('skill-board').checked = skills.includes('ボード');
+    }
+
+    function closeModal() {
+      document.getElementById('staff-modal').style.display = 'none';
+      currentStaff = null;
+    }
+
+    function saveStaffMember() {
+      const form = document.getElementById('staff-form');
+
+      // Basic validation
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      const formData = new FormData(form);
+      const staff = {};
+
+      formData.forEach((value, key) => {
+        if (value !== '') {
+          // Convert numeric fields
+          if (['daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half'].includes(key)) {
+            staff[key] = value ? Number(value) : null;
+          } else if (key === 'is_active' || key === 'has_motorbike') {
+            staff[key] = value === 'true';
+          } else {
+            staff[key] = value;
+          }
+        }
+      });
+
+      // Collect skills
+      const skills = [];
+      if (document.getElementById('skill-tobi').checked) skills.push('鳶');
+      if (document.getElementById('skill-age').checked) skills.push('揚げ');
+      if (document.getElementById('skill-tobiage').checked) skills.push('鳶揚げ');
+      if (document.getElementById('skill-board').checked) skills.push('ボード');
+      staff.skills = skills.join(',');
+
+      const staffId = document.getElementById('staff-id').value;
+      const updatedAt = document.getElementById('staff-updated-at').value;
+
+      if (staffId) {
+        staff.staff_id = staffId;
+      }
+
+      // Disable button while saving
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
+
+      const isNew = !staffId;
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存';
+
+          if (response.ok) {
+            // 差分更新（全件再取得せずローカル更新）
+            if (isNew) {
+              staffList.push(response.data);
+            } else {
+              const idx = staffList.findIndex(s => s.staff_id === response.data.staff_id);
+              if (idx !== -1) staffList[idx] = response.data;
+            }
+            updateStats();
+            filterStaff();
+            showToast('保存しました', 'success');
+            closeModal();
+          } else {
+            if (response.error?.code === 'CONFLICT_ERROR') {
+              showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
+            } else {
+              showToast(response.error?.message || '保存に失敗しました', 'error');
+            }
+          }
+        })
+        .withFailureHandler((error) => {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          showToast(error.message, 'error');
+        })
+        .saveStaff(staff, updatedAt || null);
+    }
+
+    function deleteStaffMember() {
+      if (!currentStaff) return;
+
+      if (!confirm(`「${currentStaff.name}」を削除しますか？\n\n※この操作は取り消せません。`)) {
+        return;
+      }
+
+      const deleteBtn = document.getElementById('delete-btn');
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = '削除中...';
+
+      const updatedAt = document.getElementById('staff-updated-at').value;
+      const deleteId = currentStaff.staff_id;
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = '削除';
+
+          if (response.ok) {
+            // 差分更新（全件再取得せずローカル更新）
+            staffList = staffList.filter(s => s.staff_id !== deleteId);
+            updateStats();
+            filterStaff();
+            showToast('削除しました', 'success');
+            closeModal();
+          } else {
+            if (response.error?.code === 'CONFLICT_ERROR') {
+              showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
+            } else {
+              showToast(response.error?.message || '削除に失敗しました', 'error');
+            }
+          }
+        })
+        .withFailureHandler((error) => {
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = '削除';
+          showToast(error.message, 'error');
+        })
+        .deleteStaff(currentStaff.staff_id, updatedAt || null);
+    }
+
+    function handleError(error) {
+      console.error('Error:', error);
+      showToast(error.message || 'エラーが発生しました', 'error');
+    }
+
+    function showToast(message, type = '') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show' + (type ? ' ' + type : '');
+      setTimeout(() => {
+        toast.className = 'toast';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

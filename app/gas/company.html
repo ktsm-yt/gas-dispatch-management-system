@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>自社情報</title>
+  <style>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-danger: #DC3545;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+    .header {
+      background: linear-gradient(90deg, #139BC4 0%, #172D90 100%);
+      color: white;
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header-title { font-size: 20px; font-weight: 600; }
+    .header-nav { display: flex; gap: var(--spacing-md); }
+    .header-nav a {
+      color: white;
+      text-decoration: none;
+      padding: 4px var(--spacing-sm);
+      border-radius: var(--radius-sm);
+      opacity: 0.9;
+      position: relative;
+    }
+    .header-nav a:hover {
+      opacity: 1;
+      background: rgba(255,255,255,0.1);
+    }
+    .header-nav > a.active,
+    .header-nav .nav-dropdown > a.active {
+      opacity: 1;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header-nav > a.active::after,
+    .header-nav .nav-dropdown > a.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -4px;
+      height: 2px;
+      background: white;
+      border-radius: 1px;
+    }
+    .nav-dropdown { position: relative; display: flex; align-items: center; }
+    .nav-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 120px;
+      z-index: 100;
+      margin-top: 4px;
+    }
+    .nav-dropdown-menu a {
+      display: block;
+      color: var(--text-primary);
+      padding: var(--spacing-sm) var(--spacing-md);
+      opacity: 1;
+    }
+    .nav-dropdown-menu a:hover { background: var(--bg-hover); }
+    .nav-dropdown.open .nav-dropdown-menu { display: block; }
+    .main-content { padding: var(--spacing-lg); max-width: 800px; margin: 0 auto; }
+    .card {
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      margin-bottom: var(--spacing-lg);
+    }
+    .card-header {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .card-body { padding: var(--spacing-lg); }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+    .form-row-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+    .form-group { margin-bottom: var(--spacing-md); }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 4px;
+      color: var(--text-primary);
+    }
+    .form-group label .required { color: var(--color-danger); margin-left: 2px; }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+    .help-text { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+    .btn {
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--color-primary); color: white; }
+    .btn-primary:hover { background: var(--color-accent); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-top: 1px solid var(--border-color);
+    }
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--color-primary);
+      color: white;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: none;
+      z-index: 1000;
+    }
+    .toast.show { display: block; }
+    .toast.error { background: var(--color-danger); }
+    .toast.success { background: var(--color-success); }
+    .skeleton-line {
+      display: block;
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, #eef1f4 0%, #f7f8fa 50%, #eef1f4 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite;
+    }
+    .skeleton-w-30 { width: 30%; }
+    .skeleton-w-40 { width: 40%; }
+    .skeleton-w-60 { width: 60%; }
+    .skeleton-w-80 { width: 80%; }
+    .skeleton-stack { display: grid; gap: var(--spacing-sm); }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> 自社情報</div>
+    <nav class="header-nav">
+      <a href="#" id="nav-dashboard">ダッシュボード</a>
+      <a href="#" id="nav-customers">顧客</a>
+      <a href="#" id="nav-staff">スタッフ</a>
+      <div class="nav-dropdown">
+        <a href="#" class="active" id="nav-settings">設定</a>
+        <div class="nav-dropdown-menu" id="settings-menu">
+          <a href="#" id="nav-subcontractors">外注先</a>
+          <a href="#" id="nav-transport">交通費</a>
+          <a href="#" id="nav-company">自社情報</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main class="main-content" id="content">
+    <div class="card">
+      <div class="card-header">
+        <div class="skeleton-line skeleton-w-30"></div>
+      </div>
+      <div class="card-body skeleton-stack">
+        <div class="skeleton-line skeleton-w-60"></div>
+        <div class="skeleton-line skeleton-w-80"></div>
+        <div class="skeleton-line skeleton-w-40"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="skeleton-line skeleton-w-40"></div>
+      </div>
+      <div class="card-body skeleton-stack">
+        <div class="skeleton-line skeleton-w-60"></div>
+        <div class="skeleton-line skeleton-w-80"></div>
+        <div class="skeleton-line skeleton-w-40"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let companyData = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      setupNavigation();
+    });
+
+    function setupNavigation() {
+      document.getElementById('nav-dashboard').onclick = (e) => { e.preventDefault(); navigateTo('dashboard'); };
+      document.getElementById('nav-staff').onclick = (e) => { e.preventDefault(); navigateTo('staff'); };
+      document.getElementById('nav-customers').onclick = (e) => { e.preventDefault(); navigateTo('customers'); };
+      const dropdown = document.querySelector('.nav-dropdown');
+      document.getElementById('nav-settings').onclick = (e) => { e.preventDefault(); e.stopPropagation(); dropdown.classList.toggle('open'); };
+      document.addEventListener('click', () => dropdown.classList.remove('open'));
+      document.getElementById('nav-subcontractors').onclick = (e) => { e.preventDefault(); navigateTo('subcontractors'); };
+      document.getElementById('nav-transport').onclick = (e) => { e.preventDefault(); navigateTo('transportFees'); };
+      document.getElementById('nav-company').onclick = (e) => { e.preventDefault(); };
+    }
+
+    function navigateTo(page) {
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url + '?page=' + page, '_top');
+        })
+        .getScriptUrl();
+    }
+
+    function loadData() {
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (response.ok) {
+            companyData = response.data || {};
+            renderForm();
+          } else {
+            showToast(response.error?.message || 'データの取得に失敗', 'error');
+            renderForm();
+          }
+        })
+        .withFailureHandler((e) => {
+          showToast(e.message, 'error');
+          renderForm();
+        })
+        .getCompany();
+    }
+
+    function renderForm() {
+      const content = document.getElementById('content');
+      const d = companyData || {};
+
+      content.innerHTML = `
+        <form id="company-form">
+          <input type="hidden" id="company-id" value="${d.company_id || ''}">
+          <input type="hidden" id="updated-at" value="${d.updated_at || ''}">
+
+          <div class="card">
+            <div class="card-header">基本情報</div>
+            <div class="card-body">
+              <div class="form-group">
+                <label>会社名<span class="required">*</span></label>
+                <input type="text" id="company-name" value="${escapeHtml(d.company_name) || ''}" required>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>郵便番号</label>
+                  <input type="text" id="postal-code" value="${escapeHtml(d.postal_code) || ''}" placeholder="123-4567">
+                </div>
+                <div class="form-group">
+                  <label>電話番号</label>
+                  <input type="tel" id="phone" value="${escapeHtml(d.phone) || ''}" placeholder="03-1234-5678">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>住所</label>
+                <input type="text" id="address" value="${escapeHtml(d.address) || ''}" placeholder="東京都〇〇区...">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>FAX</label>
+                  <input type="tel" id="fax" value="${escapeHtml(d.fax) || ''}" placeholder="03-1234-5679">
+                </div>
+                <div class="form-group">
+                  <label>インボイス登録番号</label>
+                  <input type="text" id="invoice-registration-number" value="${escapeHtml(d.invoice_registration_number) || ''}" placeholder="T1234567890123">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">振込先情報</div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>銀行名</label>
+                  <input type="text" id="bank-name" value="${escapeHtml(d.bank_name) || ''}" placeholder="〇〇銀行">
+                </div>
+                <div class="form-group">
+                  <label>支店名</label>
+                  <input type="text" id="bank-branch" value="${escapeHtml(d.bank_branch) || ''}" placeholder="〇〇支店">
+                </div>
+              </div>
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label>口座種別</label>
+                  <select id="bank-account-type">
+                    <option value="">選択してください</option>
+                    <option value="普通" ${d.bank_account_type === '普通' ? 'selected' : ''}>普通</option>
+                    <option value="当座" ${d.bank_account_type === '当座' ? 'selected' : ''}>当座</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>口座番号</label>
+                  <input type="text" id="bank-account-number" value="${escapeHtml(d.bank_account_number) || ''}" placeholder="1234567">
+                </div>
+                <div class="form-group">
+                  <label>口座名義</label>
+                  <input type="text" id="bank-account-name" value="${escapeHtml(d.bank_account_name) || ''}" placeholder="カ）〇〇">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">ファイル設定</div>
+            <div class="card-body">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>ロゴ画像（Drive File ID）</label>
+                  <input type="text" id="logo-file-id" value="${escapeHtml(d.logo_file_id) || ''}">
+                  <div class="help-text">Google DriveのファイルIDを入力</div>
+                </div>
+                <div class="form-group">
+                  <label>印鑑画像（Drive File ID）</label>
+                  <input type="text" id="stamp-file-id" value="${escapeHtml(d.stamp_file_id) || ''}">
+                  <div class="help-text">Google DriveのファイルIDを入力</div>
+                </div>
+              </div>
+            </div>
+            <div class="actions">
+              <button type="button" class="btn btn-primary" id="save-btn" onclick="saveData()">保存</button>
+            </div>
+          </div>
+        </form>
+      `;
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function saveData() {
+      const form = document.getElementById('company-form');
+      if (!form.checkValidity()) { form.reportValidity(); return; }
+
+      const data = {
+        company_name: document.getElementById('company-name').value,
+        postal_code: document.getElementById('postal-code').value,
+        address: document.getElementById('address').value,
+        phone: document.getElementById('phone').value,
+        fax: document.getElementById('fax').value,
+        invoice_registration_number: document.getElementById('invoice-registration-number').value,
+        bank_name: document.getElementById('bank-name').value,
+        bank_branch: document.getElementById('bank-branch').value,
+        bank_account_type: document.getElementById('bank-account-type').value,
+        bank_account_number: document.getElementById('bank-account-number').value,
+        bank_account_name: document.getElementById('bank-account-name').value,
+        logo_file_id: document.getElementById('logo-file-id').value,
+        stamp_file_id: document.getElementById('stamp-file-id').value
+      };
+
+      const companyId = document.getElementById('company-id').value;
+      if (companyId) data.company_id = companyId;
+
+      const saveBtn = document.getElementById('save-btn');
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          if (response.ok) {
+            companyData = response.data;
+            document.getElementById('company-id').value = response.data.company_id || '';
+            document.getElementById('updated-at').value = response.data.updated_at || '';
+            showToast('保存しました', 'success');
+          } else {
+            showToast(response.error?.message || '保存失敗', 'error');
+          }
+        })
+        .withFailureHandler((e) => {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          showToast(e.message, 'error');
+        })
+        .saveCompany(data);
+    }
+
+    function showToast(message, type = '') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast show' + (type ? ' ' + type : '');
+      setTimeout(() => { toast.className = 'toast'; }, 3000);
+    }
+  </script>
+</body>
+</html>

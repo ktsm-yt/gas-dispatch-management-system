@@ -1,12 +1,25 @@
 // File: ui_jobs.gs
-// 案件フォーム用の日本語ラベルを生成してテンプレに渡す
-function doGet() {
-  const template = HtmlService.createTemplateFromFile('jobs_form');
-  template.fieldLabelMap = getFieldLabelMap();
-  template.clients = readRows('master_clients'); // プルダウン用
-  template.rates = readRows('master_rates');     // プルダウン用
-  return template.evaluate()
-    .setTitle('案件登録')
+// Web App エントリーポイント
+
+/**
+ * Web App メインエントリーポイント
+ * URLパラメータでページを切り替え
+ */
+function doGet(e) {
+  const page = e?.parameter?.page || 'customers';
+
+  const pages = {
+    customers: { file: 'customers', title: '顧客マスター' },
+    staff: { file: 'staff', title: 'スタッフマスター' },
+    subcontractors: { file: 'subcontractors', title: '外注先マスター' },
+    transportFees: { file: 'transportFees', title: '交通費マスター' },
+    company: { file: 'company', title: '自社情報' }
+  };
+
+  const config = pages[page] || pages.customers;
+
+  return HtmlService.createHtmlOutputFromFile(config.file)
+    .setTitle(config.title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -24,4 +37,11 @@ function debugCheck() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   Logger.log(ss.getSheets().map(s => s.getName())); // 期待: master_clients 等
   return getSheetByName('jobs').getName(); // ここで名前が返ればOK
+}
+
+/**
+ * WebアプリのURLを取得（ナビゲーション用）
+ */
+function getScriptUrl() {
+  return ScriptApp.getService().getUrl();
 }
