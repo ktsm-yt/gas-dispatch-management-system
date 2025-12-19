@@ -4,32 +4,22 @@
 /**
  * Web App メインエントリーポイント
  * URLパラメータでページを切り替え
- * ?page=customers -> 顧客マスター
- * ?page=staff -> スタッフマスター
- * default -> ダッシュボード（未実装の場合は顧客マスター）
  */
 function doGet(e) {
   const page = e?.parameter?.page || 'customers';
 
-  let htmlFile;
-  let title;
+  const pages = {
+    customers: { file: 'customers', title: '顧客マスター' },
+    staff: { file: 'staff', title: 'スタッフマスター' },
+    subcontractors: { file: 'subcontractors', title: '外注先マスター' },
+    transportFees: { file: 'transportFees', title: '交通費マスター' },
+    company: { file: 'company', title: '自社情報' }
+  };
 
-  switch (page) {
-    case 'customers':
-      htmlFile = 'customers';
-      title = '顧客マスター';
-      break;
-    case 'staff':
-      htmlFile = 'staff';
-      title = 'スタッフマスター';
-      break;
-    default:
-      htmlFile = 'customers';
-      title = '顧客マスター';
-  }
+  const config = pages[page] || pages.customers;
 
-  return HtmlService.createHtmlOutputFromFile(htmlFile)
-    .setTitle(title)
+  return HtmlService.createHtmlOutputFromFile(config.file)
+    .setTitle(config.title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -47,4 +37,11 @@ function debugCheck() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   Logger.log(ss.getSheets().map(s => s.getName())); // 期待: master_clients 等
   return getSheetByName('jobs').getName(); // ここで名前が返ればOK
+}
+
+/**
+ * WebアプリのURLを取得（ナビゲーション用）
+ */
+function getScriptUrl() {
+  return ScriptApp.getService().getUrl();
 }
