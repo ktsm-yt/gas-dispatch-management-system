@@ -1101,15 +1101,25 @@
       saveBtn.disabled = true;
       saveBtn.textContent = '保存中...';
 
+      const isNew = !customerId;
+
       google.script.run
         .withSuccessHandler((response) => {
           saveBtn.disabled = false;
           saveBtn.textContent = '保存';
 
           if (response.ok) {
+            // 差分更新（全件再取得せずローカル更新）
+            if (isNew) {
+              customers.push(response.data);
+            } else {
+              const idx = customers.findIndex(c => c.customer_id === response.data.customer_id);
+              if (idx !== -1) customers[idx] = response.data;
+            }
+            updateStats();
+            filterCustomers();
             showToast('保存しました', 'success');
             closeModal();
-            loadCustomers();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1139,15 +1149,20 @@
 
       const updatedAt = document.getElementById('customer-updated-at').value;
 
+      const deleteId = currentCustomer.customer_id;
+
       google.script.run
         .withSuccessHandler((response) => {
           deleteBtn.disabled = false;
           deleteBtn.textContent = '削除';
 
           if (response.ok) {
+            // 差分更新（全件再取得せずローカル削除）
+            customers = customers.filter(c => c.customer_id !== deleteId);
+            updateStats();
+            filterCustomers();
             showToast('削除しました', 'success');
             closeModal();
-            loadCustomers();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1161,7 +1176,7 @@
           deleteBtn.textContent = '削除';
           showToast(error.message, 'error');
         })
-        .deleteCustomer(currentCustomer.customer_id, updatedAt || null);
+        .deleteCustomer(deleteId, updatedAt || null);
     }
 
     function handleError(error) {

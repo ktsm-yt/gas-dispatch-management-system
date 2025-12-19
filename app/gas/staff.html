@@ -1281,15 +1281,25 @@
       saveBtn.disabled = true;
       saveBtn.textContent = '保存中...';
 
+      const isNew = !staffId;
+
       google.script.run
         .withSuccessHandler((response) => {
           saveBtn.disabled = false;
           saveBtn.textContent = '保存';
 
           if (response.ok) {
+            // 差分更新（全件再取得せずローカル更新）
+            if (isNew) {
+              staffList.push(response.data);
+            } else {
+              const idx = staffList.findIndex(s => s.staff_id === response.data.staff_id);
+              if (idx !== -1) staffList[idx] = response.data;
+            }
+            updateStats();
+            filterStaff();
             showToast('保存しました', 'success');
             closeModal();
-            loadStaff();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1318,6 +1328,7 @@
       deleteBtn.textContent = '削除中...';
 
       const updatedAt = document.getElementById('staff-updated-at').value;
+      const deleteId = currentStaff.staff_id;
 
       google.script.run
         .withSuccessHandler((response) => {
@@ -1325,9 +1336,12 @@
           deleteBtn.textContent = '削除';
 
           if (response.ok) {
+            // 差分更新（全件再取得せずローカル更新）
+            staffList = staffList.filter(s => s.staff_id !== deleteId);
+            updateStats();
+            filterStaff();
             showToast('削除しました', 'success');
             closeModal();
-            loadStaff();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
