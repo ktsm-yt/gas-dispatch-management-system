@@ -1,12 +1,35 @@
 // File: ui_jobs.gs
-// 案件フォーム用の日本語ラベルを生成してテンプレに渡す
-function doGet() {
-  const template = HtmlService.createTemplateFromFile('jobs_form');
-  template.fieldLabelMap = getFieldLabelMap();
-  template.clients = readRows('master_clients'); // プルダウン用
-  template.rates = readRows('master_rates');     // プルダウン用
-  return template.evaluate()
-    .setTitle('案件登録')
+// Web App エントリーポイント
+
+/**
+ * Web App メインエントリーポイント
+ * URLパラメータでページを切り替え
+ * ?page=customers -> 顧客マスター
+ * ?page=staff -> スタッフマスター
+ * default -> ダッシュボード（未実装の場合は顧客マスター）
+ */
+function doGet(e) {
+  const page = e?.parameter?.page || 'customers';
+
+  let htmlFile;
+  let title;
+
+  switch (page) {
+    case 'customers':
+      htmlFile = 'customers';
+      title = '顧客マスター';
+      break;
+    case 'staff':
+      htmlFile = 'staff';
+      title = 'スタッフマスター';
+      break;
+    default:
+      htmlFile = 'customers';
+      title = '顧客マスター';
+  }
+
+  return HtmlService.createHtmlOutputFromFile(htmlFile)
+    .setTitle(title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
