@@ -66,12 +66,64 @@
       padding: var(--spacing-xs) var(--spacing-sm);
       border-radius: var(--radius-sm);
       opacity: 0.9;
+      position: relative;
     }
 
-    .header-nav a:hover,
-    .header-nav a.active {
+    .header-nav a:hover {
       opacity: 1;
       background: rgba(255,255,255,0.1);
+    }
+
+    .header-nav > a.active,
+    .header-nav .nav-dropdown > a.active {
+      opacity: 1;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header-nav > a.active::after,
+    .header-nav .nav-dropdown > a.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -4px;
+      height: 2px;
+      background: white;
+      border-radius: 1px;
+    }
+
+    .nav-dropdown {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 120px;
+      z-index: 100;
+      margin-top: 4px;
+    }
+
+    .nav-dropdown-menu a {
+      display: block;
+      color: var(--text-primary);
+      padding: var(--spacing-sm) var(--spacing-md);
+      opacity: 1;
+    }
+
+    .nav-dropdown-menu a:hover {
+      background: var(--bg-hover);
+    }
+
+    .nav-dropdown.open .nav-dropdown-menu {
+      display: block;
     }
 
     /* Toolbar */
@@ -224,27 +276,28 @@
       color: #991B1B;
     }
 
-    /* Loading */
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: var(--spacing-lg) * 2;
-      color: var(--text-muted);
+    /* Skeleton */
+    .data-table tbody tr.skeleton-row { cursor: default; }
+    .data-table tbody tr.skeleton-row:hover { background: transparent; }
+    .skeleton-line,
+    .skeleton-pill {
+      display: block;
+      background: linear-gradient(90deg, #eef1f4 0%, #f7f8fa 50%, #eef1f4 100%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s ease-in-out infinite;
     }
-
-    .spinner {
-      width: 24px;
-      height: 24px;
-      border: 3px solid var(--border-color);
-      border-top-color: var(--color-secondary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-right: var(--spacing-sm);
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .skeleton-line { height: 12px; border-radius: 6px; }
+    .skeleton-pill { height: 14px; border-radius: 999px; }
+    .skeleton-w-20 { width: 20%; }
+    .skeleton-w-30 { width: 30%; }
+    .skeleton-w-40 { width: 40%; }
+    .skeleton-w-50 { width: 50%; }
+    .skeleton-w-60 { width: 60%; }
+    .skeleton-w-70 { width: 70%; }
+    .skeleton-w-80 { width: 80%; }
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     /* Empty State */
@@ -503,12 +556,19 @@
 <body>
   <!-- Header -->
   <header class="header">
-    <div class="header-title">配置管理システム</div>
+    <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> 顧客</div>
     <nav class="header-nav">
       <a href="#" id="nav-dashboard">ダッシュボード</a>
-      <a href="#" id="nav-jobs">案件一覧</a>
-      <a href="#" id="nav-staff">スタッフ</a>
       <a href="#" class="active" id="nav-customers">顧客</a>
+      <a href="#" id="nav-staff">スタッフ</a>
+      <div class="nav-dropdown">
+        <a href="#" id="nav-settings">設定</a>
+        <div class="nav-dropdown-menu" id="settings-menu">
+          <a href="#" id="nav-subcontractors">外注先</a>
+          <a href="#" id="nav-transport">交通費</a>
+          <a href="#" id="nav-company">自社情報</a>
+        </div>
+      </div>
     </nav>
   </header>
 
@@ -552,10 +612,35 @@
           </tr>
         </thead>
         <tbody id="customer-table-body">
-          <tr>
-            <td colspan="8">
-              <div class="loading"><div class="spinner"></div>読み込み中...</div>
-            </td>
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-80"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-20"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          </tr>
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-70"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-20"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          </tr>
+          <tr class="skeleton-row">
+            <td><div class="skeleton-line skeleton-w-70"></div></td>
+            <td><div class="skeleton-line skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-30"></div></td>
+            <td><div class="skeleton-line skeleton-w-20"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
           </tr>
         </tbody>
       </table>
@@ -787,10 +872,6 @@
         e.preventDefault();
         navigateTo('dashboard');
       });
-      document.getElementById('nav-jobs').addEventListener('click', (e) => {
-        e.preventDefault();
-        navigateTo('jobs');
-      });
       document.getElementById('nav-staff').addEventListener('click', (e) => {
         e.preventDefault();
         navigateTo('staff');
@@ -798,6 +879,28 @@
       document.getElementById('nav-customers').addEventListener('click', (e) => {
         e.preventDefault();
         // Already on this page
+      });
+
+      // Settings dropdown
+      const dropdown = document.querySelector('.nav-dropdown');
+      document.getElementById('nav-settings').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      document.addEventListener('click', () => dropdown.classList.remove('open'));
+
+      document.getElementById('nav-subcontractors').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('subcontractors');
+      });
+      document.getElementById('nav-transport').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('transportFees');
+      });
+      document.getElementById('nav-company').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('company');
       });
 
       // Search
@@ -831,9 +934,11 @@
     }
 
     function navigateTo(page) {
-      const currentUrl = window.location.href;
-      const baseUrl = currentUrl.split('?')[0];
-      window.top.location.href = baseUrl + '?page=' + page;
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url + '?page=' + page, '_top');
+        })
+        .getScriptUrl();
     }
 
     function debounce(func, wait) {
@@ -948,10 +1053,35 @@
 
     function showTableLoading() {
       document.getElementById('customer-table-body').innerHTML = `
-        <tr>
-          <td colspan="8">
-            <div class="loading"><div class="spinner"></div>読み込み中...</div>
-          </td>
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-80"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-20"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+        </tr>
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-70"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-20"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+        </tr>
+        <tr class="skeleton-row">
+          <td><div class="skeleton-line skeleton-w-70"></div></td>
+          <td><div class="skeleton-line skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-30"></div></td>
+          <td><div class="skeleton-line skeleton-w-20"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
         </tr>
       `;
     }
