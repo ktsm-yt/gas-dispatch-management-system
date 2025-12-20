@@ -23,6 +23,14 @@ function getCurrentTimestamp() {
 }
 
 /**
+ * サーバーの現在日付を取得（Asia/Tokyo）
+ * @returns {string} YYYY-MM-DD形式の日付文字列
+ */
+function getServerDate() {
+  return Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+}
+
+/**
  * リクエストIDを生成
  * @returns {string} リクエストID（req_xxx形式）
  */
@@ -72,18 +80,49 @@ function isValidDate(dateStr) {
 }
 
 /**
+ * オブジェクト内のDateを再帰的にISO文字列に変換
+ * @param {*} obj - 変換対象
+ * @returns {*} 変換後のオブジェクト
+ */
+function serializeForWeb(obj) {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  if (obj instanceof Date) {
+    // 1899-1900年のDateはスプレッドシートの空セルなので空文字列に
+    if (obj.getFullYear() < 1901) {
+      return '';
+    }
+    return obj.toISOString();
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => serializeForWeb(item));
+  }
+  if (typeof obj === 'object') {
+    const result = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = serializeForWeb(obj[key]);
+    }
+    return result;
+  }
+  return obj;
+}
+
+/**
  * 成功レスポンスを構築
  * @param {Object} data - レスポンスデータ
  * @param {string} requestId - リクエストID
  * @returns {Object} 成功レスポンス
  */
 function buildSuccessResponse(data, requestId) {
-  return {
+  const response = {
     ok: true,
-    data: data,
+    data: serializeForWeb(data),
     serverTime: getCurrentTimestamp(),
     requestId: requestId || generateRequestId()
   };
+  // Web App経由でのシリアライズ問題を回避
+  return JSON.parse(JSON.stringify(response));
 }
 
 /**
@@ -95,16 +134,18 @@ function buildSuccessResponse(data, requestId) {
  * @returns {Object} エラーレスポンス
  */
 function buildErrorResponse(code, message, details, requestId) {
-  return {
+  const response = {
     ok: false,
     error: {
       code: code,
       message: message,
-      details: details || {}
+      details: serializeForWeb(details) || {}
     },
     serverTime: getCurrentTimestamp(),
     requestId: requestId || generateRequestId()
   };
+  // Web App経由でのシリアライズ問題を回避
+  return JSON.parse(JSON.stringify(response));
 }
 
 /**

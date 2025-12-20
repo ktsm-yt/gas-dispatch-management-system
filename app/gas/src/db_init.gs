@@ -268,3 +268,64 @@ function resetDevDatabase() {
     Logger.log(`✗ エラー: ${error.message}`);
   }
 }
+
+/**
+ * 既存のDBにT_Jobsシートを追加
+ * P1-2で作成したDBにP1-3の案件シートを追加する
+ */
+function addJobsSheetToExistingDb() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV');
+
+  if (!spreadsheetId) {
+    throw new Error('SPREADSHEET_ID_DEV が設定されていません');
+  }
+
+  Logger.log(`対象DB: ${spreadsheetId}`);
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // 案件シートが既にあるか確認
+  const existingSheet = ss.getSheetByName('案件');
+  if (existingSheet) {
+    Logger.log('案件シートは既に存在します');
+    return;
+  }
+
+  // T_Jobsの定義
+  const jobsHeaders = [
+    'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
+    'time_slot', 'start_time', 'required_count', 'job_type', 'supervisor_name',
+    'order_number', 'branch_office', 'property_code', 'construction_div', 'status',
+    'notes', 'created_at', 'updated_at', 'is_deleted'
+  ];
+
+  const sheet = ss.insertSheet('案件');
+  sheet.getRange(1, 1, 1, jobsHeaders.length).setValues([jobsHeaders]);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, jobsHeaders.length).setFontWeight('bold');
+
+  Logger.log('✓ 案件シートを追加しました');
+}
+
+/**
+ * 既存DBに切り替え（データが入っている方を使う）
+ */
+function switchToExistingDb() {
+  const existingDbId = '1_YwkMQOnxS8zX2Zyl5AydXtSpG3zGIL0B9JRXVDiViI';
+
+  // ScriptPropertiesを更新
+  const prop = PropertiesService.getScriptProperties();
+  const oldId = prop.getProperty('SPREADSHEET_ID_DEV');
+  prop.setProperty('SPREADSHEET_ID_DEV', existingDbId);
+
+  Logger.log(`SPREADSHEET_ID_DEV を更新しました`);
+  Logger.log(`  旧: ${oldId}`);
+  Logger.log(`  新: ${existingDbId}`);
+
+  // 案件シートを追加
+  addJobsSheetToExistingDb();
+
+  Logger.log('\n=== 完了 ===');
+  Logger.log('既存DBに切り替えました。insertTestData() でテストデータを投入してください。');
+}
