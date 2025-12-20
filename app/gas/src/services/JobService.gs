@@ -32,11 +32,18 @@ const JobService = {
       return null;
     }
 
+    // 顧客名を追加
+    const customerMap = this._getCustomerMap();
+    const jobWithCustomer = {
+      ...job,
+      customer_name: customerMap[job.customer_id] || ''
+    };
+
     // TODO: 配置情報取得（P1-4で実装）
     const assignments = [];
 
     return {
-      job: job,
+      job: jobWithCustomer,
       assignments: assignments
     };
   },
@@ -54,21 +61,26 @@ const JobService = {
 
     const jobs = JobRepository.findByDate(date);
 
-    // 顧客名をJOIN（キャッシュ利用推奨）
+    // 顧客マスターを取得してマップ作成
+    const customerMap = this._getCustomerMap();
+
+    // 顧客名をJOIN
     const jobsWithCustomer = jobs.map(job => {
-      // TODO: 顧客名取得（CustomerRepositoryから）
       return {
         job_id: job.job_id,
         customer_id: job.customer_id,
-        customer_name: '', // 後で実装
+        customer_name: customerMap[job.customer_id] || '',
         site_name: job.site_name,
+        site_address: job.site_address || '',
         time_slot: job.time_slot,
         start_time: job.start_time,
         job_type: job.job_type,
         required_count: job.required_count,
-        assigned_count: 0, // TODO: 配置数取得
+        assigned_count: 0, // TODO: 配置数取得（P1-4）
         status: job.status,
-        staff_names: [], // TODO: 配置スタッフ名取得
+        supervisor_name: job.supervisor_name || '',
+        notes: job.notes || '',
+        staff_names: [], // TODO: 配置スタッフ名取得（P1-4）
         updated_at: job.updated_at
       };
     });
@@ -104,10 +116,58 @@ const JobService = {
   /**
    * 案件を検索
    * @param {Object} query - 検索条件
-   * @returns {Object[]} 案件配列
+   * @returns {Object[]} 案件配列（顧客名付き）
    */
   search: function(query) {
-    return JobRepository.search(query);
+    const jobs = JobRepository.search(query);
+
+    // 顧客マスターを取得してマップ作成
+    const customerMap = this._getCustomerMap();
+
+    // 顧客名をJOIN
+    let result = jobs.map(job => ({
+      ...job,
+      customer_name: customerMap[job.customer_id] || ''
+    }));
+
+    // 検索ワードで絞り込み（顧客名・現場名の両方を検索）
+    if (query.search_term) {
+      const term = query.search_term.toLowerCase();
+      result = result.filter(job =>
+        (job.customer_name && job.customer_name.toLowerCase().includes(term)) ||
+        (job.site_name && job.site_name.toLowerCase().includes(term))
+      );
+    }
+
+    // 顧客名で絞り込み（部分一致）- 後方互換性
+    if (query.customer_name) {
+      const term = query.customer_name.toLowerCase();
+      result = result.filter(job =>
+        job.customer_name && job.customer_name.toLowerCase().includes(term)
+      );
+    }
+
+    return result;
+  },
+
+  /**
+   * 顧客IDから会社名へのマップを作成
+   * @returns {Object} { customer_id: company_name }
+   */
+  _getCustomerMap: function() {
+    try {
+      const customers = getAllRecords('M_Customers');
+      const map = {};
+      for (const c of customers) {
+        if (c.customer_id && !c.is_deleted) {
+          map[c.customer_id] = c.company_name + (c.branch_name ? ' ' + c.branch_name : '');
+        }
+      }
+      return map;
+    } catch (e) {
+      Logger.log('_getCustomerMap error: ' + e.message);
+      return {};
+    }
   },
 
   /**

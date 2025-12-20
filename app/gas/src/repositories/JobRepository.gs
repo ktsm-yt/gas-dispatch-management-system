@@ -14,7 +14,16 @@ const JobRepository = {
    * @returns {Object|null} 案件レコードまたはnull
    */
   findById: function(jobId) {
-    return getRecordById(this.TABLE_NAME, this.ID_COLUMN, jobId);
+    const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, jobId);
+    if (!record) return null;
+
+    // work_dateをYYYY-MM-DD形式の文字列に変換
+    return {
+      ...record,
+      work_date: record.work_date instanceof Date
+        ? Utilities.formatDate(record.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : record.work_date
+    };
   },
 
   /**
@@ -23,8 +32,22 @@ const JobRepository = {
    * @returns {Object[]} 案件配列
    */
   findByDate: function(date) {
-    const records = findRecords(this.TABLE_NAME, { work_date: date });
-    return records.filter(r => !r.is_deleted);
+    const records = getAllRecords(this.TABLE_NAME);
+
+    // 日付比較（DateオブジェクトまたはYYYY-MM-DD文字列に対応）
+    return records.filter(r => {
+      if (r.is_deleted) return false;
+
+      const workDate = r.work_date;
+      if (!workDate) return false;
+
+      // Dateオブジェクトの場合はフォーマット
+      const workDateStr = workDate instanceof Date
+        ? Utilities.formatDate(workDate, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : String(workDate);
+
+      return workDateStr === date;
+    });
   },
 
   /**
@@ -42,17 +65,32 @@ const JobRepository = {
   search: function(query = {}) {
     let records = getAllRecords(this.TABLE_NAME);
 
+    // 論理削除除外
+    records = records.filter(r => !r.is_deleted);
+
     // 顧客IDで絞り込み
     if (query.customer_id) {
       records = records.filter(r => r.customer_id === query.customer_id);
     }
 
-    // 日付範囲で絞り込み
+    // 日付範囲で絞り込み（Date型対応）
     if (query.work_date_from) {
-      records = records.filter(r => r.work_date >= query.work_date_from);
+      records = records.filter(r => {
+        if (!r.work_date) return false;
+        const workDateStr = r.work_date instanceof Date
+          ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+          : String(r.work_date);
+        return workDateStr >= query.work_date_from;
+      });
     }
     if (query.work_date_to) {
-      records = records.filter(r => r.work_date <= query.work_date_to);
+      records = records.filter(r => {
+        if (!r.work_date) return false;
+        const workDateStr = r.work_date instanceof Date
+          ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+          : String(r.work_date);
+        return workDateStr <= query.work_date_to;
+      });
     }
 
     // ステータスで絞り込み
@@ -73,12 +111,18 @@ const JobRepository = {
       );
     }
 
-    // 作業日の新しい順にソート
+    // 作業日の古い順にソート（Date型対応）
     records.sort((a, b) => {
-      if (a.work_date !== b.work_date) {
-        return b.work_date > a.work_date ? 1 : -1;
+      const dateA = a.work_date instanceof Date
+        ? Utilities.formatDate(a.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : String(a.work_date || '');
+      const dateB = b.work_date instanceof Date
+        ? Utilities.formatDate(b.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : String(b.work_date || '');
+      if (dateA !== dateB) {
+        return dateA > dateB ? 1 : -1;
       }
-      return b.created_at > a.created_at ? 1 : -1;
+      return a.created_at > b.created_at ? 1 : -1;
     });
 
     // 件数制限
@@ -86,7 +130,13 @@ const JobRepository = {
       records = records.slice(0, query.limit);
     }
 
-    return records;
+    // work_dateを文字列に変換
+    return records.map(r => ({
+      ...r,
+      work_date: r.work_date instanceof Date
+        ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : r.work_date
+    }));
   },
 
   /**

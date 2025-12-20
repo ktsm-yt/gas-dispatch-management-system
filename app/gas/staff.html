@@ -616,6 +616,7 @@
     <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> スタッフ</div>
     <nav class="header-nav">
       <a href="#" id="nav-dashboard">ダッシュボード</a>
+      <a href="#" id="nav-jobs">案件一覧</a>
       <a href="#" id="nav-customers">顧客</a>
       <a href="#" class="active" id="nav-staff">スタッフ</a>
       <div class="nav-dropdown">
@@ -974,6 +975,10 @@
       document.getElementById('nav-dashboard').addEventListener('click', (e) => {
         e.preventDefault();
         navigateTo('dashboard');
+      });
+      document.getElementById('nav-jobs').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('jobs');
       });
       document.getElementById('nav-staff').addEventListener('click', (e) => {
         e.preventDefault();
