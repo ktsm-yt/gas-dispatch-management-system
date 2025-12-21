@@ -1237,9 +1237,12 @@
         if (byTimeSlot[slot]) {
           byTimeSlot[slot].total++;
           byTimeSlot[slot].required += Number(job.required_count) || 0;
+          byTimeSlot[slot].assigned += Number(job.assigned_count) || 0;
         }
       }
 
+      // shortage = assigned - required
+      // 正: 余裕あり, 負: 不足, 0: ちょうど
       for (const slot of Object.keys(byTimeSlot)) {
         byTimeSlot[slot].shortage = byTimeSlot[slot].assigned - byTimeSlot[slot].required;
       }
