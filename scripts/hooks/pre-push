@@ -1,0 +1,129 @@
+#!/bin/bash
+# Pre-push hook: PRチェックリスト自動検証
+# 問題があればpushをブロック
+
+set -e
+
+echo "🔍 Pre-push チェック実行中..."
+
+# プッシュ対象のコミット範囲を取得
+remote="$1"
+url="$2"
+
+# mainブランチへの直接pushの場合は警告
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+errors=()
+warnings=()
+
+# ================================================================
+# 1. 禁止ファイルチェック
+# ================================================================
+check_forbidden_files() {
+    local forbidden_patterns=(
+        ".env"
+        "_rendered/"
+        ".clasp.json"
+        "app/gas/.clasp.json"
+        "docs/references/"
+        "docs/02_meetings/"
+    )
+
+    # ステージングされている全ファイルを取得
+    local staged_files
+    staged_files=$(git diff --cached --name-only 2>/dev/null || git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
+
+    # 最新コミットの変更ファイルも確認
+    local committed_files
+    committed_files=$(git diff --name-only origin/main...HEAD 2>/dev/null || echo "")
+
+    local all_files="$staged_files"$'\n'"$committed_files"
+
+    for pattern in "${forbidden_patterns[@]}"; do
+        local matches
+        matches=$(echo "$all_files" | grep -E "^${pattern}$|/${pattern}$|^${pattern}" 2>/dev/null || true)
+        if [[ -n "$matches" ]]; then
+            errors+=("❌ 禁止ファイルが含まれています: $pattern")
+            echo "   該当: $matches"
+        fi
+    done
+}
+
+# ================================================================
+# 2. バイナリファイルチェック
+# ================================================================
+check_binary_files() {
+    local binary_extensions=("docx" "xlsx" "pdf" "pptx" "doc" "xls" "ppt")
+
+    local committed_files
+    committed_files=$(git diff --name-only origin/main...HEAD 2>/dev/null || echo "")
+
+    for ext in "${binary_extensions[@]}"; do
+        local matches
+        matches=$(echo "$committed_files" | grep -iE "\.${ext}$" 2>/dev/null || true)
+        if [[ -n "$matches" ]]; then
+            errors+=("❌ バイナリファイル(.$ext)が含まれています")
+            echo "   該当: $matches"
+        fi
+    done
+}
+
+# ================================================================
+# 3. docs内のテンプレート変数チェック ({{...}} が壊れていないか)
+# ================================================================
+check_template_variables() {
+    local committed_files
+    committed_files=$(git diff --name-only origin/main...HEAD 2>/dev/null | grep "^docs/" | grep -v "^docs/references/" | grep -v "^docs/02_meetings/" || true)
+
+    if [[ -z "$committed_files" ]]; then
+        return 0
+    fi
+
+    # 未閉じの {{ や }} のみをチェック
+    while IFS= read -r file; do
+        if [[ -f "$file" ]]; then
+            # {{ と }} の数が一致するかチェック
+            local open_count close_count
+            open_count=$(grep -o "{{" "$file" 2>/dev/null | wc -l | tr -d ' ')
+            close_count=$(grep -o "}}" "$file" 2>/dev/null | wc -l | tr -d ' ')
+
+            if [[ "$open_count" -ne "$close_count" ]]; then
+                errors+=("❌ テンプレート変数の括弧が不整合: $file ({{ : $open_count, }} : $close_count)")
+            fi
+        fi
+    done <<< "$committed_files"
+}
+
+# ================================================================
+# チェック実行
+# ================================================================
+check_forbidden_files
+check_binary_files
+check_template_variables
+
+# ================================================================
+# 結果出力
+# ================================================================
+echo ""
+
+if [[ ${#warnings[@]} -gt 0 ]]; then
+    echo "⚠️  警告:"
+    for warning in "${warnings[@]}"; do
+        echo "  $warning"
+    done
+    echo ""
+fi
+
+if [[ ${#errors[@]} -gt 0 ]]; then
+    echo "🚫 エラーが検出されました:"
+    for error in "${errors[@]}"; do
+        echo "  $error"
+    done
+    echo ""
+    echo "pushをブロックしました。問題を修正してから再度pushしてください。"
+    echo "強制的にpushする場合: git push --no-verify"
+    exit 1
+fi
+
+echo "✅ 全てのチェックに合格しました"
+exit 0
