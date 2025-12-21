@@ -6,9 +6,13 @@
  * URLパラメータでページを切り替え
  */
 function doGet(e) {
-  const page = e?.parameter?.page || 'customers';
+  const page = e?.parameter?.page || 'dashboard';
 
   const pages = {
+    // P1-3: ダッシュボード・案件管理
+    dashboard: { file: 'dashboard', title: 'ダッシュボード' },
+    jobs: { file: 'jobs', title: '案件管理' },
+    // P1-2: マスター管理
     customers: { file: 'customers', title: '顧客マスター' },
     staff: { file: 'staff', title: 'スタッフマスター' },
     subcontractors: { file: 'subcontractors', title: '外注先マスター' },
@@ -16,7 +20,7 @@ function doGet(e) {
     company: { file: 'company', title: '自社情報' }
   };
 
-  const config = pages[page] || pages.customers;
+  const config = pages[page] || pages.dashboard;
 
   return HtmlService.createHtmlOutputFromFile(config.file)
     .setTitle(config.title)
