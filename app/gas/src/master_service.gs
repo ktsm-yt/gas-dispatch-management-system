@@ -56,7 +56,7 @@ function saveMasterRecord(sheetName, idColumn, tableName, data, expectedUpdatedA
     }
 
     try {
-      const sheet = getSheet(sheetName);
+      const sheet = getSheetDirect(sheetName);
       const now = getCurrentTimestamp();
       const user = getCurrentUserEmail();
 
@@ -162,7 +162,7 @@ function deleteMasterRecord(sheetName, idColumn, tableName, id, expectedUpdatedA
     }
 
     try {
-      const sheet = getSheet(sheetName);
+      const sheet = getSheetDirect(sheetName);
       const existing = findById(sheet, idColumn, id);
 
       if (!existing) {
@@ -209,7 +209,7 @@ function getMasterRecord(sheetName, idColumn, id) {
   const requestId = generateRequestId();
 
   try {
-    const sheet = getSheet(sheetName);
+    const sheet = getSheetDirect(sheetName);
     const record = findById(sheet, idColumn, id);
 
     if (!record || record.is_deleted) {
@@ -236,7 +236,7 @@ function listMasterRecords(sheetName, options = {}) {
   const requestId = generateRequestId();
 
   try {
-    const sheet = getSheet(sheetName);
+    const sheet = getSheetDirect(sheetName);
     const rows = getAllRows(sheet, { includeDeleted: options.includeDeleted || false });
 
     // _rowIndex を除去
@@ -485,7 +485,7 @@ function saveTransportFee(transportFee) {
     }
 
     try {
-      const sheet = getSheet(SHEET_NAMES.TRANSPORT_FEE);
+      const sheet = getSheetDirect(SHEET_NAMES.TRANSPORT_FEE);
       const existing = findById(sheet, ID_COLUMNS.TRANSPORT_FEE, transportFee.area_code);
 
       if (existing) {
@@ -525,7 +525,7 @@ function listTransportFees() {
   const requestId = generateRequestId();
 
   try {
-    const sheet = getSheet(SHEET_NAMES.TRANSPORT_FEE);
+    const sheet = getSheetDirect(SHEET_NAMES.TRANSPORT_FEE);
     const rows = getAllRows(sheet, { includeDeleted: true });
 
     const data = rows.map(row => {
@@ -558,7 +558,7 @@ function deleteTransportFee(areaCode) {
     }
 
     try {
-      const sheet = getSheet(SHEET_NAMES.TRANSPORT_FEE);
+      const sheet = getSheetDirect(SHEET_NAMES.TRANSPORT_FEE);
       const existing = findById(sheet, ID_COLUMNS.TRANSPORT_FEE, areaCode);
 
       if (!existing) {
@@ -615,7 +615,7 @@ function saveCompany(company) {
     }
 
     try {
-      const sheet = getSheet(SHEET_NAMES.COMPANY);
+      const sheet = getSheetDirect(SHEET_NAMES.COMPANY);
       const rows = getAllRows(sheet, { includeDeleted: true });
       const now = getCurrentTimestamp();
 
@@ -659,7 +659,7 @@ function getCompany() {
   const requestId = generateRequestId();
 
   try {
-    const sheet = getSheet(SHEET_NAMES.COMPANY);
+    const sheet = getSheetDirect(SHEET_NAMES.COMPANY);
     const rows = getAllRows(sheet, { includeDeleted: true });
 
     if (rows.length === 0) {

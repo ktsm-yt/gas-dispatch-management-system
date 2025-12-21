@@ -194,6 +194,7 @@
     <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> 自社情報</div>
     <nav class="header-nav">
       <a href="#" id="nav-dashboard">ダッシュボード</a>
+      <a href="#" id="nav-jobs">案件一覧</a>
       <a href="#" id="nav-customers">顧客</a>
       <a href="#" id="nav-staff">スタッフ</a>
       <div class="nav-dropdown">
@@ -242,6 +243,7 @@
 
     function setupNavigation() {
       document.getElementById('nav-dashboard').onclick = (e) => { e.preventDefault(); navigateTo('dashboard'); };
+      document.getElementById('nav-jobs').onclick = (e) => { e.preventDefault(); navigateTo('jobs'); };
       document.getElementById('nav-staff').onclick = (e) => { e.preventDefault(); navigateTo('staff'); };
       document.getElementById('nav-customers').onclick = (e) => { e.preventDefault(); navigateTo('customers'); };
       const dropdown = document.querySelector('.nav-dropdown');
