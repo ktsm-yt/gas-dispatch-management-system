@@ -22,7 +22,8 @@ function doGet(e) {
 
   const config = pages[page] || pages.dashboard;
 
-  return HtmlService.createHtmlOutputFromFile(config.file)
+  return HtmlService.createTemplateFromFile(config.file)
+    .evaluate()
     .setTitle(config.title)
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
