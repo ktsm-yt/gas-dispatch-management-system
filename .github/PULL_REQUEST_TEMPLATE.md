@@ -22,26 +22,27 @@
 
 ## 動作確認
 
-- [ ] ローカルで動作確認済み
-- [ ] 目視で問題ない
-- [ ] 影響範囲を把握した（関連画面/帳票/集計/API）
-- [ ] 必要なら `npm run env:check` / `npm run render:docs` を実行した
+- [] ローカルで動作確認済み
+- [] 目視で問題ない
+- [] 影響範囲を把握した（関連画面/帳票/集計/API）
+- [] 必要なら `npm run env:check` / `npm run render:docs` を実行した
 
 ## 顧客共有（デモする場合）
 
-- [ ] デモで見てほしい点をPR本文に書いた
-- [ ] デモ後は `push --force` / `rebase -i` せず、追加コミットで積む
+- [] デモで見てほしい点をPR本文に書いた
+- [] デモ後は `push --force` / `rebase -i` せず、追加コミットで積む
 
 ## 影響・リスク
 
 -
 
 ## チェックリスト（公開・運用の事故防止）
+<!-- pre-push hookで自動検証済み -->
 
-- [ ] `.env` / `_rendered/` / `.clasp.json` / `app/gas/.clasp.json` を含まない
-- [ ] `docs/references/` / `docs/02_meetings/` を含まない
-- [ ] docs内の `{{...}}` が壊れていない（公開版の体裁OK）
-- [ ] 余計なバイナリ（`.docx`/`.xlsx`/`.pdf` 等）が混ざっていない
+- [x] `.env` / `_rendered/` / `.clasp.json` / `app/gas/.clasp.json` を含まない
+- [x] `docs/references/` / `docs/02_meetings/` を含まない
+- [x] docs内の `{{...}}` が壊れていない（公開版の体裁OK）
+- [x] 余計なバイナリ（`.docx`/`.xlsx`/`.pdf` 等）が混ざっていない
 
 ## 関連情報（任意）
 
