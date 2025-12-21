@@ -31,66 +31,7 @@
       color: var(--text-primary);
       line-height: 1.5;
     }
-    .header {
-      background: linear-gradient(90deg, #139BC4 0%, #172D90 100%);
-      color: white;
-      padding: var(--spacing-md) var(--spacing-lg);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .header-title { font-size: 20px; font-weight: 600; }
-    .header-nav { display: flex; gap: var(--spacing-md); }
-    .header-nav a {
-      color: white;
-      text-decoration: none;
-      padding: 4px var(--spacing-sm);
-      border-radius: var(--radius-sm);
-      opacity: 0.9;
-      position: relative;
-    }
-    .header-nav a:hover {
-      opacity: 1;
-      background: rgba(255,255,255,0.1);
-    }
-    .header-nav > a.active,
-    .header-nav .nav-dropdown > a.active {
-      opacity: 1;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-    }
-    .header-nav > a.active::after,
-    .header-nav .nav-dropdown > a.active::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 0;
-      bottom: -4px;
-      height: 2px;
-      background: white;
-      border-radius: 1px;
-    }
-    .nav-dropdown { position: relative; display: flex; align-items: center; }
-    .nav-dropdown-menu {
-      display: none;
-      position: absolute;
-      top: 100%;
-      right: 0;
-      background: white;
-      border-radius: var(--radius-sm);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      min-width: 120px;
-      z-index: 100;
-      margin-top: 4px;
-    }
-    .nav-dropdown-menu a {
-      display: block;
-      color: var(--text-primary);
-      padding: var(--spacing-sm) var(--spacing-md);
-      opacity: 1;
-    }
-    .nav-dropdown-menu a:hover { background: var(--bg-hover); }
-    .nav-dropdown.open .nav-dropdown-menu { display: block; }
+    <?!= include('nav_styles'); ?>
     .main-content { padding: var(--spacing-lg); max-width: 800px; margin: 0 auto; }
     .card {
       background: white;
@@ -190,23 +131,7 @@
   </style>
 </head>
 <body>
-  <header class="header">
-    <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> 自社情報</div>
-    <nav class="header-nav">
-      <a href="#" id="nav-dashboard">ダッシュボード</a>
-      <a href="#" id="nav-jobs">案件一覧</a>
-      <a href="#" id="nav-customers">顧客</a>
-      <a href="#" id="nav-staff">スタッフ</a>
-      <div class="nav-dropdown">
-        <a href="#" class="active" id="nav-settings">設定</a>
-        <div class="nav-dropdown-menu" id="settings-menu">
-          <a href="#" id="nav-subcontractors">外注先</a>
-          <a href="#" id="nav-transport">交通費</a>
-          <a href="#" id="nav-company">自社情報</a>
-        </div>
-      </div>
-    </nav>
-  </header>
+  <?!= include('nav_bar'); ?>
 
   <main class="main-content" id="content">
     <div class="card">
@@ -237,30 +162,9 @@
     let companyData = null;
 
     document.addEventListener('DOMContentLoaded', () => {
+      initNavBar('company', '自社情報');
       loadData();
-      setupNavigation();
     });
-
-    function setupNavigation() {
-      document.getElementById('nav-dashboard').onclick = (e) => { e.preventDefault(); navigateTo('dashboard'); };
-      document.getElementById('nav-jobs').onclick = (e) => { e.preventDefault(); navigateTo('jobs'); };
-      document.getElementById('nav-staff').onclick = (e) => { e.preventDefault(); navigateTo('staff'); };
-      document.getElementById('nav-customers').onclick = (e) => { e.preventDefault(); navigateTo('customers'); };
-      const dropdown = document.querySelector('.nav-dropdown');
-      document.getElementById('nav-settings').onclick = (e) => { e.preventDefault(); e.stopPropagation(); dropdown.classList.toggle('open'); };
-      document.addEventListener('click', () => dropdown.classList.remove('open'));
-      document.getElementById('nav-subcontractors').onclick = (e) => { e.preventDefault(); navigateTo('subcontractors'); };
-      document.getElementById('nav-transport').onclick = (e) => { e.preventDefault(); navigateTo('transportFees'); };
-      document.getElementById('nav-company').onclick = (e) => { e.preventDefault(); };
-    }
-
-    function navigateTo(page) {
-      google.script.run
-        .withSuccessHandler(function(url) {
-          window.open(url + '?page=' + page, '_top');
-        })
-        .getScriptUrl();
-    }
 
     function loadData() {
       google.script.run
