@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>配置管理</title>
+  <style>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-warning: #FFC107;
+      --color-danger: #DC3545;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-xs: 2px;
+      --spacing-sm: 4px;
+      --spacing-md: 8px;
+      --spacing-lg: 12px;
+      --radius-sm: 3px;
+      --radius-md: 6px;
+      --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    <?!= include('nav_styles'); ?>
+
+    .date-nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: 6px 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-btn {
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .date-btn:hover { background: var(--bg-hover); }
+
+    .current-date {
+      font-size: 15px;
+      font-weight: 600;
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .main-content {
+      padding: 10px 12px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .summary-cards {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .summary-card {
+      background: white;
+      border-radius: var(--radius-md);
+      padding: 8px 16px;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+      min-width: 90px;
+    }
+
+    .summary-card-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+    }
+
+    .summary-card-value {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .summary-card-value.shortage { color: var(--color-danger); }
+    .summary-card-value.ok { color: var(--color-success); }
+
+    /* Table Styles */
+    .jobs-table-container {
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .jobs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .jobs-table th {
+      background: var(--bg-card);
+      padding: 6px 8px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      white-space: nowrap;
+    }
+
+    .jobs-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
+    }
+
+    .jobs-table tbody tr:hover {
+      background: var(--bg-hover);
+      cursor: pointer;
+    }
+
+    .jobs-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .job-time-slot {
+      background: var(--color-primary);
+      color: white;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-size: 10px;
+      font-weight: 600;
+      display: inline-block;
+    }
+
+    .job-name {
+      font-weight: 500;
+    }
+
+    .job-customer {
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .stat-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .stat-badge.ok { background: #D1FAE5; color: #065F46; }
+    .stat-badge.shortage { background: #FEE2E2; color: #991B1B; }
+
+    .btn-action {
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 10px;
+    }
+
+    .btn-action:hover {
+      background: var(--color-accent);
+    }
+
+    .no-assignments {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-style: italic;
+    }
+
+    .staff-cell {
+      max-width: 200px;
+      font-size: 11px;
+      color: var(--text-primary);
+    }
+
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+
+    .empty-state {
+      text-align: center;
+      padding: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 12px;
+      right: 12px;
+      padding: 8px 12px;
+      border-radius: var(--radius-md);
+      background: #333;
+      color: white;
+      z-index: 1000;
+      display: none;
+      font-size: 12px;
+    }
+
+    .toast.error { background: var(--color-danger); }
+    .toast.success { background: var(--color-success); }
+
+    /* Modal Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal {
+      background: white;
+      border-radius: var(--radius-md);
+      width: 95%;
+      max-width: 900px;
+      max-height: 85vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-card);
+    }
+
+    .modal-header-info {
+      flex: 1;
+    }
+
+    .modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0 0 2px 0;
+    }
+
+    .modal-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .modal-stats {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-muted);
+      line-height: 1;
+      padding: 0;
+    }
+
+    .modal-close:hover {
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 10px;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .modal-panel {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+    }
+
+    /* Staff Selector */
+    .staff-filter {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+
+    .staff-search {
+      flex: 1;
+      min-width: 100px;
+      padding: 3px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+    }
+
+    .staff-filter select {
+      padding: 3px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+    }
+
+    .staff-list-item {
+      display: flex;
+      align-items: center;
+      padding: 3px 6px;
+      border-bottom: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: background 0.1s;
+      gap: 6px;
+    }
+
+    .staff-list-item:last-child {
+      border-bottom: none;
+    }
+
+    .staff-list-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .staff-list-item.selected {
+      background: #DBEAFE;
+    }
+
+    .staff-list-item.assigned {
+      background: #F0FDF4;
+      opacity: 0.8;
+      cursor: default;
+    }
+
+    .assigned-label {
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      background: #22C55E;
+      color: white;
+      margin-left: auto;
+    }
+
+    .staff-checkbox {
+      width: 14px;
+      height: 14px;
+      cursor: pointer;
+    }
+
+    .staff-list-info {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .staff-list-name {
+      font-weight: 500;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    .staff-type-badge {
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .staff-type-badge.employee,
+    .staff-type-badge.regular {
+      background: #D1FAE5;
+      color: #065F46;
+    }
+
+    .staff-type-badge.subcontract {
+      background: #FEE2E2;
+      color: #991B1B;
+    }
+
+    .staff-type-badge.student {
+      background: #DBEAFE;
+      color: #1E40AF;
+    }
+
+    .staff-type-badge.sole_proprietor {
+      background: #FEF3C7;
+      color: #92400E;
+    }
+
+    .skill-badge {
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      background: #E5E7EB;
+      color: var(--text-primary);
+      flex-shrink: 0;
+    }
+
+    .skill-badge.match {
+      background: var(--color-secondary);
+      color: white;
+    }
+
+    .selected-count {
+      font-size: 11px;
+      color: var(--color-primary);
+      font-weight: 500;
+    }
+
+    .btn-link {
+      background: none;
+      border: none;
+      color: var(--color-secondary);
+      font-size: 10px;
+      cursor: pointer;
+      padding: 0;
+      margin-left: auto;
+    }
+
+    .btn-link:hover {
+      text-decoration: underline;
+    }
+
+    /* Assignment List */
+    .assignment-list-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .assignment-list-item:last-child {
+      border-bottom: none;
+    }
+
+    .assignment-info {
+      flex: 1;
+    }
+
+    .assignment-staff-name {
+      font-weight: 500;
+      font-size: 12px;
+    }
+
+    .assignment-details {
+      font-size: 10px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+    }
+
+    .assignment-actions {
+      display: flex;
+      gap: 2px;
+    }
+
+    .btn-icon {
+      background: none;
+      border: none;
+      width: 22px;
+      height: 22px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+    }
+
+    .btn-icon:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .btn-icon.btn-delete:hover {
+      background: #FEE2E2;
+      color: var(--color-danger);
+    }
+
+    /* Assignment Form */
+    .assignment-form-container {
+      padding: 8px;
+      background: white;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .assignment-form-title {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-size: 10px;
+      font-weight: 500;
+      margin-bottom: 1px;
+      color: var(--text-muted);
+    }
+
+    .form-group select,
+    .form-group input {
+      padding: 3px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+    }
+
+    .form-group select:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      margin-top: 6px;
+    }
+
+    .btn {
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-accent);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 4px;
+      padding: 6px 10px;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: auto;
+    }
+
+    .panel-empty {
+      padding: 10px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .loading-spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <?!= include('nav_bar'); ?>
+
+  <div class="date-nav">
+    <button class="date-btn" id="prev-day">&lt; 前日</button>
+    <span class="current-date" id="current-date">-</span>
+    <button class="date-btn" id="next-day">翌日 &gt;</button>
+    <button class="date-btn" id="today-btn">今日</button>
+  </div>
+
+  <main class="main-content">
+    <div class="summary-cards" id="summary-cards">
+      <div class="summary-card">
+        <div class="summary-card-label">必要人数</div>
+        <div class="summary-card-value" id="summary-required">-</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-label">配置済み</div>
+        <div class="summary-card-value" id="summary-assigned">-</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-card-label">不足</div>
+        <div class="summary-card-value shortage" id="summary-shortage">-</div>
+      </div>
+    </div>
+
+    <div class="jobs-table-container" id="jobs-container">
+      <table class="jobs-table">
+        <thead>
+          <tr>
+            <th>時間</th>
+            <th>現場名</th>
+            <th>顧客</th>
+            <th>配置スタッフ</th>
+            <th class="text-center">必要</th>
+            <th class="text-center">配置</th>
+            <th class="text-center">過不足</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-tbody">
+          <tr><td colspan="7" class="loading">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Edit Assignment Modal -->
+  <div class="modal-overlay" id="edit-modal" style="display: none; z-index: 1100;">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <h2 class="modal-title"><span id="edit-staff-name">-</span> の編集</h2>
+        </div>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="display: block; padding: 12px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label>給与区分</label>
+            <select id="edit-pay-unit">
+              <option value="FULLDAY">終日</option>
+              <option value="HALFDAY">半日</option>
+              <option value="HOURLY">時給</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>請求区分</label>
+            <select id="edit-invoice-unit">
+              <option value="FULLDAY">終日</option>
+              <option value="HALFDAY">半日</option>
+              <option value="HOURLY">時給</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>交通費エリア</label>
+            <select id="edit-transport-area" onchange="onEditTransportAreaChange()">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>交通費（円）</label>
+            <input type="number" id="edit-transport-amount" min="0" step="100">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditModal()">キャンセル</button>
+        <button class="btn btn-primary" id="edit-save-btn" onclick="saveEditAssignment()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Assignment Modal -->
+  <div class="modal-overlay" id="assignment-modal" style="display: none;">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-header-info">
+          <h2 class="modal-title" id="modal-job-name">-</h2>
+          <div class="modal-subtitle">
+            <span id="modal-job-date">-</span>
+            <span id="modal-job-time">-</span>
+            <span id="modal-job-type">-</span>
+            <div class="modal-stats">
+              <span class="stat-badge required">必要: <span id="modal-required">0</span></span>
+              <span class="stat-badge assigned">配置: <span id="modal-assigned">0</span></span>
+              <span class="stat-badge shortage" id="modal-shortage-badge" style="display: none;">不足: <span id="modal-shortage">0</span></span>
+            </div>
+          </div>
+        </div>
+        <button class="modal-close" onclick="closeAssignmentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- Left Panel: Staff Selector -->
+        <div class="modal-panel">
+          <div class="panel-header">
+            <span>スタッフ選択</span>
+            <span class="selected-count" id="selected-count"></span>
+            <button class="btn-link" onclick="selectAllAssigned()">配置済を選択</button>
+          </div>
+          <div class="staff-filter">
+            <input type="text" class="staff-search" id="staff-search" placeholder="名前で検索..." oninput="filterStaffList()">
+            <select id="staff-skill-filter" onchange="filterStaffList()">
+              <option value="">全スキル</option>
+              <option value="鳶">鳶</option>
+              <option value="揚げ">揚げ</option>
+              <option value="鳶揚げ">鳶揚げ</option>
+            </select>
+            <select id="staff-type-filter" onchange="filterStaffList()">
+              <option value="">全タイプ</option>
+              <option value="regular">自社</option>
+              <option value="student">学生</option>
+              <option value="sole_proprietor">個人事業主</option>
+              <option value="subcontract">外注</option>
+            </select>
+          </div>
+          <div class="panel-content" id="staff-list">
+            <div class="loading-spinner">読み込み中...</div>
+          </div>
+        </div>
+
+        <!-- Right Panel: Assigned Staff -->
+        <div class="modal-panel">
+          <div class="panel-header">
+            <span>配置済みスタッフ</span>
+          </div>
+          <div class="panel-content" id="assigned-list">
+            <div class="panel-empty">配置されたスタッフはいません</div>
+          </div>
+          <!-- Batch Add Form -->
+          <div class="assignment-form-container" id="batch-form-container">
+            <div class="assignment-form-title">一括配置設定</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>給与区分</label>
+                <select id="form-pay-unit">
+                  <option value="FULLDAY">終日</option>
+                  <option value="HALFDAY">半日</option>
+                  <option value="HOURLY">時給</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>請求区分</label>
+                <select id="form-invoice-unit">
+                  <option value="FULLDAY">終日</option>
+                  <option value="HALFDAY">半日</option>
+                  <option value="HOURLY">時給</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>交通費エリア</label>
+                <select id="form-transport-area" onchange="onTransportAreaChange()">
+                  <option value="">選択してください</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>交通費（円）</label>
+                <input type="number" id="form-transport-amount" min="0" step="100">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" id="batch-add-btn" onclick="batchAddStaff()" disabled>
+                選択したスタッフを保存
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeAssignmentModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentDate = new Date();
+    let currentRequestId = 0;  // リクエスト追跡用
+    let isLoading = false;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initNavBar('assignments', '配置管理');
+      initializeDate();
+      setupEventListeners();
+      setupModalEventListeners();
+    });
+
+    function setupModalEventListeners() {
+      // Close modal on overlay click
+      document.getElementById('assignment-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'assignment-modal') {
+          closeAssignmentModal();
+        }
+      });
+
+      // Close modal on Escape key
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.getElementById('assignment-modal').style.display !== 'none') {
+          closeAssignmentModal();
+        }
+      });
+    }
+
+    function initializeDate() {
+      // URLパラメータから日付を取得
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        // URLに有効な日付がある場合はそれを使用
+        currentDate = new Date(dateParam + 'T00:00:00');
+        loadAssignments();
+      } else {
+        // URLに日付がない場合はサーバー日付を取得
+        google.script.run
+          .withSuccessHandler(function(serverDate) {
+            currentDate = new Date(serverDate + 'T00:00:00');
+            updateUrlDate();
+            loadAssignments();
+          })
+          .withFailureHandler(function(error) {
+            console.error('getServerDate failed:', error);
+            currentDate = new Date();
+            updateUrlDate();
+            loadAssignments();
+          })
+          .getServerDate();
+      }
+    }
+
+    function updateUrlDate() {
+      const dateStr = formatDateISO(currentDate);
+      const url = new URL(window.location);
+      url.searchParams.set('date', dateStr);
+      history.replaceState(null, '', url);
+    }
+
+    function setupEventListeners() {
+      document.getElementById('prev-day').addEventListener('click', () => changeDate(-1));
+      document.getElementById('next-day').addEventListener('click', () => changeDate(1));
+      document.getElementById('today-btn').addEventListener('click', () => {
+        google.script.run
+          .withSuccessHandler(function(serverDate) {
+            currentDate = new Date(serverDate + 'T00:00:00');
+            updateUrlDate();
+            loadAssignments();
+          })
+          .withFailureHandler(function(error) {
+            currentDate = new Date();
+            updateUrlDate();
+            loadAssignments();
+          })
+          .getServerDate();
+      });
+    }
+
+    function changeDate(delta) {
+      currentDate.setDate(currentDate.getDate() + delta);
+      updateUrlDate();
+      loadAssignments();
+    }
+
+    function loadAssignments() {
+      const dateStr = formatDateISO(currentDate);
+      const requestId = ++currentRequestId;  // 新しいリクエストID（古いレスポンスは無視される）
+
+      isLoading = true;
+      updateDateDisplay();
+
+      document.getElementById('jobs-tbody').innerHTML = '<tr><td colspan="7" class="loading">読み込み中...</td></tr>';
+
+      google.script.run
+        .withSuccessHandler((response) => handleData(response, requestId, dateStr))
+        .withFailureHandler((error) => handleError(error, requestId))
+        .getDashboardAssignments(dateStr);
+    }
+
+    function handleData(response, requestId, requestedDate) {
+      // 古いリクエストのレスポンスは無視
+      if (requestId !== currentRequestId) {
+        console.log('Ignoring stale response for request', requestId);
+        return;
+      }
+
+      isLoading = false;
+
+      if (!response.ok) {
+        showToast(response.error?.message || 'データの取得に失敗しました', 'error');
+        return;
+      }
+
+      // 現在の日付と一致するか確認
+      const currentDateStr = formatDateISO(currentDate);
+      if (requestedDate !== currentDateStr) {
+        console.log('Date mismatch, ignoring response');
+        return;
+      }
+
+      const { jobs } = response.data;
+
+      // フロントエンドでサマリーを計算（キャンセル済み案件を除外）
+      let totalRequired = 0;
+      let totalAssigned = 0;
+
+      if (jobs && jobs.length > 0) {
+        for (const job of jobs) {
+          if (job.status === 'cancelled') continue;
+          totalRequired += Number(job.required_count) || 0;
+          totalAssigned += Number(job.assigned_count) || 0;
+        }
+      }
+
+      const totalShortage = totalRequired - totalAssigned;
+
+      // Update summary
+      document.getElementById('summary-required').textContent = totalRequired;
+      document.getElementById('summary-assigned').textContent = totalAssigned;
+      document.getElementById('summary-shortage').textContent = totalShortage;
+
+      const shortageEl = document.getElementById('summary-shortage');
+      if (totalShortage <= 0) {
+        shortageEl.className = 'summary-card-value ok';
+        shortageEl.textContent = totalShortage === 0 ? '0' : '+' + Math.abs(totalShortage);
+      } else {
+        shortageEl.className = 'summary-card-value shortage';
+      }
+
+      // Render jobs
+      renderJobs(jobs);
+    }
+
+    function handleError(error, requestId) {
+      // 古いリクエストのエラーは無視
+      if (requestId !== currentRequestId) return;
+
+      isLoading = false;
+      showToast('エラー: ' + error.message, 'error');
+      document.getElementById('jobs-tbody').innerHTML = '<tr><td colspan="7" class="empty-state">データの読み込みに失敗しました</td></tr>';
+    }
+
+    function renderJobs(jobs) {
+      const tbody = document.getElementById('jobs-tbody');
+
+      // キャンセル済み案件を除外
+      const activeJobs = (jobs || []).filter(job => job.status !== 'cancelled');
+
+      if (activeJobs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">この日の案件はありません</td></tr>';
+        return;
+      }
+
+      let html = '';
+      activeJobs.forEach((job) => {
+        const validAssignments = (job.assignments || []).filter(a => a.status !== 'CANCELLED');
+        const shortage = (job.required_count || 0) - (job.assigned_count || 0);
+
+        // スタッフ名をカンマ区切りで表示
+        const staffNames = validAssignments.length > 0
+          ? validAssignments.map(a => escapeHtml(a.staff_name || a.staff_id)).join(', ')
+          : '<span class="no-assignments">-</span>';
+
+        html += `
+          <tr class="job-row" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
+            <td><span class="job-time-slot">${formatTimeSlot(job.time_slot)}</span></td>
+            <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
+            <td><span class="job-customer">${escapeHtml(job.customer_name || '-')}</span></td>
+            <td class="staff-cell">${staffNames}</td>
+            <td class="text-center">${job.required_count || 0}</td>
+            <td class="text-center">${job.assigned_count || 0}</td>
+            <td class="text-center">
+              ${shortage > 0
+                ? `<span class="stat-badge shortage">-${shortage}</span>`
+                : shortage < 0
+                  ? `<span class="stat-badge ok">+${Math.abs(shortage)}</span>`
+                  : '<span class="stat-badge ok">0</span>'
+              }
+            </td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+    }
+
+    // ========== Modal State ==========
+    let modalState = {
+      jobId: null,
+      job: null,
+      assignments: [],
+      allStaff: [],
+      filteredStaff: [],
+      transportAreas: [],
+      jobUpdatedAt: null,
+      selectedStaffIds: [],  // 選択中のスタッフID
+      isSaving: false,  // 保存中フラグ
+      deleteQueue: []  // 削除キュー
+    };
+
+    // ========== Modal Functions ==========
+    function openJobAssignments(jobId) {
+      modalState.jobId = jobId;
+      modalState.selectedStaffIds = [];
+
+      // Show modal
+      document.getElementById('assignment-modal').style.display = 'flex';
+
+      // Reset filters and search
+      document.getElementById('staff-search').value = '';
+      document.getElementById('staff-skill-filter').value = '';
+      document.getElementById('staff-type-filter').value = '';
+
+      // Reset batch button
+      updateBatchButton();
+
+      // Load data
+      loadModalData(jobId);
+
+      // Load transport areas (cached)
+      loadTransportAreas();
+    }
+
+    function closeAssignmentModal() {
+      const jobId = modalState.jobId;
+      const job = modalState.job;
+      const assignments = modalState.assignments;
+
+      document.getElementById('assignment-modal').style.display = 'none';
+
+      // 部分更新: 該当行だけ更新
+      if (jobId && job) {
+        updateJobRow(jobId, job, assignments);
+        updateSummaryFromTable();
+      }
+
+      modalState = {
+        jobId: null,
+        job: null,
+        assignments: [],
+        allStaff: [],
+        filteredStaff: [],
+        transportAreas: modalState.transportAreas, // Keep cache
+        jobUpdatedAt: null,
+        selectedStaffIds: [],
+        isSaving: false,
+        deleteQueue: []
+      };
+    }
+
+    // 特定の行だけ更新
+    function updateJobRow(jobId, job, assignments) {
+      const row = document.querySelector(`tr[data-job-id="${jobId}"]`);
+      if (!row) return;
+
+      const validAssignments = (assignments || []).filter(a => a.status !== 'CANCELLED');
+      const assignedCount = validAssignments.length;
+      const requiredCount = Number(job.required_count) || 0;
+      const shortage = requiredCount - assignedCount;
+
+      const staffNames = validAssignments.length > 0
+        ? validAssignments.map(a => escapeHtml(a.staff_name || a.staff_id)).join(', ')
+        : '<span class="no-assignments">-</span>';
+
+      row.innerHTML = `
+        <td><span class="job-time-slot">${formatTimeSlot(job.time_slot)}</span></td>
+        <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
+        <td><span class="job-customer">${escapeHtml(job.customer_name || '-')}</span></td>
+        <td class="staff-cell">${staffNames}</td>
+        <td class="text-center">${requiredCount}</td>
+        <td class="text-center">${assignedCount}</td>
+        <td class="text-center">
+          ${shortage > 0
+            ? `<span class="stat-badge shortage">-${shortage}</span>`
+            : shortage < 0
+              ? `<span class="stat-badge ok">+${Math.abs(shortage)}</span>`
+              : '<span class="stat-badge ok">0</span>'
+          }
+        </td>
+      `;
+    }
+
+    // テーブルからサマリーを再計算
+    function updateSummaryFromTable() {
+      const rows = document.querySelectorAll('#jobs-tbody tr.job-row');
+      let totalRequired = 0;
+      let totalAssigned = 0;
+
+      rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 6) {
+          totalRequired += parseInt(cells[4].textContent) || 0;
+          totalAssigned += parseInt(cells[5].textContent) || 0;
+        }
+      });
+
+      const totalShortage = totalRequired - totalAssigned;
+
+      document.getElementById('summary-required').textContent = totalRequired;
+      document.getElementById('summary-assigned').textContent = totalAssigned;
+
+      const shortageEl = document.getElementById('summary-shortage');
+      if (totalShortage <= 0) {
+        shortageEl.className = 'summary-card-value ok';
+        shortageEl.textContent = totalShortage === 0 ? '0' : '+' + Math.abs(totalShortage);
+      } else {
+        shortageEl.className = 'summary-card-value shortage';
+        shortageEl.textContent = totalShortage;
+      }
+    }
+
+    function loadModalData(jobId) {
+      // Show loading
+      document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+      document.getElementById('assigned-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+
+      // Load job and assignments
+      google.script.run
+        .withSuccessHandler(handleAssignmentData)
+        .withFailureHandler(handleModalError)
+        .getAssignments(jobId);
+
+      // Load available staff
+      google.script.run
+        .withSuccessHandler(handleStaffData)
+        .withFailureHandler(handleModalError)
+        .getAvailableStaff({ jobId: jobId, excludeAssigned: false });
+    }
+
+    function handleAssignmentData(response) {
+      if (!response.ok) {
+        showToast(response.error?.message || 'データの取得に失敗しました', 'error');
+        return;
+      }
+
+      const { job, assignments } = response.data;
+      modalState.job = job;
+      modalState.assignments = assignments || [];
+      modalState.jobUpdatedAt = job.updated_at;
+
+      // Update header
+      document.getElementById('modal-job-name').textContent = job.site_name || '-';
+      document.getElementById('modal-job-date').textContent = formatModalDate(job.work_date);
+      document.getElementById('modal-job-time').textContent = formatTimeSlot(job.time_slot);
+      document.getElementById('modal-job-type').textContent = job.job_type || '-';
+
+      // Update stats
+      updateModalStats();
+
+      // Render assigned list
+      renderAssignedList();
+
+      // Re-render staff list if already loaded (to show assigned status)
+      if (modalState.allStaff.length > 0) {
+        filterStaffList();
+      }
+    }
+
+    function handleStaffData(response) {
+      if (!response.ok) {
+        document.getElementById('staff-list').innerHTML = '<div class="panel-empty">スタッフの取得に失敗しました</div>';
+        return;
+      }
+
+      modalState.allStaff = response.data.staff || [];
+      filterStaffList();
+    }
+
+    function handleModalError(error) {
+      showToast('エラー: ' + error.message, 'error');
+    }
+
+    function updateModalStats() {
+      const validAssignments = modalState.assignments.filter(a => a.status !== 'CANCELLED');
+      const assigned = validAssignments.length;
+      const required = Number(modalState.job?.required_count) || 0;
+      const shortage = required - assigned;
+
+      document.getElementById('modal-required').textContent = required;
+      document.getElementById('modal-assigned').textContent = assigned;
+
+      const shortageBadge = document.getElementById('modal-shortage-badge');
+      const shortageValue = document.getElementById('modal-shortage');
+
+      if (shortage > 0) {
+        shortageBadge.style.display = 'inline-flex';
+        shortageValue.textContent = shortage;
+      } else {
+        shortageBadge.style.display = 'none';
+      }
+    }
+
+    function filterStaffList() {
+      const searchQuery = document.getElementById('staff-search').value.toLowerCase();
+      const skillFilter = document.getElementById('staff-skill-filter').value;
+      const typeFilter = document.getElementById('staff-type-filter').value;
+
+      // Get assigned staff IDs
+      const assignedIds = modalState.assignments
+        .filter(a => a.status !== 'CANCELLED')
+        .map(a => a.staff_id);
+
+      // Filter staff (配置済みも含める)
+      let filtered = modalState.allStaff.filter(s => {
+        // Name search (漢字・かな両方)
+        if (searchQuery) {
+          const name = (s.name || '').toLowerCase();
+          const kana = (s.name_kana || '').toLowerCase();
+          if (!name.includes(searchQuery) && !kana.includes(searchQuery)) return false;
+        }
+
+        // Skill filter
+        if (skillFilter && s.skills) {
+          const skills = s.skills.split(',').map(sk => sk.trim());
+          if (!skills.includes(skillFilter)) return false;
+        }
+
+        // Type filter
+        if (typeFilter && s.staff_type !== typeFilter) {
+          return false;
+        }
+
+        return true;
+      });
+
+      // Sort: 配置済みを先頭に、その後かな順
+      filtered.sort((a, b) => {
+        const aAssigned = assignedIds.includes(a.staff_id) ? 0 : 1;
+        const bAssigned = assignedIds.includes(b.staff_id) ? 0 : 1;
+        if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+        const nameA = a.name_kana || a.name || '';
+        const nameB = b.name_kana || b.name || '';
+        return nameA.localeCompare(nameB, 'ja');
+      });
+
+      modalState.filteredStaff = filtered;
+      renderStaffList();
+    }
+
+    function renderStaffList() {
+      const container = document.getElementById('staff-list');
+      const staff = modalState.filteredStaff;
+      const jobType = modalState.job?.job_type;
+
+      // Get assigned staff IDs
+      const assignedIds = modalState.assignments
+        .filter(a => a.status !== 'CANCELLED')
+        .map(a => a.staff_id);
+
+      if (staff.length === 0) {
+        container.innerHTML = '<div class="panel-empty">該当するスタッフがいません</div>';
+        updateSelectedCount();
+        return;
+      }
+
+      const typeLabels = {
+        'regular': '自社',
+        'student': '学生',
+        'sole_proprietor': '個人',
+        'subcontract': '外注'
+      };
+
+      container.innerHTML = staff.map(s => {
+        const typeLabel = typeLabels[s.staff_type] || s.staff_type;
+        const typeClass = s.staff_type || 'employee';
+        const isAssigned = assignedIds.includes(s.staff_id);
+        const isSelected = modalState.selectedStaffIds.includes(s.staff_id);
+
+        // Check skill match
+        const skills = s.skills ? s.skills.split(',').map(sk => sk.trim()) : [];
+
+        if (isAssigned) {
+          // 配置済みスタッフ: 選択可能（一括更新用）
+          return `
+            <div class="staff-list-item assigned ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
+              <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+              <div class="staff-list-info">
+                <span class="staff-list-name">${escapeHtml(s.name)}</span>
+                <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+                ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+                <span class="assigned-label">配置済</span>
+              </div>
+            </div>
+          `;
+        }
+
+        return `
+          <div class="staff-list-item ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
+            <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+            <div class="staff-list-info">
+              <span class="staff-list-name">${escapeHtml(s.name)}</span>
+              <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+              ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      updateSelectedCount();
+    }
+
+    function toggleStaffSelection(staffId) {
+      const idx = modalState.selectedStaffIds.indexOf(staffId);
+      if (idx === -1) {
+        modalState.selectedStaffIds.push(staffId);
+      } else {
+        modalState.selectedStaffIds.splice(idx, 1);
+      }
+      renderStaffList();
+      updateBatchButton();
+    }
+
+    function updateSelectedCount() {
+      const count = modalState.selectedStaffIds.length;
+      const countEl = document.getElementById('selected-count');
+      countEl.textContent = count > 0 ? `${count}名選択中` : '';
+    }
+
+    function updateBatchButton() {
+      const btn = document.getElementById('batch-add-btn');
+      const count = modalState.selectedStaffIds.length;
+      btn.disabled = count === 0;
+      btn.textContent = count > 0 ? `${count}名を保存` : '選択したスタッフを保存';
+    }
+
+    function selectAllAssigned() {
+      const assignedIds = modalState.assignments
+        .filter(a => a.status !== 'CANCELLED')
+        .map(a => a.staff_id);
+
+      // 配置済みスタッフを全て選択状態に
+      assignedIds.forEach(id => {
+        if (!modalState.selectedStaffIds.includes(id)) {
+          modalState.selectedStaffIds.push(id);
+        }
+      });
+
+      renderStaffList();
+      updateBatchButton();
+    }
+
+    function batchAddStaff() {
+      if (modalState.isSaving) return;  // 保存中は無視
+
+      const selectedIds = modalState.selectedStaffIds;
+      if (selectedIds.length === 0) return;
+
+      const payUnit = document.getElementById('form-pay-unit').value;
+      const invoiceUnit = document.getElementById('form-invoice-unit').value;
+      const transportArea = document.getElementById('form-transport-area').value;
+      const transportAmount = document.getElementById('form-transport-amount').value;
+
+      // 配置済みスタッフのassignment_idマップ
+      const assignmentMap = {};
+      modalState.assignments.filter(a => a.status !== 'CANCELLED').forEach(a => {
+        assignmentMap[a.staff_id] = a.assignment_id;
+      });
+
+      // 選択されたスタッフの情報を取得
+      const upserts = selectedIds.map(staffId => {
+        const staff = modalState.allStaff.find(s => s.staff_id === staffId);
+        const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
+
+        const data = {
+          staff_id: staffId,
+          worker_type: workerType,
+          pay_unit: payUnit,
+          invoice_unit: invoiceUnit
+        };
+
+        // 既存配置の場合はassignment_idを追加（更新になる）
+        if (assignmentMap[staffId]) {
+          data.assignment_id = assignmentMap[staffId];
+        }
+
+        if (transportArea) {
+          data.transport_area = transportArea;
+        }
+        if (transportAmount) {
+          data.transport_amount = Number(transportAmount);
+        }
+
+        return data;
+      });
+
+      const changes = {
+        upserts: upserts,
+        deletes: []
+      };
+
+      // === 楽観的更新: UIを即座に更新 ===
+      const addedCount = selectedIds.length;
+
+      // 新規追加・更新をローカルに反映
+      for (const upsert of upserts) {
+        const staff = modalState.allStaff.find(s => s.staff_id === upsert.staff_id);
+
+        if (upsert.assignment_id) {
+          // 既存配置の更新
+          const idx = modalState.assignments.findIndex(a => a.assignment_id === upsert.assignment_id);
+          if (idx !== -1) {
+            modalState.assignments[idx] = {
+              ...modalState.assignments[idx],
+              pay_unit: upsert.pay_unit,
+              invoice_unit: upsert.invoice_unit,
+              transport_area: upsert.transport_area || modalState.assignments[idx].transport_area,
+              transport_amount: upsert.transport_amount || modalState.assignments[idx].transport_amount
+            };
+          }
+        } else {
+          // 新規配置（仮IDで追加）
+          const tempAssignment = {
+            assignment_id: 'temp_' + upsert.staff_id,
+            job_id: modalState.jobId,
+            staff_id: upsert.staff_id,
+            staff_name: staff?.name || '',
+            worker_type: upsert.worker_type,
+            pay_unit: upsert.pay_unit,
+            invoice_unit: upsert.invoice_unit,
+            transport_area: upsert.transport_area || '',
+            transport_amount: upsert.transport_amount || 0,
+            status: 'ASSIGNED'
+          };
+          modalState.assignments.push(tempAssignment);
+        }
+      }
+
+      // 選択をクリアしてUI更新
+      modalState.selectedStaffIds = [];
+      updateModalStats();
+      renderAssignedList();
+      filterStaffList();
+      updateBatchButton();
+
+      // === バックグラウンドでAPI呼び出し ===
+      modalState.isSaving = true;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          modalState.isSaving = false;
+
+          if (response.ok) {
+            showToast(`${addedCount}名を保存しました`, 'success');
+
+            // サーバーからの正式データで差し替え
+            modalState.assignments = response.data.assignments || [];
+            modalState.jobUpdatedAt = response.data.job?.updated_at;
+
+            // Re-render with real data
+            updateModalStats();
+            renderAssignedList();
+            filterStaffList();
+          } else {
+            // エラー時はデータ再読み込み
+            showToast(response.error?.message || '保存に失敗しました', 'error');
+            loadModalData(modalState.jobId);
+          }
+        })
+        .withFailureHandler(function(error) {
+          modalState.isSaving = false;
+          showToast('エラー: ' + error.message, 'error');
+          loadModalData(modalState.jobId);
+        })
+        .saveAssignments(modalState.jobId, changes, modalState.jobUpdatedAt);
+    }
+
+    function renderAssignedList() {
+      const container = document.getElementById('assigned-list');
+      const assignments = modalState.assignments.filter(a => a.status !== 'CANCELLED');
+
+      if (assignments.length === 0) {
+        container.innerHTML = '<div class="panel-empty">配置されたスタッフはいません</div>';
+        return;
+      }
+
+      container.innerHTML = assignments.map(a => {
+        const workerType = a.worker_type === 'SUBCONTRACT' ? '外注' : '自社';
+        const payUnit = formatPayUnit(a.pay_unit);
+        const transport = a.transport_amount ? a.transport_amount.toLocaleString() + '円' : (a.transport_area || '-');
+
+        return `
+          <div class="assignment-list-item">
+            <div class="assignment-info">
+              <div class="assignment-staff-name">${escapeHtml(a.staff_name || a.staff_id)}</div>
+              <div class="assignment-details">
+                <span>${workerType}</span>
+                <span>${payUnit}</span>
+                <span>交通費: ${transport}</span>
+              </div>
+            </div>
+            <div class="assignment-actions">
+              <button class="btn-icon" onclick="editAssignment('${a.assignment_id}')" title="編集">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+              <button class="btn-icon btn-delete" onclick="removeAssignment('${a.assignment_id}')" title="削除">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ========== Assignment Edit ==========
+    let editingAssignment = null;
+
+    function editAssignment(assignmentId) {
+      const assignment = modalState.assignments.find(a => a.assignment_id === assignmentId);
+      if (!assignment) {
+        showToast('配置データが見つかりません', 'error');
+        return;
+      }
+
+      editingAssignment = assignment;
+
+      // 編集モーダルを表示
+      document.getElementById('edit-staff-name').textContent = assignment.staff_name;
+      document.getElementById('edit-pay-unit').value = assignment.pay_unit || 'FULLDAY';
+      document.getElementById('edit-invoice-unit').value = assignment.invoice_unit || 'FULLDAY';
+      document.getElementById('edit-transport-area').value = assignment.transport_area || '';
+      document.getElementById('edit-transport-amount').value = assignment.transport_amount || '';
+
+      document.getElementById('edit-modal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+      document.getElementById('edit-modal').style.display = 'none';
+      editingAssignment = null;
+    }
+
+    function saveEditAssignment() {
+      if (!editingAssignment) return;
+
+      const changes = {
+        upserts: [{
+          assignment_id: editingAssignment.assignment_id,
+          staff_id: editingAssignment.staff_id,
+          pay_unit: document.getElementById('edit-pay-unit').value,
+          invoice_unit: document.getElementById('edit-invoice-unit').value,
+          transport_area: document.getElementById('edit-transport-area').value,
+          transport_amount: Number(document.getElementById('edit-transport-amount').value) || 0,
+          transport_is_manual: true
+        }],
+        deletes: []
+      };
+
+      const btn = document.getElementById('edit-save-btn');
+      btn.disabled = true;
+      btn.textContent = '保存中...';
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          btn.disabled = false;
+          btn.textContent = '保存';
+
+          if (response.ok) {
+            showToast('更新しました', 'success');
+            modalState.assignments = response.data.assignments || [];
+            modalState.jobUpdatedAt = response.data.job?.updated_at;
+            updateModalStats();
+            renderAssignedList();
+            filterStaffList();
+            closeEditModal();
+          } else {
+            showToast(response.error?.message || '保存に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          btn.disabled = false;
+          btn.textContent = '保存';
+          showToast('エラー: ' + error.message, 'error');
+        })
+        .saveAssignments(modalState.jobId, changes, modalState.jobUpdatedAt);
+    }
+
+    function loadTransportAreas() {
+      if (modalState.transportAreas.length > 0) {
+        populateTransportAreas();
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok) {
+            modalState.transportAreas = response.data.areas || [];
+            populateTransportAreas();
+          }
+        })
+        .getTransportFeeAreas();
+    }
+
+    function populateTransportAreas() {
+      // 一括設定用
+      populateTransportAreaSelect('form-transport-area');
+      // 編集モーダル用
+      populateTransportAreaSelect('edit-transport-area');
+    }
+
+    function populateTransportAreaSelect(selectId) {
+      const select = document.getElementById(selectId);
+      if (!select) return;
+
+      const currentValue = select.value;
+
+      select.innerHTML = '<option value="">選択してください</option>';
+      modalState.transportAreas.forEach(area => {
+        const option = document.createElement('option');
+        option.value = area.area_code;
+        option.textContent = area.area_name + ' (' + (area.default_fee || 0).toLocaleString() + '円)';
+        option.dataset.fee = area.default_fee || 0;
+        select.appendChild(option);
+      });
+
+      if (currentValue) {
+        select.value = currentValue;
+      }
+    }
+
+    function onTransportAreaChange() {
+      const select = document.getElementById('form-transport-area');
+      const amountInput = document.getElementById('form-transport-amount');
+
+      if (select.value) {
+        const selectedOption = select.options[select.selectedIndex];
+        const fee = selectedOption.dataset.fee || 0;
+        amountInput.value = fee;
+      }
+    }
+
+    function onEditTransportAreaChange() {
+      const select = document.getElementById('edit-transport-area');
+      const amountInput = document.getElementById('edit-transport-amount');
+
+      if (select.value) {
+        const selectedOption = select.options[select.selectedIndex];
+        const fee = selectedOption.dataset.fee || 0;
+        amountInput.value = fee;
+      }
+    }
+
+    function removeAssignment(assignmentId) {
+      // キューに追加
+      if (!modalState.deleteQueue.includes(assignmentId)) {
+        modalState.deleteQueue.push(assignmentId);
+      }
+
+      // UIから即座に削除（楽観的更新）
+      modalState.assignments = modalState.assignments.filter(a => a.assignment_id !== assignmentId);
+      renderAssignedList();
+      updateModalStats();
+      filterStaffList();
+
+      // キュー処理開始
+      processDeleteQueue();
+    }
+
+    function processDeleteQueue() {
+      if (modalState.isSaving || modalState.deleteQueue.length === 0) return;
+
+      modalState.isSaving = true;
+      const assignmentId = modalState.deleteQueue.shift();
+
+      const changes = {
+        upserts: [],
+        deletes: [assignmentId]
+      };
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          modalState.isSaving = false;
+
+          if (response.ok) {
+            modalState.jobUpdatedAt = response.data.job?.updated_at;
+            // 次のキューを処理
+            processDeleteQueue();
+          } else {
+            showToast(response.error?.message || '削除に失敗しました', 'error');
+            // エラー時はリロード
+            loadModalData(modalState.jobId);
+          }
+        })
+        .withFailureHandler(function(error) {
+          modalState.isSaving = false;
+          showToast('エラー: ' + error.message, 'error');
+          loadModalData(modalState.jobId);
+        })
+        .saveAssignments(modalState.jobId, changes, modalState.jobUpdatedAt);
+    }
+
+    function saveAssignmentChanges(changes) {
+      if (modalState.isSaving) return;
+      modalState.isSaving = true;
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          modalState.isSaving = false;
+
+          if (response.ok) {
+            showToast('保存しました', 'success');
+
+            // Update state
+            modalState.assignments = response.data.assignments || [];
+            modalState.jobUpdatedAt = response.data.job?.updated_at;
+
+            // Re-render
+            updateModalStats();
+            renderAssignedList();
+            filterStaffList();
+          } else {
+            if (response.error?.code === 'CONFLICT_ERROR') {
+              showToast('他のユーザーが変更を行いました。画面を更新してください。', 'error');
+              loadModalData(modalState.jobId);
+            } else {
+              showToast(response.error?.message || '保存に失敗しました', 'error');
+            }
+          }
+        })
+        .withFailureHandler(function(error) {
+          modalState.isSaving = false;
+          showToast('エラー: ' + error.message, 'error');
+        })
+        .saveAssignments(modalState.jobId, changes, modalState.jobUpdatedAt);
+    }
+
+    function formatModalDate(dateStr) {
+      if (!dateStr) return '-';
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' });
+    }
+
+    function formatPayUnit(unit) {
+      const units = { 'FULLDAY': '終日', 'HALFDAY': '半日', 'HOURLY': '時給' };
+      return units[unit] || unit || '-';
+    }
+
+    function updateDateDisplay() {
+      const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
+      document.getElementById('current-date').textContent = currentDate.toLocaleDateString('ja-JP', options);
+    }
+
+    function formatDateISO(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function formatTimeSlot(slot) {
+      const slots = {
+        'jotou': '上棟',
+        'shuujitsu': '終日',
+        'am': 'AM',
+        'pm': 'PM',
+        'yakin': '夜勤',
+        'mitei': '未定'
+      };
+      return slots[slot] || slot || '-';
+    }
+
+    function formatWorkerType(type) {
+      return type === 'SUBCONTRACT' ? '外注' : '自社';
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + type;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+  </script>
+</body>
+</html>

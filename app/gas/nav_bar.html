@@ -4,6 +4,7 @@
   <nav class="header-nav">
     <a href="#" id="nav-dashboard">ダッシュボード</a>
     <a href="#" id="nav-jobs">案件一覧</a>
+    <a href="#" id="nav-assignments">配置管理</a>
     <a href="#" id="nav-customers">顧客</a>
     <a href="#" id="nav-staff">スタッフ</a>
     <div class="nav-dropdown">
@@ -26,6 +27,7 @@ function initNavBar(currentPage, pageTitle) {
   const navMap = {
     'dashboard': 'nav-dashboard',
     'jobs': 'nav-jobs',
+    'assignments': 'nav-assignments',
     'customers': 'nav-customers',
     'staff': 'nav-staff',
     'subcontractors': 'nav-settings',
@@ -46,6 +48,10 @@ function initNavBar(currentPage, pageTitle) {
   document.getElementById('nav-jobs').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('jobs');
+  });
+  document.getElementById('nav-assignments').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('assignments');
   });
   document.getElementById('nav-customers').addEventListener('click', (e) => {
     e.preventDefault();
