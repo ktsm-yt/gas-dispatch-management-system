@@ -25,11 +25,11 @@ function getDatabase() {
 }
 
 /**
- * シートを取得
- * @param {string} sheetName - シート名
+ * シートを取得（直接シート名で検索）
+ * @param {string} sheetName - シート名（日本語）
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
-function getSheet(sheetName) {
+function getSheetDirect(sheetName) {
   const ss = getDatabase();
   const sheet = ss.getSheetByName(sheetName);
 

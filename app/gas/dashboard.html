@@ -76,6 +76,58 @@
       background: rgba(255,255,255,0.1);
     }
 
+    .header-nav > a.active,
+    .header-nav .nav-dropdown > a.active {
+      opacity: 1;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .header-nav > a.active::after,
+    .header-nav .nav-dropdown > a.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -4px;
+      height: 2px;
+      background: white;
+      border-radius: 1px;
+    }
+
+    .nav-dropdown {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .nav-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-card);
+      min-width: 150px;
+      z-index: 100;
+      margin-top: 4px;
+    }
+
+    .nav-dropdown-menu a {
+      display: block;
+      color: var(--text-primary);
+      padding: var(--spacing-sm) var(--spacing-md);
+      opacity: 1;
+    }
+
+    .nav-dropdown-menu a:hover {
+      background: var(--bg-hover);
+    }
+
+    .nav-dropdown.open .nav-dropdown-menu {
+      display: block;
+    }
+
     /* Date Navigation */
     .date-nav {
       background: var(--bg-card);
@@ -140,11 +192,11 @@
       min-height: calc(100vh - 200px);
     }
 
-    /* Column */
+    /* Column - Compact */
     .column {
       background: var(--bg-card);
-      border-radius: var(--radius-md);
-      padding: var(--spacing-md);
+      border-radius: var(--radius-sm);
+      padding: 8px;
       display: flex;
       flex-direction: column;
     }
@@ -153,39 +205,58 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: var(--spacing-md);
-      padding-bottom: var(--spacing-sm);
+      margin-bottom: 6px;
+      padding-bottom: 4px;
       border-bottom: 2px solid var(--color-secondary);
     }
 
     .column-title {
       font-weight: 600;
-      font-size: 14px;
+      font-size: 12px;
     }
 
     .column-count {
       display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      font-size: 12px;
+      align-items: center;
+      gap: 6px;
     }
 
     .column-count .total {
-      font-size: 18px;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 700;
       color: var(--color-primary);
+      line-height: 1;
+    }
+
+    .column-count .total-label {
+      font-size: 9px;
+      color: var(--text-muted);
+      margin-right: 4px;
     }
 
     .column-count .shortage {
-      font-size: 11px;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 3px;
+      white-space: nowrap;
     }
 
     .shortage.negative {
-      color: var(--color-danger);
+      background: var(--color-danger);
+      color: white;
     }
 
     .shortage.positive {
-      color: var(--color-success);
+      background: var(--color-success);
+      color: white;
+    }
+
+    .shortage.neutral {
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 9px;
+      padding: 0;
     }
 
     .column-cards {
@@ -193,42 +264,46 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-sm);
+      gap: 4px;
     }
 
-    /* Job Card */
+    /* Job Card - Compact */
     .job-card {
       background: white;
-      border-radius: var(--radius-sm);
-      padding: var(--spacing-sm);
-      box-shadow: var(--shadow-card);
+      border-radius: 3px;
+      padding: 5px 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       cursor: pointer;
-      transition: transform 0.1s, box-shadow 0.1s;
+      transition: background 0.1s;
+      border-left: 3px solid transparent;
     }
 
     .job-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      background: var(--bg-hover);
+    }
+
+    .job-card.has-shortage {
+      border-left-color: var(--color-danger);
     }
 
     .job-card-header {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: var(--spacing-xs);
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 2px;
     }
 
     .job-tags {
       display: flex;
-      gap: 4px;
+      flex-shrink: 0;
     }
 
     .tag {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
+      font-size: 9px;
+      padding: 1px 4px;
+      border-radius: 2px;
       color: white;
-      font-weight: 500;
+      font-weight: 600;
     }
 
     .tag-tobi { background: var(--tag-tobi); }
@@ -236,46 +311,18 @@
     .tag-tobiage { background: var(--tag-tobiage); }
 
     .customer-name {
+      flex: 1;
       font-size: 11px;
-      color: var(--text-muted);
-      text-align: right;
-      max-width: 80px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .site-name {
-      font-size: 13px;
       font-weight: 500;
-      margin-bottom: var(--spacing-xs);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .staff-list {
-      font-size: 11px;
-      color: var(--text-muted);
-      margin-bottom: var(--spacing-xs);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .job-card-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .start-time {
-      font-size: 11px;
-      color: var(--text-muted);
+      min-width: 0;
     }
 
     .staff-count {
-      font-size: 12px;
+      flex-shrink: 0;
+      font-size: 10px;
       font-weight: 600;
       color: var(--color-primary);
     }
@@ -284,12 +331,36 @@
       color: var(--color-danger);
     }
 
+    .job-card-footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+      color: var(--text-muted);
+    }
+
+    .site-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .start-time {
+      flex-shrink: 0;
+    }
+
+    .staff-list {
+      display: none; /* 非表示にしてコンパクト化 */
+    }
+
     /* Status badge */
     .status-badge {
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-weight: 500;
+      font-size: 8px;
+      padding: 1px 3px;
+      border-radius: 2px;
+      font-weight: 600;
     }
 
     .status-pending { background: #6C757D; color: white; }
@@ -374,10 +445,18 @@
   <header class="header">
     <div class="header-title">配置管理システム</div>
     <nav class="header-nav">
-      <a href="#" id="nav-dashboard">ダッシュボード</a>
+      <a href="#" id="nav-dashboard" class="active">ダッシュボード</a>
       <a href="#" id="nav-jobs">案件一覧</a>
-      <a href="#" id="nav-staff">スタッフ</a>
       <a href="#" id="nav-customers">顧客</a>
+      <a href="#" id="nav-staff">スタッフ</a>
+      <div class="nav-dropdown">
+        <a href="#" id="nav-settings">設定</a>
+        <div class="nav-dropdown-menu" id="settings-menu">
+          <a href="#" id="nav-subcontractors">外注先</a>
+          <a href="#" id="nav-transport">交通費</a>
+          <a href="#" id="nav-company">自社情報</a>
+        </div>
+      </div>
     </nav>
   </header>
 
@@ -423,11 +502,12 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="customer-id">顧客 *</label>
-              <select id="customer-id" name="customer_id" required>
-                <option value="">選択してください</option>
-                <!-- TODO: Load from API -->
-              </select>
+              <label for="customer-search">顧客 *</label>
+              <div class="autocomplete-wrapper">
+                <input type="text" id="customer-search" placeholder="会社名を入力..." autocomplete="off" required>
+                <input type="hidden" id="customer-id" name="customer_id">
+                <div class="autocomplete-dropdown" id="customer-dropdown"></div>
+              </div>
             </div>
             <div class="form-group">
               <label for="work-date">作業日 *</label>
@@ -630,6 +710,58 @@
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
     }
 
+    /* Autocomplete */
+    .autocomplete-wrapper {
+      position: relative;
+    }
+
+    .autocomplete-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .autocomplete-dropdown.show {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: var(--spacing-sm) var(--spacing-md);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.selected {
+      background: var(--bg-hover);
+    }
+
+    .autocomplete-item .company-name {
+      font-weight: 500;
+    }
+
+    .autocomplete-item .branch-name {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-left: var(--spacing-xs);
+    }
+
+    .autocomplete-empty {
+      padding: var(--spacing-sm) var(--spacing-md);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -686,9 +818,13 @@
 
   <script>
     // State
-    let currentDate = new Date();
+    let currentDate = null;  // サーバー時間で初期化
     let dashboardData = null;
     let lastMaxUpdatedAt = null;
+
+    // 日付別キャッシュ（最大5日分）
+    const dateCache = new Map();
+    const MAX_CACHE_SIZE = 5;
 
     // Time slot labels
     const TIME_SLOT_LABELS = {
@@ -712,12 +848,31 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
       renderColumns();
-      loadDashboard();
+      initializeWithServerDate();
       setupEventListeners();
-      startPolling();
+      setupCustomerAutocomplete();
     });
 
+    function initializeWithServerDate() {
+      // サーバー時間（Asia/Tokyo）を取得して初期化
+      google.script.run
+        .withSuccessHandler(function(serverDate) {
+          currentDate = new Date(serverDate + 'T00:00:00');
+          loadDashboard();
+          startPolling();
+        })
+        .withFailureHandler(function(error) {
+          // フォールバック: クライアント時間を使用
+          console.error('getServerDate failed:', error);
+          currentDate = new Date();
+          loadDashboard();
+          startPolling();
+        })
+        .getServerDate();
+    }
+
     function setupEventListeners() {
+      // Date navigation
       document.getElementById('prev-day').addEventListener('click', () => {
         changeDate(-1);
       });
@@ -727,13 +882,70 @@
       });
 
       document.getElementById('today-btn').addEventListener('click', () => {
-        currentDate = new Date();
-        loadDashboard();
+        // サーバー時間で「今日」に移動
+        google.script.run
+          .withSuccessHandler(function(serverDate) {
+            currentDate = new Date(serverDate + 'T00:00:00');
+            loadDashboard();
+          })
+          .withFailureHandler(function(error) {
+            currentDate = new Date();
+            loadDashboard();
+          })
+          .getServerDate();
       });
 
       document.getElementById('add-job-btn').addEventListener('click', () => {
         openJobModal(null);
       });
+
+      // Navigation
+      document.getElementById('nav-dashboard').addEventListener('click', (e) => {
+        e.preventDefault();
+        // Already on this page
+      });
+      document.getElementById('nav-jobs').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('jobs');
+      });
+      document.getElementById('nav-customers').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('customers');
+      });
+      document.getElementById('nav-staff').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('staff');
+      });
+
+      // Settings dropdown
+      const dropdown = document.querySelector('.nav-dropdown');
+      document.getElementById('nav-settings').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      document.addEventListener('click', () => dropdown.classList.remove('open'));
+
+      document.getElementById('nav-subcontractors').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('subcontractors');
+      });
+      document.getElementById('nav-transport').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('transportFees');
+      });
+      document.getElementById('nav-company').addEventListener('click', (e) => {
+        e.preventDefault();
+        navigateTo('company');
+      });
+    }
+
+    function navigateTo(page) {
+      google.script.run
+        .withSuccessHandler(function(url) {
+          window.open(url + '?page=' + page, '_top');
+        })
+        .getScriptUrl();
     }
 
     function changeDate(delta) {
@@ -764,7 +976,10 @@
           <div class="column-header">
             <span class="column-title">${TIME_SLOT_LABELS[slot]}</span>
             <div class="column-count">
-              <span class="total" id="col-total-${slot}">-</span>
+              <div>
+                <span class="total" id="col-total-${slot}">-</span>
+                <span class="total-label">件</span>
+              </div>
               <span class="shortage" id="col-shortage-${slot}">-</span>
             </div>
           </div>
@@ -779,7 +994,21 @@
       const dateStr = formatDate(currentDate);
       document.getElementById('current-date').textContent = formatDisplayDate(currentDate);
 
-      // Show loading
+      // キャッシュがあれば即座に表示
+      const cached = dateCache.get(dateStr);
+      if (cached) {
+        dashboardData = cached;
+        lastMaxUpdatedAt = null;
+        renderDashboard();
+        // バックグラウンドで最新データを取得
+        google.script.run
+          .withSuccessHandler(handleDashboardDataSilent)
+          .withFailureHandler(() => {})  // サイレント
+          .getDashboard(dateStr);
+        return;
+      }
+
+      // キャッシュなし: ローディング表示
       TIME_SLOT_ORDER.forEach(slot => {
         document.getElementById(`col-cards-${slot}`).innerHTML =
           '<div class="loading"><div class="spinner"></div>読み込み中...</div>';
@@ -791,6 +1020,29 @@
         .getDashboard(dateStr);
     }
 
+    // バックグラウンド更新用（差分があれば更新）
+    function handleDashboardDataSilent(response) {
+      if (!response.ok) return;
+
+      const newData = response.data;
+      // キャッシュと比較して変更があれば更新
+      if (JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs)) {
+        dashboardData = newData;
+        saveToCachedDate(newData.date, newData);
+        renderDashboard();
+      }
+    }
+
+    // キャッシュに保存（最大件数管理）
+    function saveToCachedDate(dateStr, data) {
+      dateCache.set(dateStr, data);
+      // 最大件数を超えたら古いものを削除
+      if (dateCache.size > MAX_CACHE_SIZE) {
+        const oldestKey = dateCache.keys().next().value;
+        dateCache.delete(oldestKey);
+      }
+    }
+
     function handleDashboardData(response) {
       if (!response.ok) {
         showToast(response.error?.message || 'データの取得に失敗しました', true);
@@ -800,7 +1052,14 @@
       dashboardData = response.data;
       lastMaxUpdatedAt = null; // Reset for polling
 
-      // Update stats
+      // キャッシュに保存
+      saveToCachedDate(dashboardData.date, dashboardData);
+
+      renderDashboard();
+    }
+
+    // ダッシュボードを描画
+    function renderDashboard() {
       const stats = dashboardData.stats;
       document.getElementById('stats-total').textContent = stats.total;
       document.getElementById('stats-assigned').textContent = stats.assigned;
@@ -814,14 +1073,14 @@
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
         const shortage = slotStats.shortage;
         if (shortage < 0) {
-          shortageEl.textContent = `${shortage}名不足`;
+          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
           shortageEl.className = 'shortage negative';
         } else if (shortage > 0) {
-          shortageEl.textContent = `+${shortage}名`;
+          shortageEl.textContent = `+${shortage}名余裕`;
           shortageEl.className = 'shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
-          shortageEl.className = 'shortage';
+          shortageEl.className = 'shortage neutral';
         }
 
         // Render cards
@@ -840,27 +1099,155 @@
 
       container.innerHTML = jobs.map(job => {
         const tagClass = JOB_TYPE_TAG[job.job_type] || 'tag-age';
-        const staffNames = job.staff_names?.join(', ') || '未配置';
         const hasShortage = job.assigned_count < job.required_count;
+        const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
 
         return `
-          <div class="job-card" data-job-id="${job.job_id}" onclick="openJobModal('${job.job_id}')">
+          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobModal('${job.job_id}')">
             <div class="job-card-header">
-              <div class="job-tags">
-                <span class="tag ${tagClass}">${job.job_type}</span>
-                ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
-              </div>
+              <span class="tag ${tagClass}">${job.job_type}</span>
+              ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${job.customer_name || '-'}</span>
+              <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
             </div>
-            <div class="site-name">${job.site_name}</div>
-            <div class="staff-list">${staffNames}</div>
             <div class="job-card-footer">
+              <span class="site-name">${job.site_name}</span>
               <span class="start-time">${job.start_time || ''}</span>
-              <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}名</span>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    /**
+     * 差分更新：案件を1件だけ更新してカラムを再描画
+     */
+    function updateJobInDashboard(savedJob, isNew) {
+      if (!dashboardData) return;
+
+      // 日付が異なる場合は全体リロード
+      const savedDate = savedJob.work_date instanceof Date
+        ? Utilities.formatDate(savedJob.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+        : savedJob.work_date;
+      if (savedDate !== dashboardData.date) {
+        loadDashboard();
+        return;
+      }
+
+      // 顧客名を取得
+      const customerName = document.getElementById('customer-search').value || '';
+
+      // 更新用のジョブオブジェクト作成
+      const updatedJob = {
+        job_id: savedJob.job_id,
+        customer_id: savedJob.customer_id,
+        customer_name: customerName,
+        site_name: savedJob.site_name || '',
+        site_address: savedJob.site_address || '',
+        time_slot: savedJob.time_slot,
+        start_time: savedJob.start_time || '',
+        job_type: savedJob.job_type,
+        required_count: savedJob.required_count,
+        assigned_count: 0,
+        status: savedJob.status,
+        supervisor_name: savedJob.supervisor_name || '',
+        notes: savedJob.notes || '',
+        staff_names: [],
+        updated_at: savedJob.updated_at
+      };
+
+      // 再描画が必要なカラム
+      const slotsToRender = new Set();
+
+      if (isNew) {
+        // 新規追加
+        dashboardData.jobs.push(updatedJob);
+        slotsToRender.add(updatedJob.time_slot);
+      } else {
+        // 既存を更新
+        const index = dashboardData.jobs.findIndex(j => j.job_id === savedJob.job_id);
+        if (index >= 0) {
+          const oldSlot = dashboardData.jobs[index].time_slot;
+          slotsToRender.add(oldSlot);
+          slotsToRender.add(updatedJob.time_slot);
+          dashboardData.jobs[index] = updatedJob;
+        }
+      }
+
+      // 統計を再計算
+      recalculateStats();
+
+      // 影響するカラムだけ再描画
+      slotsToRender.forEach(slot => {
+        const jobs = dashboardData.jobs.filter(j => j.time_slot === slot);
+        renderCards(slot, jobs);
+
+        // カラムヘッダーの統計更新
+        const slotStats = dashboardData.stats.byTimeSlot[slot];
+        document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
+
+        const shortageEl = document.getElementById(`col-shortage-${slot}`);
+        const shortage = slotStats.shortage;
+        if (shortage < 0) {
+          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
+          shortageEl.className = 'shortage negative';
+        } else if (shortage > 0) {
+          shortageEl.textContent = `+${shortage}名余裕`;
+          shortageEl.className = 'shortage positive';
+        } else {
+          shortageEl.textContent = '過不足なし';
+          shortageEl.className = 'shortage neutral';
+        }
+      });
+
+      // 全体統計更新
+      document.getElementById('stats-total').textContent = dashboardData.stats.total;
+      document.getElementById('stats-assigned').textContent = dashboardData.stats.assigned;
+      document.getElementById('stats-pending').textContent = dashboardData.stats.pending;
+
+      // キャッシュも更新
+      saveToCachedDate(dashboardData.date, dashboardData);
+    }
+
+    /**
+     * 統計情報を再計算
+     */
+    function recalculateStats() {
+      const jobs = dashboardData.jobs;
+      const byTimeSlot = {
+        jotou: { total: 0, required: 0, assigned: 0, shortage: 0 },
+        shuujitsu: { total: 0, required: 0, assigned: 0, shortage: 0 },
+        am: { total: 0, required: 0, assigned: 0, shortage: 0 },
+        pm: { total: 0, required: 0, assigned: 0, shortage: 0 },
+        yakin: { total: 0, required: 0, assigned: 0, shortage: 0 },
+        mitei: { total: 0, required: 0, assigned: 0, shortage: 0 }
+      };
+
+      let total = 0, assigned = 0, pending = 0;
+
+      for (const job of jobs) {
+        total++;
+        if (job.status === 'assigned' || job.status === 'completed') {
+          assigned++;
+        } else if (job.status === 'pending') {
+          pending++;
+        }
+
+        const slot = job.time_slot;
+        if (byTimeSlot[slot]) {
+          byTimeSlot[slot].total++;
+          byTimeSlot[slot].required += Number(job.required_count) || 0;
+          byTimeSlot[slot].assigned += Number(job.assigned_count) || 0;
+        }
+      }
+
+      // shortage = assigned - required
+      // 正: 余裕あり, 負: 不足, 0: ちょうど
+      for (const slot of Object.keys(byTimeSlot)) {
+        byTimeSlot[slot].shortage = byTimeSlot[slot].assigned - byTimeSlot[slot].required;
+      }
+
+      dashboardData.stats = { total, assigned, pending, byTimeSlot };
     }
 
     function openJobModal(jobId) {
@@ -871,10 +1258,34 @@
       form.reset();
       document.getElementById('job-id').value = '';
       document.getElementById('job-updated-at').value = '';
+      document.getElementById('customer-search').value = '';
+      document.getElementById('customer-id').value = '';
+
+      // Load customers for autocomplete
+      loadCustomersForSelect();
 
       if (jobId) {
-        // Edit mode - load job data
+        // Edit mode
         document.getElementById('modal-title').textContent = '案件編集';
+
+        // キャッシュからデータを即座に反映
+        const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
+        if (cachedJob) {
+          document.getElementById('job-id').value = cachedJob.job_id;
+          setCustomerById(cachedJob.customer_id, cachedJob.customer_name);
+          document.getElementById('work-date').value = dashboardData.date || '';
+          document.getElementById('site-name').value = cachedJob.site_name || '';
+          document.getElementById('site-address').value = cachedJob.site_address || '';
+          document.getElementById('time-slot').value = cachedJob.time_slot || 'am';
+          document.getElementById('start-time').value = cachedJob.start_time || '';
+          document.getElementById('required-count').value = cachedJob.required_count || 1;
+          document.getElementById('job-type').value = cachedJob.job_type || '揚げ';
+          document.getElementById('status').value = cachedJob.status || 'pending';
+          document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
+          document.getElementById('notes').value = cachedJob.notes || '';
+        }
+
+        // 詳細データをバックグラウンドで取得（住所、備考等）
         loadJobData(jobId);
       } else {
         // Create mode
@@ -883,6 +1294,175 @@
       }
 
       modal.style.display = 'flex';
+
+      // モーダル内を上部にスクロール
+      const modalBody = document.querySelector('.modal-body');
+      if (modalBody) {
+        modalBody.scrollTop = 0;
+      }
+    }
+
+    // 顧客インクリメンタルサーチ
+    let customersCache = null;
+    let selectedCustomerIndex = -1;
+
+    function loadCustomersForSelect() {
+      // キャッシュがあれば何もしない
+      if (customersCache) {
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (response.ok) {
+            customersCache = (response.data.items || []).filter(c => c.is_active !== false);
+          }
+        })
+        .withFailureHandler(() => {
+          console.error('顧客一覧の取得に失敗しました');
+        })
+        .listCustomers({ includeDeleted: false });
+    }
+
+    function setupCustomerAutocomplete() {
+      const searchInput = document.getElementById('customer-search');
+      const hiddenInput = document.getElementById('customer-id');
+      const dropdown = document.getElementById('customer-dropdown');
+
+      // 入力イベント
+      searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        selectedCustomerIndex = -1;
+
+        if (query.length === 0) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        const matches = (customersCache || []).filter(c => {
+          const name = (c.company_name || '').toLowerCase();
+          const branch = (c.branch_name || '').toLowerCase();
+          return name.includes(query) || branch.includes(query);
+        }).slice(0, 10); // 最大10件
+
+        renderCustomerDropdown(matches);
+      });
+
+      // フォーカスアウトで閉じる（少し遅延）
+      searchInput.addEventListener('blur', () => {
+        setTimeout(() => {
+          dropdown.classList.remove('show');
+        }, 200);
+      });
+
+      // キーボードナビゲーション
+      searchInput.addEventListener('keydown', (e) => {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        if (items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          selectedCustomerIndex = Math.min(selectedCustomerIndex + 1, items.length - 1);
+          updateSelectedItem(items);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          selectedCustomerIndex = Math.max(selectedCustomerIndex - 1, 0);
+          updateSelectedItem(items);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedCustomerIndex >= 0 && items[selectedCustomerIndex]) {
+            items[selectedCustomerIndex].click();
+          }
+        } else if (e.key === 'Escape') {
+          dropdown.classList.remove('show');
+        }
+      });
+    }
+
+    function renderCustomerDropdown(customers) {
+      const dropdown = document.getElementById('customer-dropdown');
+
+      if (customers.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-empty">該当する顧客がありません</div>';
+        dropdown.classList.add('show');
+        return;
+      }
+
+      dropdown.innerHTML = customers.map((c, i) => `
+        <div class="autocomplete-item" data-customer-id="${c.customer_id}" data-index="${i}">
+          <span class="company-name">${c.company_name}</span>
+          ${c.branch_name ? `<span class="branch-name">${c.branch_name}</span>` : ''}
+        </div>
+      `).join('');
+
+      // クリックイベント
+      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+          selectCustomer(item.dataset.customerId);
+        });
+      });
+
+      dropdown.classList.add('show');
+    }
+
+    function updateSelectedItem(items) {
+      items.forEach((item, i) => {
+        item.classList.toggle('selected', i === selectedCustomerIndex);
+      });
+    }
+
+    function selectCustomer(customerId) {
+      const customer = (customersCache || []).find(c => c.customer_id === customerId);
+      if (!customer) return;
+
+      const searchInput = document.getElementById('customer-search');
+      const hiddenInput = document.getElementById('customer-id');
+      const dropdown = document.getElementById('customer-dropdown');
+
+      const displayName = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
+      searchInput.value = displayName;
+      hiddenInput.value = customerId;
+      dropdown.classList.remove('show');
+    }
+
+    function setCustomerById(customerId, fallbackName) {
+      if (!customerId) return;
+
+      const searchInput = document.getElementById('customer-search');
+      const hiddenInput = document.getElementById('customer-id');
+
+      const setName = () => {
+        const customer = (customersCache || []).find(c => c.customer_id === customerId);
+        if (customer) {
+          const displayName = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
+          searchInput.value = displayName;
+          hiddenInput.value = customerId;
+          return true;
+        }
+        return false;
+      };
+
+      if (customersCache && setName()) {
+        return;
+      }
+
+      // フォールバック名がある場合は先にセット
+      if (fallbackName) {
+        searchInput.value = fallbackName;
+        hiddenInput.value = customerId;
+      }
+
+      // キャッシュがなければリトライ（最大10回、200ms間隔）
+      let retryCount = 0;
+      const maxRetries = 10;
+      const retryInterval = setInterval(() => {
+        retryCount++;
+        if (customersCache && setName()) {
+          clearInterval(retryInterval);
+        } else if (retryCount >= maxRetries) {
+          clearInterval(retryInterval);
+        }
+      }, 200);
     }
 
     function closeJobModal() {
@@ -896,7 +1476,8 @@
             const job = response.data.job;
             document.getElementById('job-id').value = job.job_id;
             document.getElementById('job-updated-at').value = job.updated_at;
-            document.getElementById('customer-id').value = job.customer_id || '';
+            // 顧客名をフォールバックとして渡す
+            setCustomerById(job.customer_id, job.customer_name);
             document.getElementById('work-date').value = job.work_date || '';
             document.getElementById('site-name').value = job.site_name || '';
             document.getElementById('site-address').value = job.site_address || '';
@@ -929,6 +1510,14 @@
       // Basic validation
       if (!form.checkValidity()) {
         form.reportValidity();
+        return;
+      }
+
+      // Customer validation (hidden field)
+      const customerId = document.getElementById('customer-id').value;
+      if (!customerId) {
+        showToast('顧客を選択してください', true);
+        document.getElementById('customer-search').focus();
         return;
       }
 
@@ -968,7 +1557,7 @@
           if (response.ok) {
             showToast('保存しました');
             closeJobModal();
-            loadDashboard(); // Refresh
+            updateJobInDashboard(response.data.job, !jobId); // 差分更新（新規かどうか）
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', true);

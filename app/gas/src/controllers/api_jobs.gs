@@ -104,11 +104,13 @@ function getDashboardMeta(date) {
  * @returns {Object} APIレスポンス
  */
 function searchJobs(query) {
-  const requestId = generateRequestId();
-
   try {
+    Logger.log('searchJobs called with: ' + JSON.stringify(query));
+    const requestId = generateRequestId();
+
     // 認可チェック
     const authResult = checkPermission(ROLES.STAFF);
+    Logger.log('authResult: ' + JSON.stringify(authResult));
     if (!authResult.allowed) {
       return buildErrorResponse(
         ERROR_CODES.PERMISSION_DENIED,
@@ -120,16 +122,21 @@ function searchJobs(query) {
 
     // Service呼び出し
     const jobs = JobService.search(query || {});
+    Logger.log('jobs count: ' + jobs.length);
 
-    return buildSuccessResponse({ jobs: jobs }, requestId);
+    const response = buildSuccessResponse({ jobs: jobs }, requestId);
+    Logger.log('response built successfully');
+
+    return response;
 
   } catch (error) {
     Logger.log(`searchJobs error: ${error.message}`);
+    Logger.log(error.stack);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       error.message,
       {},
-      requestId
+      'req_error'
     );
   }
 }

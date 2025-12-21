@@ -254,6 +254,34 @@ function testJobApi() {
 }
 
 /**
+ * searchJobs APIテスト
+ */
+function testSearchJobs() {
+  Logger.log('=== searchJobs テスト ===');
+
+  try {
+    const query = {
+      work_date_from: '2025-11-01',
+      work_date_to: '2025-12-31',
+      limit: 10
+    };
+    Logger.log('Query: ' + JSON.stringify(query));
+
+    const result = searchJobs(query);
+    Logger.log('Result: ' + JSON.stringify(result, null, 2));
+
+    if (result && result.ok) {
+      Logger.log('✓ 成功: ' + (result.data.jobs?.length || 0) + '件');
+    } else {
+      Logger.log('✗ 失敗: ' + (result?.error?.message || 'Unknown error'));
+    }
+  } catch (e) {
+    Logger.log('✗ 例外: ' + e.message);
+    Logger.log(e.stack);
+  }
+}
+
+/**
  * 簡易テスト（開発中の確認用）
  */
 function quickTest() {
@@ -272,4 +300,69 @@ function quickTest() {
   } else {
     Logger.log(`  Error: ${dashResp.error?.message}`);
   }
+}
+
+/**
+ * work_dateの値をデバッグ
+ */
+function debugWorkDate() {
+  const sheet = getSheet('T_Jobs');
+  const data = sheet.getDataRange().getValues();
+
+  Logger.log('=== work_date デバッグ ===');
+  Logger.log(`行数: ${data.length}`);
+
+  if (data.length > 1) {
+    const headers = data[0];
+    const workDateIdx = headers.indexOf('work_date');
+    Logger.log(`work_date列インデックス: ${workDateIdx}`);
+
+    for (let i = 1; i < Math.min(data.length, 5); i++) {
+      const val = data[i][workDateIdx];
+      Logger.log(`行${i+1}: value="${val}", type=${typeof val}, isDate=${val instanceof Date}`);
+      if (val instanceof Date) {
+        Logger.log(`  -> formatted: ${Utilities.formatDate(val, 'Asia/Tokyo', 'yyyy-MM-dd')}`);
+      }
+    }
+  }
+}
+
+/**
+ * テストデータ投入（今日と明日の案件を作成）
+ */
+function insertTestData() {
+  Logger.log('=== テストデータ投入開始 ===');
+
+  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const tomorrow = Utilities.formatDate(
+    new Date(Date.now() + 24 * 60 * 60 * 1000),
+    'Asia/Tokyo',
+    'yyyy-MM-dd'
+  );
+
+  const testJobs = [
+    // 今日の案件
+    { work_date: today, time_slot: 'jotou', site_name: '○○邸 新築工事', site_address: '東京都新宿区西新宿1-1-1', required_count: 5, job_type: '鳶揚げ', status: 'pending', supervisor_name: '山田太郎' },
+    { work_date: today, time_slot: 'am', site_name: '△△マンション改修', site_address: '東京都渋谷区渋谷2-2-2', required_count: 3, job_type: '揚げ', status: 'assigned', supervisor_name: '鈴木一郎' },
+    { work_date: today, time_slot: 'am', site_name: '□□ビル解体', site_address: '東京都港区六本木3-3-3', required_count: 4, job_type: '鳶', status: 'pending', supervisor_name: '佐藤次郎' },
+    { work_date: today, time_slot: 'pm', site_name: '◇◇倉庫建設', site_address: '東京都品川区大井4-4-4', required_count: 2, job_type: '揚げ', status: 'pending', supervisor_name: '田中三郎' },
+    { work_date: today, time_slot: 'shuujitsu', site_name: '××商業施設', site_address: '東京都中央区銀座5-5-5', required_count: 6, job_type: '鳶揚げ', status: 'assigned', supervisor_name: '高橋四郎' },
+    { work_date: today, time_slot: 'yakin', site_name: '☆☆病院増築', site_address: '東京都文京区本郷6-6-6', required_count: 3, job_type: '鳶', status: 'pending', supervisor_name: '伊藤五郎' },
+    // 明日の案件
+    { work_date: tomorrow, time_slot: 'am', site_name: '▲▲学校体育館', site_address: '東京都世田谷区三軒茶屋7-7-7', required_count: 4, job_type: '揚げ', status: 'pending', supervisor_name: '渡辺六郎' },
+    { work_date: tomorrow, time_slot: 'pm', site_name: '●●オフィスビル', site_address: '東京都千代田区丸の内8-8-8', required_count: 5, job_type: '鳶揚げ', status: 'pending', supervisor_name: '小林七郎' },
+  ];
+
+  let successCount = 0;
+  for (const job of testJobs) {
+    try {
+      const result = JobRepository.insert(job);
+      Logger.log(`✓ 作成: ${job.site_name} (${result.job_id})`);
+      successCount++;
+    } catch (error) {
+      Logger.log(`✗ 失敗: ${job.site_name} - ${error.message}`);
+    }
+  }
+
+  Logger.log(`\n=== 完了: ${successCount}/${testJobs.length} 件作成 ===`);
 }
