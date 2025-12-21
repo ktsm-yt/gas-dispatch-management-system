@@ -1,0 +1,89 @@
+<!-- Shared Navigation Bar -->
+<header class="header">
+  <div class="header-title">配置管理システム <span style="opacity:0.7">›</span> <span id="page-title"></span></div>
+  <nav class="header-nav">
+    <a href="#" id="nav-dashboard">ダッシュボード</a>
+    <a href="#" id="nav-jobs">案件一覧</a>
+    <a href="#" id="nav-customers">顧客</a>
+    <a href="#" id="nav-staff">スタッフ</a>
+    <div class="nav-dropdown">
+      <a href="#" id="nav-settings">設定</a>
+      <div class="nav-dropdown-menu" id="settings-menu">
+        <a href="#" id="nav-subcontractors">外注先</a>
+        <a href="#" id="nav-transport">交通費</a>
+        <a href="#" id="nav-company">自社情報</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<script>
+function initNavBar(currentPage, pageTitle) {
+  // Set page title
+  document.getElementById('page-title').textContent = pageTitle;
+
+  // Set active nav item
+  const navMap = {
+    'dashboard': 'nav-dashboard',
+    'jobs': 'nav-jobs',
+    'customers': 'nav-customers',
+    'staff': 'nav-staff',
+    'subcontractors': 'nav-settings',
+    'transportFees': 'nav-settings',
+    'company': 'nav-settings'
+  };
+
+  const activeNavId = navMap[currentPage];
+  if (activeNavId) {
+    document.getElementById(activeNavId).classList.add('active');
+  }
+
+  // Navigation click handlers
+  document.getElementById('nav-dashboard').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('dashboard');
+  });
+  document.getElementById('nav-jobs').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('jobs');
+  });
+  document.getElementById('nav-customers').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('customers');
+  });
+  document.getElementById('nav-staff').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('staff');
+  });
+
+  // Settings dropdown
+  const dropdown = document.querySelector('.nav-dropdown');
+  document.getElementById('nav-settings').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', () => dropdown.classList.remove('open'));
+
+  document.getElementById('nav-subcontractors').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('subcontractors');
+  });
+  document.getElementById('nav-transport').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('transportFees');
+  });
+  document.getElementById('nav-company').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('company');
+  });
+}
+
+function navigateTo(page) {
+  google.script.run
+    .withSuccessHandler(function(url) {
+      window.open(url + '?page=' + page, '_top');
+    })
+    .getScriptUrl();
+}
+</script>
