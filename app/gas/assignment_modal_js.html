@@ -628,10 +628,23 @@ function processDeleteQueue() {
 }
 
 // ========== LINE Template Functions ==========
-function copyLineTemplate() {
+function openLineTemplateModal() {
   const template = generateLineTemplate();
-  navigator.clipboard.writeText(template)
-    .then(() => showToast('テンプレートをコピーしました', 'success'))
+  document.getElementById('line-template-textarea').value = template;
+  document.getElementById('line-template-modal').style.display = 'flex';
+}
+
+function closeLineTemplateModal() {
+  document.getElementById('line-template-modal').style.display = 'none';
+}
+
+function copyLineTemplateFromModal() {
+  const textarea = document.getElementById('line-template-textarea');
+  navigator.clipboard.writeText(textarea.value)
+    .then(() => {
+      showToast('コピーしました', 'success');
+      closeLineTemplateModal();
+    })
     .catch(() => showToast('コピーに失敗しました', 'error'));
 }
 
@@ -639,34 +652,64 @@ function generateLineTemplate() {
   const { job, assignments } = assignmentModalState;
   const activeAssignments = assignments.filter(a => a.status !== 'CANCELLED');
 
-  // 日付フォーマット
+  // 日付フォーマット（YYYY年M月D日（曜日））
   const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
 
-  // 時間区分＋開始時間
-  const timeStr = formatTimeSlotLabel(job.time_slot) + (job.start_time ? ' ' + job.start_time : '');
+  // メンバー名リスト
+  const memberNames = activeAssignments.map(a => a.staff_name || a.staff_id).join('、');
+
+  // 単価（配置の pay_unit から判定、混在する場合は「混在」）
+  const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
+  const payUnitLabel = payUnits.length === 1
+    ? (payUnits[0] === 'FULLDAY' ? '終日' : payUnits[0] === 'HALFDAY' ? 'ハーフ' : '-')
+    : payUnits.length > 1 ? '混在' : '-';
+
+  // 顧客名付き現場名
+  const siteWithCustomer = job.customer_name
+    ? `${job.site_name || ''}（${job.customer_name}）`
+    : job.site_name || '';
 
   // テンプレート生成
-  return `【現場連絡】
-日付: ${dateStr}
-時間: ${timeStr}
-現場: ${job.site_name || ''}
-住所: ${job.site_address || ''}
-種別: ${job.job_type || ''}
-監督: ${job.supervisor_name || ''}
+  return `【工事発注書】${dateStr}${memberNames ? ' ' + memberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
 
-参加者:
-${activeAssignments.map(a => '・' + (a.staff_name || a.staff_id)).join('\n')}
+お世話になっております。
+内容確認次第、ご返信お願いします。
+
+--------------------------------
+
+◉作業年月日：${dateStr}
+◉開始時間：${job.start_time || '-'}
+◉最寄駅：
+◉現場住所：${job.site_address || ''}
+◉現場名：${siteWithCustomer}
+◉担当者：${job.supervisor_name ? job.supervisor_name + 'さま' : ''}
+◉リーダー：
+◉人数：${activeAssignments.length}名
+◉メンバー：${memberNames || '-'}
+◉作業内容：${job.job_type || ''}
+◉単価：${payUnitLabel}
+◉装備品：
+◉詳細
+${job.notes ? '・' + job.notes : '・'}
+◉連絡事項
+・
+
+--------------------------------
+
+上記以外の詳細情報等がある場合は、別途お送り致します。
+よろしくお願い致します。
 `;
 }
 
 function formatLineTemplateDate(dateStr) {
   if (!dateStr) return '';
   const date = new Date(dateStr + 'T00:00:00');
+  const year = date.getFullYear();
   const month = date.getMonth() + 1;
   const day = date.getDate();
   const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
   const weekday = weekdays[date.getDay()];
-  return `${month}月${day}日(${weekday})`;
+  return `${year}年${month}月${day}日（${weekday}）`;
 }
 
 // ========== Utility Functions ==========
@@ -709,10 +752,19 @@ function setupAssignmentModalEventListeners() {
     }
   });
 
+  // Close LINE template modal on overlay click
+  document.getElementById('line-template-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'line-template-modal') {
+      closeLineTemplateModal();
+    }
+  });
+
   // Close modals on Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (document.getElementById('edit-modal').style.display !== 'none') {
+      if (document.getElementById('line-template-modal').style.display !== 'none') {
+        closeLineTemplateModal();
+      } else if (document.getElementById('edit-modal').style.display !== 'none') {
         closeEditModal();
       } else if (document.getElementById('assignment-modal').style.display !== 'none') {
         closeAssignmentModal();
