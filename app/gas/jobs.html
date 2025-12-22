@@ -163,6 +163,20 @@
       white-space: nowrap;
     }
 
+    .data-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .data-table th.sortable:hover {
+      color: var(--color-primary);
+    }
+
+    #sort-indicator {
+      font-size: 10px;
+      margin-left: 4px;
+    }
+
     .data-table tbody tr {
       cursor: pointer;
       transition: background 0.1s;
@@ -384,17 +398,6 @@
         <input type="date" id="date-from">
       </div>
       <div class="filter-group">
-        <label>ステータス</label>
-        <select id="status-filter">
-          <option value="">すべて</option>
-          <option value="pending">未配置</option>
-          <option value="assigned">配置済</option>
-          <option value="hold">保留</option>
-          <option value="completed">完了</option>
-          <option value="cancelled">キャンセル</option>
-        </select>
-      </div>
-      <div class="filter-group">
         <label>時間区分</label>
         <select id="time-slot-filter">
           <option value="">すべて</option>
@@ -404,6 +407,17 @@
           <option value="pm">PM</option>
           <option value="yakin">夜勤</option>
           <option value="mitei">未定</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>ステータス</label>
+        <select id="status-filter">
+          <option value="">すべて</option>
+          <option value="pending">未配置</option>
+          <option value="assigned">配置済</option>
+          <option value="hold">保留</option>
+          <option value="completed">完了</option>
+          <option value="cancelled">キャンセル</option>
         </select>
       </div>
       <div class="search-box">
@@ -423,7 +437,9 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>作業日</th>
+            <th class="sortable" onclick="toggleSortOrder()" title="クリックでソート切替">
+              作業日 <span id="sort-indicator">▲</span>
+            </th>
             <th>時間</th>
             <th>種別</th>
             <th>現場名</th>
@@ -818,6 +834,7 @@
     const PAGE_SIZE = 100;
     let totalCount = 0;
     let totalPages = 1;
+    let sortOrder = 'asc'; // 昇順（近い日付が上）がデフォルト
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -905,6 +922,23 @@
 
     let allJobs = []; // 全件保持用
 
+    function toggleSortOrder() {
+      sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+      document.getElementById('sort-indicator').textContent = sortOrder === 'desc' ? '▼' : '▲';
+      loadJobs(1);
+    }
+
+    function sortJobs() {
+      const multiplier = sortOrder === 'asc' ? 1 : -1;
+      jobs.sort((a, b) => {
+        if (a.work_date !== b.work_date) {
+          return (a.work_date > b.work_date ? 1 : -1) * multiplier;
+        }
+        const timeOrder = { am: 0, pm: 1, night: 2 };
+        return ((timeOrder[a.time_slot] || 0) - (timeOrder[b.time_slot] || 0)) * multiplier;
+      });
+    }
+
     function loadJobs(page = 1) {
       showTableLoading();
       currentPage = page;
@@ -912,6 +946,7 @@
       const dateFrom = document.getElementById('date-from').value;
       const query = {
         work_date_from: dateFrom,
+        sort_order: sortOrder,
         limit: 1000
       };
 
@@ -1042,6 +1077,74 @@
           </tr>
         `;
       }).join('');
+    }
+
+    function updateJobInTable(savedJob, isNew) {
+      const customerName = document.getElementById('customer-search').value || '';
+      const dateFrom = document.getElementById('date-from').value;
+      const dateTo = document.getElementById('date-to').value;
+      const savedDate = savedJob.work_date;
+
+      // Check if job is within current filter range
+      const inRange = (!dateFrom || savedDate >= dateFrom) && (!dateTo || savedDate <= dateTo);
+
+      if (isNew) {
+        if (inRange) {
+          // Add new job to list
+          const newJob = {
+            job_id: savedJob.job_id,
+            work_date: savedDate,
+            time_slot: savedJob.time_slot,
+            start_time: savedJob.start_time || '',
+            job_type: savedJob.job_type,
+            site_name: savedJob.site_name || '',
+            customer_id: savedJob.customer_id,
+            customer_name: customerName,
+            required_count: savedJob.required_count,
+            assigned_count: 0,
+            status: savedJob.status || 'pending',
+            supervisor_name: savedJob.supervisor_name || ''
+          };
+          jobs.unshift(newJob);
+          // Sort by date and time (respect current sortOrder)
+          sortJobs();
+          totalCount++;
+          renderTable();
+          updatePagination();
+        }
+      } else {
+        // Update existing job
+        const idx = jobs.findIndex(j => j.job_id === savedJob.job_id);
+        if (idx >= 0) {
+          if (!inRange) {
+            // Job moved out of range, remove from list
+            jobs.splice(idx, 1);
+            totalCount--;
+          } else {
+            // Update job in place
+            jobs[idx] = {
+              ...jobs[idx],
+              work_date: savedDate,
+              time_slot: savedJob.time_slot,
+              start_time: savedJob.start_time || '',
+              job_type: savedJob.job_type,
+              site_name: savedJob.site_name || '',
+              customer_id: savedJob.customer_id,
+              customer_name: customerName,
+              required_count: savedJob.required_count,
+              status: savedJob.status,
+              supervisor_name: savedJob.supervisor_name || ''
+            };
+            // Re-sort if date changed (respect current sortOrder)
+            sortJobs();
+          }
+          renderTable();
+          updatePagination();
+        } else if (inRange) {
+          // Job newly in range, reload to get full data
+          loadJobs(currentPage);
+        }
+      }
     }
 
     function showTableLoading() {
@@ -1233,7 +1336,7 @@
 
           if (response.ok) {
             showToast('保存しました', 'success');
-            loadJobs(currentPage); // Refresh current page
+            updateJobInTable(response.data.job, !jobId); // 差分更新
 
             if (saveAndContinue) {
               // Reset form for next entry but preserve date and customer
