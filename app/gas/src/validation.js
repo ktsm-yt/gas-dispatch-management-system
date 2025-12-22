@@ -92,6 +92,15 @@ const WORKER_TYPES = {
   SUBCONTRACT: 'SUBCONTRACT'
 };
 
+/**
+ * 配置時の役割（この現場での役割）
+ */
+const ASSIGNMENT_ROLES = {
+  TOBI: '鳶',
+  NIAGE: '荷揚げ',
+  TOBIAGE: '鳶揚げ'
+};
+
 // ============================================
 // バリデーションユーティリティ
 // ============================================
@@ -439,6 +448,19 @@ function validateAssignment_(assignment, isNew = false) {
 
   if (assignment.status !== undefined) {
     validateEnum_(assignment.status, 'ステータス', ASSIGNMENT_STATUSES);
+  }
+
+  if (assignment.assignment_role !== undefined) {
+    validateEnum_(assignment.assignment_role, '配置役割', ASSIGNMENT_ROLES);
+  }
+
+  if (assignment.is_leader !== undefined) {
+    if (typeof assignment.is_leader !== 'boolean') {
+      throw new ValidationError(
+        'リーダーフラグはtrue/falseで指定してください',
+        { field: 'is_leader', actualValue: assignment.is_leader }
+      );
+    }
   }
 }
 

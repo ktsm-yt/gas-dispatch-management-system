@@ -126,6 +126,8 @@ const AssignmentRepository = {
       transport_amount: assignment.transport_amount || '',
       transport_is_manual: assignment.transport_is_manual || false,
       site_role: assignment.site_role || '',
+      assignment_role: assignment.assignment_role || '',
+      is_leader: assignment.is_leader || false,
       entry_date: assignment.entry_date || '',
       safety_training_date: assignment.safety_training_date || '',
       status: assignment.status || 'ASSIGNED',
@@ -176,7 +178,8 @@ const AssignmentRepository = {
       'staff_id', 'worker_type', 'subcontractor_id', 'display_time_slot',
       'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
       'transport_area', 'transport_amount', 'transport_is_manual',
-      'site_role', 'entry_date', 'safety_training_date',
+      'site_role', 'assignment_role', 'is_leader',
+      'entry_date', 'safety_training_date',
       'status', 'notes'
     ];
 
@@ -273,6 +276,8 @@ const AssignmentRepository = {
       transport_amount: assignment.transport_amount || '',
       transport_is_manual: assignment.transport_is_manual || false,
       site_role: assignment.site_role || '',
+      assignment_role: assignment.assignment_role || '',
+      is_leader: assignment.is_leader || false,
       entry_date: assignment.entry_date || '',
       safety_training_date: assignment.safety_training_date || '',
       status: assignment.status || 'ASSIGNED',
