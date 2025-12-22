@@ -627,6 +627,48 @@ function processDeleteQueue() {
     .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
 }
 
+// ========== LINE Template Functions ==========
+function copyLineTemplate() {
+  const template = generateLineTemplate();
+  navigator.clipboard.writeText(template)
+    .then(() => showToast('テンプレートをコピーしました', 'success'))
+    .catch(() => showToast('コピーに失敗しました', 'error'));
+}
+
+function generateLineTemplate() {
+  const { job, assignments } = assignmentModalState;
+  const activeAssignments = assignments.filter(a => a.status !== 'CANCELLED');
+
+  // 日付フォーマット
+  const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
+
+  // 時間区分＋開始時間
+  const timeStr = formatTimeSlotLabel(job.time_slot) + (job.start_time ? ' ' + job.start_time : '');
+
+  // テンプレート生成
+  return `【現場連絡】
+日付: ${dateStr}
+時間: ${timeStr}
+現場: ${job.site_name || ''}
+住所: ${job.site_address || ''}
+種別: ${job.job_type || ''}
+監督: ${job.supervisor_name || ''}
+
+参加者:
+${activeAssignments.map(a => '・' + (a.staff_name || a.staff_id)).join('\n')}
+`;
+}
+
+function formatLineTemplateDate(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr + 'T00:00:00');
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const weekday = weekdays[date.getDay()];
+  return `${month}月${day}日(${weekday})`;
+}
+
 // ========== Utility Functions ==========
 function formatAssignmentModalDate(dateStr) {
   if (!dateStr) return '-';
