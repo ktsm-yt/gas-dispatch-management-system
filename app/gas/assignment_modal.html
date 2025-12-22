@@ -1,70 +1,6 @@
 <!-- Assignment Modal - Shared Component -->
 <!-- Usage: <?!= include('assignment_modal'); ?> -->
 
-<!-- Edit Assignment Modal -->
-<div class="modal-overlay" id="edit-modal" style="display: none; z-index: 1100;">
-  <div class="modal" style="max-width: 400px;">
-    <div class="modal-header">
-      <div class="modal-header-info">
-        <h2 class="modal-title"><span id="edit-staff-name">-</span> の編集</h2>
-      </div>
-      <button class="modal-close" onclick="closeEditModal()">&times;</button>
-    </div>
-    <div class="modal-body" style="display: block; padding: 12px;">
-      <div class="form-row">
-        <div class="form-group">
-          <label>給与区分</label>
-          <select id="edit-pay-unit">
-            <option value="FULLDAY">終日</option>
-            <option value="HALFDAY">半日</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>請求区分</label>
-          <select id="edit-invoice-unit">
-            <option value="FULLDAY">終日</option>
-            <option value="HALFDAY">半日</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>交通費エリア</label>
-          <select id="edit-transport-area" onchange="onEditTransportAreaChange()">
-            <option value="">選択してください</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>交通費（円）</label>
-          <input type="number" id="edit-transport-amount" min="0" step="100">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>役割</label>
-          <select id="edit-assignment-role">
-            <option value="">選択してください</option>
-            <option value="鳶">鳶</option>
-            <option value="荷揚げ">荷揚げ</option>
-            <option value="鳶揚げ">鳶揚げ</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>リーダー</label>
-          <label class="checkbox-label">
-            <input type="checkbox" id="edit-is-leader">
-            <span>リーダーに指定</span>
-          </label>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeEditModal()">キャンセル</button>
-      <button class="btn btn-primary" id="edit-save-btn" onclick="saveEditAssignment()">保存</button>
-    </div>
-  </div>
-</div>
-
 <!-- Assignment Modal -->
 <div class="modal-overlay" id="assignment-modal" style="display: none;">
   <div class="modal assignment-modal-content">
@@ -88,9 +24,8 @@
       <!-- Left Panel: Staff Selector -->
       <div class="modal-panel">
         <div class="panel-header">
-          <span>スタッフ選択</span>
+          <span>スタッフ一覧</span>
           <span class="selected-count" id="selected-count"></span>
-          <button class="btn-link" onclick="selectAllAssigned()">配置済を選択</button>
         </div>
         <div class="staff-filter">
           <input type="text" class="staff-search" id="staff-search" placeholder="名前で検索..." oninput="filterStaffList()">
@@ -113,15 +48,8 @@
         </div>
       </div>
 
-      <!-- Right Panel: Assigned Staff -->
-      <div class="modal-panel">
-        <div class="panel-header">
-          <span>配置済みスタッフ</span>
-        </div>
-        <div class="panel-content" id="assigned-list">
-          <div class="panel-empty">配置されたスタッフはいません</div>
-        </div>
-        <!-- Batch Add Form -->
+      <!-- Right Panel: Assignment Form -->
+      <div class="modal-panel form-panel">
         <div class="assignment-form-container" id="batch-form-container">
           <div class="assignment-form-title">一括配置設定</div>
           <div class="form-row">
@@ -129,14 +57,14 @@
               <label>給与区分</label>
               <select id="form-pay-unit">
                 <option value="FULLDAY">終日</option>
-                <option value="HALFDAY">半日</option>
+                <option value="HALFDAY">ハーフ</option>
               </select>
             </div>
             <div class="form-group">
               <label>請求区分</label>
               <select id="form-invoice-unit">
                 <option value="FULLDAY">終日</option>
-                <option value="HALFDAY">半日</option>
+                <option value="HALFDAY">ハーフ</option>
               </select>
             </div>
           </div>
