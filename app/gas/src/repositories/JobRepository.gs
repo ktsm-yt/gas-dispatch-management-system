@@ -111,7 +111,10 @@ const JobRepository = {
       );
     }
 
-    // 作業日の古い順にソート（Date型対応）
+    // ソート（デフォルト: 昇順 = 近い日付が上）
+    const sortOrder = query.sort_order || 'asc';
+    const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
+
     records.sort((a, b) => {
       const dateA = a.work_date instanceof Date
         ? Utilities.formatDate(a.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
@@ -120,9 +123,16 @@ const JobRepository = {
         ? Utilities.formatDate(b.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
         : String(b.work_date || '');
       if (dateA !== dateB) {
-        return dateA > dateB ? 1 : -1;
+        return (dateA > dateB ? 1 : -1) * sortMultiplier;
       }
-      return a.created_at > b.created_at ? 1 : -1;
+      // 同日内は時間帯順（am→pm→night）
+      const timeOrder = { am: 0, pm: 1, night: 2 };
+      const timeA = timeOrder[a.time_slot] ?? 9;
+      const timeB = timeOrder[b.time_slot] ?? 9;
+      if (timeA !== timeB) {
+        return (timeA - timeB) * sortMultiplier;
+      }
+      return (a.created_at > b.created_at ? 1 : -1) * sortMultiplier;
     });
 
     // 件数制限
