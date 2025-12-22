@@ -8,6 +8,47 @@
   max-height: 85vh;
 }
 
+.assignment-modal-content .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-card);
+}
+
+.assignment-modal-content .modal-header-info {
+  flex: 1;
+}
+
+.assignment-modal-content .modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 2px 0;
+}
+
+.assignment-modal-content .modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0;
+}
+
+.assignment-modal-content .modal-close:hover {
+  color: var(--text-primary);
+}
+
+.assignment-modal-content .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
 .assignment-modal-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
