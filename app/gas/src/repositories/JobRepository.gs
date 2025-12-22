@@ -37,15 +37,9 @@ const JobRepository = {
     // 日付比較（DateオブジェクトまたはYYYY-MM-DD文字列に対応）
     return records.filter(r => {
       if (r.is_deleted) return false;
+      if (!r.work_date) return false;
 
-      const workDate = r.work_date;
-      if (!workDate) return false;
-
-      // Dateオブジェクトの場合はフォーマット
-      const workDateStr = workDate instanceof Date
-        ? Utilities.formatDate(workDate, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : String(workDate);
-
+      const workDateStr = this._normalizeDate(r.work_date);
       return workDateStr === date;
     });
   },
@@ -77,18 +71,14 @@ const JobRepository = {
     if (query.work_date_from) {
       records = records.filter(r => {
         if (!r.work_date) return false;
-        const workDateStr = r.work_date instanceof Date
-          ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-          : String(r.work_date);
+        const workDateStr = this._normalizeDate(r.work_date);
         return workDateStr >= query.work_date_from;
       });
     }
     if (query.work_date_to) {
       records = records.filter(r => {
         if (!r.work_date) return false;
-        const workDateStr = r.work_date instanceof Date
-          ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-          : String(r.work_date);
+        const workDateStr = this._normalizeDate(r.work_date);
         return workDateStr <= query.work_date_to;
       });
     }
@@ -116,12 +106,8 @@ const JobRepository = {
     const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
 
     records.sort((a, b) => {
-      const dateA = a.work_date instanceof Date
-        ? Utilities.formatDate(a.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : String(a.work_date || '');
-      const dateB = b.work_date instanceof Date
-        ? Utilities.formatDate(b.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : String(b.work_date || '');
+      const dateA = this._normalizeDate(a.work_date) || '';
+      const dateB = this._normalizeDate(b.work_date) || '';
       if (dateA !== dateB) {
         return (dateA > dateB ? 1 : -1) * sortMultiplier;
       }
@@ -311,5 +297,21 @@ const JobRepository = {
     }
 
     return stats;
+  },
+
+  /**
+   * 日付を正規化してYYYY-MM-DD形式の文字列に変換
+   * @param {Date|string} dateValue - 日付値
+   * @returns {string|null} 正規化された日付文字列
+   */
+  _normalizeDate: function(dateValue) {
+    if (!dateValue) return null;
+
+    if (dateValue instanceof Date) {
+      return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy-MM-dd');
+    }
+
+    // 文字列の場合はスラッシュをハイフンに変換
+    return String(dateValue).replace(/\//g, '-');
   }
 };
