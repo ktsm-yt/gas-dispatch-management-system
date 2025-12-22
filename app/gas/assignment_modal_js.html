@@ -304,6 +304,8 @@ function batchAddStaff() {
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
+  const assignmentRole = document.getElementById('form-assignment-role').value;
+  const isLeader = document.getElementById('form-is-leader').checked;
 
   // Build assignment map
   const assignmentMap = {};
@@ -319,7 +321,9 @@ function batchAddStaff() {
       staff_id: staffId,
       worker_type: workerType,
       pay_unit: payUnit,
-      invoice_unit: invoiceUnit
+      invoice_unit: invoiceUnit,
+      assignment_role: assignmentRole,
+      is_leader: isLeader
     };
 
     if (assignmentMap[staffId]) {
@@ -352,7 +356,9 @@ function batchAddStaff() {
           pay_unit: upsert.pay_unit,
           invoice_unit: upsert.invoice_unit,
           transport_area: upsert.transport_area || assignmentModalState.assignments[idx].transport_area,
-          transport_amount: upsert.transport_amount || assignmentModalState.assignments[idx].transport_amount
+          transport_amount: upsert.transport_amount || assignmentModalState.assignments[idx].transport_amount,
+          assignment_role: upsert.assignment_role,
+          is_leader: upsert.is_leader
         };
       }
     } else {
@@ -366,6 +372,8 @@ function batchAddStaff() {
         invoice_unit: upsert.invoice_unit,
         transport_area: upsert.transport_area || '',
         transport_amount: upsert.transport_amount || 0,
+        assignment_role: upsert.assignment_role || '',
+        is_leader: upsert.is_leader || false,
         status: 'ASSIGNED'
       };
       assignmentModalState.assignments.push(tempAssignment);
@@ -418,13 +426,16 @@ function renderAssignedList() {
     const workerType = a.worker_type === 'SUBCONTRACT' ? '外注' : '自社';
     const payUnit = formatPayUnitLabel(a.pay_unit);
     const transport = a.transport_amount ? a.transport_amount.toLocaleString() + '円' : (a.transport_area || '-');
+    const roleLabel = a.assignment_role || '-';
+    const leaderBadge = a.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
 
     return `
       <div class="assignment-list-item">
         <div class="assignment-info">
-          <div class="assignment-staff-name">${escapeHtml(a.staff_name || '名前未設定')}</div>
+          <div class="assignment-staff-name">${escapeHtml(a.staff_name || '名前未設定')}${leaderBadge}</div>
           <div class="assignment-details">
             <span>${workerType}</span>
+            <span>${roleLabel}</span>
             <span>${payUnit}</span>
             <span>交通費: ${transport}</span>
           </div>
@@ -465,6 +476,8 @@ function editAssignment(assignmentId) {
   document.getElementById('edit-invoice-unit').value = assignment.invoice_unit || 'FULLDAY';
   document.getElementById('edit-transport-area').value = assignment.transport_area || '';
   document.getElementById('edit-transport-amount').value = assignment.transport_amount || '';
+  document.getElementById('edit-assignment-role').value = assignment.assignment_role || '';
+  document.getElementById('edit-is-leader').checked = assignment.is_leader === true;
 
   document.getElementById('edit-modal').style.display = 'flex';
 }
@@ -477,44 +490,50 @@ function closeEditModal() {
 function saveEditAssignment() {
   if (!editingAssignment) return;
 
-  const changes = {
-    upserts: [{
-      assignment_id: editingAssignment.assignment_id,
-      staff_id: editingAssignment.staff_id,
-      pay_unit: document.getElementById('edit-pay-unit').value,
-      invoice_unit: document.getElementById('edit-invoice-unit').value,
-      transport_area: document.getElementById('edit-transport-area').value,
-      transport_amount: Number(document.getElementById('edit-transport-amount').value) || 0,
-      transport_is_manual: true
-    }],
-    deletes: []
+  const updatedData = {
+    assignment_id: editingAssignment.assignment_id,
+    staff_id: editingAssignment.staff_id,
+    pay_unit: document.getElementById('edit-pay-unit').value,
+    invoice_unit: document.getElementById('edit-invoice-unit').value,
+    transport_area: document.getElementById('edit-transport-area').value,
+    transport_amount: Number(document.getElementById('edit-transport-amount').value) || 0,
+    transport_is_manual: true,
+    assignment_role: document.getElementById('edit-assignment-role').value,
+    is_leader: document.getElementById('edit-is-leader').checked
   };
 
-  const btn = document.getElementById('edit-save-btn');
-  btn.disabled = true;
-  btn.textContent = '保存中...';
+  const changes = { upserts: [updatedData], deletes: [] };
 
+  // Optimistic update - 即座にUIを更新してモーダルを閉じる
+  const idx = assignmentModalState.assignments.findIndex(a => a.assignment_id === editingAssignment.assignment_id);
+  if (idx !== -1) {
+    assignmentModalState.assignments[idx] = {
+      ...assignmentModalState.assignments[idx],
+      ...updatedData
+    };
+  }
+  updateModalStats();
+  renderAssignedList();
+  filterStaffList();
+  closeEditModal();
+
+  // Background API call
   google.script.run
     .withSuccessHandler(function(response) {
-      btn.disabled = false;
-      btn.textContent = '保存';
-
       if (response.ok) {
-        showToast('更新しました', 'success');
         assignmentModalState.assignments = response.data.assignments || [];
         assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
         updateModalStats();
         renderAssignedList();
         filterStaffList();
-        closeEditModal();
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
+        loadAssignmentModalData(assignmentModalState.jobId);
       }
     })
     .withFailureHandler(function(error) {
-      btn.disabled = false;
-      btn.textContent = '保存';
       showToast('エラー: ' + error.message, 'error');
+      loadAssignmentModalData(assignmentModalState.jobId);
     })
     .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
 }
@@ -673,10 +692,47 @@ function generateLineTemplate() {
   // 日付フォーマット（YYYY年M月D日（曜日））
   const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
 
-  // メンバー名リスト（staff_id露出を防ぐ）
-  const memberNames = activeAssignments
-    .map(a => a.staff_name || '名前未設定')
-    .join('、');
+  // リーダーを特定（staff_id露出を防ぐ）
+  const leaders = activeAssignments.filter(a => a.is_leader);
+  const leaderNames = leaders.map(a => a.staff_name || '名前未設定').join('、');
+  const leaderWithPhone = leaders.length > 0
+    ? leaders.map(a => {
+        const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+        const phone = staff?.phone || a.staff_phone || '';
+        return phone ? `${a.staff_name || '名前未設定'}（${phone}）` : (a.staff_name || '名前未設定');
+      }).join('、')
+    : '';
+
+  // 役割別にグループ化（staff_id露出を防ぐ）
+  const roleGroups = {};
+  activeAssignments.forEach(a => {
+    const role = a.assignment_role || '未指定';
+    if (!roleGroups[role]) roleGroups[role] = [];
+    roleGroups[role].push(a.staff_name || '名前未設定');
+  });
+
+  // メンバー欄を役割別に生成
+  const memberLines = [];
+  const roleOrder = ['鳶', '荷揚げ', '鳶揚げ', '未指定'];
+  roleOrder.forEach(role => {
+    if (roleGroups[role] && roleGroups[role].length > 0) {
+      if (role === '未指定') {
+        memberLines.push(roleGroups[role].join('、'));
+      } else {
+        memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
+      }
+    }
+  });
+  // roleOrderにない役割があれば追加
+  Object.keys(roleGroups).forEach(role => {
+    if (!roleOrder.includes(role)) {
+      memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
+    }
+  });
+  const memberStr = memberLines.join(' ');
+
+  // ヘッダー用メンバー名リスト（シンプル、staff_id露出を防ぐ）
+  const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
 
   // 単価（配置の pay_unit から判定、混在する場合は「混在」）
   const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
@@ -690,7 +746,7 @@ function generateLineTemplate() {
     : job.site_name || '';
 
   // テンプレート生成
-  return `【工事発注書】${dateStr}${memberNames ? ' ' + memberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
+  return `【工事発注書】${dateStr}${headerMemberNames ? ' ' + headerMemberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
 
 お世話になっております。
 内容確認次第、ご返信お願いします。
@@ -703,9 +759,9 @@ function generateLineTemplate() {
 ◉現場住所：${job.site_address || ''}
 ◉現場名：${siteWithCustomer}
 ◉担当者：${job.supervisor_name ? job.supervisor_name + 'さま' : ''}
-◉リーダー：
+◉リーダー：${leaderWithPhone}
 ◉人数：${activeAssignments.length}名
-◉メンバー：${memberNames || '-'}
+◉メンバー：${memberStr || '-'}
 ◉作業内容：${job.job_type || ''}
 ◉単価：${payUnitLabel}
 ◉装備品：

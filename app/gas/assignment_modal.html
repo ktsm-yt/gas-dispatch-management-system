@@ -39,6 +39,24 @@
           <input type="number" id="edit-transport-amount" min="0" step="100">
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>役割</label>
+          <select id="edit-assignment-role">
+            <option value="">選択してください</option>
+            <option value="鳶">鳶</option>
+            <option value="荷揚げ">荷揚げ</option>
+            <option value="鳶揚げ">鳶揚げ</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>リーダー</label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit-is-leader">
+            <span>リーダーに指定</span>
+          </label>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeEditModal()">キャンセル</button>
@@ -132,6 +150,24 @@
             <div class="form-group">
               <label>交通費（円）</label>
               <input type="number" id="form-transport-amount" min="0" step="100">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>役割</label>
+              <select id="form-assignment-role">
+                <option value="">選択してください</option>
+                <option value="鳶">鳶</option>
+                <option value="荷揚げ">荷揚げ</option>
+                <option value="鳶揚げ">鳶揚げ</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>リーダー</label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="form-is-leader">
+                <span>リーダーに指定</span>
+              </label>
             </div>
           </div>
           <div class="form-actions">
