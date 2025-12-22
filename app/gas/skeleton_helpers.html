@@ -1,0 +1,22 @@
+// Shared skeleton helpers
+function renderSkeletonRows(rows) {
+  if (!Array.isArray(rows)) return '';
+  return rows.map((row) => {
+    const cells = Array.isArray(row) ? row : [];
+    return '<tr class="skeleton-row">' + cells.map(renderSkeletonCell).join('') + '</tr>';
+  }).join('');
+}
+
+function renderSkeletonCell(token) {
+  if (!token) return '<td></td>';
+  const parts = String(token).split('-');
+  const type = parts[0] === 'pill' ? 'skeleton-pill' : 'skeleton-line';
+  const width = parts[1] ? ' skeleton-w-' + parts[1] : '';
+  return '<td><div class="' + type + width + '"></div></td>';
+}
+
+function setSkeletonTableBody(tbodyId, rows) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = renderSkeletonRows(rows);
+}
