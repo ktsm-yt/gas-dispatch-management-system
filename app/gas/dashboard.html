@@ -44,6 +44,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('assignment_modal_styles'); ?>
 
     /* Date Navigation */
     .date-nav {
@@ -248,6 +249,28 @@
       color: var(--color-danger);
     }
 
+    .card-edit-btn {
+      background: none;
+      border: none;
+      padding: 2px;
+      cursor: pointer;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.1s;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .job-card:hover .card-edit-btn {
+      opacity: 1;
+    }
+
+    .card-edit-btn:hover {
+      color: var(--color-primary);
+    }
+
     .job-card-footer {
       display: flex;
       align-items: center;
@@ -388,6 +411,9 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <!-- Assignment Modal (shared component) -->
+  <?!= include('assignment_modal'); ?>
+
   <!-- Job Edit Modal -->
   <div class="modal-overlay" id="job-modal" style="display: none;">
     <div class="modal">
@@ -507,7 +533,8 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
-        <button type="button" class="btn btn-primary" onclick="submitJob()">保存</button>
+        <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
+        <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
       </div>
     </div>
   </div>
@@ -710,13 +737,46 @@
       background: var(--bg-hover);
     }
 
+    .btn-outline {
+      background: white;
+      color: var(--color-primary);
+      border: 1px solid var(--color-primary);
+    }
+
+    .btn-outline:hover {
+      background: var(--color-primary);
+      color: white;
+    }
+
     .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
   </style>
 
+  <?!= include('assignment_modal_js'); ?>
+
   <script>
+    // Callback: 配置モーダルが閉じられたときに呼ばれる
+    function onAssignmentModalClose(jobId, job, assignments) {
+      if (!jobId || !dashboardData) return;
+
+      // dashboardDataの該当案件を更新
+      const idx = dashboardData.jobs.findIndex(j => j.job_id === jobId);
+      if (idx >= 0) {
+        const validAssignments = (assignments || []).filter(a => a.status !== 'CANCELLED');
+        dashboardData.jobs[idx].assigned_count = validAssignments.length;
+        dashboardData.jobs[idx].staff_names = validAssignments.map(a => a.staff_name || '');
+
+        // 統計を再計算して再描画
+        recalculateStats();
+        renderDashboard();
+
+        // キャッシュも更新
+        saveToCachedDate(dashboardData.date, dashboardData);
+      }
+    }
+
     // State
     let currentDate = null;  // サーバー時間で初期化
     let dashboardData = null;
@@ -956,12 +1016,18 @@
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
 
         return `
-          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobModal('${job.job_id}')">
+          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
             <div class="job-card-header">
               <span class="tag ${tagClass}">${job.job_type}</span>
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${job.customer_name || '-'}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
+              <button class="card-edit-btn" onclick="event.stopPropagation(); openJobModal('${job.job_id}')" title="案件編集">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
             </div>
             <div class="job-card-footer">
               <span class="site-name">${job.site_name}</span>
@@ -1117,9 +1183,13 @@
       // Load customers for autocomplete
       loadCustomersForSelect();
 
+      // Show/hide "保存して次へ" button based on mode
+      const saveNextBtn = document.getElementById('save-next-btn');
+
       if (jobId) {
         // Edit mode
         document.getElementById('modal-title').textContent = '案件編集';
+        saveNextBtn.style.display = 'none';
 
         // キャッシュからデータを即座に反映
         const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
@@ -1144,6 +1214,7 @@
         // Create mode
         document.getElementById('modal-title').textContent = '新規案件';
         document.getElementById('work-date').value = formatDate(currentDate);
+        saveNextBtn.style.display = 'inline-block';
       }
 
       modal.style.display = 'flex';
@@ -1357,7 +1428,7 @@
         .getJob(jobId);
     }
 
-    function submitJob() {
+    function submitJob(saveAndContinue = false) {
       const form = document.getElementById('job-form');
 
       // Basic validation
@@ -1397,20 +1468,36 @@
         delete job.job_id;
       }
 
-      // Disable button while saving
-      const submitBtn = document.querySelector('.modal-footer .btn-primary');
-      submitBtn.disabled = true;
-      submitBtn.textContent = '保存中...';
+      // Preserve values for "Save and Next" mode
+      const preservedDate = document.getElementById('work-date').value;
+      const preservedCustomerId = customerId;
+      const preservedCustomerName = document.getElementById('customer-search').value;
+
+      // Disable buttons while saving
+      const saveBtn = document.getElementById('save-btn');
+      const saveNextBtn = document.getElementById('save-next-btn');
+      const clickedBtn = saveAndContinue ? saveNextBtn : saveBtn;
+      saveBtn.disabled = true;
+      saveNextBtn.disabled = true;
+      clickedBtn.textContent = '保存中...';
 
       google.script.run
         .withSuccessHandler((response) => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '保存';
+          saveBtn.disabled = false;
+          saveNextBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          saveNextBtn.textContent = '保存して次へ';
 
           if (response.ok) {
             showToast('保存しました');
-            closeJobModal();
             updateJobInDashboard(response.data.job, !jobId); // 差分更新（新規かどうか）
+
+            if (saveAndContinue) {
+              // Reset form for next entry but preserve date and customer
+              resetJobFormForNext(preservedDate, preservedCustomerId, preservedCustomerName);
+            } else {
+              closeJobModal();
+            }
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', true);
@@ -1420,11 +1507,26 @@
           }
         })
         .withFailureHandler((error) => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '保存';
+          saveBtn.disabled = false;
+          saveNextBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          saveNextBtn.textContent = '保存して次へ';
           showToast(error.message, true);
         })
         .saveJob(job, updatedAt || null);
+    }
+
+    function resetJobFormForNext(date, customerId, customerName) {
+      const form = document.getElementById('job-form');
+      form.reset();
+      document.getElementById('job-id').value = '';
+      document.getElementById('job-updated-at').value = '';
+      // Restore preserved values
+      document.getElementById('work-date').value = date || '';
+      document.getElementById('customer-search').value = customerName || '';
+      document.getElementById('customer-id').value = customerId || '';
+      // Focus on site name for quick entry
+      document.getElementById('site-name').focus();
     }
 
     // Close modal on overlay click
@@ -1446,13 +1548,25 @@
       showToast(error.message || 'エラーが発生しました', true);
     }
 
-    function showToast(message, isError = false) {
+    function showToast(message, typeOrIsError = false) {
       const toast = document.getElementById('toast');
       toast.textContent = message;
+      // Support both boolean (isError) and string (type) formats
+      const isError = typeOrIsError === true || typeOrIsError === 'error';
       toast.className = 'toast show' + (isError ? ' error' : '');
       setTimeout(() => {
         toast.className = 'toast';
       }, 3000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
     // Polling for updates

@@ -1,0 +1,688 @@
+<!-- Assignment Modal JavaScript - Shared Component -->
+<!-- Usage: <?!= include('assignment_modal_js'); ?> -->
+<!-- Requires: escapeHtml(), showToast() functions to be defined by host page -->
+<!-- Provides: openJobAssignments(), closeAssignmentModal() -->
+<!-- Callback: onAssignmentModalClose(jobId, job, assignments) - define in host page to handle updates -->
+
+<script>
+// ========== Modal State ==========
+let assignmentModalState = {
+  jobId: null,
+  job: null,
+  assignments: [],
+  allStaff: [],
+  filteredStaff: [],
+  transportAreas: [],
+  jobUpdatedAt: null,
+  selectedStaffIds: [],
+  isSaving: false,
+  deleteQueue: []
+};
+
+// ========== Modal Functions ==========
+function openJobAssignments(jobId) {
+  assignmentModalState.jobId = jobId;
+  assignmentModalState.selectedStaffIds = [];
+
+  // Show modal
+  document.getElementById('assignment-modal').style.display = 'flex';
+
+  // Reset filters and search
+  document.getElementById('staff-search').value = '';
+  document.getElementById('staff-skill-filter').value = '';
+  document.getElementById('staff-type-filter').value = '';
+
+  // Reset batch button
+  updateBatchButton();
+
+  // Load data
+  loadAssignmentModalData(jobId);
+
+  // Load transport areas (cached)
+  loadTransportAreas();
+}
+
+function closeAssignmentModal() {
+  const jobId = assignmentModalState.jobId;
+  const job = assignmentModalState.job;
+  const assignments = assignmentModalState.assignments;
+
+  document.getElementById('assignment-modal').style.display = 'none';
+
+  // Call host page callback if defined
+  if (typeof onAssignmentModalClose === 'function') {
+    onAssignmentModalClose(jobId, job, assignments);
+  }
+
+  // Reset state (keep transport areas cache)
+  assignmentModalState = {
+    jobId: null,
+    job: null,
+    assignments: [],
+    allStaff: [],
+    filteredStaff: [],
+    transportAreas: assignmentModalState.transportAreas,
+    jobUpdatedAt: null,
+    selectedStaffIds: [],
+    isSaving: false,
+    deleteQueue: []
+  };
+}
+
+function loadAssignmentModalData(jobId) {
+  // Show loading
+  document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  document.getElementById('assigned-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+
+  // Load job and assignments
+  google.script.run
+    .withSuccessHandler(handleAssignmentData)
+    .withFailureHandler(handleAssignmentModalError)
+    .getAssignments(jobId);
+
+  // Load available staff
+  google.script.run
+    .withSuccessHandler(handleStaffData)
+    .withFailureHandler(handleAssignmentModalError)
+    .getAvailableStaff({ jobId: jobId, excludeAssigned: false });
+}
+
+function handleAssignmentData(response) {
+  if (!response.ok) {
+    showToast(response.error?.message || 'データの取得に失敗しました', 'error');
+    return;
+  }
+
+  const { job, assignments } = response.data;
+  assignmentModalState.job = job;
+  assignmentModalState.assignments = assignments || [];
+  assignmentModalState.jobUpdatedAt = job.updated_at;
+
+  // Update header
+  document.getElementById('modal-job-name').textContent = job.site_name || '-';
+  document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
+  document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
+  document.getElementById('modal-job-type').textContent = job.job_type || '-';
+
+  // Update stats
+  updateModalStats();
+
+  // Render assigned list
+  renderAssignedList();
+
+  // Re-render staff list if already loaded
+  if (assignmentModalState.allStaff.length > 0) {
+    filterStaffList();
+  }
+}
+
+function handleStaffData(response) {
+  if (!response.ok) {
+    document.getElementById('staff-list').innerHTML = '<div class="panel-empty">スタッフの取得に失敗しました</div>';
+    return;
+  }
+
+  assignmentModalState.allStaff = response.data.staff || [];
+  filterStaffList();
+}
+
+function handleAssignmentModalError(error) {
+  showToast('エラー: ' + error.message, 'error');
+}
+
+function updateModalStats() {
+  const validAssignments = assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED');
+  const assigned = validAssignments.length;
+  const required = Number(assignmentModalState.job?.required_count) || 0;
+  const shortage = required - assigned;
+
+  document.getElementById('modal-required').textContent = required;
+  document.getElementById('modal-assigned').textContent = assigned;
+
+  const shortageBadge = document.getElementById('modal-shortage-badge');
+  const shortageValue = document.getElementById('modal-shortage');
+
+  if (shortage > 0) {
+    shortageBadge.style.display = 'inline-flex';
+    shortageValue.textContent = shortage;
+  } else {
+    shortageBadge.style.display = 'none';
+  }
+}
+
+function filterStaffList() {
+  const searchQuery = document.getElementById('staff-search').value.toLowerCase();
+  const skillFilter = document.getElementById('staff-skill-filter').value;
+  const typeFilter = document.getElementById('staff-type-filter').value;
+
+  // Get assigned staff IDs
+  const assignedIds = assignmentModalState.assignments
+    .filter(a => a.status !== 'CANCELLED')
+    .map(a => a.staff_id);
+
+  // Filter staff
+  let filtered = assignmentModalState.allStaff.filter(s => {
+    // Name search
+    if (searchQuery) {
+      const name = (s.name || '').toLowerCase();
+      const kana = (s.name_kana || '').toLowerCase();
+      if (!name.includes(searchQuery) && !kana.includes(searchQuery)) return false;
+    }
+
+    // Skill filter
+    if (skillFilter && s.skills) {
+      const skills = s.skills.split(',').map(sk => sk.trim());
+      if (!skills.includes(skillFilter)) return false;
+    }
+
+    // Type filter
+    if (typeFilter && s.staff_type !== typeFilter) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Sort: assigned first, then by kana
+  filtered.sort((a, b) => {
+    const aAssigned = assignedIds.includes(a.staff_id) ? 0 : 1;
+    const bAssigned = assignedIds.includes(b.staff_id) ? 0 : 1;
+    if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+    const nameA = a.name_kana || a.name || '';
+    const nameB = b.name_kana || b.name || '';
+    return nameA.localeCompare(nameB, 'ja');
+  });
+
+  assignmentModalState.filteredStaff = filtered;
+  renderStaffList();
+}
+
+function renderStaffList() {
+  const container = document.getElementById('staff-list');
+  const staff = assignmentModalState.filteredStaff;
+  const jobType = assignmentModalState.job?.job_type;
+
+  const assignedIds = assignmentModalState.assignments
+    .filter(a => a.status !== 'CANCELLED')
+    .map(a => a.staff_id);
+
+  if (staff.length === 0) {
+    container.innerHTML = '<div class="panel-empty">該当するスタッフがいません</div>';
+    updateSelectedCount();
+    return;
+  }
+
+  const typeLabels = {
+    'regular': '自社',
+    'student': '学生',
+    'sole_proprietor': '個人',
+    'subcontract': '外注'
+  };
+
+  container.innerHTML = staff.map(s => {
+    const typeLabel = typeLabels[s.staff_type] || s.staff_type;
+    const typeClass = s.staff_type || 'employee';
+    const isAssigned = assignedIds.includes(s.staff_id);
+    const isSelected = assignmentModalState.selectedStaffIds.includes(s.staff_id);
+    const skills = s.skills ? s.skills.split(',').map(sk => sk.trim()) : [];
+
+    if (isAssigned) {
+      return `
+        <div class="staff-list-item assigned ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
+          <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+          <div class="staff-list-info">
+            <span class="staff-list-name">${escapeHtml(s.name)}</span>
+            <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+            ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+            <span class="assigned-label">配置済</span>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="staff-list-item ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
+        <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+        <div class="staff-list-info">
+          <span class="staff-list-name">${escapeHtml(s.name)}</span>
+          <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+          ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  updateSelectedCount();
+}
+
+function toggleStaffSelection(staffId) {
+  const idx = assignmentModalState.selectedStaffIds.indexOf(staffId);
+  if (idx === -1) {
+    assignmentModalState.selectedStaffIds.push(staffId);
+  } else {
+    assignmentModalState.selectedStaffIds.splice(idx, 1);
+  }
+  renderStaffList();
+  updateBatchButton();
+}
+
+function updateSelectedCount() {
+  const count = assignmentModalState.selectedStaffIds.length;
+  const countEl = document.getElementById('selected-count');
+  countEl.textContent = count > 0 ? `${count}名選択中` : '';
+}
+
+function updateBatchButton() {
+  const btn = document.getElementById('batch-add-btn');
+  const count = assignmentModalState.selectedStaffIds.length;
+  btn.disabled = count === 0;
+  btn.textContent = count > 0 ? `${count}名を保存` : '選択したスタッフを保存';
+}
+
+function selectAllAssigned() {
+  const assignedIds = assignmentModalState.assignments
+    .filter(a => a.status !== 'CANCELLED')
+    .map(a => a.staff_id);
+
+  assignedIds.forEach(id => {
+    if (!assignmentModalState.selectedStaffIds.includes(id)) {
+      assignmentModalState.selectedStaffIds.push(id);
+    }
+  });
+
+  renderStaffList();
+  updateBatchButton();
+}
+
+function batchAddStaff() {
+  if (assignmentModalState.isSaving) return;
+
+  const selectedIds = assignmentModalState.selectedStaffIds;
+  if (selectedIds.length === 0) return;
+
+  const payUnit = document.getElementById('form-pay-unit').value;
+  const invoiceUnit = document.getElementById('form-invoice-unit').value;
+  const transportArea = document.getElementById('form-transport-area').value;
+  const transportAmount = document.getElementById('form-transport-amount').value;
+
+  // Build assignment map
+  const assignmentMap = {};
+  assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED').forEach(a => {
+    assignmentMap[a.staff_id] = a.assignment_id;
+  });
+
+  const upserts = selectedIds.map(staffId => {
+    const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
+    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
+
+    const data = {
+      staff_id: staffId,
+      worker_type: workerType,
+      pay_unit: payUnit,
+      invoice_unit: invoiceUnit
+    };
+
+    if (assignmentMap[staffId]) {
+      data.assignment_id = assignmentMap[staffId];
+    }
+
+    if (transportArea) {
+      data.transport_area = transportArea;
+    }
+    if (transportAmount) {
+      data.transport_amount = Number(transportAmount);
+    }
+
+    return data;
+  });
+
+  const changes = { upserts: upserts, deletes: [] };
+
+  // Optimistic update
+  const addedCount = selectedIds.length;
+
+  for (const upsert of upserts) {
+    const staff = assignmentModalState.allStaff.find(s => s.staff_id === upsert.staff_id);
+
+    if (upsert.assignment_id) {
+      const idx = assignmentModalState.assignments.findIndex(a => a.assignment_id === upsert.assignment_id);
+      if (idx !== -1) {
+        assignmentModalState.assignments[idx] = {
+          ...assignmentModalState.assignments[idx],
+          pay_unit: upsert.pay_unit,
+          invoice_unit: upsert.invoice_unit,
+          transport_area: upsert.transport_area || assignmentModalState.assignments[idx].transport_area,
+          transport_amount: upsert.transport_amount || assignmentModalState.assignments[idx].transport_amount
+        };
+      }
+    } else {
+      const tempAssignment = {
+        assignment_id: 'temp_' + upsert.staff_id,
+        job_id: assignmentModalState.jobId,
+        staff_id: upsert.staff_id,
+        staff_name: staff?.name || '',
+        worker_type: upsert.worker_type,
+        pay_unit: upsert.pay_unit,
+        invoice_unit: upsert.invoice_unit,
+        transport_area: upsert.transport_area || '',
+        transport_amount: upsert.transport_amount || 0,
+        status: 'ASSIGNED'
+      };
+      assignmentModalState.assignments.push(tempAssignment);
+    }
+  }
+
+  assignmentModalState.selectedStaffIds = [];
+  updateModalStats();
+  renderAssignedList();
+  filterStaffList();
+  updateBatchButton();
+
+  // Background API call
+  assignmentModalState.isSaving = true;
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      assignmentModalState.isSaving = false;
+
+      if (response.ok) {
+        showToast(`${addedCount}名を保存しました`, 'success');
+        assignmentModalState.assignments = response.data.assignments || [];
+        assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
+        updateModalStats();
+        renderAssignedList();
+        filterStaffList();
+      } else {
+        showToast(response.error?.message || '保存に失敗しました', 'error');
+        loadAssignmentModalData(assignmentModalState.jobId);
+      }
+    })
+    .withFailureHandler(function(error) {
+      assignmentModalState.isSaving = false;
+      showToast('エラー: ' + error.message, 'error');
+      loadAssignmentModalData(assignmentModalState.jobId);
+    })
+    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
+}
+
+function renderAssignedList() {
+  const container = document.getElementById('assigned-list');
+  const assignments = assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED');
+
+  if (assignments.length === 0) {
+    container.innerHTML = '<div class="panel-empty">配置されたスタッフはいません</div>';
+    return;
+  }
+
+  container.innerHTML = assignments.map(a => {
+    const workerType = a.worker_type === 'SUBCONTRACT' ? '外注' : '自社';
+    const payUnit = formatPayUnitLabel(a.pay_unit);
+    const transport = a.transport_amount ? a.transport_amount.toLocaleString() + '円' : (a.transport_area || '-');
+
+    return `
+      <div class="assignment-list-item">
+        <div class="assignment-info">
+          <div class="assignment-staff-name">${escapeHtml(a.staff_name || a.staff_id)}</div>
+          <div class="assignment-details">
+            <span>${workerType}</span>
+            <span>${payUnit}</span>
+            <span>交通費: ${transport}</span>
+          </div>
+        </div>
+        <div class="assignment-actions">
+          <button class="btn-icon" onclick="editAssignment('${a.assignment_id}')" title="編集">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+          </button>
+          <button class="btn-icon btn-delete" onclick="removeAssignment('${a.assignment_id}')" title="削除">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ========== Assignment Edit ==========
+let editingAssignment = null;
+
+function editAssignment(assignmentId) {
+  const assignment = assignmentModalState.assignments.find(a => a.assignment_id === assignmentId);
+  if (!assignment) {
+    showToast('配置データが見つかりません', 'error');
+    return;
+  }
+
+  editingAssignment = assignment;
+
+  document.getElementById('edit-staff-name').textContent = assignment.staff_name;
+  document.getElementById('edit-pay-unit').value = assignment.pay_unit || 'FULLDAY';
+  document.getElementById('edit-invoice-unit').value = assignment.invoice_unit || 'FULLDAY';
+  document.getElementById('edit-transport-area').value = assignment.transport_area || '';
+  document.getElementById('edit-transport-amount').value = assignment.transport_amount || '';
+
+  document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function closeEditModal() {
+  document.getElementById('edit-modal').style.display = 'none';
+  editingAssignment = null;
+}
+
+function saveEditAssignment() {
+  if (!editingAssignment) return;
+
+  const changes = {
+    upserts: [{
+      assignment_id: editingAssignment.assignment_id,
+      staff_id: editingAssignment.staff_id,
+      pay_unit: document.getElementById('edit-pay-unit').value,
+      invoice_unit: document.getElementById('edit-invoice-unit').value,
+      transport_area: document.getElementById('edit-transport-area').value,
+      transport_amount: Number(document.getElementById('edit-transport-amount').value) || 0,
+      transport_is_manual: true
+    }],
+    deletes: []
+  };
+
+  const btn = document.getElementById('edit-save-btn');
+  btn.disabled = true;
+  btn.textContent = '保存中...';
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      btn.disabled = false;
+      btn.textContent = '保存';
+
+      if (response.ok) {
+        showToast('更新しました', 'success');
+        assignmentModalState.assignments = response.data.assignments || [];
+        assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
+        updateModalStats();
+        renderAssignedList();
+        filterStaffList();
+        closeEditModal();
+      } else {
+        showToast(response.error?.message || '保存に失敗しました', 'error');
+      }
+    })
+    .withFailureHandler(function(error) {
+      btn.disabled = false;
+      btn.textContent = '保存';
+      showToast('エラー: ' + error.message, 'error');
+    })
+    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
+}
+
+function loadTransportAreas() {
+  if (assignmentModalState.transportAreas.length > 0) {
+    populateTransportAreas();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (response.ok) {
+        assignmentModalState.transportAreas = response.data.areas || [];
+        populateTransportAreas();
+      }
+    })
+    .getTransportFeeAreas();
+}
+
+function populateTransportAreas() {
+  populateTransportAreaSelect('form-transport-area');
+  populateTransportAreaSelect('edit-transport-area');
+}
+
+function populateTransportAreaSelect(selectId) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  const currentValue = select.value;
+
+  select.innerHTML = '<option value="">選択してください</option>';
+  assignmentModalState.transportAreas.forEach(area => {
+    const option = document.createElement('option');
+    option.value = area.area_code;
+    option.textContent = area.area_name + ' (' + (area.default_fee || 0).toLocaleString() + '円)';
+    option.dataset.fee = area.default_fee || 0;
+    select.appendChild(option);
+  });
+
+  if (currentValue) {
+    select.value = currentValue;
+  }
+}
+
+function onTransportAreaChange() {
+  const select = document.getElementById('form-transport-area');
+  const amountInput = document.getElementById('form-transport-amount');
+
+  if (select.value) {
+    const selectedOption = select.options[select.selectedIndex];
+    const fee = selectedOption.dataset.fee || 0;
+    amountInput.value = fee;
+  }
+}
+
+function onEditTransportAreaChange() {
+  const select = document.getElementById('edit-transport-area');
+  const amountInput = document.getElementById('edit-transport-amount');
+
+  if (select.value) {
+    const selectedOption = select.options[select.selectedIndex];
+    const fee = selectedOption.dataset.fee || 0;
+    amountInput.value = fee;
+  }
+}
+
+function removeAssignment(assignmentId) {
+  if (!assignmentModalState.deleteQueue.includes(assignmentId)) {
+    assignmentModalState.deleteQueue.push(assignmentId);
+  }
+
+  // Optimistic update
+  assignmentModalState.assignments = assignmentModalState.assignments.filter(a => a.assignment_id !== assignmentId);
+  renderAssignedList();
+  updateModalStats();
+  filterStaffList();
+
+  processDeleteQueue();
+}
+
+function processDeleteQueue() {
+  if (assignmentModalState.isSaving || assignmentModalState.deleteQueue.length === 0) return;
+
+  assignmentModalState.isSaving = true;
+  const assignmentId = assignmentModalState.deleteQueue.shift();
+
+  const changes = {
+    upserts: [],
+    deletes: [assignmentId]
+  };
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      assignmentModalState.isSaving = false;
+
+      if (response.ok) {
+        assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
+        processDeleteQueue();
+      } else {
+        showToast(response.error?.message || '削除に失敗しました', 'error');
+        loadAssignmentModalData(assignmentModalState.jobId);
+      }
+    })
+    .withFailureHandler(function(error) {
+      assignmentModalState.isSaving = false;
+      showToast('エラー: ' + error.message, 'error');
+      loadAssignmentModalData(assignmentModalState.jobId);
+    })
+    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
+}
+
+// ========== Utility Functions ==========
+function formatAssignmentModalDate(dateStr) {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' });
+}
+
+function formatPayUnitLabel(unit) {
+  const units = { 'FULLDAY': '終日', 'HALFDAY': '半日', 'HOURLY': '時給' };
+  return units[unit] || unit || '-';
+}
+
+function formatTimeSlotLabel(slot) {
+  const slots = {
+    'jotou': '上棟',
+    'shuujitsu': '終日',
+    'am': 'AM',
+    'pm': 'PM',
+    'yakin': '夜勤',
+    'mitei': '未定'
+  };
+  return slots[slot] || slot || '-';
+}
+
+// ========== Event Listeners Setup ==========
+function setupAssignmentModalEventListeners() {
+  // Close modal on overlay click
+  document.getElementById('assignment-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'assignment-modal') {
+      closeAssignmentModal();
+    }
+  });
+
+  // Close edit modal on overlay click
+  document.getElementById('edit-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'edit-modal') {
+      closeEditModal();
+    }
+  });
+
+  // Close modals on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('edit-modal').style.display !== 'none') {
+        closeEditModal();
+      } else if (document.getElementById('assignment-modal').style.display !== 'none') {
+        closeAssignmentModal();
+      }
+    }
+  });
+}
+
+// Auto-setup when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupAssignmentModalEventListeners);
+} else {
+  setupAssignmentModalEventListeners();
+}
+</script>

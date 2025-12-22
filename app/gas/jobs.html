@@ -302,6 +302,17 @@
       background: var(--bg-hover);
     }
 
+    .btn-outline {
+      background: white;
+      color: var(--color-primary);
+      border: 1px solid var(--color-primary);
+    }
+
+    .btn-outline:hover {
+      background: var(--color-primary);
+      color: white;
+    }
+
     /* Cell styles */
     .cell-site {
       font-weight: 500;
@@ -595,7 +606,8 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
-        <button type="button" class="btn btn-primary" onclick="submitJob()">保存</button>
+        <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
+        <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
       </div>
     </div>
   </div>
@@ -1089,9 +1101,13 @@
       // Load customers for autocomplete
       loadCustomersForSelect();
 
+      // Show/hide "保存して次へ" button based on mode
+      const saveNextBtn = document.getElementById('save-next-btn');
+
       if (jobId) {
         // Edit mode - load from cache first
         document.getElementById('modal-title').textContent = '案件編集';
+        saveNextBtn.style.display = 'none';
         const cachedJob = jobs.find(j => j.job_id === jobId);
         if (cachedJob) {
           document.getElementById('job-id').value = cachedJob.job_id;
@@ -1113,6 +1129,7 @@
         // Create mode
         document.getElementById('modal-title').textContent = '新規案件';
         document.getElementById('work-date').value = formatDate(new Date());
+        saveNextBtn.style.display = 'inline-block';
       }
 
       modal.style.display = 'flex';
@@ -1158,7 +1175,7 @@
         .getJob(jobId);
     }
 
-    function submitJob() {
+    function submitJob(saveAndContinue = false) {
       const form = document.getElementById('job-form');
 
       if (!form.checkValidity()) {
@@ -1194,19 +1211,36 @@
         delete job.job_id;
       }
 
-      const submitBtn = document.querySelector('.modal-footer .btn-primary');
-      submitBtn.disabled = true;
-      submitBtn.textContent = '保存中...';
+      // Preserve values for "Save and Next" mode
+      const preservedDate = document.getElementById('work-date').value;
+      const preservedCustomerId = customerId;
+      const preservedCustomerName = document.getElementById('customer-search').value;
+
+      // Disable buttons while saving
+      const saveBtn = document.getElementById('save-btn');
+      const saveNextBtn = document.getElementById('save-next-btn');
+      const clickedBtn = saveAndContinue ? saveNextBtn : saveBtn;
+      saveBtn.disabled = true;
+      saveNextBtn.disabled = true;
+      clickedBtn.textContent = '保存中...';
 
       google.script.run
         .withSuccessHandler((response) => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '保存';
+          saveBtn.disabled = false;
+          saveNextBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          saveNextBtn.textContent = '保存して次へ';
 
           if (response.ok) {
             showToast('保存しました', 'success');
-            closeJobModal();
             loadJobs(currentPage); // Refresh current page
+
+            if (saveAndContinue) {
+              // Reset form for next entry but preserve date and customer
+              resetJobFormForNext(preservedDate, preservedCustomerId, preservedCustomerName);
+            } else {
+              closeJobModal();
+            }
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1216,11 +1250,26 @@
           }
         })
         .withFailureHandler((error) => {
-          submitBtn.disabled = false;
-          submitBtn.textContent = '保存';
+          saveBtn.disabled = false;
+          saveNextBtn.disabled = false;
+          saveBtn.textContent = '保存';
+          saveNextBtn.textContent = '保存して次へ';
           showToast(error.message, 'error');
         })
         .saveJob(job, updatedAt || null);
+    }
+
+    function resetJobFormForNext(date, customerId, customerName) {
+      const form = document.getElementById('job-form');
+      form.reset();
+      document.getElementById('job-id').value = '';
+      document.getElementById('job-updated-at').value = '';
+      // Restore preserved values
+      document.getElementById('work-date').value = date || '';
+      document.getElementById('customer-search').value = customerName || '';
+      document.getElementById('customer-id').value = customerId || '';
+      // Focus on site name for quick entry
+      document.getElementById('site-name').focus();
     }
 
     // ========== Customer Autocomplete ==========
