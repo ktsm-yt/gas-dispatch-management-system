@@ -376,6 +376,7 @@
       opacity: 0.6;
       cursor: not-allowed;
     }
+    <?!= include('skeleton_styles'); ?>
   </style>
 </head>
 <body>
@@ -419,7 +420,6 @@
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="8" class="loading">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -431,6 +431,13 @@
   <?!= include('assignment_modal_js'); ?>
 
   <script>
+    <?!= include('skeleton_helpers'); ?>
+    const ASSIGNMENTS_SKELETON_ROWS = [
+      ['line-30', 'line-50', 'line-60', 'line-80', 'line-70', 'line-20', 'line-20', 'line-20'],
+      ['line-40', 'line-40', 'line-70', 'line-60', 'line-60', 'line-20', 'line-20', 'line-20'],
+      ['line-30', 'line-30', 'line-50', 'line-70', 'line-50', 'line-20', 'line-20', 'line-20']
+    ];
+
     let currentDate = new Date();
     let currentRequestId = 0;  // リクエスト追跡用
     let isLoading = false;
@@ -515,7 +522,7 @@
       isLoading = true;
       updateDateDisplay();
 
-      document.getElementById('jobs-tbody').innerHTML = '<tr><td colspan="8" class="loading">読み込み中...</td></tr>';
+      setSkeletonTableBody('jobs-tbody', ASSIGNMENTS_SKELETON_ROWS);
 
       google.script.run
         .withSuccessHandler((response) => handleData(response, requestId, dateStr))

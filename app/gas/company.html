@@ -111,23 +111,8 @@
     .toast.show { display: block; }
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
-    .skeleton-line {
-      display: block;
-      height: 12px;
-      border-radius: 6px;
-      background: linear-gradient(90deg, #eef1f4 0%, #f7f8fa 50%, #eef1f4 100%);
-      background-size: 200% 100%;
-      animation: shimmer 1.2s ease-in-out infinite;
-    }
-    .skeleton-w-30 { width: 30%; }
-    .skeleton-w-40 { width: 40%; }
-    .skeleton-w-60 { width: 60%; }
-    .skeleton-w-80 { width: 80%; }
+    <?!= include('skeleton_styles'); ?>
     .skeleton-stack { display: grid; gap: var(--spacing-sm); }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
   </style>
 </head>
 <body>
