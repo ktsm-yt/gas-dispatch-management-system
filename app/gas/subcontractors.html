@@ -475,30 +475,28 @@
       if (!currentRecord) return;
       if (!confirm(`「${currentRecord.company_name}」を削除しますか？`)) return;
 
-      const deleteBtn = document.getElementById('delete-btn');
-      deleteBtn.disabled = true;
-      deleteBtn.textContent = '削除中...';
       const deleteId = currentRecord.subcontractor_id;
+      const deleteName = currentRecord.company_name;
       const updatedAt = document.getElementById('updated-at').value;
 
+      // 楽観的更新: UIを即座に更新
+      dataList = dataList.filter(d => d.subcontractor_id !== deleteId);
+      updateStats();
+      filterData();
+      closeModal();
+      showToast(`${deleteName}を削除しました`, 'success');
+
+      // バックグラウンドでAPI呼び出し
       google.script.run
         .withSuccessHandler((response) => {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = '削除';
-          if (response.ok) {
-            dataList = dataList.filter(d => d.subcontractor_id !== deleteId);
-            updateStats();
-            filterData();
-            showToast('削除しました', 'success');
-            closeModal();
-          } else {
-            showToast(response.error?.message || '削除失敗', 'error');
+          if (!response.ok) {
+            showToast(response.error?.message || '削除失敗。再読み込みします。', 'error');
+            loadData();
           }
         })
         .withFailureHandler((e) => {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = '削除';
-          showToast(e.message, 'error');
+          showToast('削除失敗。再読み込みします。', 'error');
+          loadData();
         })
         .deleteSubcontractor(deleteId, updatedAt || null);
     }
