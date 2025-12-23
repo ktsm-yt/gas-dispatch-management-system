@@ -422,7 +422,7 @@ function renderAssignedList() {
     return `
       <div class="assignment-list-item">
         <div class="assignment-info">
-          <div class="assignment-staff-name">${escapeHtml(a.staff_name || a.staff_id)}</div>
+          <div class="assignment-staff-name">${escapeHtml(a.staff_name || '名前未設定')}</div>
           <div class="assignment-details">
             <span>${workerType}</span>
             <span>${payUnit}</span>
@@ -638,14 +638,32 @@ function closeLineTemplateModal() {
   document.getElementById('line-template-modal').style.display = 'none';
 }
 
-function copyLineTemplateFromModal() {
+async function copyLineTemplateFromModal() {
   const textarea = document.getElementById('line-template-textarea');
-  navigator.clipboard.writeText(textarea.value)
-    .then(() => {
-      showToast('コピーしました', 'success');
-      closeLineTemplateModal();
-    })
-    .catch(() => showToast('コピーに失敗しました', 'error'));
+  const text = textarea.value;
+
+  try {
+    // モダンなClipboard API（HTTPS環境で動作）
+    await navigator.clipboard.writeText(text);
+    showToast('コピーしました', 'success');
+    closeLineTemplateModal();
+  } catch (error) {
+    // フォールバック: 従来のexecCommand方式
+    try {
+      textarea.select();
+      textarea.setSelectionRange(0, text.length); // iOS Safari対応
+      const success = document.execCommand('copy');
+      if (success) {
+        showToast('コピーしました', 'success');
+        closeLineTemplateModal();
+      } else {
+        showToast('テキストを選択しました。Ctrl+C/Cmd+Cでコピーしてください', 'info');
+      }
+    } catch (fallbackError) {
+      showToast('テキストを選択しました。手動でコピーしてください', 'info');
+      textarea.select();
+    }
+  }
 }
 
 function generateLineTemplate() {
@@ -655,8 +673,10 @@ function generateLineTemplate() {
   // 日付フォーマット（YYYY年M月D日（曜日））
   const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
 
-  // メンバー名リスト
-  const memberNames = activeAssignments.map(a => a.staff_name || a.staff_id).join('、');
+  // メンバー名リスト（staff_id露出を防ぐ）
+  const memberNames = activeAssignments
+    .map(a => a.staff_name || '名前未設定')
+    .join('、');
 
   // 単価（配置の pay_unit から判定、混在する場合は「混在」）
   const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
