@@ -441,9 +441,10 @@
               作業日 <span id="sort-indicator">▲</span>
             </th>
             <th>時間</th>
-            <th>種別</th>
-            <th>現場名</th>
             <th>顧客</th>
+            <th>現場名</th>
+            <th>住所</th>
+            <th>種別</th>
             <th>人数</th>
             <th>ステータス</th>
             <th>監督</th>
@@ -453,9 +454,10 @@
           <tr class="skeleton-row">
             <td><div class="skeleton-line skeleton-w-60"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
-            <td><div class="skeleton-pill skeleton-w-40"></div></td>
-            <td><div class="skeleton-line skeleton-w-80"></div></td>
             <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-80"></div></td>
+            <td><div class="skeleton-line skeleton-w-70"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-30"></div></td>
             <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -463,9 +465,10 @@
           <tr class="skeleton-row">
             <td><div class="skeleton-line skeleton-w-60"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
-            <td><div class="skeleton-pill skeleton-w-40"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
             <td><div class="skeleton-line skeleton-w-70"></div></td>
             <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-30"></div></td>
             <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -473,9 +476,10 @@
           <tr class="skeleton-row">
             <td><div class="skeleton-line skeleton-w-60"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
-            <td><div class="skeleton-pill skeleton-w-40"></div></td>
-            <td><div class="skeleton-line skeleton-w-60"></div></td>
             <td><div class="skeleton-line skeleton-w-50"></div></td>
+            <td><div class="skeleton-line skeleton-w-60"></div></td>
+            <td><div class="skeleton-line skeleton-w-80"></div></td>
+            <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-30"></div></td>
             <td><div class="skeleton-pill skeleton-w-40"></div></td>
             <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -1068,9 +1072,10 @@
           <tr onclick="openJob('${job.job_id}')">
             <td>${formatDisplayDate(job.work_date)}</td>
             <td>${TIME_SLOT_LABELS[job.time_slot] || job.time_slot || '-'}${formatStartTime(job.start_time) ? ' ' + formatStartTime(job.start_time) : ''}</td>
-            <td><span class="tag ${tagClass}">${escapeHtml(job.job_type)}</span></td>
-            <td class="cell-site">${escapeHtml(job.site_name)}</td>
             <td>${escapeHtml(job.customer_name) || '-'}</td>
+            <td class="cell-site">${escapeHtml(job.site_name)}</td>
+            <td class="cell-address">${escapeHtml(job.site_address) || ''}</td>
+            <td><span class="tag ${tagClass}">${escapeHtml(job.job_type)}</span></td>
             <td class="cell-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count || 0}/${job.required_count}</td>
             <td><span class="status-badge ${statusClass}">${STATUS_LABELS[job.status] || job.status || '-'}</span></td>
             <td>${escapeHtml(job.supervisor_name) || '-'}</td>
@@ -1098,6 +1103,7 @@
             start_time: savedJob.start_time || '',
             job_type: savedJob.job_type,
             site_name: savedJob.site_name || '',
+            site_address: savedJob.site_address || '',
             customer_id: savedJob.customer_id,
             customer_name: customerName,
             required_count: savedJob.required_count,
@@ -1129,6 +1135,7 @@
               start_time: savedJob.start_time || '',
               job_type: savedJob.job_type,
               site_name: savedJob.site_name || '',
+              site_address: savedJob.site_address || '',
               customer_id: savedJob.customer_id,
               customer_name: customerName,
               required_count: savedJob.required_count,
@@ -1152,9 +1159,10 @@
         <tr class="skeleton-row">
           <td><div class="skeleton-line skeleton-w-60"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>
-          <td><div class="skeleton-pill skeleton-w-40"></div></td>
-          <td><div class="skeleton-line skeleton-w-80"></div></td>
           <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-80"></div></td>
+          <td><div class="skeleton-line skeleton-w-70"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-30"></div></td>
           <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -1162,9 +1170,10 @@
         <tr class="skeleton-row">
           <td><div class="skeleton-line skeleton-w-60"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>
-          <td><div class="skeleton-pill skeleton-w-40"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
           <td><div class="skeleton-line skeleton-w-70"></div></td>
           <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-30"></div></td>
           <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>
@@ -1172,9 +1181,10 @@
         <tr class="skeleton-row">
           <td><div class="skeleton-line skeleton-w-60"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>
-          <td><div class="skeleton-pill skeleton-w-40"></div></td>
-          <td><div class="skeleton-line skeleton-w-60"></div></td>
           <td><div class="skeleton-line skeleton-w-50"></div></td>
+          <td><div class="skeleton-line skeleton-w-60"></div></td>
+          <td><div class="skeleton-line skeleton-w-80"></div></td>
+          <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-30"></div></td>
           <td><div class="skeleton-pill skeleton-w-40"></div></td>
           <td><div class="skeleton-line skeleton-w-40"></div></td>

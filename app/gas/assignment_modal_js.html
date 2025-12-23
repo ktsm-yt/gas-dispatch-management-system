@@ -422,7 +422,7 @@ function renderAssignedList() {
     return `
       <div class="assignment-list-item">
         <div class="assignment-info">
-          <div class="assignment-staff-name">${escapeHtml(a.staff_name || a.staff_id)}</div>
+          <div class="assignment-staff-name">${escapeHtml(a.staff_name || '名前未設定')}</div>
           <div class="assignment-details">
             <span>${workerType}</span>
             <span>${payUnit}</span>
@@ -627,6 +627,111 @@ function processDeleteQueue() {
     .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
 }
 
+// ========== LINE Template Functions ==========
+function openLineTemplateModal() {
+  const template = generateLineTemplate();
+  document.getElementById('line-template-textarea').value = template;
+  document.getElementById('line-template-modal').style.display = 'flex';
+}
+
+function closeLineTemplateModal() {
+  document.getElementById('line-template-modal').style.display = 'none';
+}
+
+async function copyLineTemplateFromModal() {
+  const textarea = document.getElementById('line-template-textarea');
+  const text = textarea.value;
+
+  try {
+    // モダンなClipboard API（HTTPS環境で動作）
+    await navigator.clipboard.writeText(text);
+    showToast('コピーしました', 'success');
+    closeLineTemplateModal();
+  } catch (error) {
+    // フォールバック: 従来のexecCommand方式
+    try {
+      textarea.select();
+      textarea.setSelectionRange(0, text.length); // iOS Safari対応
+      const success = document.execCommand('copy');
+      if (success) {
+        showToast('コピーしました', 'success');
+        closeLineTemplateModal();
+      } else {
+        showToast('テキストを選択しました。Ctrl+C/Cmd+Cでコピーしてください', 'info');
+      }
+    } catch (fallbackError) {
+      showToast('テキストを選択しました。手動でコピーしてください', 'info');
+      textarea.select();
+    }
+  }
+}
+
+function generateLineTemplate() {
+  const { job, assignments } = assignmentModalState;
+  const activeAssignments = assignments.filter(a => a.status !== 'CANCELLED');
+
+  // 日付フォーマット（YYYY年M月D日（曜日））
+  const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
+
+  // メンバー名リスト（staff_id露出を防ぐ）
+  const memberNames = activeAssignments
+    .map(a => a.staff_name || '名前未設定')
+    .join('、');
+
+  // 単価（配置の pay_unit から判定、混在する場合は「混在」）
+  const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
+  const payUnitLabel = payUnits.length === 1
+    ? (payUnits[0] === 'FULLDAY' ? '終日' : payUnits[0] === 'HALFDAY' ? 'ハーフ' : '-')
+    : payUnits.length > 1 ? '混在' : '-';
+
+  // 顧客名付き現場名
+  const siteWithCustomer = job.customer_name
+    ? `${job.site_name || ''}（${job.customer_name}）`
+    : job.site_name || '';
+
+  // テンプレート生成
+  return `【工事発注書】${dateStr}${memberNames ? ' ' + memberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
+
+お世話になっております。
+内容確認次第、ご返信お願いします。
+
+--------------------------------
+
+◉作業年月日：${dateStr}
+◉開始時間：${job.start_time || '-'}
+◉最寄駅：
+◉現場住所：${job.site_address || ''}
+◉現場名：${siteWithCustomer}
+◉担当者：${job.supervisor_name ? job.supervisor_name + 'さま' : ''}
+◉リーダー：
+◉人数：${activeAssignments.length}名
+◉メンバー：${memberNames || '-'}
+◉作業内容：${job.job_type || ''}
+◉単価：${payUnitLabel}
+◉装備品：
+◉詳細
+${job.notes ? '・' + job.notes : '・'}
+◉連絡事項
+・
+
+--------------------------------
+
+上記以外の詳細情報等がある場合は、別途お送り致します。
+よろしくお願い致します。
+`;
+}
+
+function formatLineTemplateDate(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr + 'T00:00:00');
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const weekday = weekdays[date.getDay()];
+  return `${year}年${month}月${day}日（${weekday}）`;
+}
+
 // ========== Utility Functions ==========
 function formatAssignmentModalDate(dateStr) {
   if (!dateStr) return '-';
@@ -667,10 +772,19 @@ function setupAssignmentModalEventListeners() {
     }
   });
 
+  // Close LINE template modal on overlay click
+  document.getElementById('line-template-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'line-template-modal') {
+      closeLineTemplateModal();
+    }
+  });
+
   // Close modals on Escape key
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-      if (document.getElementById('edit-modal').style.display !== 'none') {
+      if (document.getElementById('line-template-modal').style.display !== 'none') {
+        closeLineTemplateModal();
+      } else if (document.getElementById('edit-modal').style.display !== 'none') {
         closeEditModal();
       } else if (document.getElementById('assignment-modal').style.display !== 'none') {
         closeAssignmentModal();

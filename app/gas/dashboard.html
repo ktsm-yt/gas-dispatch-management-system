@@ -217,7 +217,7 @@
     }
 
     .tag {
-      font-size: 9px;
+      font-size: 10px;
       padding: 1px 4px;
       border-radius: 2px;
       color: white;
@@ -230,7 +230,7 @@
 
     .customer-name {
       flex: 1;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 500;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -240,7 +240,7 @@
 
     .staff-count {
       flex-shrink: 0;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       color: var(--color-primary);
     }
@@ -275,11 +275,19 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 9px;
+      font-size: 10px;
       color: var(--text-muted);
     }
 
     .site-name {
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .site-address {
       flex: 1;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -297,7 +305,7 @@
 
     /* Status badge */
     .status-badge {
-      font-size: 8px;
+      font-size: 9px;
       padding: 1px 3px;
       border-radius: 2px;
       font-weight: 600;
@@ -1031,6 +1039,7 @@
             </div>
             <div class="job-card-footer">
               <span class="site-name">${job.site_name}</span>
+              <span class="site-address">${job.site_address || ''}</span>
               <span class="start-time">${job.start_time || ''}</span>
             </div>
           </div>

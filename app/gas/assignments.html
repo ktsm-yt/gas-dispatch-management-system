@@ -114,6 +114,7 @@
       width: 100%;
       border-collapse: collapse;
       font-size: 12px;
+      table-layout: fixed;
     }
 
     .jobs-table th {
@@ -127,10 +128,22 @@
       white-space: nowrap;
     }
 
+    .jobs-table th:nth-child(1) { width: 60px; }  /* 時間 */
+    .jobs-table th:nth-child(2) { width: 15%; }   /* 顧客 */
+    .jobs-table th:nth-child(3) { width: 20%; }   /* 現場名 */
+    .jobs-table th:nth-child(4) { width: 25%; }   /* 住所 */
+    .jobs-table th:nth-child(5) { width: auto; }  /* 配置スタッフ */
+    .jobs-table th:nth-child(6) { width: 50px; }  /* 必要 */
+    .jobs-table th:nth-child(7) { width: 50px; }  /* 配置 */
+    .jobs-table th:nth-child(8) { width: 60px; }  /* 過不足 */
+
     .jobs-table td {
       padding: 6px 8px;
       border-bottom: 1px solid var(--border-color);
       vertical-align: middle;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .jobs-table tbody tr:hover {
@@ -154,6 +167,11 @@
 
     .job-name {
       font-weight: 500;
+    }
+
+    .job-address {
+      color: var(--text-muted);
+      font-size: 11px;
     }
 
     .job-customer {
@@ -393,8 +411,9 @@
         <thead>
           <tr>
             <th>時間</th>
-            <th>現場名</th>
             <th>顧客</th>
+            <th>現場名</th>
+            <th>住所</th>
             <th>配置スタッフ</th>
             <th class="text-center">必要</th>
             <th class="text-center">配置</th>
@@ -402,7 +421,7 @@
           </tr>
         </thead>
         <tbody id="jobs-tbody">
-          <tr><td colspan="7" class="loading">読み込み中...</td></tr>
+          <tr><td colspan="8" class="loading">読み込み中...</td></tr>
         </tbody>
       </table>
     </div>
@@ -498,7 +517,7 @@
       isLoading = true;
       updateDateDisplay();
 
-      document.getElementById('jobs-tbody').innerHTML = '<tr><td colspan="7" class="loading">読み込み中...</td></tr>';
+      document.getElementById('jobs-tbody').innerHTML = '<tr><td colspan="8" class="loading">読み込み中...</td></tr>';
 
       google.script.run
         .withSuccessHandler((response) => handleData(response, requestId, dateStr))
@@ -593,8 +612,9 @@
         html += `
           <tr class="job-row" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
             <td><span class="job-time-slot">${formatTimeSlot(job.time_slot)}</span></td>
-            <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
             <td><span class="job-customer">${escapeHtml(job.customer_name || '-')}</span></td>
+            <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
+            <td><div class="job-address">${escapeHtml(job.site_address || '')}</div></td>
             <td class="staff-cell">${staffNames}</td>
             <td class="text-center">${job.required_count || 0}</td>
             <td class="text-center">${job.assigned_count || 0}</td>
@@ -629,8 +649,9 @@
 
       row.innerHTML = `
         <td><span class="job-time-slot">${formatTimeSlot(job.time_slot)}</span></td>
-        <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
         <td><span class="job-customer">${escapeHtml(job.customer_name || '-')}</span></td>
+        <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
+        <td><div class="job-address">${escapeHtml(job.site_address || '')}</div></td>
         <td class="staff-cell">${staffNames}</td>
         <td class="text-center">${requiredCount}</td>
         <td class="text-center">${assignedCount}</td>
