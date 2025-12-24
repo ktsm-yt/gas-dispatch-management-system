@@ -1029,10 +1029,12 @@
       }
 
       tbody.innerHTML = jobs.map(job => {
-        const tagClass = JOB_TYPE_TAG[job.job_type] || 'tag-age';
-        const jobTypeLabel = JOB_TYPE_LABEL[job.job_type] || job.job_type;
+        const tagClass = JOB_TYPE_TAG[job.job_type] || '';
+        const jobTypeLabel = JOB_TYPE_LABEL[job.job_type] || '';
         const statusClass = 'status-' + (job.status || 'pending');
         const hasShortage = (job.assigned_count || 0) < job.required_count;
+        // 種別ラベル：job_typeがある場合のみ表示
+        const jobTypeHtml = jobTypeLabel ? `<span class="tag ${tagClass}">${escapeHtml(jobTypeLabel)}</span>` : '-';
 
         return `
           <tr onclick="openJob('${job.job_id}')">
@@ -1041,7 +1043,7 @@
             <td>${escapeHtml(job.customer_name) || '-'}</td>
             <td class="cell-site">${escapeHtml(job.site_name)}</td>
             <td class="cell-address">${escapeHtml(job.site_address) || ''}</td>
-            <td><span class="tag ${tagClass}">${escapeHtml(jobTypeLabel)}</span></td>
+            <td>${jobTypeHtml}</td>
             <td class="cell-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count || 0}/${job.required_count}</td>
             <td><span class="status-badge ${statusClass}">${STATUS_LABELS[job.status] || job.status || '-'}</span></td>
           </tr>
