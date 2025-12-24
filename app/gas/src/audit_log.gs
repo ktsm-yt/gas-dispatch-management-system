@@ -96,6 +96,60 @@ function logToAudit(action, tableName, recordId, beforeData, afterData) {
 }
 
 /**
+ * 監査ログを一括記録
+ * @param {Object[]} logs - ログ配列
+ * @returns {Object[]|null} 記録したログ情報の配列（失敗時はnull）
+ */
+function logBatch(logs) {
+  if (!logs || logs.length === 0) {
+    return [];
+  }
+
+  try {
+    const sheet = getAuditLogSheet();
+    const user = Session.getActiveUser().getEmail() || 'system';
+
+    const rows = [];
+    const results = [];
+
+    for (const log of logs) {
+      const timestamp = new Date().toISOString();
+      const logId = generateUuid();
+
+      rows.push([
+        logId,
+        timestamp,
+        user,
+        log.action,
+        log.table_name,
+        log.record_id,
+        log.before ? JSON.stringify(log.before) : '',
+        log.after ? JSON.stringify(log.after) : ''
+      ]);
+
+      results.push({
+        log_id: logId,
+        timestamp: timestamp,
+        user_email: user,
+        action: log.action,
+        table_name: log.table_name,
+        record_id: log.record_id
+      });
+    }
+
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, rows[0].length).setValues(rows);
+
+    return results;
+
+  } catch (error) {
+    // ログ記録の失敗は本体処理に影響させない
+    Logger.log(`監査ログ一括記録エラー: ${error.message}`);
+    return null;
+  }
+}
+
+/**
  * CREATE操作のログを記録
  * @param {string} tableName - テーブル名
  * @param {string} recordId - レコードID
