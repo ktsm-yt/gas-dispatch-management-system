@@ -391,14 +391,18 @@ function createBulkJobs() {
       const invoiceFormat = customer.invoice_format || 'format1';
       const jobIndex = dayOffset * jobsPerDay + j;
 
+      const timeSlot = timeSlots[j % timeSlots.length];
+      // 時間未定以外は開始時間を設定
+      const startTime = timeSlot === 'mitei' ? '' : startTimes[j % startTimes.length];
+
       toInsert.push({
         job_id: generateId('job'),
         customer_id: customer.customer_id,
         site_name: `${randomPick(BULK_TEST_CONFIG.LAST_NAMES)}${siteType}${siteAction}`,
         site_address: `東京都${area}${Math.floor(Math.random() * 9) + 1}-${Math.floor(Math.random() * 99) + 1}`,
         work_date: dateStr,
-        time_slot: timeSlots[j % timeSlots.length],
-        start_time: startTimes[j % startTimes.length],
+        time_slot: timeSlot,
+        start_time: startTime,
         required_count: (j % 5) + 1,
         job_type: jobTypes[j % jobTypes.length],
         supervisor_name: randomPick(supervisors),
