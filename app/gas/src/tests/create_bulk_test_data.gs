@@ -394,6 +394,8 @@ function createBulkJobs() {
       const timeSlot = timeSlots[j % timeSlots.length];
       // 時間未定以外は開始時間を設定
       const startTime = timeSlot === 'mitei' ? '' : startTimes[j % startTimes.length];
+      // 上棟のみ作業種別を設定
+      const jobType = timeSlot === 'jotou' ? jobTypes[j % jobTypes.length] : '';
 
       toInsert.push({
         job_id: generateId('job'),
@@ -404,7 +406,7 @@ function createBulkJobs() {
         time_slot: timeSlot,
         start_time: startTime,
         required_count: (j % 5) + 1,
-        job_type: jobTypes[j % jobTypes.length],
+        job_type: jobType,
         supervisor_name: randomPick(supervisors),
         // format2用項目
         order_number: invoiceFormat === 'format2' ? `${String(30000 + jobIndex).padStart(6, '0')}` : '',
@@ -478,7 +480,7 @@ function createBulkAssignments() {
   for (const job of jobsToAssign) {
     const assignCount = Math.min(job.required_count || 1, 3);
     const customer = customerMap[job.customer_id] || {};
-    const jobType = job.job_type || 'tobi';
+    const jobType = job.job_type || '';  // 上棟以外はjob_typeなし
 
     for (let i = 0; i < assignCount; i++) {
       const staff = staffList[(assignmentCounter + i) % staffList.length];

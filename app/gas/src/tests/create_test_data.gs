@@ -275,7 +275,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '08:00',
       required_count: 3,
-      job_type: '鳶',
+      job_type: 'tobi',  // 上棟のみ作業種別あり
       status: 'pending'
     },
     {
@@ -286,7 +286,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '09:00',
       required_count: 2,
-      job_type: '揚げ',
+      // job_type なし（上棟以外）
       status: 'pending'
     },
     {
@@ -297,7 +297,7 @@ function createTestJobs() {
       time_slot: 'am',
       start_time: '08:30',
       required_count: 2,
-      job_type: '揚げ',
+      // job_type なし（上棟以外）
       status: 'pending'
     },
     {
@@ -308,7 +308,7 @@ function createTestJobs() {
       time_slot: 'pm',
       start_time: '13:00',
       required_count: 4,
-      job_type: '鳶揚げ',
+      // job_type なし（上棟以外）
       status: 'pending'
     },
     // 明日の案件
@@ -320,7 +320,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '07:30',
       required_count: 5,
-      job_type: '鳶',
+      job_type: 'tobiage',  // 上棟のみ作業種別あり
       status: 'pending'
     },
     {
@@ -331,7 +331,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '08:00',
       required_count: 3,
-      job_type: '揚げ',
+      // job_type なし（上棟以外）
       status: 'pending'
     }
   ];
@@ -366,4 +366,258 @@ function deleteTestData() {
 
   console.log('=== テストデータ削除完了 ===');
   console.log('注: 顧客・スタッフ・交通費マスターは残っています');
+}
+
+/**
+ * 重複配置データをクリーンアップ
+ * 同じ案件に同じスタッフが複数配置されている場合、最新の1件のみ残して他を削除
+ */
+function cleanupDuplicateAssignments() {
+  console.log('=== 重複配置クリーンアップ開始 ===');
+
+  const allAssignments = getAllRecords('T_JobAssignments', { includeDeleted: false });
+  console.log(`全配置レコード数: ${allAssignments.length}`);
+
+  // job_id + staff_id でグループ化
+  const groupedByJobStaff = {};
+  for (const a of allAssignments) {
+    const key = `${a.job_id}__${a.staff_id}`;
+    if (!groupedByJobStaff[key]) {
+      groupedByJobStaff[key] = [];
+    }
+    groupedByJobStaff[key].push(a);
+  }
+
+  // 重複を検出して削除
+  let deletedCount = 0;
+  let keptCount = 0;
+
+  for (const key of Object.keys(groupedByJobStaff)) {
+    const assignments = groupedByJobStaff[key];
+    if (assignments.length <= 1) {
+      keptCount++;
+      continue;
+    }
+
+    // updated_at で降順ソート（最新を残す）
+    assignments.sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at || 0);
+      const dateB = new Date(b.updated_at || b.created_at || 0);
+      return dateB - dateA;
+    });
+
+    const [keep, ...duplicates] = assignments;
+    keptCount++;
+
+    console.log(`重複発見: ${key}`);
+    console.log(`  保持: ${keep.assignment_id} (updated_at: ${keep.updated_at})`);
+
+    for (const dup of duplicates) {
+      console.log(`  削除: ${dup.assignment_id} (updated_at: ${dup.updated_at})`);
+      AssignmentRepository.softDelete(dup.assignment_id);
+      deletedCount++;
+    }
+  }
+
+  console.log('=== 重複配置クリーンアップ完了 ===');
+  console.log(`保持: ${keptCount}件, 削除: ${deletedCount}件`);
+
+  return { kept: keptCount, deleted: deletedCount };
+}
+
+/**
+ * 配置データの整合性チェック
+ * 重複や不整合を検出してレポート
+ */
+function checkAssignmentIntegrity() {
+  console.log('=== 配置データ整合性チェック開始 ===');
+
+  const allAssignments = getAllRecords('T_JobAssignments', { includeDeleted: false });
+  const allJobs = getAllRecords('T_Jobs', { includeDeleted: false });
+  const allStaff = getAllRecords('M_Staff', { includeDeleted: false });
+
+  const jobIds = new Set(allJobs.map(j => j.job_id));
+  const staffIds = new Set(allStaff.map(s => s.staff_id));
+
+  const issues = [];
+
+  // 1. 重複チェック
+  const groupedByJobStaff = {};
+  for (const a of allAssignments) {
+    const key = `${a.job_id}__${a.staff_id}`;
+    if (!groupedByJobStaff[key]) {
+      groupedByJobStaff[key] = [];
+    }
+    groupedByJobStaff[key].push(a);
+  }
+
+  for (const [key, assignments] of Object.entries(groupedByJobStaff)) {
+    if (assignments.length > 1) {
+      issues.push({
+        type: 'DUPLICATE',
+        message: `重複配置: ${key} (${assignments.length}件)`,
+        data: assignments.map(a => a.assignment_id)
+      });
+    }
+  }
+
+  // 2. 孤児配置チェック（存在しない案件への配置）
+  for (const a of allAssignments) {
+    if (!jobIds.has(a.job_id)) {
+      issues.push({
+        type: 'ORPHAN_JOB',
+        message: `存在しない案件への配置: ${a.assignment_id} -> ${a.job_id}`,
+        data: a
+      });
+    }
+  }
+
+  // 3. 存在しないスタッフへの配置
+  for (const a of allAssignments) {
+    if (!staffIds.has(a.staff_id)) {
+      issues.push({
+        type: 'ORPHAN_STAFF',
+        message: `存在しないスタッフへの配置: ${a.assignment_id} -> ${a.staff_id}`,
+        data: a
+      });
+    }
+  }
+
+  console.log('=== 配置データ整合性チェック完了 ===');
+  console.log(`総配置数: ${allAssignments.length}`);
+  console.log(`問題数: ${issues.length}`);
+
+  if (issues.length > 0) {
+    console.log('\n--- 問題詳細 ---');
+    for (const issue of issues) {
+      console.log(`[${issue.type}] ${issue.message}`);
+    }
+  }
+
+  return issues;
+}
+
+/**
+ * 案件ステータスを配置数に基づいて一括修正
+ * pending/assigned のみ対象（completed, cancelled は変更しない）
+ */
+function fixJobStatuses() {
+  console.log('=== 案件ステータス修正開始 ===');
+
+  const allJobs = getAllRecords('T_Jobs', { includeDeleted: false });
+  let updatedCount = 0;
+  let skippedCount = 0;
+
+  for (const job of allJobs) {
+    // completed, cancelled, hold はスキップ
+    if (['completed', 'cancelled', 'hold'].includes(job.status)) {
+      skippedCount++;
+      continue;
+    }
+
+    const assignedCount = AssignmentRepository.countByJobId(job.job_id);
+    const requiredCount = Number(job.required_count) || 0;
+
+    let expectedStatus;
+    if (assignedCount === 0) {
+      expectedStatus = 'pending';
+    } else if (assignedCount >= requiredCount) {
+      expectedStatus = 'assigned';
+    } else {
+      expectedStatus = 'pending';
+    }
+
+    if (job.status !== expectedStatus) {
+      console.log(`${job.job_id}: ${job.status} -> ${expectedStatus} (${assignedCount}/${requiredCount})`);
+      JobRepository.update({ job_id: job.job_id, status: expectedStatus }, job.updated_at);
+      updatedCount++;
+    }
+  }
+
+  console.log('=== 案件ステータス修正完了 ===');
+  console.log(`更新: ${updatedCount}件, スキップ: ${skippedCount}件`);
+
+  return { updated: updatedCount, skipped: skippedCount };
+}
+
+/**
+ * テストデータを一括削除
+ * @param {Object} options - オプション
+ * @param {boolean} options.jobs - 案件を削除（デフォルト: true）
+ * @param {boolean} options.assignments - 配置を削除（デフォルト: true）
+ * @param {boolean} options.customers - 顧客を削除（デフォルト: false）
+ * @param {boolean} options.staff - スタッフを削除（デフォルト: false）
+ */
+function clearTestData(options = {}) {
+  const defaults = {
+    jobs: true,
+    assignments: true,
+    customers: false,
+    staff: false
+  };
+  const opts = { ...defaults, ...options };
+
+  console.log('=== テストデータ一括削除開始 ===');
+  console.log('オプション:', JSON.stringify(opts));
+
+  const results = {};
+
+  if (opts.assignments) {
+    results.assignments = clearTable('T_JobAssignments');
+  }
+
+  if (opts.jobs) {
+    results.jobs = clearTable('T_Jobs');
+  }
+
+  if (opts.customers) {
+    results.customers = clearTable('M_Customers');
+  }
+
+  if (opts.staff) {
+    results.staff = clearTable('M_Staff');
+  }
+
+  console.log('=== テストデータ一括削除完了 ===');
+  console.log('結果:', JSON.stringify(results));
+
+  return results;
+}
+
+/**
+ * テーブルのデータ行を全削除（ヘッダーは保持）
+ * @param {string} tableName - テーブル名
+ * @returns {number} 削除した行数
+ */
+function clearTable(tableName) {
+  const sheet = getSheet(tableName);
+  const lastRow = sheet.getLastRow();
+  const lastCol = sheet.getLastColumn();
+
+  if (lastRow <= 1) {
+    console.log(`${tableName}: データなし`);
+    return 0;
+  }
+
+  const rowCount = lastRow - 1;
+  // deleteRowsは固定行があるとエラーになるため、clearContentを使用
+  sheet.getRange(2, 1, rowCount, lastCol).clearContent();
+  console.log(`${tableName}: ${rowCount}行クリア`);
+
+  return rowCount;
+}
+
+/**
+ * 全テストデータを削除（案件・配置のみ、マスターは保持）
+ */
+function clearAllTestData() {
+  return clearTestData({ jobs: true, assignments: true, customers: false, staff: false });
+}
+
+/**
+ * マスターを含む全データを削除（注意: 復元不可）
+ */
+function clearEverything() {
+  console.log('⚠️ 全データ削除を実行します');
+  return clearTestData({ jobs: true, assignments: true, customers: true, staff: true });
 }
