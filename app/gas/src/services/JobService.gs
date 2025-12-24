@@ -6,21 +6,6 @@
 
 const JobService = {
   /**
-   * 案件必須フィールド
-   */
-  REQUIRED_FIELDS: ['customer_id', 'site_name', 'work_date', 'time_slot', 'required_count', 'job_type'],
-
-  /**
-   * 有効な時間区分
-   */
-  VALID_TIME_SLOTS: ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'],
-
-  /**
-   * 有効なステータス
-   */
-  VALID_STATUSES: ['pending', 'assigned', 'hold', 'completed', 'cancelled'],
-
-  /**
    * 案件を取得（配置情報付き）
    * @param {string} jobId - 案件ID
    * @returns {Object|null} { job, assignments[] } または null
@@ -177,15 +162,18 @@ const JobService = {
    * @returns {Object} { success, job?, error? }
    */
   save: function(job, expectedUpdatedAt) {
-    // バリデーション
-    const validationResult = this._validate(job, !job.job_id);
-
-    if (!validationResult.valid) {
-      return {
-        success: false,
-        error: 'VALIDATION_ERROR',
-        details: validationResult.errors
-      };
+    // バリデーション（validation.js の validateJob_ を使用）
+    try {
+      validateJob_(job, !job.job_id);
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        return {
+          success: false,
+          error: 'VALIDATION_ERROR',
+          details: { message: e.message }
+        };
+      }
+      throw e;
     }
 
     // 新規作成
@@ -226,7 +214,9 @@ const JobService = {
    * @returns {Object} { success, job?, error? }
    */
   updateStatus: function(jobId, status, expectedUpdatedAt) {
-    if (!this.VALID_STATUSES.includes(status)) {
+    // validation.js の JOB_STATUSES を使用
+    const validStatuses = Object.values(JOB_STATUSES);
+    if (!validStatuses.includes(status)) {
       return {
         success: false,
         error: 'VALIDATION_ERROR',
@@ -235,54 +225,6 @@ const JobService = {
     }
 
     return this.save({ job_id: jobId, status: status }, expectedUpdatedAt);
-  },
-
-  /**
-   * バリデーション
-   * @param {Object} job - 案件データ
-   * @param {boolean} isNew - 新規作成かどうか
-   * @returns {Object} { valid, errors }
-   */
-  _validate: function(job, isNew) {
-    const errors = {};
-
-    // 新規作成時は必須項目チェック
-    if (isNew) {
-      const requiredCheck = validateRequired(job, this.REQUIRED_FIELDS);
-      if (!requiredCheck.valid) {
-        requiredCheck.missing.forEach(field => {
-          errors[field] = `${field} is required`;
-        });
-      }
-    }
-
-    // 日付形式チェック
-    if (job.work_date && !isValidDate(job.work_date)) {
-      errors.work_date = 'Invalid date format. Expected YYYY-MM-DD';
-    }
-
-    // 時間区分チェック
-    if (job.time_slot && !this.VALID_TIME_SLOTS.includes(job.time_slot)) {
-      errors.time_slot = `Invalid time_slot: ${job.time_slot}`;
-    }
-
-    // ステータスチェック
-    if (job.status && !this.VALID_STATUSES.includes(job.status)) {
-      errors.status = `Invalid status: ${job.status}`;
-    }
-
-    // 必要人数チェック
-    if (job.required_count !== undefined) {
-      const count = Number(job.required_count);
-      if (isNaN(count) || count < 1) {
-        errors.required_count = 'required_count must be a positive number';
-      }
-    }
-
-    return {
-      valid: Object.keys(errors).length === 0,
-      errors: errors
-    };
   },
 
   /**
