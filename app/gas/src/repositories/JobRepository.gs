@@ -17,12 +17,13 @@ const JobRepository = {
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, jobId);
     if (!record) return null;
 
-    // work_dateをYYYY-MM-DD形式の文字列に変換
+    // work_dateをYYYY-MM-DD形式、start_timeをHH:mm形式の文字列に変換
     return {
       ...record,
       work_date: record.work_date instanceof Date
         ? Utilities.formatDate(record.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : record.work_date
+        : record.work_date,
+      start_time: this._normalizeTime(record.start_time)
     };
   },
 
@@ -35,13 +36,20 @@ const JobRepository = {
     const records = getAllRecords(this.TABLE_NAME);
 
     // 日付比較（DateオブジェクトまたはYYYY-MM-DD文字列に対応）
-    return records.filter(r => {
+    const filtered = records.filter(r => {
       if (r.is_deleted) return false;
       if (!r.work_date) return false;
 
       const workDateStr = this._normalizeDate(r.work_date);
       return workDateStr === date;
     });
+
+    // 日付・時刻を正規化して返す
+    return filtered.map(r => ({
+      ...r,
+      work_date: this._normalizeDate(r.work_date),
+      start_time: this._normalizeTime(r.start_time)
+    }));
   },
 
   /**
@@ -126,12 +134,11 @@ const JobRepository = {
       records = records.slice(0, query.limit);
     }
 
-    // work_dateを文字列に変換
+    // work_date, start_timeを正規化
     return records.map(r => ({
       ...r,
-      work_date: r.work_date instanceof Date
-        ? Utilities.formatDate(r.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : r.work_date
+      work_date: this._normalizeDate(r.work_date),
+      start_time: this._normalizeTime(r.start_time)
     }));
   },
 
@@ -313,5 +320,22 @@ const JobRepository = {
 
     // 文字列の場合はスラッシュをハイフンに変換
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 時刻をHH:mm形式に正規化
+   * @param {Date|string} timeValue - 時刻値
+   * @returns {string|null} HH:mm形式の文字列またはnull
+   */
+  _normalizeTime: function(timeValue) {
+    if (!timeValue) return '';
+
+    if (timeValue instanceof Date) {
+      // 1899-1900年のDateはスプレッドシートの時刻のみセル
+      return Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+    }
+
+    // 既に文字列の場合はそのまま返す
+    return String(timeValue);
   }
 };

@@ -170,41 +170,8 @@ function softDeleteRow(sheet, rowIndex, deletedBy) {
   });
 }
 
-/**
- * UUID生成
- * @returns {string} UUID
- */
-function generateId() {
-  return Utilities.getUuid();
-}
-
-/**
- * 現在時刻をISO8601形式で取得
- * @returns {string} ISO8601形式の日時文字列
- */
-function getCurrentTimestamp() {
-  return new Date().toISOString();
-}
-
-/**
- * 現在のユーザーメールを取得
- * @returns {string} メールアドレス
- */
-function getCurrentUserEmail() {
-  try {
-    return Session.getActiveUser().getEmail() || 'system';
-  } catch (e) {
-    return 'system';
-  }
-}
-
-/**
- * リクエストIDを生成
- * @returns {string} リクエストID
- */
-function generateRequestId() {
-  return 'req_' + Utilities.getUuid().substring(0, 8);
-}
+// NOTE: generateId, getCurrentTimestamp, getCurrentUserEmail, generateRequestId は
+// utils.gs で定義されているため、ここでは削除（重複回避）
 
 /**
  * 成功レスポンスを生成

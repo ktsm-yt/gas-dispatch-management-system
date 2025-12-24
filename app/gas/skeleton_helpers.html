@@ -1,3 +1,4 @@
+<script>
 // Shared skeleton helpers
 function renderSkeletonRows(rows) {
   if (!Array.isArray(rows)) return '';
@@ -20,3 +21,4 @@ function setSkeletonTableBody(tbodyId, rows) {
   if (!tbody) return;
   tbody.innerHTML = renderSkeletonRows(rows);
 }
+</script>

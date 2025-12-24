@@ -485,9 +485,10 @@
             <div class="form-group">
               <label for="job-type">作業種別 *</label>
               <select id="job-type" name="job_type" required>
-                <option value="鳶">鳶</option>
-                <option value="揚げ">揚げ</option>
-                <option value="鳶揚げ">鳶揚げ</option>
+                <option value="">選択してください</option>
+                <option value="tobi">鳶</option>
+                <option value="age">揚げ</option>
+                <option value="tobiage">鳶揚げ</option>
               </select>
             </div>
           </div>
@@ -773,7 +774,9 @@
       const idx = dashboardData.jobs.findIndex(j => j.job_id === jobId);
       if (idx >= 0) {
         const validAssignments = (assignments || []).filter(a => a.status !== 'CANCELLED');
-        dashboardData.jobs[idx].assigned_count = validAssignments.length;
+        // 一意なスタッフIDでカウント（サーバー側と同じロジック）
+        const uniqueStaffIds = new Set(validAssignments.map(a => a.staff_id));
+        dashboardData.jobs[idx].assigned_count = uniqueStaffIds.size;
         dashboardData.jobs[idx].staff_names = validAssignments.map(a => a.staff_name || '');
 
         // 統計を再計算して再描画
@@ -806,11 +809,25 @@
 
     const TIME_SLOT_ORDER = ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'];
 
-    // Job type to tag class
+    // Job type to tag class (English keys)
     const JOB_TYPE_TAG = {
+      'tobi': 'tag-tobi',
+      'age': 'tag-age',
+      'tobiage': 'tag-tobiage',
+      // 後方互換性のため日本語キーも維持
       '鳶': 'tag-tobi',
       '揚げ': 'tag-age',
       '鳶揚げ': 'tag-tobiage'
+    };
+
+    // Job type English to Japanese label
+    const JOB_TYPE_LABEL = {
+      'tobi': '鳶',
+      'age': '揚げ',
+      'tobiage': '鳶揚げ',
+      '鳶': '鳶',
+      '揚げ': '揚げ',
+      '鳶揚げ': '鳶揚げ'
     };
 
     // Initialize
@@ -946,6 +963,15 @@
       if (!response.ok) return;
 
       const newData = response.data;
+      const currentDateStr = formatDate(currentDate);
+
+      // 現在表示中の日付と一致する場合のみ更新
+      if (newData.date !== currentDateStr) {
+        // 別の日付のデータ → キャッシュだけ更新
+        saveToCachedDate(newData.date, newData);
+        return;
+      }
+
       // キャッシュと比較して変更があれば更新
       if (JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs)) {
         dashboardData = newData;
@@ -970,12 +996,19 @@
         return;
       }
 
-      dashboardData = response.data;
-      lastMaxUpdatedAt = null; // Reset for polling
+      const newData = response.data;
+      const currentDateStr = formatDate(currentDate);
 
       // キャッシュに保存
-      saveToCachedDate(dashboardData.date, dashboardData);
+      saveToCachedDate(newData.date, newData);
 
+      // 現在表示中の日付と一致する場合のみ表示更新
+      if (newData.date !== currentDateStr) {
+        return;
+      }
+
+      dashboardData = newData;
+      lastMaxUpdatedAt = null; // Reset for polling
       renderDashboard();
     }
 
@@ -992,12 +1025,14 @@
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
-        const shortage = slotStats.shortage;
-        if (shortage < 0) {
-          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
+        const shortage = slotStats.shortage;  // required - assigned
+        if (shortage > 0) {
+          // 不足（必要 > 配置済み）
+          shortageEl.textContent = `${shortage}名不足`;
           shortageEl.className = 'shortage negative';
-        } else if (shortage > 0) {
-          shortageEl.textContent = `+${shortage}名余裕`;
+        } else if (shortage < 0) {
+          // 余裕（配置済み > 必要）
+          shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
           shortageEl.className = 'shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
@@ -1020,13 +1055,14 @@
 
       container.innerHTML = jobs.map(job => {
         const tagClass = JOB_TYPE_TAG[job.job_type] || 'tag-age';
+        const jobTypeLabel = JOB_TYPE_LABEL[job.job_type] || job.job_type;
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
 
         return `
           <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
             <div class="job-card-header">
-              <span class="tag ${tagClass}">${job.job_type}</span>
+              <span class="tag ${tagClass}">${jobTypeLabel}</span>
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${job.customer_name || '-'}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
@@ -1115,12 +1151,14 @@
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
-        const shortage = slotStats.shortage;
-        if (shortage < 0) {
-          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
+        const shortage = slotStats.shortage;  // required - assigned
+        if (shortage > 0) {
+          // 不足（必要 > 配置済み）
+          shortageEl.textContent = `${shortage}名不足`;
           shortageEl.className = 'shortage negative';
-        } else if (shortage > 0) {
-          shortageEl.textContent = `+${shortage}名余裕`;
+        } else if (shortage < 0) {
+          // 余裕（配置済み > 必要）
+          shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
           shortageEl.className = 'shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
@@ -1169,10 +1207,10 @@
         }
       }
 
-      // shortage = assigned - required
-      // 正: 余裕あり, 負: 不足, 0: ちょうど
+      // shortage = required - assigned
+      // 正: 不足, 負: 余裕, 0: ちょうど
       for (const slot of Object.keys(byTimeSlot)) {
-        byTimeSlot[slot].shortage = byTimeSlot[slot].assigned - byTimeSlot[slot].required;
+        byTimeSlot[slot].shortage = byTimeSlot[slot].required - byTimeSlot[slot].assigned;
       }
 
       dashboardData.stats = { total, assigned, pending, byTimeSlot };
@@ -1211,7 +1249,7 @@
           document.getElementById('time-slot').value = cachedJob.time_slot || 'am';
           document.getElementById('start-time').value = cachedJob.start_time || '';
           document.getElementById('required-count').value = cachedJob.required_count || 1;
-          document.getElementById('job-type').value = cachedJob.job_type || '揚げ';
+          document.getElementById('job-type').value = cachedJob.job_type || '';
           document.getElementById('status').value = cachedJob.status || 'pending';
           document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
           document.getElementById('notes').value = cachedJob.notes || '';
@@ -1417,7 +1455,7 @@
             document.getElementById('time-slot').value = job.time_slot || 'am';
             document.getElementById('start-time').value = job.start_time || '';
             document.getElementById('required-count').value = job.required_count || 1;
-            document.getElementById('job-type').value = job.job_type || '揚げ';
+            document.getElementById('job-type').value = job.job_type || '';
             document.getElementById('status').value = job.status || 'pending';
             document.getElementById('supervisor-name').value = job.supervisor_name || '';
             document.getElementById('order-number').value = job.order_number || '';
