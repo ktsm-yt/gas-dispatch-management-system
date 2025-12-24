@@ -409,7 +409,7 @@ function testBulkOperations() {
 
     if (testJobs.length > 0) {
       // シートを直接操作して一括削除
-      const ss = SpreadsheetApp.openById(getDbSpreadsheetId());
+      const ss = SpreadsheetApp.openById(getSpreadsheetId());
       const sheet = ss.getSheetByName('T_Jobs');
       const data = sheet.getDataRange().getValues();
       const headers = data[0];
@@ -458,15 +458,24 @@ function testBulkOperations() {
 function testOptimisticLocking() {
   const testName = 'optimisticLocking';
 
-  // テスト用顧客取得
+  // UUID形式の顧客を探す（テストデータはcus_bulk_形式なのでバリデーション通過しない）
   const customers = getAllRecords('M_Customers').filter(c => !c.is_deleted);
   if (customers.length === 0) {
     console.log(`⚠️ ${testName}: テスト顧客がありません（スキップ）`);
     return { name: testName, passed: true, skipped: true };
   }
 
-  // 顧客IDの確認
-  const customerId = customers[0].customer_id;
+  // UUID形式の顧客を優先的に使用（8-4-4-4-12形式）
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  let customer = customers.find(c => c.customer_id && uuidRegex.test(c.customer_id));
+
+  // UUID顧客がない場合はJobRepository.insert()で直接挿入（バリデーションスキップ）
+  const useDirectInsert = !customer;
+  if (!customer) {
+    customer = customers[0];
+  }
+  const customerId = customer.customer_id;
+
   if (!customerId) {
     console.log(`⚠️ ${testName}: 顧客IDが無効です（スキップ）`);
     return { name: testName, passed: true, skipped: true };
@@ -490,22 +499,34 @@ function testOptimisticLocking() {
       status: 'pending'
     };
 
-    const createResult = JobService.save(job, null);
-    if (!createResult.success) {
-      // エラー詳細を出力
-      const errorDetail = createResult.details ?
-        JSON.stringify(createResult.details) :
-        (createResult.error || '不明なエラー');
-      throw new Error('案件作成失敗: ' + errorDetail);
+    let createdJob;
+    if (useDirectInsert) {
+      // UUID形式でない顧客の場合、JobRepository.insert()を直接使用（バリデーションスキップ）
+      createdJob = JobRepository.insert(job);
+      if (!createdJob || !createdJob.job_id) {
+        throw new Error('案件作成失敗（直接挿入）');
+      }
+    } else {
+      const createResult = JobService.save(job, null);
+      if (!createResult.success) {
+        const errorDetail = createResult.details ?
+          JSON.stringify(createResult.details) :
+          (createResult.error || '不明なエラー');
+        throw new Error('案件作成失敗: ' + errorDetail);
+      }
+      createdJob = createResult.job;
     }
-    testJobId = createResult.job.job_id;
-    const originalUpdatedAt = createResult.job.updated_at;
+    testJobId = createdJob.job_id;
+    const originalUpdatedAt = createdJob.updated_at;
 
     // 2. 正常更新（正しいupdated_at）
-    const update1 = JobService.save(
-      { job_id: testJobId, notes: '更新1' },
-      originalUpdatedAt
-    );
+    let update1;
+    if (useDirectInsert) {
+      // JobRepository.updateを直接使用
+      update1 = JobRepository.update({ job_id: testJobId, notes: '更新1' }, originalUpdatedAt);
+    } else {
+      update1 = JobService.save({ job_id: testJobId, notes: '更新1' }, originalUpdatedAt);
+    }
     if (!update1.success) {
       const errorDetail = update1.details ?
         JSON.stringify(update1.details) :
@@ -514,10 +535,12 @@ function testOptimisticLocking() {
     }
 
     // 3. 競合更新（古いupdated_at）
-    const update2 = JobService.save(
-      { job_id: testJobId, notes: '更新2' },
-      originalUpdatedAt  // 古いタイムスタンプを使用
-    );
+    let update2;
+    if (useDirectInsert) {
+      update2 = JobRepository.update({ job_id: testJobId, notes: '更新2' }, originalUpdatedAt);
+    } else {
+      update2 = JobService.save({ job_id: testJobId, notes: '更新2' }, originalUpdatedAt);
+    }
 
     if (update2.success) {
       passed = false;
