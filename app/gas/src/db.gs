@@ -75,8 +75,9 @@ function getSheet(tableName) {
  * @returns {string[]} ヘッダー配列
  */
 function getHeaders(sheet) {
-  const headerRange = sheet.getRange(1, 1, 1, sheet.getLastColumn());
-  return headerRange.getValues()[0];
+  const lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return [];
+  return sheet.getRange(1, 1, 1, lastCol).getValues()[0];
 }
 
 /**
@@ -293,28 +294,6 @@ function findRecords(tableName, conditions, options = {}) {
   return records;
 }
 
-/**
- * スクリプトロックを取得
- * @param {number} waitTimeMs - 待機時間（ミリ秒）
- * @returns {GoogleAppsScript.Lock.Lock|null} ロックオブジェクトまたはnull
- */
-function acquireLock(waitTimeMs = 3000) {
-  const lock = LockService.getScriptLock();
-
-  try {
-    lock.waitLock(waitTimeMs);
-    return lock;
-  } catch (e) {
-    return null;
-  }
-}
-
-/**
- * ロックを解放
- * @param {GoogleAppsScript.Lock.Lock} lock - ロックオブジェクト
- */
-function releaseLock(lock) {
-  if (lock) {
-    lock.releaseLock();
-  }
-}
+// ロック取得関数は repository.gs に統一
+// @see repository.gs acquireLock()
+// 注意: waitLock()ではなくtryLock()を使用（ノンブロッキング）

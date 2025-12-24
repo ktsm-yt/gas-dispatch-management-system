@@ -218,3 +218,7 @@ function apiHandlerWithLock_(fn, lockTimeoutMs = 3000) {
     }
   };
 }
+
+// 後方互換性のためのエイリアス
+// 既存コードで ERROR_CODES を使用している箇所のため
+const ERROR_CODES = ErrorCodes;

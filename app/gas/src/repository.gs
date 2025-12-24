@@ -6,23 +6,8 @@
  * スプレッドシートへの読み書きを一括処理で行う基盤層
  */
 
-/**
- * DB Spreadsheet を取得
- * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
- */
-function getDatabase() {
-  const prop = PropertiesService.getScriptProperties();
-  const env = prop.getProperty('ENV') || 'dev';
-  const spreadsheetId = env === 'prod'
-    ? prop.getProperty('SPREADSHEET_ID_PROD')
-    : prop.getProperty('SPREADSHEET_ID_DEV');
-
-  if (!spreadsheetId) {
-    throw new Error('DB Spreadsheet ID が設定されていません');
-  }
-
-  return SpreadsheetApp.openById(spreadsheetId);
-}
+// getDb() は db.gs に統一
+// @see db.gs getDb()
 
 /**
  * シートを取得（直接シート名で検索）
@@ -30,7 +15,7 @@ function getDatabase() {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function getSheetDirect(sheetName) {
-  const ss = getDatabase();
+  const ss = getDb();
   const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
@@ -40,16 +25,8 @@ function getSheetDirect(sheetName) {
   return sheet;
 }
 
-/**
- * シートからヘッダー行を取得
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @returns {string[]} ヘッダー配列
- */
-function getHeaders(sheet) {
-  const lastCol = sheet.getLastColumn();
-  if (lastCol === 0) return [];
-  return sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-}
+// getHeaders() は db.gs に統一
+// @see db.gs getHeaders()
 
 /**
  * シートから全データを取得（オブジェクト配列）
@@ -170,42 +147,20 @@ function softDeleteRow(sheet, rowIndex, deletedBy) {
   });
 }
 
-// NOTE: generateId, getCurrentTimestamp, getCurrentUserEmail, generateRequestId は
-// utils.gs で定義されているため、ここでは削除（重複回避）
+// 以下の関数は utils.gs に統一
+// @see utils.gs generateId(), getCurrentTimestamp(), generateRequestId()
+// @see utils.gs buildSuccessResponse(), buildErrorResponse()
 
 /**
- * 成功レスポンスを生成
- * @param {Object} data - データ
- * @param {string} requestId - リクエストID
- * @returns {Object} レスポンス
+ * 現在のユーザーメールを取得
+ * @returns {string} メールアドレス
  */
-function successResponse(data, requestId) {
-  return {
-    ok: true,
-    data: data,
-    serverTime: getCurrentTimestamp(),
-    requestId: requestId
-  };
-}
-
-/**
- * エラーレスポンスを生成
- * @param {string} code - エラーコード
- * @param {string} message - エラーメッセージ
- * @param {Object} details - 詳細情報
- * @param {string} requestId - リクエストID
- * @returns {Object} レスポンス
- */
-function errorResponse(code, message, details, requestId) {
-  return {
-    ok: false,
-    error: {
-      code: code,
-      message: message,
-      details: details || {}
-    },
-    requestId: requestId
-  };
+function getCurrentUserEmail() {
+  try {
+    return Session.getActiveUser().getEmail() || 'system';
+  } catch (e) {
+    return 'system';
+  }
 }
 
 /**
@@ -226,6 +181,7 @@ function checkOptimisticLock(record, expectedUpdatedAt) {
 
 /**
  * スクリプトロックを取得
+ * tryLock()を使用（ノンブロッキング）
  * @param {number} waitMs - 待機時間（ミリ秒）
  * @returns {GoogleAppsScript.Lock.Lock|null} ロック、取得失敗時はnull
  */
@@ -233,4 +189,18 @@ function acquireLock(waitMs = 3000) {
   const lock = LockService.getScriptLock();
   const acquired = lock.tryLock(waitMs);
   return acquired ? lock : null;
+}
+
+/**
+ * ロックを解放
+ * @param {GoogleAppsScript.Lock.Lock} lock - ロックオブジェクト
+ */
+function releaseLock(lock) {
+  if (lock) {
+    try {
+      lock.releaseLock();
+    } catch (e) {
+      // ロック解放エラーは無視
+    }
+  }
 }

@@ -160,17 +160,9 @@ function buildErrorResponse(code, message, details, requestId) {
   return JSON.parse(JSON.stringify(response));
 }
 
-/**
- * エラーコード定義
- */
-const ERROR_CODES = {
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  PERMISSION_DENIED: 'PERMISSION_DENIED',
-  NOT_FOUND: 'NOT_FOUND',
-  CONFLICT_ERROR: 'CONFLICT_ERROR',
-  BUSY_ERROR: 'BUSY_ERROR',
-  SYSTEM_ERROR: 'SYSTEM_ERROR'
-};
+// エラーコードは errors.js に統一
+// @see errors.js ErrorCodes
+// 後方互換性のため ERROR_CODES は errors.js で ErrorCodes のエイリアスとして定義
 
 /**
  * オブジェクトの差分を取得（監査ログ用）
