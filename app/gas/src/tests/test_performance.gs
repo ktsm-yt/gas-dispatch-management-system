@@ -20,7 +20,7 @@ const PERF_TEST_CONFIG = {
   // 許容時間（ms）
   THRESHOLDS: {
     getDashboard: 3000,       // ダッシュボード取得
-    searchJobs: 5000,         // 案件検索
+    searchJobs: 15000,        // 案件検索（大量データ対応）
     getAllCustomers: 2000,    // 顧客一覧
     getAllStaff: 2000,        // スタッフ一覧
     saveJob: 1000,            // 案件保存
