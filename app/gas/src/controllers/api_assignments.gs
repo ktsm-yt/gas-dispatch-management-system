@@ -462,6 +462,15 @@ function getDashboardAssignments(date) {
     // 配置を取得
     const assignments = AssignmentRepository.findByDate(date);
 
+    // 顧客情報を一括取得してキャッシュ
+    const allCustomers = getAllRecords('M_Customers');
+    const customerCache = {};
+    for (const customer of allCustomers) {
+      if (customer.customer_id && !customer.is_deleted) {
+        customerCache[customer.customer_id] = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
+      }
+    }
+
     // スタッフ情報を一括取得してキャッシュ
     const allStaff = getAllRecords('M_Staff');
     const staffCache = {};
@@ -478,13 +487,16 @@ function getDashboardAssignments(date) {
       };
     });
 
-    // 案件ごとに配置をグループ化
+    // 案件ごとに配置をグループ化（一意なスタッフIDでカウント）
     const jobsWithAssignments = jobs.map(job => {
       const jobAssignments = enrichedAssignments.filter(a => a.job_id === job.job_id);
-      const assignedCount = jobAssignments.filter(a => a.status !== 'CANCELLED').length;
+      const activeAssignments = jobAssignments.filter(a => a.status !== 'CANCELLED');
+      const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
+      const assignedCount = uniqueStaffIds.size;
 
       return {
         ...job,
+        customer_name: customerCache[job.customer_id] || '',
         assignments: jobAssignments,
         assigned_count: assignedCount,
         shortage: (Number(job.required_count) || 0) - assignedCount

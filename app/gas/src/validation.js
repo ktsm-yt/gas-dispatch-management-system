@@ -332,7 +332,8 @@ function validatePostalCode_(value, fieldName) {
 }
 
 /**
- * UUID形式チェック
+ * ID形式チェック（プレフィックス付きUUID対応）
+ * 形式: prefix_uuid (例: cus_xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
  * @param {string} value - チェックする値
  * @param {string} fieldName - フィールド名
  * @throws {ValidationError} 不正な形式の場合
@@ -340,8 +341,11 @@ function validatePostalCode_(value, fieldName) {
 function validateUuid_(value, fieldName) {
   if (value === null || value === undefined || value === '') return;
 
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(value)) {
+  // プレフィックス付きUUID (prefix_uuid) または純粋UUIDを許可
+  const prefixedUuidRegex = /^[a-z]{2,4}_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const pureUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  if (!prefixedUuidRegex.test(value) && !pureUuidRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}は正しいID形式ではありません`,
       { field: fieldName, actualValue: value }

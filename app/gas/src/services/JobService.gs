@@ -6,21 +6,6 @@
 
 const JobService = {
   /**
-   * 案件必須フィールド
-   */
-  REQUIRED_FIELDS: ['customer_id', 'site_name', 'work_date', 'time_slot', 'required_count', 'job_type'],
-
-  /**
-   * 有効な時間区分
-   */
-  VALID_TIME_SLOTS: ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'],
-
-  /**
-   * 有効なステータス
-   */
-  VALID_STATUSES: ['pending', 'assigned', 'hold', 'completed', 'cancelled'],
-
-  /**
    * 案件を取得（配置情報付き）
    * @param {string} jobId - 案件ID
    * @returns {Object|null} { job, assignments[] } または null
@@ -64,8 +49,36 @@ const JobService = {
     // 顧客マスターを取得してマップ作成
     const customerMap = this._getCustomerMap();
 
-    // 顧客名をJOIN
+    // 配置データを取得
+    const allAssignments = AssignmentRepository.findByDate(date);
+
+    // スタッフマスターを取得してマップ作成
+    const allStaff = getAllRecords('M_Staff');
+    const staffMap = {};
+    for (const staff of allStaff) {
+      if (staff.staff_id && !staff.is_deleted) {
+        staffMap[staff.staff_id] = staff.name;
+      }
+    }
+
+    // 案件ごとの配置をグループ化
+    const assignmentsByJob = {};
+    for (const a of allAssignments) {
+      if (!assignmentsByJob[a.job_id]) {
+        assignmentsByJob[a.job_id] = [];
+      }
+      assignmentsByJob[a.job_id].push(a);
+    }
+
+    // 顧客名と配置情報をJOIN
     const jobsWithCustomer = jobs.map(job => {
+      const jobAssignments = assignmentsByJob[job.job_id] || [];
+      const activeAssignments = jobAssignments.filter(a => a.status !== 'CANCELLED');
+
+      // 一意なスタッフIDでカウント（重複レコードがあっても正しくカウント）
+      const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
+      const staffNames = Array.from(uniqueStaffIds).map(id => staffMap[id] || '（削除済み）');
+
       return {
         job_id: job.job_id,
         customer_id: job.customer_id,
@@ -76,17 +89,17 @@ const JobService = {
         start_time: job.start_time,
         job_type: job.job_type,
         required_count: job.required_count,
-        assigned_count: 0, // TODO: 配置数取得（P1-4）
+        assigned_count: uniqueStaffIds.size,
         status: job.status,
         supervisor_name: job.supervisor_name || '',
         notes: job.notes || '',
-        staff_names: [], // TODO: 配置スタッフ名取得（P1-4）
+        staff_names: staffNames,
         updated_at: job.updated_at
       };
     });
 
-    // 統計情報
-    const stats = this._calculateStats(jobs);
+    // 統計情報（配置情報付きのjobsWithCustomerを使用）
+    const stats = this._calculateStats(jobsWithCustomer);
 
     return {
       date: date,
@@ -116,7 +129,7 @@ const JobService = {
   /**
    * 案件を検索
    * @param {Object} query - 検索条件
-   * @returns {Object[]} 案件配列（顧客名付き）
+   * @returns {Object[]} 案件配列（顧客名・配置数付き）
    */
   search: function(query) {
     const jobs = JobRepository.search(query);
@@ -124,10 +137,23 @@ const JobService = {
     // 顧客マスターを取得してマップ作成
     const customerMap = this._getCustomerMap();
 
-    // 顧客名をJOIN
+    // 全配置を取得して案件ごとに一意なスタッフIDをグループ化
+    const allAssignments = getAllRecords('T_JobAssignments');
+    const staffIdsByJob = {};
+    for (const a of allAssignments) {
+      if (!a.is_deleted && a.status !== 'CANCELLED') {
+        if (!staffIdsByJob[a.job_id]) {
+          staffIdsByJob[a.job_id] = new Set();
+        }
+        staffIdsByJob[a.job_id].add(a.staff_id);
+      }
+    }
+
+    // 顧客名と配置数をJOIN（一意なスタッフ数）
     let result = jobs.map(job => ({
       ...job,
-      customer_name: customerMap[job.customer_id] || ''
+      customer_name: customerMap[job.customer_id] || '',
+      assigned_count: staffIdsByJob[job.job_id] ? staffIdsByJob[job.job_id].size : 0
     }));
 
     // 検索ワードで絞り込み（顧客名・現場名の両方を検索）
@@ -177,15 +203,18 @@ const JobService = {
    * @returns {Object} { success, job?, error? }
    */
   save: function(job, expectedUpdatedAt) {
-    // バリデーション
-    const validationResult = this._validate(job, !job.job_id);
-
-    if (!validationResult.valid) {
-      return {
-        success: false,
-        error: 'VALIDATION_ERROR',
-        details: validationResult.errors
-      };
+    // バリデーション（validation.js の validateJob_ を使用）
+    try {
+      validateJob_(job, !job.job_id);
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        return {
+          success: false,
+          error: 'VALIDATION_ERROR',
+          details: { message: e.message }
+        };
+      }
+      throw e;
     }
 
     // 新規作成
@@ -226,7 +255,9 @@ const JobService = {
    * @returns {Object} { success, job?, error? }
    */
   updateStatus: function(jobId, status, expectedUpdatedAt) {
-    if (!this.VALID_STATUSES.includes(status)) {
+    // validation.js の JOB_STATUSES を使用
+    const validStatuses = Object.values(JOB_STATUSES);
+    if (!validStatuses.includes(status)) {
       return {
         success: false,
         error: 'VALIDATION_ERROR',
@@ -235,54 +266,6 @@ const JobService = {
     }
 
     return this.save({ job_id: jobId, status: status }, expectedUpdatedAt);
-  },
-
-  /**
-   * バリデーション
-   * @param {Object} job - 案件データ
-   * @param {boolean} isNew - 新規作成かどうか
-   * @returns {Object} { valid, errors }
-   */
-  _validate: function(job, isNew) {
-    const errors = {};
-
-    // 新規作成時は必須項目チェック
-    if (isNew) {
-      const requiredCheck = validateRequired(job, this.REQUIRED_FIELDS);
-      if (!requiredCheck.valid) {
-        requiredCheck.missing.forEach(field => {
-          errors[field] = `${field} is required`;
-        });
-      }
-    }
-
-    // 日付形式チェック
-    if (job.work_date && !isValidDate(job.work_date)) {
-      errors.work_date = 'Invalid date format. Expected YYYY-MM-DD';
-    }
-
-    // 時間区分チェック
-    if (job.time_slot && !this.VALID_TIME_SLOTS.includes(job.time_slot)) {
-      errors.time_slot = `Invalid time_slot: ${job.time_slot}`;
-    }
-
-    // ステータスチェック
-    if (job.status && !this.VALID_STATUSES.includes(job.status)) {
-      errors.status = `Invalid status: ${job.status}`;
-    }
-
-    // 必要人数チェック
-    if (job.required_count !== undefined) {
-      const count = Number(job.required_count);
-      if (isNaN(count) || count < 1) {
-        errors.required_count = 'required_count must be a positive number';
-      }
-    }
-
-    return {
-      valid: Object.keys(errors).length === 0,
-      errors: errors
-    };
   },
 
   /**
@@ -317,13 +300,13 @@ const JobService = {
       if (byTimeSlot[slot]) {
         byTimeSlot[slot].total++;
         byTimeSlot[slot].required += Number(job.required_count) || 0;
-        // TODO: assigned_count は配置データから取得
+        byTimeSlot[slot].assigned += Number(job.assigned_count) || 0;
       }
     }
 
-    // 過不足計算
+    // 過不足計算（shortage = required - assigned）
     for (const slot of Object.keys(byTimeSlot)) {
-      byTimeSlot[slot].shortage = byTimeSlot[slot].assigned - byTimeSlot[slot].required;
+      byTimeSlot[slot].shortage = byTimeSlot[slot].required - byTimeSlot[slot].assigned;
     }
 
     return {

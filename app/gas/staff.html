@@ -667,6 +667,10 @@
                 <label for="daily-rate-half">ハーフ</label>
                 <input type="number" id="daily-rate-half" name="daily_rate_half" min="0" step="100" placeholder="8000">
               </div>
+              <div class="form-group">
+                <label for="daily-rate-fullday">終日</label>
+                <input type="number" id="daily-rate-fullday" name="daily_rate_fullday" min="0" step="100" placeholder="18000">
+              </div>
             </div>
           </div>
 
@@ -1038,6 +1042,7 @@
         case 'age': return staff.daily_rate_age;
         case 'tobiage': return staff.daily_rate_tobiage;
         case 'half': return staff.daily_rate_half;
+        case 'fullday': return staff.daily_rate_fullday;
         default: return staff.daily_rate_tobi;
       }
     }
@@ -1117,6 +1122,7 @@
       document.getElementById('daily-rate-age').value = staff.daily_rate_age || '';
       document.getElementById('daily-rate-tobiage').value = staff.daily_rate_tobiage || '';
       document.getElementById('daily-rate-half').value = staff.daily_rate_half || '';
+      document.getElementById('daily-rate-fullday').value = staff.daily_rate_fullday || '';
       document.getElementById('birth-date').value = staff.birth_date || '';
       document.getElementById('gender').value = staff.gender || '';
       document.getElementById('blood-type').value = staff.blood_type || '';
@@ -1162,7 +1168,7 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half'].includes(key)) {
+          if (['daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'daily_rate_fullday'].includes(key)) {
             staff[key] = value ? Number(value) : null;
           } else if (key === 'is_active' || key === 'has_motorbike') {
             staff[key] = value === 'true';
