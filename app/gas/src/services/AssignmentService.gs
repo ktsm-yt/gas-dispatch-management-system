@@ -93,6 +93,8 @@ const AssignmentService = {
       };
 
       const auditLogs = [];
+      const toInsert = [];
+      const pendingStaffIds = new Set();
 
       // 削除処理
       if (changes.deletes && changes.deletes.length > 0) {
@@ -142,6 +144,11 @@ const AssignmentService = {
           } else {
             // 新規作成
             // 重複チェック
+            const effectiveStatus = processedAssignment.status || 'ASSIGNED';
+            if (effectiveStatus !== 'CANCELLED' && pendingStaffIds.has(processedAssignment.staff_id)) {
+              continue; // 同一リクエスト内の重複はスキップ
+            }
+
             if (AssignmentRepository.checkDuplicateAssignment(
               processedAssignment.staff_id,
               jobId
@@ -150,16 +157,26 @@ const AssignmentService = {
             }
 
             processedAssignment.job_id = jobId;
-            const newAssignment = AssignmentRepository.insert(processedAssignment);
-            results.inserted.push(newAssignment);
-            auditLogs.push({
-              action: 'CREATE',
-              table_name: 'T_JobAssignments',
-              record_id: newAssignment.assignment_id,
-              before: null,
-              after: newAssignment
-            });
+            toInsert.push(processedAssignment);
+            if (effectiveStatus !== 'CANCELLED') {
+              pendingStaffIds.add(processedAssignment.staff_id);
+            }
           }
+        }
+      }
+
+      // 追加処理（一括挿入）
+      if (toInsert.length > 0) {
+        const insertedAssignments = AssignmentRepository.bulkInsert(toInsert);
+        results.inserted.push(...insertedAssignments);
+        for (const newAssignment of insertedAssignments) {
+          auditLogs.push({
+            action: 'CREATE',
+            table_name: 'T_JobAssignments',
+            record_id: newAssignment.assignment_id,
+            before: null,
+            after: newAssignment
+          });
         }
       }
 
@@ -173,8 +190,8 @@ const AssignmentService = {
       this._updateJobStatus(jobId);
 
       // 監査ログの記録
-      for (const log of auditLogs) {
-        logToAudit(log.action, log.table_name, log.record_id, log.before, log.after);
+      if (auditLogs.length > 0) {
+        logBatch(auditLogs);
       }
 
       // 更新後の配置一覧を取得（スタッフ名付き）

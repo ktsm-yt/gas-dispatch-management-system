@@ -226,6 +226,27 @@ function insertRecord(tableName, record) {
 }
 
 /**
+ * レコードを一括挿入
+ * @param {string} tableName - テーブル名
+ * @param {Object[]} records - レコード配列
+ * @returns {Object[]} 挿入したレコード配列
+ */
+function insertRecords(tableName, records) {
+  if (!records || records.length === 0) {
+    return [];
+  }
+
+  const sheet = getSheet(tableName);
+  const headers = getHeaders(sheet);
+  const rows = records.map(record => objectToRow(headers, record));
+
+  const lastRow = sheet.getLastRow();
+  sheet.getRange(lastRow + 1, 1, rows.length, headers.length).setValues(rows);
+
+  return records;
+}
+
+/**
  * レコードを更新
  * @param {string} tableName - テーブル名
  * @param {string} idColumn - IDカラム名
