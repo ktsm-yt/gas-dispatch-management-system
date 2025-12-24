@@ -465,6 +465,7 @@
         <option value="age">揚げ単価</option>
         <option value="tobiage">鳶揚げ単価</option>
         <option value="half">ハーフ単価</option>
+        <option value="fullday">終日単価</option>
       </select>
       <div class="stats-bar">
         <span>全 <span class="count" id="stats-total">-</span> 件</span>
@@ -594,6 +595,10 @@
                 <label for="unit-price-half">ハーフ単価</label>
                 <input type="number" id="unit-price-half" name="unit_price_half" min="0" step="100" placeholder="12000">
               </div>
+              <div class="form-group">
+                <label for="unit-price-fullday">終日単価</label>
+                <input type="number" id="unit-price-fullday" name="unit_price_fullday" min="0" step="100" placeholder="30000">
+              </div>
             </div>
           </div>
 
@@ -702,8 +707,9 @@
     </div>
   </div>
 
+  <?!= include('skeleton_helpers'); ?>
+
   <script>
-    <?!= include('skeleton_helpers'); ?>
     const CUSTOMER_SKELETON_ROWS = [
       ['line-60', 'line-40', 'line-30', 'line-50', 'line-80', 'line-30', 'line-20', 'pill-40'],
       ['line-50', 'line-30', 'line-40', 'line-40', 'line-70', 'line-30', 'line-20', 'pill-40'],
@@ -880,13 +886,14 @@
         case 'age': return customer.unit_price_age;
         case 'tobiage': return customer.unit_price_tobiage;
         case 'half': return customer.unit_price_half;
+        case 'fullday': return customer.unit_price_fullday;
         default: return customer.unit_price_tobi;
       }
     }
 
     function updatePriceHeader() {
       const priceType = document.getElementById('price-type').value;
-      const labels = { tobi: '鳶単価', age: '揚げ単価', tobiage: '鳶揚げ単価', half: 'ハーフ単価' };
+      const labels = { tobi: '鳶単価', age: '揚げ単価', tobiage: '鳶揚げ単価', half: 'ハーフ単価', fullday: '終日単価' };
       document.getElementById('price-header').textContent = labels[priceType] || '単価';
     }
 
@@ -955,6 +962,7 @@
       document.getElementById('unit-price-age').value = customer.unit_price_age || '';
       document.getElementById('unit-price-tobiage').value = customer.unit_price_tobiage || '';
       document.getElementById('unit-price-half').value = customer.unit_price_half || '';
+      document.getElementById('unit-price-fullday').value = customer.unit_price_fullday || '';
       document.getElementById('closing-day').value = customer.closing_day || '';
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
       document.getElementById('payment-day').value = customer.payment_day || '';
@@ -989,7 +997,7 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['unit_price_tobi', 'unit_price_age', 'unit_price_tobiage', 'unit_price_half',
+          if (['unit_price_tobi', 'unit_price_age', 'unit_price_tobiage', 'unit_price_half', 'unit_price_fullday',
                'closing_day', 'payment_day', 'payment_month_offset', 'tax_rate', 'expense_rate'].includes(key)) {
             customer[key] = value ? Number(value) : null;
           } else if (key === 'is_active') {

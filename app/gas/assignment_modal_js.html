@@ -16,7 +16,8 @@ let assignmentModalState = {
   jobUpdatedAt: null,
   selectedStaffIds: [],   // 選択中のスタッフID（追加/更新対象）
   stagedDeletes: [],      // 削除予定の配置ID
-  isSaving: false
+  isSaving: false,
+  assignmentsLoaded: false  // 配置データがロード済みかどうか
 };
 
 // ========== Modal Functions ==========
@@ -24,6 +25,7 @@ function openJobAssignments(jobId) {
   assignmentModalState.jobId = jobId;
   assignmentModalState.selectedStaffIds = [];
   assignmentModalState.stagedDeletes = [];
+  assignmentModalState.assignmentsLoaded = false;
 
   // Show modal
   document.getElementById('assignment-modal').style.display = 'flex';
@@ -47,11 +49,12 @@ function closeAssignmentModal() {
   const jobId = assignmentModalState.jobId;
   const job = assignmentModalState.job;
   const assignments = assignmentModalState.assignments;
+  const assignmentsLoaded = assignmentModalState.assignmentsLoaded;
 
   document.getElementById('assignment-modal').style.display = 'none';
 
-  // Call host page callback if defined
-  if (typeof onAssignmentModalClose === 'function') {
+  // Call host page callback if defined (only if data was loaded)
+  if (typeof onAssignmentModalClose === 'function' && assignmentsLoaded) {
     onAssignmentModalClose(jobId, job, assignments);
   }
 
@@ -66,7 +69,8 @@ function closeAssignmentModal() {
     jobUpdatedAt: null,
     selectedStaffIds: [],
     stagedDeletes: [],
-    isSaving: false
+    isSaving: false,
+    assignmentsLoaded: false
   };
 }
 
@@ -97,6 +101,7 @@ function handleAssignmentData(response) {
   assignmentModalState.job = job;
   assignmentModalState.assignments = assignments || [];
   assignmentModalState.jobUpdatedAt = job.updated_at;
+  assignmentModalState.assignmentsLoaded = true;
 
   // Update header
   document.getElementById('modal-job-name').textContent = job.site_name || '-';
@@ -128,17 +133,23 @@ function handleAssignmentModalError(error) {
 }
 
 function updateModalStats() {
-  // 削除予定を除いた配置数を計算
-  const validAssignments = assignmentModalState.assignments.filter(a =>
-    a.status !== 'CANCELLED' && !assignmentModalState.stagedDeletes.includes(a.assignment_id)
-  );
-  // 新規追加予定を計算
-  const assignedStaffIds = assignmentModalState.assignments
-    .filter(a => a.status !== 'CANCELLED')
-    .map(a => a.staff_id);
-  const newAdds = assignmentModalState.selectedStaffIds.filter(id => !assignedStaffIds.includes(id));
+  // 削除予定を除いた有効な配置のスタッフIDを取得（一意）
+  const validStaffIds = new Set();
+  assignmentModalState.assignments
+    .filter(a => a.status !== 'CANCELLED' && !assignmentModalState.stagedDeletes.includes(a.assignment_id))
+    .forEach(a => validStaffIds.add(a.staff_id));
 
-  const assigned = validAssignments.length + newAdds.length;
+  // 既存配置のスタッフID（削除予定含む）
+  const existingStaffIds = new Set(
+    assignmentModalState.assignments
+      .filter(a => a.status !== 'CANCELLED')
+      .map(a => a.staff_id)
+  );
+
+  // 新規追加予定を計算（既存配置にないスタッフのみ）
+  const newAdds = assignmentModalState.selectedStaffIds.filter(id => !existingStaffIds.has(id));
+
+  const assigned = validStaffIds.size + newAdds.length;
   const required = Number(assignmentModalState.job?.required_count) || 0;
   const shortage = required - assigned;
 

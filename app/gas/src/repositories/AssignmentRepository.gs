@@ -298,13 +298,15 @@ const AssignmentRepository = {
   },
 
   /**
-   * 案件の配置数を取得
+   * 案件の配置数を取得（一意なスタッフ数）
    * @param {string} jobId - 案件ID
-   * @returns {number} 配置数（有効な配置のみ）
+   * @returns {number} 配置数（有効な配置の一意なスタッフ数）
    */
   countByJobId: function(jobId) {
     const assignments = this.findByJobId(jobId);
-    return assignments.filter(a => a.status !== 'CANCELLED').length;
+    const activeAssignments = assignments.filter(a => a.status !== 'CANCELLED');
+    const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
+    return uniqueStaffIds.size;
   },
 
   /**
