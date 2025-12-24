@@ -80,28 +80,7 @@
       text-align: right;
       font-family: 'SF Mono', Monaco, monospace;
     }
-    .data-table tbody tr.skeleton-row { cursor: default; }
-    .data-table tbody tr.skeleton-row:hover { background: transparent; }
-    .skeleton-line,
-    .skeleton-pill {
-      display: block;
-      background: linear-gradient(90deg, #eef1f4 0%, #f7f8fa 50%, #eef1f4 100%);
-      background-size: 200% 100%;
-      animation: shimmer 1.2s ease-in-out infinite;
-    }
-    .skeleton-line { height: 12px; border-radius: 6px; }
-    .skeleton-pill { height: 14px; border-radius: 999px; }
-    .skeleton-w-20 { width: 20%; }
-    .skeleton-w-30 { width: 30%; }
-    .skeleton-w-40 { width: 40%; }
-    .skeleton-w-50 { width: 50%; }
-    .skeleton-w-60 { width: 60%; }
-    .skeleton-w-70 { width: 70%; }
-    .skeleton-w-80 { width: 80%; }
-    @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
+    <?!= include('skeleton_styles'); ?>
     .empty-state { text-align: center; color: var(--text-muted); padding: 48px; }
     .add-btn {
       position: fixed;
@@ -242,21 +221,6 @@
           </tr>
         </thead>
         <tbody id="table-body">
-          <tr class="skeleton-row">
-            <td><div class="skeleton-line skeleton-w-30"></div></td>
-            <td><div class="skeleton-line skeleton-w-70"></div></td>
-            <td><div class="skeleton-line skeleton-w-40"></div></td>
-          </tr>
-          <tr class="skeleton-row">
-            <td><div class="skeleton-line skeleton-w-40"></div></td>
-            <td><div class="skeleton-line skeleton-w-60"></div></td>
-            <td><div class="skeleton-line skeleton-w-30"></div></td>
-          </tr>
-          <tr class="skeleton-row">
-            <td><div class="skeleton-line skeleton-w-30"></div></td>
-            <td><div class="skeleton-line skeleton-w-80"></div></td>
-            <td><div class="skeleton-line skeleton-w-40"></div></td>
-          </tr>
         </tbody>
       </table>
     </div>
@@ -300,6 +264,13 @@
   </div>
 
   <script>
+    <?!= include('skeleton_helpers'); ?>
+    const TRANSPORT_FEE_SKELETON_ROWS = [
+      ['line-30', 'line-70', 'line-40'],
+      ['line-40', 'line-60', 'line-30'],
+      ['line-30', 'line-80', 'line-40']
+    ];
+
     let dataList = [];
     let filteredList = [];
     let currentRecord = null;
@@ -318,6 +289,7 @@
     }
 
     function loadData() {
+      setSkeletonTableBody('table-body', TRANSPORT_FEE_SKELETON_ROWS);
       google.script.run
         .withSuccessHandler((response) => {
           if (response.ok) {
