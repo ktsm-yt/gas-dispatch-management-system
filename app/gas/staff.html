@@ -810,8 +810,9 @@
     </div>
   </div>
 
+  <?!= include('skeleton_helpers'); ?>
+
   <script>
-    <?!= include('skeleton_helpers'); ?>
     const STAFF_SKELETON_ROWS = [
       ['line-40', 'line-30', 'line-50', 'line-70', 'line-60', 'line-30', 'pill-40'],
       ['line-50', 'line-30', 'line-40', 'line-60', 'line-50', 'line-30', 'pill-40'],
@@ -917,6 +918,11 @@
     }
 
     function handleStaffData(response) {
+      if (!response) {
+        console.error('listStaff returned null');
+        showToast('サーバーエラー: データを取得できませんでした', 'error');
+        return;
+      }
       if (!response.ok) {
         showToast(response.error?.message || 'データの取得に失敗しました', 'error');
         return;
