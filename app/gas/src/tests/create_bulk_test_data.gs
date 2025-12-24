@@ -73,9 +73,13 @@ function createBulkTestData() {
   console.log('\n--- 配置データ作成 ---');
   results.assignments = createBulkAssignments();
 
+  // 5. 案件ステータス修正（配置数に応じて）
+  console.log('\n--- 案件ステータス修正 ---');
+  results.statusFixed = fixBulkJobStatuses();
+
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log('\n=== 大量テストデータ作成完了 ===');
-  console.log(`作成数: 顧客${results.customers}, スタッフ${results.staff}, 案件${results.jobs}, 配置${results.assignments}`);
+  console.log(`作成数: 顧客${results.customers}, スタッフ${results.staff}, 案件${results.jobs}, 配置${results.assignments}, ステータス修正${results.statusFixed}`);
   console.log(`所要時間: ${elapsed}秒`);
 
   return results;
@@ -394,8 +398,8 @@ function createBulkJobs() {
       const timeSlot = timeSlots[j % timeSlots.length];
       // 時間未定以外は開始時間を設定
       const startTime = timeSlot === 'mitei' ? '' : startTimes[j % startTimes.length];
-      // 上棟のみ作業種別を設定
-      const jobType = timeSlot === 'jotou' ? jobTypes[j % jobTypes.length] : '';
+      // 上棟のみ作業種別をランダムに設定（tobi, age, tobiage）
+      const jobType = timeSlot === 'jotou' ? randomPick(jobTypes) : '';
 
       toInsert.push({
         job_id: generateId('job'),
@@ -537,6 +541,87 @@ function createBulkAssignments() {
   }
 
   return toInsert.length;
+}
+
+// ============================================================
+// ステータス修正（バッチ最適化版）
+// ============================================================
+
+/**
+ * 案件ステータスを配置数に応じて一括修正
+ */
+function fixBulkJobStatuses() {
+  console.log('案件ステータス一括修正中...');
+
+  const prefix = BULK_TEST_CONFIG.PREFIX;
+
+  // テスト顧客の案件を取得
+  const allJobs = getAllRecords('T_Jobs').filter(j =>
+    j.customer_id && j.customer_id.startsWith('cus_' + prefix) &&
+    !j.is_deleted && !['completed', 'cancelled', 'hold'].includes(j.status)
+  );
+
+  // 配置を取得して案件ごとにカウント
+  const allAssignments = getAllRecords('T_JobAssignments').filter(a =>
+    !a.is_deleted && a.status !== 'CANCELLED'
+  );
+
+  // 案件ごとの一意なスタッフ数をカウント
+  const assignmentCounts = {};
+  for (const a of allAssignments) {
+    if (!assignmentCounts[a.job_id]) {
+      assignmentCounts[a.job_id] = new Set();
+    }
+    assignmentCounts[a.job_id].add(a.staff_id);
+  }
+
+  // シートを直接更新
+  const sheet = getSheet('T_Jobs');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const jobIdCol = headers.indexOf('job_id');
+  const statusCol = headers.indexOf('status');
+  const requiredCountCol = headers.indexOf('required_count');
+  const updatedAtCol = headers.indexOf('updated_at');
+
+  let updatedCount = 0;
+  const now = getCurrentTimestamp();
+
+  for (let i = 1; i < data.length; i++) {
+    const jobId = data[i][jobIdCol];
+    const currentStatus = data[i][statusCol];
+    const requiredCount = Number(data[i][requiredCountCol]) || 0;
+
+    // テスト案件のみ対象
+    const job = allJobs.find(j => j.job_id === jobId);
+    if (!job) continue;
+
+    const assignedCount = assignmentCounts[jobId] ? assignmentCounts[jobId].size : 0;
+
+    let expectedStatus;
+    if (assignedCount === 0) {
+      expectedStatus = 'pending';
+    } else if (assignedCount >= requiredCount) {
+      expectedStatus = 'assigned';
+    } else {
+      expectedStatus = 'pending';
+    }
+
+    if (currentStatus !== expectedStatus) {
+      data[i][statusCol] = expectedStatus;
+      data[i][updatedAtCol] = now;
+      updatedCount++;
+    }
+  }
+
+  if (updatedCount > 0) {
+    sheet.getDataRange().setValues(data);
+    console.log(`ステータス修正完了: ${updatedCount}件`);
+  } else {
+    console.log('ステータス修正: 変更なし');
+  }
+
+  return updatedCount;
 }
 
 // ============================================================
