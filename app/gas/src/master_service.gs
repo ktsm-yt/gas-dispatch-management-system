@@ -233,15 +233,27 @@ function getMasterRecord(sheetName, idColumn, id) {
  * @returns {Object} レスポンス
  */
 function listMasterRecords(sheetName, options = {}) {
-  const requestId = generateRequestId();
-
+  let requestId = 'unknown';
   try {
-    const sheet = getSheetDirect(sheetName);
-    const rows = getAllRows(sheet, { includeDeleted: options.includeDeleted || false });
+    Logger.log('listMasterRecords: sheetName=' + sheetName);
+    requestId = generateRequestId();
+    Logger.log('listMasterRecords: requestId=' + requestId);
 
-    // _rowIndex を除去
+    Logger.log('listMasterRecords: getting sheet');
+    const sheet = getSheetDirect(sheetName);
+    Logger.log('listMasterRecords: sheet found');
+    const rows = getAllRows(sheet, { includeDeleted: options.includeDeleted || false });
+    Logger.log('listMasterRecords: rows count=' + rows.length);
+
+    // _rowIndex を除去し、Date型を文字列に変換
     const data = rows.map(row => {
       const { _rowIndex, ...record } = row;
+      // Date型をISO文字列に変換（GASクライアント通信用）
+      Object.keys(record).forEach(key => {
+        if (record[key] instanceof Date) {
+          record[key] = record[key].toISOString();
+        }
+      });
       return record;
     });
 
@@ -251,6 +263,7 @@ function listMasterRecords(sheetName, options = {}) {
       filtered = filtered.filter(r => r.is_active === true);
     }
 
+    Logger.log('listMasterRecords: returning success');
     return successResponse({
       items: filtered,
       count: filtered.length
@@ -258,6 +271,7 @@ function listMasterRecords(sheetName, options = {}) {
 
   } catch (error) {
     Logger.log(`listMasterRecords error: ${error.message}`);
+    Logger.log(`listMasterRecords stack: ${error.stack}`);
     return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
   }
 }
@@ -366,7 +380,15 @@ function getStaff(staffId) {
  * @param {Object} options - オプション
  */
 function listStaff(options = {}) {
-  return listMasterRecords(SHEET_NAMES.STAFF, options);
+  try {
+    Logger.log('listStaff called with options: ' + JSON.stringify(options));
+    const result = listMasterRecords(SHEET_NAMES.STAFF, options);
+    Logger.log('listStaff result: ' + JSON.stringify(result ? 'ok' : 'null'));
+    return result;
+  } catch (e) {
+    Logger.log('listStaff error: ' + e.message);
+    return errorResponse('SYSTEM_ERROR', e.message, {}, generateRequestId());
+  }
 }
 
 /**

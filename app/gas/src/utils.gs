@@ -39,6 +39,18 @@ function generateRequestId() {
 }
 
 /**
+ * 現在のユーザーメールを取得
+ * @returns {string} メールアドレス
+ */
+function getCurrentUserEmail() {
+  try {
+    return Session.getActiveUser().getEmail() || 'system';
+  } catch (e) {
+    return 'system';
+  }
+}
+
+/**
  * 必須項目のバリデーション
  * @param {Object} obj - 検証対象オブジェクト
  * @param {string[]} fields - 必須フィールド名の配列
