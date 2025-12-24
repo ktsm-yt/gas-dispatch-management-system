@@ -168,9 +168,9 @@ function testValidatePostalCode() {
 }
 
 function testValidateJob() {
-  // 正常系 - 新規作成
+  // 正常系 - 新規作成（UUID形式の顧客ID）
   assertNoThrow(() => validateJob_({
-    customer_id: 'cus_12345678-1234-1234-1234-123456789012',
+    customer_id: '12345678-1234-1234-1234-123456789012',
     site_name: 'テスト現場',
     work_date: '2025-12-24',
     time_slot: 'jotou',
@@ -181,13 +181,13 @@ function testValidateJob() {
 
   // 異常系 - 必須項目欠落
   assertThrows(() => validateJob_({
-    customer_id: 'cus_test'
+    customer_id: '12345678-1234-1234-1234-123456789012'
     // missing required fields
   }, true), 'missing required fields should throw');
 
   // 異常系 - 無効なtime_slot
   assertThrows(() => validateJob_({
-    customer_id: 'cus_12345678-1234-1234-1234-123456789012',
+    customer_id: '12345678-1234-1234-1234-123456789012',
     site_name: 'テスト現場',
     work_date: '2025-12-24',
     time_slot: 'invalid',
