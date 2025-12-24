@@ -9,20 +9,21 @@
 let assignmentModalState = {
   jobId: null,
   job: null,
-  assignments: [],
+  assignments: [],        // サーバーからの現在の配置データ
   allStaff: [],
   filteredStaff: [],
   transportAreas: [],
   jobUpdatedAt: null,
-  selectedStaffIds: [],
-  isSaving: false,
-  deleteQueue: []
+  selectedStaffIds: [],   // 選択中のスタッフID（追加/更新対象）
+  stagedDeletes: [],      // 削除予定の配置ID
+  isSaving: false
 };
 
 // ========== Modal Functions ==========
 function openJobAssignments(jobId) {
   assignmentModalState.jobId = jobId;
   assignmentModalState.selectedStaffIds = [];
+  assignmentModalState.stagedDeletes = [];
 
   // Show modal
   document.getElementById('assignment-modal').style.display = 'flex';
@@ -32,8 +33,8 @@ function openJobAssignments(jobId) {
   document.getElementById('staff-skill-filter').value = '';
   document.getElementById('staff-type-filter').value = '';
 
-  // Reset batch button
-  updateBatchButton();
+  // Reset save button
+  updateSaveButton();
 
   // Load data
   loadAssignmentModalData(jobId);
@@ -64,15 +65,14 @@ function closeAssignmentModal() {
     transportAreas: assignmentModalState.transportAreas,
     jobUpdatedAt: null,
     selectedStaffIds: [],
-    isSaving: false,
-    deleteQueue: []
+    stagedDeletes: [],
+    isSaving: false
   };
 }
 
 function loadAssignmentModalData(jobId) {
   // Show loading
   document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
-  document.getElementById('assigned-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
 
   // Load job and assignments
   google.script.run
@@ -107,9 +107,6 @@ function handleAssignmentData(response) {
   // Update stats
   updateModalStats();
 
-  // Render assigned list
-  renderAssignedList();
-
   // Re-render staff list if already loaded
   if (assignmentModalState.allStaff.length > 0) {
     filterStaffList();
@@ -131,8 +128,17 @@ function handleAssignmentModalError(error) {
 }
 
 function updateModalStats() {
-  const validAssignments = assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED');
-  const assigned = validAssignments.length;
+  // 削除予定を除いた配置数を計算
+  const validAssignments = assignmentModalState.assignments.filter(a =>
+    a.status !== 'CANCELLED' && !assignmentModalState.stagedDeletes.includes(a.assignment_id)
+  );
+  // 新規追加予定を計算
+  const assignedStaffIds = assignmentModalState.assignments
+    .filter(a => a.status !== 'CANCELLED')
+    .map(a => a.staff_id);
+  const newAdds = assignmentModalState.selectedStaffIds.filter(id => !assignedStaffIds.includes(id));
+
+  const assigned = validAssignments.length + newAdds.length;
   const required = Number(assignmentModalState.job?.required_count) || 0;
   const shortage = required - assigned;
 
@@ -155,9 +161,9 @@ function filterStaffList() {
   const skillFilter = document.getElementById('staff-skill-filter').value;
   const typeFilter = document.getElementById('staff-type-filter').value;
 
-  // Get assigned staff IDs
+  // Get assigned staff IDs (excluding staged deletes)
   const assignedIds = assignmentModalState.assignments
-    .filter(a => a.status !== 'CANCELLED')
+    .filter(a => a.status !== 'CANCELLED' && !assignmentModalState.stagedDeletes.includes(a.assignment_id))
     .map(a => a.staff_id);
 
   // Filter staff
@@ -202,9 +208,11 @@ function renderStaffList() {
   const staff = assignmentModalState.filteredStaff;
   const jobType = assignmentModalState.job?.job_type;
 
-  const assignedIds = assignmentModalState.assignments
+  // Build assignment map for quick lookup
+  const assignmentMap = {};
+  assignmentModalState.assignments
     .filter(a => a.status !== 'CANCELLED')
-    .map(a => a.staff_id);
+    .forEach(a => { assignmentMap[a.staff_id] = a; });
 
   if (staff.length === 0) {
     container.innerHTML = '<div class="panel-empty">該当するスタッフがいません</div>';
@@ -222,31 +230,51 @@ function renderStaffList() {
   container.innerHTML = staff.map(s => {
     const typeLabel = typeLabels[s.staff_type] || s.staff_type;
     const typeClass = s.staff_type || 'employee';
-    const isAssigned = assignedIds.includes(s.staff_id);
+    const assignment = assignmentMap[s.staff_id];
+    const isAssigned = !!assignment;
     const isSelected = assignmentModalState.selectedStaffIds.includes(s.staff_id);
+    const isStagedForDelete = isAssigned && assignmentModalState.stagedDeletes.includes(assignment.assignment_id);
     const skills = s.skills ? s.skills.split(',').map(sk => sk.trim()) : [];
 
-    if (isAssigned) {
-      return `
-        <div class="staff-list-item assigned ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
-          <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
-          <div class="staff-list-info">
-            <span class="staff-list-name">${escapeHtml(s.name)}</span>
-            <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
-            ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
-            <span class="assigned-label">配置済</span>
-          </div>
-        </div>
-      `;
+    // 配置済みスタッフの追加情報
+    const roleLabel = isAssigned ? (assignment.assignment_role || '') : '';
+    const leaderBadge = isAssigned && assignment.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
+
+    // クラス設定
+    let itemClasses = 'staff-list-item';
+    if (isStagedForDelete) {
+      itemClasses += ' staged-delete';
+    } else if (isAssigned) {
+      itemClasses += ' assigned';
+      if (isSelected) itemClasses += ' selected';
+    } else if (isSelected) {
+      itemClasses += ' selected';
     }
 
+    // 削除ボタン（配置済みで削除予定でないもののみ）
+    const deleteBtn = isAssigned && !isStagedForDelete
+      ? `<button class="btn-icon btn-delete" onclick="event.stopPropagation(); stageDeleteByStaff('${s.staff_id}')" title="削除">×</button>`
+      : '';
+
+    // 削除取り消しボタン（削除予定のもののみ）
+    const undoBtn = isStagedForDelete
+      ? `<button class="btn-icon btn-undo" onclick="event.stopPropagation(); unstageDeleteByStaff('${s.staff_id}')" title="削除取消">↩</button>`
+      : '';
+
+    // チェックボックスの状態（選択中のみチェック、配置済みは背景色で表示）
+    const checkboxChecked = isSelected;
+
     return `
-      <div class="staff-list-item ${isSelected ? 'selected' : ''}" onclick="toggleStaffSelection('${s.staff_id}')">
-        <input type="checkbox" class="staff-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+      <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
+        <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
         <div class="staff-list-info">
-          <span class="staff-list-name">${escapeHtml(s.name)}</span>
+          <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}</span>
           <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+          ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
           ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+        </div>
+        <div class="staff-list-actions">
+          ${deleteBtn}${undoBtn}
         </div>
       </div>
     `;
@@ -256,14 +284,27 @@ function renderStaffList() {
 }
 
 function toggleStaffSelection(staffId) {
+  const assignment = assignmentModalState.assignments.find(
+    a => a.staff_id === staffId && a.status !== 'CANCELLED'
+  );
+
+  // 削除予定の場合は、削除を取り消す
+  if (assignment && assignmentModalState.stagedDeletes.includes(assignment.assignment_id)) {
+    unstageDelete(assignment.assignment_id);
+    return;
+  }
+
+  // 選択状態をトグル
   const idx = assignmentModalState.selectedStaffIds.indexOf(staffId);
   if (idx === -1) {
     assignmentModalState.selectedStaffIds.push(staffId);
   } else {
     assignmentModalState.selectedStaffIds.splice(idx, 1);
   }
+
   renderStaffList();
-  updateBatchButton();
+  updateSaveButton();
+  updateModalStats();
 }
 
 function updateSelectedCount() {
@@ -272,38 +313,80 @@ function updateSelectedCount() {
   countEl.textContent = count > 0 ? `${count}名選択中` : '';
 }
 
-function updateBatchButton() {
-  const btn = document.getElementById('batch-add-btn');
-  const count = assignmentModalState.selectedStaffIds.length;
-  btn.disabled = count === 0;
-  btn.textContent = count > 0 ? `${count}名を保存` : '選択したスタッフを保存';
+// ========== Staged Delete Functions ==========
+function stageDeleteByStaff(staffId) {
+  const assignment = assignmentModalState.assignments.find(
+    a => a.staff_id === staffId && a.status !== 'CANCELLED'
+  );
+  if (assignment) {
+    stageDelete(assignment.assignment_id);
+  }
 }
 
-function selectAllAssigned() {
-  const assignedIds = assignmentModalState.assignments
-    .filter(a => a.status !== 'CANCELLED')
-    .map(a => a.staff_id);
-
-  assignedIds.forEach(id => {
-    if (!assignmentModalState.selectedStaffIds.includes(id)) {
-      assignmentModalState.selectedStaffIds.push(id);
-    }
-  });
-
+function stageDelete(assignmentId) {
+  if (!assignmentModalState.stagedDeletes.includes(assignmentId)) {
+    assignmentModalState.stagedDeletes.push(assignmentId);
+  }
   renderStaffList();
-  updateBatchButton();
+  updateSaveButton();
+  updateModalStats();
 }
 
-function batchAddStaff() {
+function unstageDeleteByStaff(staffId) {
+  const assignment = assignmentModalState.assignments.find(
+    a => a.staff_id === staffId && a.status !== 'CANCELLED'
+  );
+  if (assignment) {
+    unstageDelete(assignment.assignment_id);
+  }
+}
+
+function unstageDelete(assignmentId) {
+  const idx = assignmentModalState.stagedDeletes.indexOf(assignmentId);
+  if (idx !== -1) {
+    assignmentModalState.stagedDeletes.splice(idx, 1);
+  }
+  renderStaffList();
+  updateSaveButton();
+  updateModalStats();
+}
+
+// ========== Save Button ==========
+function updateSaveButton() {
+  const btn = document.getElementById('batch-add-btn');
+  const selectedCount = assignmentModalState.selectedStaffIds.length;
+  const deleteCount = assignmentModalState.stagedDeletes.length;
+  const totalChanges = selectedCount + deleteCount;
+
+  btn.disabled = totalChanges === 0 || assignmentModalState.isSaving;
+
+  if (assignmentModalState.isSaving) {
+    btn.textContent = '登録中...';
+  } else if (totalChanges === 0) {
+    btn.textContent = '変更を登録';
+  } else {
+    const parts = [];
+    if (selectedCount > 0) parts.push(`${selectedCount}名`);
+    if (deleteCount > 0) parts.push(`削除${deleteCount}件`);
+    btn.textContent = `${parts.join(' / ')} を登録`;
+  }
+}
+
+// ========== Save All Changes ==========
+function saveAllChanges() {
   if (assignmentModalState.isSaving) return;
 
   const selectedIds = assignmentModalState.selectedStaffIds;
-  if (selectedIds.length === 0) return;
+  const deleteIds = assignmentModalState.stagedDeletes;
+
+  if (selectedIds.length === 0 && deleteIds.length === 0) return;
 
   const payUnit = document.getElementById('form-pay-unit').value;
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
+  const assignmentRole = document.getElementById('form-assignment-role').value;
+  const isLeader = document.getElementById('form-is-leader').checked;
 
   // Build assignment map
   const assignmentMap = {};
@@ -311,6 +394,7 @@ function batchAddStaff() {
     assignmentMap[a.staff_id] = a.assignment_id;
   });
 
+  // Build upserts
   const upserts = selectedIds.map(staffId => {
     const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
     const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
@@ -319,7 +403,9 @@ function batchAddStaff() {
       staff_id: staffId,
       worker_type: workerType,
       pay_unit: payUnit,
-      invoice_unit: invoiceUnit
+      invoice_unit: invoiceUnit,
+      assignment_role: assignmentRole,
+      is_leader: isLeader
     };
 
     if (assignmentMap[staffId]) {
@@ -336,187 +422,52 @@ function batchAddStaff() {
     return data;
   });
 
-  const changes = { upserts: upserts, deletes: [] };
-
-  // Optimistic update
-  const addedCount = selectedIds.length;
-
-  for (const upsert of upserts) {
-    const staff = assignmentModalState.allStaff.find(s => s.staff_id === upsert.staff_id);
-
-    if (upsert.assignment_id) {
-      const idx = assignmentModalState.assignments.findIndex(a => a.assignment_id === upsert.assignment_id);
-      if (idx !== -1) {
-        assignmentModalState.assignments[idx] = {
-          ...assignmentModalState.assignments[idx],
-          pay_unit: upsert.pay_unit,
-          invoice_unit: upsert.invoice_unit,
-          transport_area: upsert.transport_area || assignmentModalState.assignments[idx].transport_area,
-          transport_amount: upsert.transport_amount || assignmentModalState.assignments[idx].transport_amount
-        };
-      }
-    } else {
-      const tempAssignment = {
-        assignment_id: 'temp_' + upsert.staff_id,
-        job_id: assignmentModalState.jobId,
-        staff_id: upsert.staff_id,
-        staff_name: staff?.name || '',
-        worker_type: upsert.worker_type,
-        pay_unit: upsert.pay_unit,
-        invoice_unit: upsert.invoice_unit,
-        transport_area: upsert.transport_area || '',
-        transport_amount: upsert.transport_amount || 0,
-        status: 'ASSIGNED'
-      };
-      assignmentModalState.assignments.push(tempAssignment);
-    }
-  }
-
-  assignmentModalState.selectedStaffIds = [];
-  updateModalStats();
-  renderAssignedList();
-  filterStaffList();
-  updateBatchButton();
-
-  // Background API call
-  assignmentModalState.isSaving = true;
-
-  google.script.run
-    .withSuccessHandler(function(response) {
-      assignmentModalState.isSaving = false;
-
-      if (response.ok) {
-        showToast(`${addedCount}名を保存しました`, 'success');
-        assignmentModalState.assignments = response.data.assignments || [];
-        assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
-        updateModalStats();
-        renderAssignedList();
-        filterStaffList();
-      } else {
-        showToast(response.error?.message || '保存に失敗しました', 'error');
-        loadAssignmentModalData(assignmentModalState.jobId);
-      }
-    })
-    .withFailureHandler(function(error) {
-      assignmentModalState.isSaving = false;
-      showToast('エラー: ' + error.message, 'error');
-      loadAssignmentModalData(assignmentModalState.jobId);
-    })
-    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
-}
-
-function renderAssignedList() {
-  const container = document.getElementById('assigned-list');
-  const assignments = assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED');
-
-  if (assignments.length === 0) {
-    container.innerHTML = '<div class="panel-empty">配置されたスタッフはいません</div>';
-    return;
-  }
-
-  container.innerHTML = assignments.map(a => {
-    const workerType = a.worker_type === 'SUBCONTRACT' ? '外注' : '自社';
-    const payUnit = formatPayUnitLabel(a.pay_unit);
-    const transport = a.transport_amount ? a.transport_amount.toLocaleString() + '円' : (a.transport_area || '-');
-
-    return `
-      <div class="assignment-list-item">
-        <div class="assignment-info">
-          <div class="assignment-staff-name">${escapeHtml(a.staff_name || '名前未設定')}</div>
-          <div class="assignment-details">
-            <span>${workerType}</span>
-            <span>${payUnit}</span>
-            <span>交通費: ${transport}</span>
-          </div>
-        </div>
-        <div class="assignment-actions">
-          <button class="btn-icon" onclick="editAssignment('${a.assignment_id}')" title="編集">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
-          <button class="btn-icon btn-delete" onclick="removeAssignment('${a.assignment_id}')" title="削除">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-// ========== Assignment Edit ==========
-let editingAssignment = null;
-
-function editAssignment(assignmentId) {
-  const assignment = assignmentModalState.assignments.find(a => a.assignment_id === assignmentId);
-  if (!assignment) {
-    showToast('配置データが見つかりません', 'error');
-    return;
-  }
-
-  editingAssignment = assignment;
-
-  document.getElementById('edit-staff-name').textContent = assignment.staff_name;
-  document.getElementById('edit-pay-unit').value = assignment.pay_unit || 'FULLDAY';
-  document.getElementById('edit-invoice-unit').value = assignment.invoice_unit || 'FULLDAY';
-  document.getElementById('edit-transport-area').value = assignment.transport_area || '';
-  document.getElementById('edit-transport-amount').value = assignment.transport_amount || '';
-
-  document.getElementById('edit-modal').style.display = 'flex';
-}
-
-function closeEditModal() {
-  document.getElementById('edit-modal').style.display = 'none';
-  editingAssignment = null;
-}
-
-function saveEditAssignment() {
-  if (!editingAssignment) return;
-
   const changes = {
-    upserts: [{
-      assignment_id: editingAssignment.assignment_id,
-      staff_id: editingAssignment.staff_id,
-      pay_unit: document.getElementById('edit-pay-unit').value,
-      invoice_unit: document.getElementById('edit-invoice-unit').value,
-      transport_area: document.getElementById('edit-transport-area').value,
-      transport_amount: Number(document.getElementById('edit-transport-amount').value) || 0,
-      transport_is_manual: true
-    }],
-    deletes: []
+    upserts: upserts,
+    deletes: deleteIds
   };
 
-  const btn = document.getElementById('edit-save-btn');
-  btn.disabled = true;
-  btn.textContent = '保存中...';
+  // Set saving state
+  assignmentModalState.isSaving = true;
+  updateSaveButton();
 
   google.script.run
     .withSuccessHandler(function(response) {
-      btn.disabled = false;
-      btn.textContent = '保存';
+      assignmentModalState.isSaving = false;
 
       if (response.ok) {
-        showToast('更新しました', 'success');
+        const msg = [];
+        if (selectedIds.length > 0) msg.push(`${selectedIds.length}名を登録`);
+        if (deleteIds.length > 0) msg.push(`${deleteIds.length}件を削除`);
+        showToast(msg.join('、') + 'しました', 'success');
+
+        // Update state with server response
         assignmentModalState.assignments = response.data.assignments || [];
         assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
+
+        // Clear staged changes
+        assignmentModalState.selectedStaffIds = [];
+        assignmentModalState.stagedDeletes = [];
+
         updateModalStats();
-        renderAssignedList();
         filterStaffList();
-        closeEditModal();
+        updateSaveButton();
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
+        updateSaveButton();
       }
     })
     .withFailureHandler(function(error) {
-      btn.disabled = false;
-      btn.textContent = '保存';
+      assignmentModalState.isSaving = false;
       showToast('エラー: ' + error.message, 'error');
+      updateSaveButton();
     })
     .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
+}
+
+// Legacy function name for compatibility
+function batchAddStaff() {
+  saveAllChanges();
 }
 
 function loadTransportAreas() {
@@ -537,7 +488,6 @@ function loadTransportAreas() {
 
 function populateTransportAreas() {
   populateTransportAreaSelect('form-transport-area');
-  populateTransportAreaSelect('edit-transport-area');
 }
 
 function populateTransportAreaSelect(selectId) {
@@ -571,62 +521,6 @@ function onTransportAreaChange() {
   }
 }
 
-function onEditTransportAreaChange() {
-  const select = document.getElementById('edit-transport-area');
-  const amountInput = document.getElementById('edit-transport-amount');
-
-  if (select.value) {
-    const selectedOption = select.options[select.selectedIndex];
-    const fee = selectedOption.dataset.fee || 0;
-    amountInput.value = fee;
-  }
-}
-
-function removeAssignment(assignmentId) {
-  if (!assignmentModalState.deleteQueue.includes(assignmentId)) {
-    assignmentModalState.deleteQueue.push(assignmentId);
-  }
-
-  // Optimistic update
-  assignmentModalState.assignments = assignmentModalState.assignments.filter(a => a.assignment_id !== assignmentId);
-  renderAssignedList();
-  updateModalStats();
-  filterStaffList();
-
-  processDeleteQueue();
-}
-
-function processDeleteQueue() {
-  if (assignmentModalState.isSaving || assignmentModalState.deleteQueue.length === 0) return;
-
-  assignmentModalState.isSaving = true;
-  const assignmentId = assignmentModalState.deleteQueue.shift();
-
-  const changes = {
-    upserts: [],
-    deletes: [assignmentId]
-  };
-
-  google.script.run
-    .withSuccessHandler(function(response) {
-      assignmentModalState.isSaving = false;
-
-      if (response.ok) {
-        assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
-        processDeleteQueue();
-      } else {
-        showToast(response.error?.message || '削除に失敗しました', 'error');
-        loadAssignmentModalData(assignmentModalState.jobId);
-      }
-    })
-    .withFailureHandler(function(error) {
-      assignmentModalState.isSaving = false;
-      showToast('エラー: ' + error.message, 'error');
-      loadAssignmentModalData(assignmentModalState.jobId);
-    })
-    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
-}
-
 // ========== LINE Template Functions ==========
 function openLineTemplateModal() {
   const template = generateLineTemplate();
@@ -638,32 +532,14 @@ function closeLineTemplateModal() {
   document.getElementById('line-template-modal').style.display = 'none';
 }
 
-async function copyLineTemplateFromModal() {
+function copyLineTemplateFromModal() {
   const textarea = document.getElementById('line-template-textarea');
-  const text = textarea.value;
-
-  try {
-    // モダンなClipboard API（HTTPS環境で動作）
-    await navigator.clipboard.writeText(text);
-    showToast('コピーしました', 'success');
-    closeLineTemplateModal();
-  } catch (error) {
-    // フォールバック: 従来のexecCommand方式
-    try {
-      textarea.select();
-      textarea.setSelectionRange(0, text.length); // iOS Safari対応
-      const success = document.execCommand('copy');
-      if (success) {
-        showToast('コピーしました', 'success');
-        closeLineTemplateModal();
-      } else {
-        showToast('テキストを選択しました。Ctrl+C/Cmd+Cでコピーしてください', 'info');
-      }
-    } catch (fallbackError) {
-      showToast('テキストを選択しました。手動でコピーしてください', 'info');
-      textarea.select();
-    }
-  }
+  navigator.clipboard.writeText(textarea.value)
+    .then(() => {
+      showToast('コピーしました', 'success');
+      closeLineTemplateModal();
+    })
+    .catch(() => showToast('コピーに失敗しました', 'error'));
 }
 
 function generateLineTemplate() {
@@ -673,10 +549,48 @@ function generateLineTemplate() {
   // 日付フォーマット（YYYY年M月D日（曜日））
   const dateStr = job.work_date ? formatLineTemplateDate(job.work_date) : '';
 
-  // メンバー名リスト（staff_id露出を防ぐ）
-  const memberNames = activeAssignments
-    .map(a => a.staff_name || '名前未設定')
-    .join('、');
+  // リーダーを特定
+  const leaders = activeAssignments.filter(a => a.is_leader);
+  const leaderNames = leaders.map(a => a.staff_name || '名前未設定').join('、');
+  const leaderWithPhone = leaders.length > 0
+    ? leaders.map(a => {
+        const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+        const phone = staff?.phone || a.staff_phone || '';
+        const name = a.staff_name || '名前未設定';
+        return phone ? `${name}（${phone}）` : name;
+      }).join('、')
+    : '';
+
+  // 役割別にグループ化
+  const roleGroups = {};
+  activeAssignments.forEach(a => {
+    const role = a.assignment_role || '未指定';
+    if (!roleGroups[role]) roleGroups[role] = [];
+    roleGroups[role].push(a.staff_name || '名前未設定');
+  });
+
+  // メンバー欄を役割別に生成
+  const memberLines = [];
+  const roleOrder = ['鳶', '荷揚げ', '鳶揚げ', '未指定'];
+  roleOrder.forEach(role => {
+    if (roleGroups[role] && roleGroups[role].length > 0) {
+      if (role === '未指定') {
+        memberLines.push(roleGroups[role].join('、'));
+      } else {
+        memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
+      }
+    }
+  });
+  // roleOrderにない役割があれば追加
+  Object.keys(roleGroups).forEach(role => {
+    if (!roleOrder.includes(role)) {
+      memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
+    }
+  });
+  const memberStr = memberLines.join(' ');
+
+  // ヘッダー用メンバー名リスト（シンプル）
+  const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
 
   // 単価（配置の pay_unit から判定、混在する場合は「混在」）
   const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
@@ -690,7 +604,7 @@ function generateLineTemplate() {
     : job.site_name || '';
 
   // テンプレート生成
-  return `【工事発注書】${dateStr}${memberNames ? ' ' + memberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
+  return `【工事発注書】${dateStr}${headerMemberNames ? ' ' + headerMemberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
 
 お世話になっております。
 内容確認次第、ご返信お願いします。
@@ -703,9 +617,9 @@ function generateLineTemplate() {
 ◉現場住所：${job.site_address || ''}
 ◉現場名：${siteWithCustomer}
 ◉担当者：${job.supervisor_name ? job.supervisor_name + 'さま' : ''}
-◉リーダー：
+◉リーダー：${leaderWithPhone}
 ◉人数：${activeAssignments.length}名
-◉メンバー：${memberNames || '-'}
+◉メンバー：${memberStr || '-'}
 ◉作業内容：${job.job_type || ''}
 ◉単価：${payUnitLabel}
 ◉装備品：
@@ -740,7 +654,7 @@ function formatAssignmentModalDate(dateStr) {
 }
 
 function formatPayUnitLabel(unit) {
-  const units = { 'FULLDAY': '終日', 'HALFDAY': '半日', 'HOURLY': '時給' };
+  const units = { 'FULLDAY': '終日', 'HALFDAY': 'ハーフ', 'HOURLY': '時給' };
   return units[unit] || unit || '-';
 }
 
@@ -765,13 +679,6 @@ function setupAssignmentModalEventListeners() {
     }
   });
 
-  // Close edit modal on overlay click
-  document.getElementById('edit-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'edit-modal') {
-      closeEditModal();
-    }
-  });
-
   // Close LINE template modal on overlay click
   document.getElementById('line-template-modal').addEventListener('click', (e) => {
     if (e.target.id === 'line-template-modal') {
@@ -784,8 +691,6 @@ function setupAssignmentModalEventListeners() {
     if (e.key === 'Escape') {
       if (document.getElementById('line-template-modal').style.display !== 'none') {
         closeLineTemplateModal();
-      } else if (document.getElementById('edit-modal').style.display !== 'none') {
-        closeEditModal();
       } else if (document.getElementById('assignment-modal').style.display !== 'none') {
         closeAssignmentModal();
       }

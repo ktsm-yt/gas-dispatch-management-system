@@ -51,12 +51,17 @@
 
 .assignment-modal-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr auto;
   gap: 10px;
   padding: 10px;
   overflow: hidden;
   flex: 1;
   min-height: 0;
+}
+
+.modal-panel.form-panel {
+  width: 200px;
+  overflow: visible;
 }
 
 .modal-panel {
@@ -130,7 +135,40 @@
 
 .staff-list-item.assigned {
   background: #F0FDF4;
-  opacity: 0.8;
+}
+
+.staff-list-item.assigned:hover {
+  background: #DCFCE7;
+}
+
+.staff-list-item.assigned.selected {
+  background: #BBF7D0;
+  box-shadow: inset 0 0 0 2px #3B82F6;
+}
+
+.staff-list-item.staged-delete {
+  background: #FEE2E2;
+  opacity: 0.7;
+}
+
+.staff-list-item.staged-delete .staff-list-name {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.btn-icon.btn-undo {
+  color: #2563EB;
+}
+
+.btn-icon.btn-undo:hover {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.staff-list-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .assigned-label {
@@ -285,8 +323,19 @@
 /* Assignment Form */
 .assignment-form-container {
   padding: 8px;
-  background: white;
-  border-top: 1px solid var(--border-color);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+/* Role Label */
+.role-label {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: #E0E7FF;
+  color: #3730A3;
+  flex-shrink: 0;
 }
 
 .assignment-form-title {
@@ -335,4 +384,30 @@
 
 .btn-line:hover {
   background: #05B04C;
+}
+
+/* Leader Badge */
+.leader-badge {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: #F59E0B;
+  color: white;
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* Checkbox Label */
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
