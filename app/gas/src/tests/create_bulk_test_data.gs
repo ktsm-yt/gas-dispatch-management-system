@@ -152,25 +152,28 @@ function deleteBulkTestData() {
 }
 
 // ============================================================
-// 顧客生成
+// 顧客生成（バッチ最適化版）
 // ============================================================
 
 function createBulkCustomers() {
   const count = BULK_TEST_CONFIG.CUSTOMER_COUNT;
   const prefix = BULK_TEST_CONFIG.PREFIX;
   const now = getCurrentTimestamp();
-  let created = 0;
 
   const departments = ['工事部', '建設部', '営業部', '総務部', '経理部', ''];
   const honorifics = ['様', '御中'];
 
+  // 既存IDを一括取得
+  const existingCustomers = getAllRecords('M_Customers', { includeDeleted: true });
+  const existingIds = new Set(existingCustomers.map(c => c.customer_id));
+
+  // 新規レコードを収集
+  const toInsert = [];
+
   for (let i = 1; i <= count; i++) {
     const customerId = `cus_${prefix}${String(i).padStart(3, '0')}`;
 
-    // 既存チェック
-    const sheet = getSheet('M_Customers');
-    const existing = findRowById(sheet, 'customer_id', customerId);
-    if (existing) {
+    if (existingIds.has(customerId)) {
       continue;
     }
 
@@ -180,7 +183,7 @@ function createBulkCustomers() {
     const area = randomPick(BULK_TEST_CONFIG.AREAS);
     const invoiceFormat = ['format1', 'format2', 'format3', 'atamagami'][i % 4];
 
-    const record = {
+    toInsert.push({
       customer_id: customerId,
       company_name: companyName,
       branch_name: i % 5 === 0 ? randomPick(['本社', '東京支店', '横浜支店', '埼玉支店', '千葉営業所']) : '',
@@ -211,29 +214,28 @@ function createBulkCustomers() {
       updated_at: now,
       updated_by: 'bulk_test',
       is_deleted: false
-    };
-
-    insertRecord('M_Customers', record);
-    created++;
-
-    if (created % 10 === 0) {
-      console.log(`顧客作成: ${created}/${count}`);
-    }
+    });
   }
 
-  console.log(`顧客作成完了: ${created}件`);
-  return created;
+  // 一括挿入
+  if (toInsert.length > 0) {
+    insertRecords('M_Customers', toInsert);
+    console.log(`顧客作成完了: ${toInsert.length}件（バッチ挿入）`);
+  } else {
+    console.log('顧客作成: 新規データなし');
+  }
+
+  return toInsert.length;
 }
 
 // ============================================================
-// スタッフ生成
+// スタッフ生成（バッチ最適化版）
 // ============================================================
 
 function createBulkStaff() {
   const count = BULK_TEST_CONFIG.STAFF_COUNT;
   const prefix = BULK_TEST_CONFIG.PREFIX;
   const now = getCurrentTimestamp();
-  let created = 0;
 
   const skills = ['鳶', '揚げ', '鳶,揚げ', '鳶,揚げ,鳶揚げ'];
   const bloodTypes = ['A', 'B', 'O', 'AB'];
@@ -248,13 +250,17 @@ function createBulkStaff() {
     `cus_${prefix}003`
   ];
 
+  // 既存IDを一括取得
+  const existingStaff = getAllRecords('M_Staff', { includeDeleted: true });
+  const existingIds = new Set(existingStaff.map(s => s.staff_id));
+
+  // 新規レコードを収集
+  const toInsert = [];
+
   for (let i = 1; i <= count; i++) {
     const staffId = `stf_${prefix}${String(i).padStart(3, '0')}`;
 
-    // 既存チェック
-    const sheet = getSheet('M_Staff');
-    const existing = findRowById(sheet, 'staff_id', staffId);
-    if (existing) {
+    if (existingIds.has(staffId)) {
       continue;
     }
 
@@ -268,7 +274,7 @@ function createBulkStaff() {
     // 10%のスタッフにNG顧客を設定
     const ngCustomers = i % 10 === 0 ? ngCustomerCandidates.slice(0, (i % 3) + 1).join(',') : '';
 
-    const record = {
+    toInsert.push({
       staff_id: staffId,
       name: name,
       name_kana: toKatakana(lastName) + toKatakana(firstName),
@@ -301,18 +307,18 @@ function createBulkStaff() {
       updated_at: now,
       updated_by: 'bulk_test',
       is_deleted: false
-    };
-
-    insertRecord('M_Staff', record);
-    created++;
-
-    if (created % 10 === 0) {
-      console.log(`スタッフ作成: ${created}/${count}`);
-    }
+    });
   }
 
-  console.log(`スタッフ作成完了: ${created}件`);
-  return created;
+  // 一括挿入
+  if (toInsert.length > 0) {
+    insertRecords('M_Staff', toInsert);
+    console.log(`スタッフ作成完了: ${toInsert.length}件（バッチ挿入）`);
+  } else {
+    console.log('スタッフ作成: 新規データなし');
+  }
+
+  return toInsert.length;
 }
 
 /**
@@ -343,14 +349,14 @@ function generateBirthDate(seed) {
 }
 
 // ============================================================
-// 案件生成
+// 案件生成（バッチ最適化版）
 // ============================================================
 
 function createBulkJobs() {
   const daysCount = BULK_TEST_CONFIG.DAYS_TO_GENERATE;
   const jobsPerDay = BULK_TEST_CONFIG.JOBS_PER_DAY;
   const prefix = BULK_TEST_CONFIG.PREFIX;
-  let created = 0;
+  const now = getCurrentTimestamp();
 
   // 顧客リストを取得（invoice_format情報も使用）
   const customers = getAllRecords('M_Customers').filter(c =>
@@ -370,6 +376,7 @@ function createBulkJobs() {
   const constructionDivs = ['第1工事課', '第2工事課', '第3工事課', '特需工事課', ''];
 
   const today = new Date();
+  const toInsert = [];
 
   for (let dayOffset = 0; dayOffset < daysCount; dayOffset++) {
     const targetDate = new Date(today);
@@ -384,7 +391,8 @@ function createBulkJobs() {
       const invoiceFormat = customer.invoice_format || 'format1';
       const jobIndex = dayOffset * jobsPerDay + j;
 
-      const job = {
+      toInsert.push({
+        job_id: generateId('job'),
         customer_id: customer.customer_id,
         site_name: `${randomPick(BULK_TEST_CONFIG.LAST_NAMES)}${siteType}${siteAction}`,
         site_address: `東京都${area}${Math.floor(Math.random() * 9) + 1}-${Math.floor(Math.random() * 99) + 1}`,
@@ -401,31 +409,33 @@ function createBulkJobs() {
         property_code: invoiceFormat === 'format3' ? `P${String(jobIndex).padStart(6, '0')}` : '',
         construction_div: invoiceFormat === 'format3' ? randomPick(constructionDivs) : '',
         status: 'pending',
-        notes: j % 20 === 0 ? `テスト案件${jobIndex}の備考` : ''
-      };
-
-      try {
-        JobRepository.insert(job);
-        created++;
-      } catch (e) {
-        console.log(`案件作成エラー: ${e.message}`);
-      }
+        notes: j % 20 === 0 ? `テスト案件${jobIndex}の備考` : '',
+        created_at: now,
+        created_by: 'bulk_test',
+        updated_at: now,
+        updated_by: 'bulk_test',
+        is_deleted: false
+      });
     }
 
-    console.log(`案件作成: ${dateStr} - ${jobsPerDay}件 (累計${created}件)`);
+    console.log(`案件データ準備: ${dateStr} - ${jobsPerDay}件`);
   }
 
-  console.log(`案件作成完了: ${created}件`);
-  return created;
+  // 一括挿入
+  if (toInsert.length > 0) {
+    insertRecords('T_Jobs', toInsert);
+    console.log(`案件作成完了: ${toInsert.length}件（バッチ挿入）`);
+  }
+
+  return toInsert.length;
 }
 
 // ============================================================
-// 配置生成
+// 配置生成（バッチ最適化版）
 // ============================================================
 
 function createBulkAssignments() {
   const prefix = BULK_TEST_CONFIG.PREFIX;
-  let created = 0;
 
   // テスト顧客の案件を取得
   const allJobs = getAllRecords('T_Jobs').filter(j =>
@@ -454,10 +464,12 @@ function createBulkAssignments() {
 
   const transportAreas = ['23ku_inner', '23ku_outer', 'saitama', 'chiba', 'kanagawa'];
   const transportFees = { '23ku_inner': 500, '23ku_outer': 1000, 'saitama': 1500, 'chiba': 1500, 'kanagawa': 1500 };
-  const siteRoles = ['genba_dairi', 'sagyo_shunin', 'shokcho', 'anzen_sekinin', null, null, null, null]; // 50%は一般作業員
+  const siteRoles = ['genba_dairi', 'sagyo_shunin', 'shokcho', 'anzen_sekinin', null, null, null, null];
 
   // 案件の50%に配置を作成
   const jobsToAssign = allJobs.filter((_, i) => i % 2 === 0);
+  const toInsert = [];
+  let assignmentCounter = 0;
 
   for (const job of jobsToAssign) {
     const assignCount = Math.min(job.required_count || 1, 3);
@@ -465,10 +477,9 @@ function createBulkAssignments() {
     const jobType = job.job_type || 'tobi';
 
     for (let i = 0; i < assignCount; i++) {
-      const staff = staffList[(created + i) % staffList.length];
+      const staff = staffList[(assignmentCounter + i) % staffList.length];
       const isSubcontract = staff.staff_type === 'subcontract';
       const transportArea = randomPick(transportAreas);
-      const assignmentIndex = created + i;
 
       // 給与単価決定（スタッフマスターから）
       let wageRate = staff.daily_rate_tobi || 15000;
@@ -491,7 +502,7 @@ function createBulkAssignments() {
         invoiceRate = customer.unit_price_half || 12000;
       }
 
-      const assignment = {
+      toInsert.push({
         job_id: job.job_id,
         staff_id: staff.staff_id,
         worker_type: isSubcontract ? 'SUBCONTRACT' : 'STAFF',
@@ -503,26 +514,23 @@ function createBulkAssignments() {
         invoice_rate: invoiceRate,
         transport_area: transportArea,
         transport_amount: transportFees[transportArea] || 500,
-        transport_is_manual: assignmentIndex % 10 === 0, // 10%は手入力
-        site_role: i === 0 ? randomPick(siteRoles) : null, // 最初の人に役割設定の可能性
-        status: 'assigned'
-      };
+        transport_is_manual: assignmentCounter % 10 === 0,
+        site_role: i === 0 ? randomPick(siteRoles) : null,
+        status: 'ASSIGNED'
+      });
 
-      try {
-        AssignmentRepository.insert(assignment);
-        created++;
-      } catch (e) {
-        // 重複などは無視
-      }
-    }
-
-    if (created % 100 === 0) {
-      console.log(`配置作成: ${created}件`);
+      assignmentCounter++;
     }
   }
 
-  console.log(`配置作成完了: ${created}件`);
-  return created;
+  // 一括挿入
+  if (toInsert.length > 0) {
+    console.log(`配置データ準備完了: ${toInsert.length}件`);
+    AssignmentRepository.bulkInsert(toInsert);
+    console.log(`配置作成完了: ${toInsert.length}件（バッチ挿入）`);
+  }
+
+  return toInsert.length;
 }
 
 // ============================================================
