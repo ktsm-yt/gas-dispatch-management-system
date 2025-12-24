@@ -75,7 +75,8 @@ const TABLE_DEFINITIONS = {
       'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
       'display_time_slot', 'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
       'transport_area', 'transport_amount', 'transport_is_manual', 'site_role',
-      'entry_date', 'safety_training_date', 'status', 'created_at', 'created_by',
+      'assignment_role', 'is_leader',
+      'entry_date', 'safety_training_date', 'status', 'notes', 'created_at', 'created_by',
       'updated_at', 'updated_by', 'is_deleted'
     ]
   },
@@ -328,4 +329,66 @@ function switchToExistingDb() {
 
   Logger.log('\n=== 完了 ===');
   Logger.log('既存DBに切り替えました。insertTestData() でテストデータを投入してください。');
+}
+
+/**
+ * 既存の配置シートにassignment_roleとis_leaderカラムを追加
+ * GASエディタから実行: migrateAddAssignmentRoleColumns()
+ */
+function migrateAddAssignmentRoleColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('配置');
+
+  if (!sheet) {
+    Logger.log('✗ 配置シートが見つかりません');
+    return;
+  }
+
+  // 現在のヘッダーを取得
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log(`現在のカラム数: ${lastCol}`);
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // 追加するカラム
+  const newColumns = ['assignment_role', 'is_leader'];
+  const columnsToAdd = newColumns.filter(col => !headers.includes(col));
+
+  if (columnsToAdd.length === 0) {
+    Logger.log('✓ 全てのカラムが既に存在します');
+    return;
+  }
+
+  // site_roleの後に挿入（site_roleの位置を見つける）
+  const siteRoleIndex = headers.indexOf('site_role');
+  if (siteRoleIndex === -1) {
+    Logger.log('✗ site_roleカラムが見つかりません。手動で追加してください。');
+    return;
+  }
+
+  // 挿入位置（site_roleの次）
+  const insertPosition = siteRoleIndex + 2; // 1-indexed
+
+  // カラムを挿入
+  for (let i = 0; i < columnsToAdd.length; i++) {
+    sheet.insertColumnAfter(insertPosition + i - 1);
+    sheet.getRange(1, insertPosition + i).setValue(columnsToAdd[i]);
+    Logger.log(`✓ カラム追加: ${columnsToAdd[i]} (位置: ${insertPosition + i})`);
+  }
+
+  // ヘッダー行のスタイルを適用
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('\n=== マイグレーション完了 ===');
+  Logger.log(`追加したカラム: ${columnsToAdd.join(', ')}`);
 }
