@@ -774,7 +774,9 @@
       const idx = dashboardData.jobs.findIndex(j => j.job_id === jobId);
       if (idx >= 0) {
         const validAssignments = (assignments || []).filter(a => a.status !== 'CANCELLED');
-        dashboardData.jobs[idx].assigned_count = validAssignments.length;
+        // 一意なスタッフIDでカウント（サーバー側と同じロジック）
+        const uniqueStaffIds = new Set(validAssignments.map(a => a.staff_id));
+        dashboardData.jobs[idx].assigned_count = uniqueStaffIds.size;
         dashboardData.jobs[idx].staff_names = validAssignments.map(a => a.staff_name || '');
 
         // 統計を再計算して再描画
@@ -961,6 +963,15 @@
       if (!response.ok) return;
 
       const newData = response.data;
+      const currentDateStr = formatDate(currentDate);
+
+      // 現在表示中の日付と一致する場合のみ更新
+      if (newData.date !== currentDateStr) {
+        // 別の日付のデータ → キャッシュだけ更新
+        saveToCachedDate(newData.date, newData);
+        return;
+      }
+
       // キャッシュと比較して変更があれば更新
       if (JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs)) {
         dashboardData = newData;
@@ -985,12 +996,19 @@
         return;
       }
 
-      dashboardData = response.data;
-      lastMaxUpdatedAt = null; // Reset for polling
+      const newData = response.data;
+      const currentDateStr = formatDate(currentDate);
 
       // キャッシュに保存
-      saveToCachedDate(dashboardData.date, dashboardData);
+      saveToCachedDate(newData.date, newData);
 
+      // 現在表示中の日付と一致する場合のみ表示更新
+      if (newData.date !== currentDateStr) {
+        return;
+      }
+
+      dashboardData = newData;
+      lastMaxUpdatedAt = null; // Reset for polling
       renderDashboard();
     }
 
@@ -1007,12 +1025,14 @@
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
-        const shortage = slotStats.shortage;
-        if (shortage < 0) {
-          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
+        const shortage = slotStats.shortage;  // required - assigned
+        if (shortage > 0) {
+          // 不足（必要 > 配置済み）
+          shortageEl.textContent = `${shortage}名不足`;
           shortageEl.className = 'shortage negative';
-        } else if (shortage > 0) {
-          shortageEl.textContent = `+${shortage}名余裕`;
+        } else if (shortage < 0) {
+          // 余裕（配置済み > 必要）
+          shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
           shortageEl.className = 'shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
@@ -1131,12 +1151,14 @@
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
-        const shortage = slotStats.shortage;
-        if (shortage < 0) {
-          shortageEl.textContent = `${Math.abs(shortage)}名不足`;
+        const shortage = slotStats.shortage;  // required - assigned
+        if (shortage > 0) {
+          // 不足（必要 > 配置済み）
+          shortageEl.textContent = `${shortage}名不足`;
           shortageEl.className = 'shortage negative';
-        } else if (shortage > 0) {
-          shortageEl.textContent = `+${shortage}名余裕`;
+        } else if (shortage < 0) {
+          // 余裕（配置済み > 必要）
+          shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
           shortageEl.className = 'shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
@@ -1185,10 +1207,10 @@
         }
       }
 
-      // shortage = assigned - required
-      // 正: 余裕あり, 負: 不足, 0: ちょうど
+      // shortage = required - assigned
+      // 正: 不足, 負: 余裕, 0: ちょうど
       for (const slot of Object.keys(byTimeSlot)) {
-        byTimeSlot[slot].shortage = byTimeSlot[slot].assigned - byTimeSlot[slot].required;
+        byTimeSlot[slot].shortage = byTimeSlot[slot].required - byTimeSlot[slot].assigned;
       }
 
       dashboardData.stats = { total, assigned, pending, byTimeSlot };
