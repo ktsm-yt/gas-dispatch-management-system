@@ -126,7 +126,20 @@
       white-space: nowrap;
     }
 
-    .jobs-table th:nth-child(1) { width: 60px; }  /* 時間 */
+    .jobs-table th.sortable {
+      cursor: pointer;
+      user-select: none;
+    }
+    .jobs-table th.sortable:hover {
+      background: var(--bg-hover);
+    }
+    .jobs-table th.sortable span {
+      font-size: 10px;
+      margin-left: 4px;
+      color: var(--text-muted);
+    }
+
+    .jobs-table th:nth-child(1) { width: 70px; }  /* 時間 */
     .jobs-table th:nth-child(2) { width: 15%; }   /* 顧客 */
     .jobs-table th:nth-child(3) { width: 20%; }   /* 現場名 */
     .jobs-table th:nth-child(4) { width: 25%; }   /* 住所 */
@@ -372,6 +385,34 @@
       background: var(--bg-hover);
     }
 
+    .filter-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-group label {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .filter-group select {
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: white;
+      min-width: 100px;
+    }
+
     .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -405,11 +446,36 @@
       </div>
     </div>
 
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>時間区分</label>
+        <select id="time-slot-filter" onchange="applyFilters()">
+          <option value="">すべて</option>
+          <option value="jotou">上棟</option>
+          <option value="shuujitsu">終日</option>
+          <option value="am">AM</option>
+          <option value="pm">PM</option>
+          <option value="yakin">夜勤</option>
+          <option value="mitei">未定</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>ステータス</label>
+        <select id="status-filter" onchange="applyFilters()">
+          <option value="">すべて</option>
+          <option value="pending">未配置</option>
+          <option value="assigned">配置済</option>
+          <option value="hold">保留</option>
+          <option value="completed">完了</option>
+        </select>
+      </div>
+    </div>
+
     <div class="jobs-table-container" id="jobs-container">
       <table class="jobs-table">
         <thead>
           <tr>
-            <th>時間</th>
+            <th class="sortable" onclick="toggleTimeSlotSort()">時間 <span id="time-slot-sort-indicator">▲</span></th>
             <th>顧客</th>
             <th>現場名</th>
             <th>住所</th>
@@ -442,6 +508,18 @@
     let currentDate = new Date();
     let currentRequestId = 0;  // リクエスト追跡用
     let isLoading = false;
+    let timeSlotSortOrder = 'asc';  // 時間区分ソート順
+    let currentJobs = [];  // 現在の案件データを保持
+
+    // 時間区分の順序定義
+    const TIME_SLOT_ORDER = {
+      'jotou': 0,      // 上棟
+      'shuujitsu': 1,  // 終日
+      'am': 2,         // AM
+      'pm': 3,         // PM
+      'yakin': 4,      // 夜勤
+      'mitei': 5       // 未定
+    };
 
     document.addEventListener('DOMContentLoaded', () => {
       initNavBar('assignments', '配置管理');
@@ -597,16 +675,25 @@
     function renderJobs(jobs) {
       const tbody = document.getElementById('jobs-tbody');
 
+      // 現在のデータを保持（フィルタ・ソート切り替え用）
+      currentJobs = jobs;
+
       // キャンセル済み案件を除外
       const activeJobs = (jobs || []).filter(job => job.status !== 'cancelled');
 
-      if (activeJobs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">この日の案件はありません</td></tr>';
+      // フィルタを適用
+      const filteredJobs = filterJobs(activeJobs);
+
+      if (filteredJobs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">該当する案件はありません</td></tr>';
         return;
       }
 
+      // 時間区分でソート
+      const sortedJobs = sortJobsByTimeSlot(filteredJobs);
+
       let html = '';
-      activeJobs.forEach((job) => {
+      sortedJobs.forEach((job) => {
         const validAssignments = (job.assignments || []).filter(a => a.status !== 'CANCELLED');
         const shortage = (job.required_count || 0) - (job.assigned_count || 0);
 
@@ -745,6 +832,43 @@
       toast.className = 'toast ' + type;
       toast.style.display = 'block';
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    function toggleTimeSlotSort() {
+      timeSlotSortOrder = timeSlotSortOrder === 'asc' ? 'desc' : 'asc';
+      document.getElementById('time-slot-sort-indicator').textContent =
+        timeSlotSortOrder === 'asc' ? '▲' : '▼';
+      renderJobs(currentJobs);
+    }
+
+    function sortJobsByTimeSlot(jobs) {
+      const multiplier = timeSlotSortOrder === 'asc' ? 1 : -1;
+      return [...jobs].sort((a, b) => {
+        const orderA = TIME_SLOT_ORDER[a.time_slot] ?? 99;
+        const orderB = TIME_SLOT_ORDER[b.time_slot] ?? 99;
+        return (orderA - orderB) * multiplier;
+      });
+    }
+
+    function applyFilters() {
+      renderJobs(currentJobs);
+    }
+
+    function filterJobs(jobs) {
+      const timeSlotFilter = document.getElementById('time-slot-filter').value;
+      const statusFilter = document.getElementById('status-filter').value;
+
+      return jobs.filter(job => {
+        // 時間区分フィルタ
+        if (timeSlotFilter && job.time_slot !== timeSlotFilter) {
+          return false;
+        }
+        // ステータスフィルタ
+        if (statusFilter && job.status !== statusFilter) {
+          return false;
+        }
+        return true;
+      });
     }
   </script>
 </body>
