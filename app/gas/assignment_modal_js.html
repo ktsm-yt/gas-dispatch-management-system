@@ -623,7 +623,7 @@ function generateLineTemplate() {
 --------------------------------
 
 ◉作業年月日：${dateStr}
-◉開始時間：${job.start_time || '-'}
+◉開始時間：${(job.start_time || '-').replace(/^0/, '')}
 ◉最寄駅：
 ◉現場住所：${job.site_address || ''}
 ◉現場名：${siteWithCustomer}
