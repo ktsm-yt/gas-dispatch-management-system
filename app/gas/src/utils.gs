@@ -164,6 +164,9 @@ function buildErrorResponse(code, message, details, requestId) {
 // @see errors.js ErrorCodes
 // 後方互換性のため ERROR_CODES は errors.js で ErrorCodes のエイリアスとして定義
 
+// buildErrorResponse のエイリアス（master_service.gs などで使用）
+const errorResponse = buildErrorResponse;
+
 /**
  * オブジェクトの差分を取得（監査ログ用）
  * @param {Object} before - 変更前オブジェクト
