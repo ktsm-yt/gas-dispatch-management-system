@@ -173,16 +173,21 @@ function errorResponse_(error, requestId) {
  */
 function apiHandler_(fn) {
   return function(...args) {
-    const requestId = generateRequestId_();
+    const requestId = generateRequestId();
     try {
       const result = fn.apply(this, args);
-      return successResponse_(result, requestId);
+      // buildSuccessResponse を使用（Date型シリアライズ対応）
+      return buildSuccessResponse(result, requestId);
     } catch (e) {
       Logger.log(`[${requestId}] Error in ${fn.name}: ${e.message}`);
       if (e.stack) {
         Logger.log(`[${requestId}] Stack: ${e.stack}`);
       }
-      return errorResponse_(e, requestId);
+      // AppError系はそのまま、それ以外はSystemErrorとして処理
+      if (e instanceof AppError) {
+        return buildErrorResponse(e.code, e.message, e.details, requestId);
+      }
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, e.message, {}, requestId);
     }
   };
 }
@@ -195,7 +200,7 @@ function apiHandler_(fn) {
  */
 function apiHandlerWithLock_(fn, lockTimeoutMs = 3000) {
   return function(...args) {
-    const requestId = generateRequestId_();
+    const requestId = generateRequestId();
     const lock = LockService.getScriptLock();
 
     try {
@@ -205,10 +210,13 @@ function apiHandlerWithLock_(fn, lockTimeoutMs = 3000) {
       }
 
       const result = fn.apply(this, args);
-      return successResponse_(result, requestId);
+      return buildSuccessResponse(result, requestId);
     } catch (e) {
       Logger.log(`[${requestId}] Error in ${fn.name}: ${e.message}`);
-      return errorResponse_(e, requestId);
+      if (e instanceof AppError) {
+        return buildErrorResponse(e.code, e.message, e.details, requestId);
+      }
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, e.message, {}, requestId);
     } finally {
       try {
         lock.releaseLock();
@@ -217,4 +225,44 @@ function apiHandlerWithLock_(fn, lockTimeoutMs = 3000) {
       }
     }
   };
+}
+
+// 後方互換性のためのエイリアス
+// 既存コードで ERROR_CODES を使用している箇所のため
+const ERROR_CODES = ErrorCodes;
+
+/**
+ * 権限チェック（エラースロー版）
+ * @param {string} requiredRole - 必要な権限
+ * @throws {PermissionDeniedError} 権限がない場合
+ */
+function requirePermission(requiredRole) {
+  const authResult = checkPermission(requiredRole);
+  if (!authResult.allowed) {
+    throw new PermissionDeniedError(authResult.message);
+  }
+}
+
+/**
+ * 必須パラメータチェック（エラースロー版）
+ * @param {*} value - チェックする値
+ * @param {string} name - パラメータ名
+ * @throws {ValidationError} 値がない場合
+ */
+function requireParam(value, name) {
+  if (value === undefined || value === null || value === '') {
+    throw new ValidationError(`${name} is required`, { field: name });
+  }
+}
+
+/**
+ * オブジェクトの必須チェック（エラースロー版）
+ * @param {Object} obj - チェックするオブジェクト
+ * @param {string} name - オブジェクト名
+ * @throws {ValidationError} オブジェクトでない場合
+ */
+function requireObject(obj, name) {
+  if (!obj || typeof obj !== 'object') {
+    throw new ValidationError(`${name} object is required`, { field: name });
+  }
 }

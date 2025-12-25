@@ -54,49 +54,15 @@ function getDashboard(date) {
 
 /**
  * ダッシュボード更新メタ情報を取得（更新検知用）
+ * リファクタリング例: apiHandler_ + requirePermission + requireParam
  * @param {string} date - 日付（YYYY-MM-DD形式）
  * @returns {Object} APIレスポンス
  */
-function getDashboardMeta(date) {
-  const requestId = generateRequestId();
-
-  try {
-    // 認可チェック
-    const authResult = checkPermission(ROLES.STAFF);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
-
-    // 入力検証
-    if (!date) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'date is required',
-        {},
-        requestId
-      );
-    }
-
-    // Service呼び出し
-    const result = JobService.getDashboardMeta(date);
-
-    return buildSuccessResponse(result, requestId);
-
-  } catch (error) {
-    Logger.log(`getDashboardMeta error: ${error.message}`);
-    return buildErrorResponse(
-      ERROR_CODES.SYSTEM_ERROR,
-      error.message,
-      {},
-      requestId
-    );
-  }
-}
+const getDashboardMeta = apiHandler_(function getDashboardMeta_(date) {
+  requirePermission(ROLES.STAFF);
+  requireParam(date, 'date');
+  return JobService.getDashboardMeta(date);
+});
 
 /**
  * 案件を検索
