@@ -2,6 +2,7 @@
  * Authentication & Authorization Module
  *
  * KTSM-38: 認証・認可実装
+ * Phase 2 開発テスト: このコメントはデモ版（v17）には反映されない
  *
  * 機能:
  * - Google Workspace アカウントによる SSO
