@@ -75,6 +75,16 @@ function getCurrentUser() {
  * @returns {Object} { allowed: boolean, email: string, message: string }
  */
 function checkDomain() {
+  // デモモード: 外部ユーザーでもアクセス可能にする
+  const prop = PropertiesService.getScriptProperties();
+  if (prop.getProperty('DEMO_MODE') === 'true') {
+    return {
+      allowed: true,
+      email: 'demo@example.com',
+      message: 'OK (Demo Mode)'
+    };
+  }
+
   const user = getCurrentUser();
 
   if (!user.isAuthenticated) {
@@ -338,4 +348,27 @@ function setupDevAuth() {
   Logger.log(`ALLOWED_DOMAIN: ${domain}`);
   Logger.log(`ADMIN_EMAILS: ${user}`);
   Logger.log('\n再度 testAuth() を実行して確認してください');
+}
+
+/**
+ * デモモードを有効化
+ * 外部ユーザー（ドメイン外）でもアプリにアクセス可能にする
+ */
+function enableDemoMode() {
+  const prop = PropertiesService.getScriptProperties();
+  prop.setProperty('DEMO_MODE', 'true');
+  Logger.log('✓ デモモード有効化完了');
+  Logger.log('外部ユーザーがアクセス可能になりました');
+  Logger.log('※ 新しいバージョンでデプロイが必要です');
+}
+
+/**
+ * デモモードを無効化
+ * 通常の認証チェックに戻す
+ */
+function disableDemoMode() {
+  const prop = PropertiesService.getScriptProperties();
+  prop.deleteProperty('DEMO_MODE');
+  Logger.log('✓ デモモード無効化完了');
+  Logger.log('通常の認証チェックに戻りました');
 }
