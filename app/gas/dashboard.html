@@ -412,27 +412,10 @@
       background: var(--color-accent);
     }
 
-    /* Print Button */
-    .print-btn {
-      background: white;
-      border: 1px solid var(--border-color);
-      padding: 4px 12px;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .print-btn:hover {
-      background: var(--bg-hover);
-    }
-
     /* Print Styles */
     @media print {
       /* Hide non-essential elements */
-      nav, .nav-bar, .add-btn, .print-btn,
+      nav, .nav-bar, .add-btn,
       .date-btn, .date-picker-input,
       .modal-overlay, .toast {
         display: none !important;
@@ -510,7 +493,6 @@
       <span>配置済: <span class="count" id="stats-assigned">-</span></span>
       <span>未配置: <span class="count" id="stats-pending">-</span></span>
     </div>
-    <button class="print-btn" onclick="window.print()">🖨 印刷</button>
   </div>
 
   <!-- Dashboard -->
