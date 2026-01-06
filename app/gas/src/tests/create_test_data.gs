@@ -126,10 +126,11 @@ function createTestStaff() {
       phone: '090-1111-1111',
       skills: '鳶,揚げ',
       has_motorbike: true,
-      daily_rate_tobi: 15000,
-      daily_rate_age: 13000,
-      daily_rate_tobiage: 16000,
       daily_rate_half: 8000,
+      daily_rate_basic: 11000,
+      daily_rate_fullday: 14000,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 17000,
       staff_type: 'regular',
       is_active: true
     },
@@ -140,10 +141,11 @@ function createTestStaff() {
       phone: '090-2222-2222',
       skills: '揚げ',
       has_motorbike: false,
-      daily_rate_tobi: 14000,
-      daily_rate_age: 12000,
-      daily_rate_tobiage: 15000,
-      daily_rate_half: 7000,
+      daily_rate_half: 7500,
+      daily_rate_basic: 10000,
+      daily_rate_fullday: 13000,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 0,
       staff_type: 'regular',
       is_active: true
     },
@@ -154,10 +156,11 @@ function createTestStaff() {
       phone: '090-3333-3333',
       skills: '鳶,鳶揚げ',
       has_motorbike: true,
-      daily_rate_tobi: 16000,
-      daily_rate_age: 14000,
-      daily_rate_tobiage: 17000,
-      daily_rate_half: 8500,
+      daily_rate_half: 8000,
+      daily_rate_basic: 11000,
+      daily_rate_fullday: 14000,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 17000,
       staff_type: 'regular',
       is_active: true
     },
@@ -168,10 +171,11 @@ function createTestStaff() {
       phone: '090-4444-4444',
       skills: '揚げ',
       has_motorbike: false,
-      daily_rate_tobi: 13000,
-      daily_rate_age: 11000,
-      daily_rate_tobiage: 14000,
-      daily_rate_half: 6500,
+      daily_rate_half: 7500,
+      daily_rate_basic: 10000,
+      daily_rate_fullday: 13000,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 0,
       staff_type: 'regular',
       is_active: true
     },
@@ -182,10 +186,11 @@ function createTestStaff() {
       phone: '090-5555-5555',
       skills: '鳶,揚げ,鳶揚げ',
       has_motorbike: true,
-      daily_rate_tobi: 17000,
-      daily_rate_age: 15000,
-      daily_rate_tobiage: 18000,
-      daily_rate_half: 9000,
+      daily_rate_half: 8500,
+      daily_rate_basic: 12000,
+      daily_rate_fullday: 14000,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 18000,
       staff_type: 'regular',
       is_active: true
     }
@@ -275,7 +280,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '08:00',
       required_count: 3,
-      job_type: 'tobi',  // 上棟のみ作業種別あり
+      pay_unit: 'tobi',  // 上棟は鳶単価
       status: 'pending'
     },
     {
@@ -286,7 +291,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '09:00',
       required_count: 2,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     {
@@ -297,7 +302,7 @@ function createTestJobs() {
       time_slot: 'am',
       start_time: '08:30',
       required_count: 2,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     {
@@ -308,7 +313,7 @@ function createTestJobs() {
       time_slot: 'pm',
       start_time: '13:00',
       required_count: 4,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     // 明日の案件
@@ -320,7 +325,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '07:30',
       required_count: 5,
-      job_type: 'tobiage',  // 上棟のみ作業種別あり
+      pay_unit: 'tobiage',  // 鳶揚げ単価
       status: 'pending'
     },
     {
@@ -331,7 +336,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '08:00',
       required_count: 3,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     }
   ];
