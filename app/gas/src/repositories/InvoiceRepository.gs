@@ -262,36 +262,76 @@ const InvoiceRepository = {
 
   /**
    * 請求番号を生成（YYMM_SEQ形式）
+   * 競合防止のためロックを取得し、一意性を保証する
    * @param {number} year - 年
    * @param {number} month - 月
    * @param {string} customerId - 顧客ID
    * @returns {string} 請求番号
+   * @throws {Error} ロック取得失敗または一意番号生成失敗時
    */
   generateInvoiceNumber: function(year, month, customerId) {
-    // 顧客の既存請求書から最大連番を取得
-    const records = getAllRecords(this.TABLE_NAME);
-    const customerInvoices = records.filter(r =>
-      r.customer_id === customerId && !r.is_deleted
-    );
+    const MAX_RETRIES = 3;
+    const lock = LockService.getScriptLock();
 
-    let maxSeq = 0;
-    for (const inv of customerInvoices) {
-      if (inv.invoice_number) {
-        const parts = inv.invoice_number.split('_');
-        if (parts.length === 2) {
-          const seq = parseInt(parts[1], 10);
-          if (!isNaN(seq) && seq > maxSeq) {
-            maxSeq = seq;
-          }
-        }
-      }
+    // ロックを取得（最大5秒待機）
+    const acquired = lock.tryLock(5000);
+    if (!acquired) {
+      throw new Error('LOCK_ACQUISITION_FAILED: 請求番号生成のロック取得に失敗しました。しばらく待ってから再試行してください。');
     }
 
-    const yy = String(year).slice(-2);
-    const mm = String(month).padStart(2, '0');
-    const seq = maxSeq + 1;
+    try {
+      const yy = String(year).slice(-2);
+      const mm = String(month).padStart(2, '0');
 
-    return `${yy}${mm}_${seq}`;
+      for (let retry = 0; retry < MAX_RETRIES; retry++) {
+        // 顧客の既存請求書から最大連番を取得
+        const records = getAllRecords(this.TABLE_NAME);
+        const customerInvoices = records.filter(r =>
+          r.customer_id === customerId && !r.is_deleted
+        );
+
+        let maxSeq = 0;
+        for (const inv of customerInvoices) {
+          if (inv.invoice_number) {
+            const parts = inv.invoice_number.split('_');
+            if (parts.length === 2) {
+              const seq = parseInt(parts[1], 10);
+              if (!isNaN(seq) && seq > maxSeq) {
+                maxSeq = seq;
+              }
+            }
+          }
+        }
+
+        const candidateSeq = maxSeq + 1 + retry; // リトライ時はインクリメント
+        const candidateNumber = `${yy}${mm}_${candidateSeq}`;
+
+        // 一意性チェック（全顧客で重複がないか確認）
+        const isDuplicate = records.some(r =>
+          !r.is_deleted && r.invoice_number === candidateNumber
+        );
+
+        if (!isDuplicate) {
+          return candidateNumber;
+        }
+
+        console.warn(`Invoice number collision detected: ${candidateNumber}, retrying...`);
+      }
+
+      throw new Error('INVOICE_NUMBER_GENERATION_FAILED: 一意な請求番号の生成に失敗しました。');
+    } finally {
+      lock.releaseLock();
+    }
+  },
+
+  /**
+   * 請求番号が利用可能か確認
+   * @param {string} invoiceNumber - 確認する請求番号
+   * @returns {boolean} 利用可能ならtrue
+   */
+  isInvoiceNumberAvailable: function(invoiceNumber) {
+    const records = getAllRecords(this.TABLE_NAME);
+    return !records.some(r => !r.is_deleted && r.invoice_number === invoiceNumber);
   },
 
   /**
