@@ -64,8 +64,10 @@ const TABLE_DEFINITIONS = {
     sheetName: '案件',
     headers: [
       'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
-      'time_slot', 'start_time', 'required_count', 'job_type', 'supervisor_name',
-      'order_number', 'branch_office', 'property_code', 'construction_div', 'status',
+      'time_slot', 'start_time', 'required_count',
+      'pay_unit', 'work_category', 'work_detail',
+      'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+      'status', 'is_damaged', 'is_uncollected', 'is_claimed',
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
     ]
   },
@@ -296,8 +298,10 @@ function addJobsSheetToExistingDb() {
   // T_Jobsの定義
   const jobsHeaders = [
     'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
-    'time_slot', 'start_time', 'required_count', 'job_type', 'supervisor_name',
-    'order_number', 'branch_office', 'property_code', 'construction_div', 'status',
+    'time_slot', 'start_time', 'required_count',
+    'pay_unit', 'work_category', 'work_detail',
+    'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+    'status', 'is_damaged', 'is_uncollected', 'is_claimed',
     'notes', 'created_at', 'updated_at', 'is_deleted'
   ];
 

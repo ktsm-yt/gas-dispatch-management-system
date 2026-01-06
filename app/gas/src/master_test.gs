@@ -116,8 +116,11 @@ function testStaffCRUD() {
     name_kana: 'タナカイチロウ',
     phone: '090-1234-5678',
     has_motorbike: true,
-    daily_rate_tobi: 12000,
-    daily_rate_age: 10000,
+    daily_rate_half: 8000,
+    daily_rate_basic: 11000,
+    daily_rate_fullday: 14000,
+    daily_rate_night: 13000,
+    daily_rate_tobi: 17000,
     staff_type: 'regular'
   });
 

@@ -65,7 +65,7 @@ function testJobRepository() {
     work_date: testDate,
     time_slot: 'am',
     required_count: 3,
-    job_type: '揚げ'
+    pay_unit: 'basic'
   });
   Logger.log(`insert: job_id=${newJob.job_id}`);
   Logger.log(`  ✓ Created: ${!!newJob.job_id}`);
@@ -126,7 +126,7 @@ function testJobService() {
     work_date: testDate,
     time_slot: 'pm',
     required_count: 2,
-    job_type: '鳶'
+    pay_unit: 'tobi'
   }, null);
   Logger.log(`save (create): success=${createResult.success}`);
   Logger.log(`  ✓ Has job_id: ${!!createResult.job?.job_id}`);
@@ -195,7 +195,7 @@ function testJobApi() {
     work_date: testDate,
     time_slot: 'jotou',
     required_count: 5,
-    job_type: '鳶揚げ'
+    pay_unit: 'tobiage'
   }, null);
   Logger.log(`saveJob (create): ok=${createResp.ok}`);
   Logger.log(`  ✓ Has requestId: ${!!createResp.requestId}`);
@@ -342,15 +342,15 @@ function insertTestData() {
 
   const testJobs = [
     // 今日の案件
-    { work_date: today, time_slot: 'jotou', site_name: '○○邸 新築工事', site_address: '東京都新宿区西新宿1-1-1', required_count: 5, job_type: '鳶揚げ', status: 'pending', supervisor_name: '山田太郎' },
-    { work_date: today, time_slot: 'am', site_name: '△△マンション改修', site_address: '東京都渋谷区渋谷2-2-2', required_count: 3, job_type: '揚げ', status: 'assigned', supervisor_name: '鈴木一郎' },
-    { work_date: today, time_slot: 'am', site_name: '□□ビル解体', site_address: '東京都港区六本木3-3-3', required_count: 4, job_type: '鳶', status: 'pending', supervisor_name: '佐藤次郎' },
-    { work_date: today, time_slot: 'pm', site_name: '◇◇倉庫建設', site_address: '東京都品川区大井4-4-4', required_count: 2, job_type: '揚げ', status: 'pending', supervisor_name: '田中三郎' },
-    { work_date: today, time_slot: 'shuujitsu', site_name: '××商業施設', site_address: '東京都中央区銀座5-5-5', required_count: 6, job_type: '鳶揚げ', status: 'assigned', supervisor_name: '高橋四郎' },
-    { work_date: today, time_slot: 'yakin', site_name: '☆☆病院増築', site_address: '東京都文京区本郷6-6-6', required_count: 3, job_type: '鳶', status: 'pending', supervisor_name: '伊藤五郎' },
+    { work_date: today, time_slot: 'jotou', site_name: '○○邸 新築工事', site_address: '東京都新宿区西新宿1-1-1', required_count: 5, pay_unit: 'tobiage', status: 'pending', supervisor_name: '山田太郎' },
+    { work_date: today, time_slot: 'am', site_name: '△△マンション改修', site_address: '東京都渋谷区渋谷2-2-2', required_count: 3, pay_unit: 'basic', status: 'assigned', supervisor_name: '鈴木一郎' },
+    { work_date: today, time_slot: 'am', site_name: '□□ビル解体', site_address: '東京都港区六本木3-3-3', required_count: 4, pay_unit: 'tobi', status: 'pending', supervisor_name: '佐藤次郎' },
+    { work_date: today, time_slot: 'pm', site_name: '◇◇倉庫建設', site_address: '東京都品川区大井4-4-4', required_count: 2, pay_unit: 'basic', status: 'pending', supervisor_name: '田中三郎' },
+    { work_date: today, time_slot: 'shuujitsu', site_name: '××商業施設', site_address: '東京都中央区銀座5-5-5', required_count: 6, pay_unit: 'tobiage', status: 'assigned', supervisor_name: '高橋四郎' },
+    { work_date: today, time_slot: 'yakin', site_name: '☆☆病院増築', site_address: '東京都文京区本郷6-6-6', required_count: 3, pay_unit: 'tobi', status: 'pending', supervisor_name: '伊藤五郎' },
     // 明日の案件
-    { work_date: tomorrow, time_slot: 'am', site_name: '▲▲学校体育館', site_address: '東京都世田谷区三軒茶屋7-7-7', required_count: 4, job_type: '揚げ', status: 'pending', supervisor_name: '渡辺六郎' },
-    { work_date: tomorrow, time_slot: 'pm', site_name: '●●オフィスビル', site_address: '東京都千代田区丸の内8-8-8', required_count: 5, job_type: '鳶揚げ', status: 'pending', supervisor_name: '小林七郎' },
+    { work_date: tomorrow, time_slot: 'am', site_name: '▲▲学校体育館', site_address: '東京都世田谷区三軒茶屋7-7-7', required_count: 4, pay_unit: 'basic', status: 'pending', supervisor_name: '渡辺六郎' },
+    { work_date: tomorrow, time_slot: 'pm', site_name: '●●オフィスビル', site_address: '東京都千代田区丸の内8-8-8', required_count: 5, pay_unit: 'tobiage', status: 'pending', supervisor_name: '小林七郎' },
   ];
 
   let successCount = 0;
