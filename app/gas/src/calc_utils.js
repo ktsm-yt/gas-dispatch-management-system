@@ -15,6 +15,12 @@ const RoundingMode = {
   ROUND: 'round'        // 四捨五入
 };
 
+/**
+ * 鳶揚げ係数（鳶日給に対する倍率）
+ * 業務要件: 鳶揚げ = 鳶 × 1.5
+ */
+const TOBIAGE_MULTIPLIER = 1.5;
+
 // ============================================
 // 基本的な金額計算
 // ============================================
@@ -126,14 +132,19 @@ function getDailyRateByJobType_(staff, jobType) {
   if (!staff) return 0;
 
   switch (jobType) {
-    case 'tobi':
-      return staff.daily_rate_tobi || 0;
-    case 'age':
-      return staff.daily_rate_age || 0;
-    case 'tobiage':
-      return staff.daily_rate_tobiage || 0;
     case 'half':
       return staff.daily_rate_half || 0;
+    case 'basic':
+      return staff.daily_rate_basic || 0;
+    case 'fullday':
+      return staff.daily_rate_fullday || 0;
+    case 'night':
+      return staff.daily_rate_night || 0;
+    case 'tobi':
+      return staff.daily_rate_tobi || 0;
+    case 'tobiage':
+      // 鳶揚げは鳶の係数倍（TOBIAGE_MULTIPLIER参照）
+      return Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     default:
       return 0;
   }
@@ -267,8 +278,8 @@ function calculateMonthlyPayout_(assignments, staff) {
   let transportAmount = 0;
 
   assignments.forEach(asg => {
-    // 基本給与
-    const wage = asg.wage_rate || getDailyRateByJobType_(staff, asg.job_type || 'age');
+    // 基本給与（pay_unitから日給を取得）
+    const wage = asg.wage_rate || getDailyRateByJobType_(staff, asg.pay_unit || 'basic');
     const multiplier = getUnitMultiplier_(asg.pay_unit);
     baseAmount += applyRounding_(wage * multiplier, RoundingMode.FLOOR);
 

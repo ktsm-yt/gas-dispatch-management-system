@@ -175,7 +175,7 @@ function testValidateJob() {
     work_date: '2025-12-24',
     time_slot: 'jotou',
     required_count: 3,
-    job_type: 'tobi',
+    pay_unit: 'tobi',
     status: 'pending'
   }, true), 'valid new job should not throw');
 
@@ -192,7 +192,7 @@ function testValidateJob() {
     work_date: '2025-12-24',
     time_slot: 'invalid',
     required_count: 3,
-    job_type: 'tobi',
+    pay_unit: 'tobi',
     status: 'pending'
   }, true), 'invalid time_slot should throw');
 }
