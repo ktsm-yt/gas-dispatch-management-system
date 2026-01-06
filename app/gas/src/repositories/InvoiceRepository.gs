@@ -224,7 +224,7 @@ const InvoiceRepository = {
       'subtotal', 'expense_amount', 'tax_amount', 'total_amount',
       'invoice_format', 'shipper_name',
       'pdf_file_id', 'excel_file_id', 'sheet_file_id',
-      'status', 'notes'
+      'status', 'notes', 'is_deleted'
     ];
 
     const updatedInvoice = { ...currentInvoice };
