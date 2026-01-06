@@ -21,6 +21,77 @@ const InvoiceExportService = {
   OUTPUT_FOLDER_KEY: 'OUTPUT_FOLDER_ID',
 
   /**
+   * テンプレート設定を検証
+   * @param {string} format - 請求書フォーマット
+   * @returns {Object} { valid: boolean, missingKey?: string, setupGuide?: string }
+   */
+  validateTemplateConfig: function(format) {
+    const templateKey = this.TEMPLATE_KEYS[format] || this.TEMPLATE_KEYS.format1;
+    const templateId = PropertiesService.getScriptProperties().getProperty(templateKey);
+
+    if (!templateId) {
+      return {
+        valid: false,
+        missingKey: templateKey,
+        format: format,
+        setupGuide: `テンプレートIDが未設定です。以下の手順で設定してください:\n` +
+          `1. GASエディタで [プロジェクトの設定] を開く\n` +
+          `2. [スクリプトプロパティ] に以下を追加:\n` +
+          `   - プロパティ名: ${templateKey}\n` +
+          `   - 値: GoogleスプレッドシートのテンプレートファイルID\n` +
+          `または setInvoiceTemplateIds() 関数を実行してください。`
+      };
+    }
+
+    // テンプレートファイルの存在確認
+    try {
+      DriveApp.getFileById(templateId);
+    } catch (e) {
+      return {
+        valid: false,
+        missingKey: templateKey,
+        format: format,
+        setupGuide: `テンプレートファイルが見つかりません（ID: ${templateId}）。\n` +
+          `ファイルが削除されたか、アクセス権限がない可能性があります。`
+      };
+    }
+
+    return { valid: true };
+  },
+
+  /**
+   * 全テンプレートの設定状況を取得
+   * @returns {Object} 各フォーマットの設定状況
+   */
+  getTemplateConfigStatus: function() {
+    const status = {};
+    const props = PropertiesService.getScriptProperties();
+
+    for (const [format, key] of Object.entries(this.TEMPLATE_KEYS)) {
+      const templateId = props.getProperty(key);
+      status[format] = {
+        key: key,
+        configured: !!templateId,
+        templateId: templateId || null
+      };
+
+      // ファイル存在確認
+      if (templateId) {
+        try {
+          const file = DriveApp.getFileById(templateId);
+          status[format].fileName = file.getName();
+          status[format].accessible = true;
+        } catch (e) {
+          status[format].accessible = false;
+          status[format].error = 'ファイルにアクセスできません';
+        }
+      }
+    }
+
+    return status;
+  },
+
+  /**
    * 請求書を出力
    * @param {string} invoiceId - 請求ID
    * @param {string} mode - 出力モード（pdf/excel/edit）
@@ -36,6 +107,16 @@ const InvoiceExportService = {
       }
 
       const { invoice, lines, customer } = this._extractInvoiceData(invoiceData);
+
+      // テンプレートIDの事前検証
+      const templateValidation = this.validateTemplateConfig(invoice.invoice_format);
+      if (!templateValidation.valid) {
+        return {
+          success: false,
+          error: 'TEMPLATE_NOT_CONFIGURED',
+          details: templateValidation
+        };
+      }
 
       // 自社情報を取得
       const company = this._getCompanyInfo();
