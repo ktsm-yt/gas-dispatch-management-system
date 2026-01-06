@@ -81,7 +81,7 @@ function renderAssignmentModal(data) {
   document.getElementById('assignment-job-name').textContent = job.site_name;
   document.getElementById('assignment-job-date').textContent = formatDate(job.work_date);
   document.getElementById('assignment-job-time').textContent = formatTimeSlot(job.time_slot);
-  document.getElementById('assignment-job-type').textContent = formatJobType(job.job_type);
+  document.getElementById('assignment-job-type').textContent = formatWorkCategory(job.work_category);
 
   // 必要人数と配置済み人数を更新
   const assignedCount = assignments.filter(a => a.status !== 'CANCELLED').length;
@@ -107,7 +107,7 @@ function renderAssignmentModal(data) {
   renderAssignmentList(assignments);
 
   // スタッフ一覧を読み込み
-  loadAvailableStaff(job.job_id, job.job_type);
+  loadAvailableStaff(job.job_id, job.work_category);
 }
 
 /**
@@ -180,13 +180,13 @@ function createAssignmentItem(assignment) {
 /**
  * 利用可能なスタッフ一覧を読み込み
  * @param {string} jobId - 案件ID
- * @param {string} jobType - 作業種別
+ * @param {string} workCategory - 作業区分
  */
-function loadAvailableStaff(jobId, jobType) {
+function loadAvailableStaff(jobId, workCategory) {
   google.script.run
     .withSuccessHandler(function(response) {
       if (response.ok) {
-        renderStaffSelector(response.data.staff, jobType);
+        renderStaffSelector(response.data.staff, workCategory);
       }
     })
     .withFailureHandler(function(error) {
@@ -201,9 +201,9 @@ function loadAvailableStaff(jobId, jobType) {
 /**
  * スタッフ選択リストをレンダリング
  * @param {Object[]} staff - スタッフ配列
- * @param {string} jobType - 作業種別
+ * @param {string} workCategory - 作業区分
  */
-function renderStaffSelector(staff, jobType) {
+function renderStaffSelector(staff, workCategory) {
   const container = document.getElementById('staff-selector-list');
   container.innerHTML = '';
 
@@ -213,7 +213,7 @@ function renderStaffSelector(staff, jobType) {
   }
 
   staff.forEach(function(s) {
-    const item = createStaffSelectorItem(s, jobType);
+    const item = createStaffSelectorItem(s, workCategory);
     container.appendChild(item);
   });
 }
@@ -221,16 +221,16 @@ function renderStaffSelector(staff, jobType) {
 /**
  * スタッフ選択アイテムを作成
  * @param {Object} staff - スタッフデータ
- * @param {string} jobType - 作業種別
+ * @param {string} workCategory - 作業区分
  * @returns {HTMLElement} スタッフ選択アイテム要素
  */
-function createStaffSelectorItem(staff, jobType) {
+function createStaffSelectorItem(staff, workCategory) {
   const item = document.createElement('div');
   item.className = 'staff-selector-item';
   item.dataset.staffId = staff.staff_id;
 
   // スキルに応じたハイライト
-  const hasMatchingSkill = staff.skills && staff.skills.includes(jobType);
+  const hasMatchingSkill = staff.skills && staff.skills.includes(workCategory);
 
   item.innerHTML = `
     <div class="staff-selector-info">
@@ -487,13 +487,13 @@ function formatTimeSlot(slot) {
   return slots[slot] || slot;
 }
 
-function formatJobType(type) {
-  const types = {
-    '鳶': '鳶',
-    '揚げ': '揚げ',
-    '鳶揚げ': '鳶揚げ'
+function formatWorkCategory(category) {
+  const categories = {
+    'jotou': '上棟',
+    'keisagyo': '軽作業',
+    'niage': '荷揚げ'
   };
-  return types[type] || type;
+  return categories[category] || category || '-';
 }
 
 function formatWorkerType(type) {

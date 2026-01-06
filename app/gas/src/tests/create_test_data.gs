@@ -280,7 +280,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '08:00',
       required_count: 3,
-      job_type: 'tobi',  // 上棟のみ作業種別あり
+      pay_unit: 'tobi',  // 上棟は鳶単価
       status: 'pending'
     },
     {
@@ -291,7 +291,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '09:00',
       required_count: 2,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     {
@@ -302,7 +302,7 @@ function createTestJobs() {
       time_slot: 'am',
       start_time: '08:30',
       required_count: 2,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     {
@@ -313,7 +313,7 @@ function createTestJobs() {
       time_slot: 'pm',
       start_time: '13:00',
       required_count: 4,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     },
     // 明日の案件
@@ -325,7 +325,7 @@ function createTestJobs() {
       time_slot: 'jotou',
       start_time: '07:30',
       required_count: 5,
-      job_type: 'tobiage',  // 上棟のみ作業種別あり
+      pay_unit: 'tobiage',  // 鳶揚げ単価
       status: 'pending'
     },
     {
@@ -336,7 +336,7 @@ function createTestJobs() {
       time_slot: 'shuujitsu',
       start_time: '08:00',
       required_count: 3,
-      // job_type なし（上棟以外）
+      pay_unit: 'basic',  // 基本単価
       status: 'pending'
     }
   ];

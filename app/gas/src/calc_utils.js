@@ -272,8 +272,8 @@ function calculateMonthlyPayout_(assignments, staff) {
   let transportAmount = 0;
 
   assignments.forEach(asg => {
-    // 基本給与
-    const wage = asg.wage_rate || getDailyRateByJobType_(staff, asg.job_type || 'age');
+    // 基本給与（pay_unitから日給を取得）
+    const wage = asg.wage_rate || getDailyRateByJobType_(staff, asg.pay_unit || 'basic');
     const multiplier = getUnitMultiplier_(asg.pay_unit);
     baseAmount += applyRounding_(wage * multiplier, RoundingMode.FLOOR);
 

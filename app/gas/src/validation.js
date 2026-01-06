@@ -394,7 +394,7 @@ function validateUuid_(value, fieldName) {
  */
 function validateJob_(job, isNew = false) {
   if (isNew) {
-    requireFields_(job, ['customer_id', 'site_name', 'work_date', 'time_slot', 'required_count', 'job_type', 'status']);
+    requireFields_(job, ['customer_id', 'site_name', 'work_date', 'time_slot', 'required_count', 'pay_unit', 'status']);
   }
 
   if (job.customer_id !== undefined) {
@@ -421,8 +421,12 @@ function validateJob_(job, isNew = false) {
     validateNumber_(job.required_count, '必要人数', { min: 1, max: 100, allowDecimal: false });
   }
 
-  if (job.job_type !== undefined) {
-    validateEnum_(job.job_type, '作業種別', JOB_TYPES);
+  if (job.pay_unit !== undefined) {
+    validateEnum_(job.pay_unit, '給与区分', PAY_UNITS);
+  }
+
+  if (job.work_category !== undefined) {
+    validateEnum_(job.work_category, '作業区分', WORK_CATEGORIES);
   }
 
   if (job.status !== undefined) {
