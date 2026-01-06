@@ -160,13 +160,18 @@ const JobRepository = {
       time_slot: job.time_slot,
       start_time: job.start_time || '',
       required_count: job.required_count,
-      job_type: job.job_type,
+      pay_unit: job.pay_unit,
+      work_category: job.work_category || '',
+      work_detail: job.work_detail || '',
       supervisor_name: job.supervisor_name || '',
       order_number: job.order_number || '',
       branch_office: job.branch_office || '',
       property_code: job.property_code || '',
       construction_div: job.construction_div || '',
       status: job.status || 'pending',
+      is_damaged: job.is_damaged || false,
+      is_uncollected: job.is_uncollected || false,
+      is_claimed: job.is_claimed || false,
       notes: job.notes || '',
       created_at: now,
       created_by: user,
@@ -222,7 +227,7 @@ const JobRepository = {
     // 更新可能フィールド（ホワイトリスト）
     const updatableFields = [
       'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
-      'start_time', 'required_count', 'job_type',
+      'start_time', 'required_count',
       'pay_unit', 'work_category', 'work_detail',
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
       'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'

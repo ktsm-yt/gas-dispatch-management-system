@@ -289,11 +289,10 @@ function createBulkStaff() {
       has_motorbike: i % 3 === 0,
       skills: skills[i % skills.length],
       ng_customers: ngCustomers,
-      daily_rate_half: 7500 + (i % 10) * 100,
-      daily_rate_basic: 10000 + (i % 10) * 200,
-      daily_rate_fullday: 13000 + (i % 10) * 100,
-      daily_rate_night: 13000,
-      daily_rate_tobi: 17000 + (i % 10) * 100,
+      daily_rate_tobi: 14000 + (i % 10) * 500,
+      daily_rate_age: 12000 + (i % 10) * 500,
+      daily_rate_tobiage: 15000 + (i % 10) * 500,
+      daily_rate_half: 7000 + (i % 10) * 200,
       staff_type: isSubcontract ? 'subcontract' : 'regular',
       employment_type: employmentType,
       withholding_tax_applicable: employmentType === 'employee',
@@ -399,8 +398,8 @@ function createBulkJobs() {
       const timeSlot = timeSlots[j % timeSlots.length];
       // 時間未定以外は開始時間を設定
       const startTime = timeSlot === 'mitei' ? '' : startTimes[j % startTimes.length];
-      // 上棟のみ作業種別をランダムに設定（tobi, age, tobiage）
-      const jobType = timeSlot === 'jotou' ? randomPick(jobTypes) : '';
+      // 上棟のみ鳶/揚げ/鳶揚げ単価をランダムに設定、それ以外は基本単価
+      const payUnit = timeSlot === 'jotou' ? randomPick(jobTypes) : 'basic';
 
       toInsert.push({
         job_id: generateId('job'),
@@ -411,7 +410,7 @@ function createBulkJobs() {
         time_slot: timeSlot,
         start_time: startTime,
         required_count: (j % 5) + 1,
-        job_type: jobType,
+        pay_unit: payUnit,
         supervisor_name: randomPick(supervisors),
         // format2用項目
         order_number: invoiceFormat === 'format2' ? `${String(30000 + jobIndex).padStart(6, '0')}` : '',
@@ -485,30 +484,31 @@ function createBulkAssignments() {
   for (const job of jobsToAssign) {
     const assignCount = Math.min(job.required_count || 1, 3);
     const customer = customerMap[job.customer_id] || {};
-    const jobType = job.job_type || '';  // 上棟以外はjob_typeなし
+    const payUnit = job.pay_unit || 'basic';  // デフォルトは基本単価
 
     for (let i = 0; i < assignCount; i++) {
       const staff = staffList[(assignmentCounter + i) % staffList.length];
       const isSubcontract = staff.staff_type === 'subcontract';
       const transportArea = randomPick(transportAreas);
 
-      // 給与単価決定（スタッフマスターから）
-      let wageRate = staff.daily_rate_basic || 11000;
-      if (jobType === 'tobi') wageRate = staff.daily_rate_tobi || 17000;
-      if (jobType === 'tobiage') wageRate = Math.floor((staff.daily_rate_tobi || 17000) * 1.5);
+      // 給与単価決定（スタッフマスターから、pay_unitに基づく）
+      let wageRate = staff.daily_rate_tobi || 15000;
+      if (payUnit === 'age') wageRate = staff.daily_rate_age || 12000;
+      if (payUnit === 'tobiage') wageRate = staff.daily_rate_tobiage || 16000;
+      if (payUnit === 'basic') wageRate = staff.daily_rate_basic || 13000;
 
-      // 請求単価決定（顧客マスターから）
+      // 請求単価決定（顧客マスターから、pay_unitに基づく）
       let invoiceRate = customer.unit_price_tobi || 25000;
-      if (jobType === 'age') invoiceRate = customer.unit_price_age || 20000;
-      if (jobType === 'tobiage') invoiceRate = customer.unit_price_tobiage || 28000;
+      if (payUnit === 'age') invoiceRate = customer.unit_price_age || 20000;
+      if (payUnit === 'tobiage') invoiceRate = customer.unit_price_tobiage || 28000;
 
-      // pay_unit / invoice_unit 決定
+      // 配置のpay_unit / invoice_unit 決定（FULLDAY/HALFDAY）
       const timeSlot = job.time_slot || 'shuujitsu';
-      let payUnit = 'fullday';
-      let invoiceUnit = 'fullday';
+      let asgPayUnit = 'FULLDAY';
+      let asgInvoiceUnit = 'FULLDAY';
       if (timeSlot === 'am' || timeSlot === 'pm') {
-        payUnit = 'halfday';
-        invoiceUnit = 'halfday';
+        asgPayUnit = 'HALFDAY';
+        asgInvoiceUnit = 'HALFDAY';
         wageRate = staff.daily_rate_half || 7000;
         invoiceRate = customer.unit_price_half || 12000;
       }
@@ -519,8 +519,8 @@ function createBulkAssignments() {
         worker_type: isSubcontract ? 'SUBCONTRACT' : 'STAFF',
         subcontractor_id: isSubcontract ? staff.subcontractor_id : '',
         display_time_slot: timeSlot,
-        pay_unit: payUnit,
-        invoice_unit: invoiceUnit,
+        pay_unit: asgPayUnit,
+        invoice_unit: asgInvoiceUnit,
         wage_rate: wageRate,
         invoice_rate: invoiceRate,
         transport_area: transportArea,

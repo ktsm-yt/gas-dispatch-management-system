@@ -87,7 +87,7 @@ const JobService = {
         site_address: job.site_address || '',
         time_slot: job.time_slot,
         start_time: job.start_time,
-        job_type: job.job_type,
+        work_category: job.work_category,
         required_count: job.required_count,
         assigned_count: uniqueStaffIds.size,
         status: job.status,
