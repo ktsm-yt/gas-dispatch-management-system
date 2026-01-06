@@ -59,7 +59,7 @@
     .date-nav-center {
       display: flex;
       align-items: center;
-      gap: var(--spacing-md);
+      gap: var(--spacing-sm);
     }
 
     .date-btn {
@@ -78,6 +78,47 @@
     .current-date {
       font-size: 18px;
       font-weight: 600;
+    }
+
+    .date-picker-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: var(--spacing-xs);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .date-picker-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .date-picker-btn svg {
+      display: block;
+    }
+
+    .date-picker-hidden {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .date-arrow {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      min-width: 32px;
+      font-size: 12px;
+    }
+
+    .today-btn-small {
+      font-size: 12px;
+      padding: var(--spacing-xs) var(--spacing-sm);
     }
 
     .date-stats {
@@ -133,48 +174,47 @@
       font-size: 12px;
     }
 
-    .column-count {
+    .column-info {
       display: flex;
       align-items: center;
       gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
     }
 
-    .column-count .total {
-      font-size: 16px;
+    .column-info .count {
       font-weight: 700;
       color: var(--color-primary);
-      line-height: 1;
     }
 
-    .column-count .total-label {
+    .column-shortage {
       font-size: 9px;
-      color: var(--text-muted);
-      margin-right: 4px;
-    }
-
-    .column-count .shortage {
-      font-size: 10px;
       font-weight: 600;
-      padding: 1px 5px;
+      padding: 1px 4px;
       border-radius: 3px;
       white-space: nowrap;
     }
 
-    .shortage.negative {
+    .column-shortage.negative {
       background: var(--color-danger);
       color: white;
     }
 
-    .shortage.positive {
+    .column-shortage.positive {
       background: var(--color-success);
       color: white;
     }
 
-    .shortage.neutral {
-      background: transparent;
+    .column-shortage.neutral {
+      background: var(--bg-hover);
       color: var(--text-muted);
       font-size: 9px;
-      padding: 0;
+    }
+
+    .staff-info {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 4px;
     }
 
     .column-cards {
@@ -386,6 +426,98 @@
     .add-btn:hover {
       background: var(--color-accent);
     }
+
+    .print-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-sm);
+    }
+
+    /* Print styles */
+    @media print {
+      /* Hide non-essential elements */
+      .nav-bar,
+      .add-btn,
+      .print-btn,
+      .date-btn,
+      .card-edit-btn,
+      #job-modal,
+      #assignment-modal {
+        display: none !important;
+      }
+
+      /* Adjust layout for print */
+      body {
+        background: white;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .date-nav {
+        padding: 10px 0;
+        border-bottom: 1px solid #ccc;
+        margin-bottom: 10px;
+      }
+
+      .date-nav-center {
+        justify-content: flex-start;
+      }
+
+      .current-date {
+        font-size: 16px;
+      }
+
+      .date-stats {
+        font-size: 12px;
+      }
+
+      .dashboard {
+        padding: 0;
+      }
+
+      .dashboard-columns {
+        gap: 8px;
+      }
+
+      .column {
+        min-height: auto;
+        border: 1px solid #ccc;
+        break-inside: avoid;
+      }
+
+      .column-header {
+        background: #f5f5f5 !important;
+        padding: 6px;
+      }
+
+      .column-cards {
+        overflow: visible;
+        max-height: none;
+      }
+
+      .job-card {
+        padding: 4px 6px;
+        box-shadow: none;
+        border: 1px solid #eee;
+        page-break-inside: avoid;
+      }
+
+      .job-card-header {
+        font-size: 11px;
+      }
+
+      .job-card-footer {
+        font-size: 10px;
+      }
+
+      /* Hide status badge colors for simpler print */
+      .tag {
+        border: 1px solid #999;
+        background: white !important;
+        color: #333 !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -394,13 +526,31 @@
   <!-- Date Navigation -->
   <div class="date-nav">
     <div class="date-nav-center">
-      <button class="date-btn" id="prev-day">&lt; 前日</button>
+      <button class="date-btn date-arrow" id="prev-day" title="前日">&lt;</button>
       <span class="current-date" id="current-date">-</span>
-      <button class="date-btn" id="next-day">翌日 &gt;</button>
-      <button class="date-btn" id="today-btn">今日</button>
+      <label class="date-picker-btn" title="カレンダーで選択">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <input type="date" id="date-picker" class="date-picker-hidden">
+      </label>
+      <button class="date-btn date-arrow" id="next-day" title="翌日">&gt;</button>
+      <button class="date-btn today-btn-small" id="today-btn">今日</button>
+      <button class="date-btn print-btn" id="print-btn" title="印刷">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 6 2 18 2 18 9"></polyline>
+          <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+          <rect x="6" y="14" width="12" height="8"></rect>
+        </svg>
+      </button>
     </div>
     <div class="date-stats">
       <span>総件数: <span class="count" id="stats-total">-</span></span>
+      <span>発注人数: <span class="count" id="stats-required-total">-</span></span>
+      <span>配置人数: <span class="count" id="stats-assigned-total">-</span></span>
       <span>配置済: <span class="count" id="stats-assigned">-</span></span>
       <span>未配置: <span class="count" id="stats-pending">-</span></span>
     </div>
@@ -495,6 +645,33 @@
 
           <div class="form-row">
             <div class="form-group">
+              <label for="pay-unit">給与区分</label>
+              <select id="pay-unit" name="pay_unit">
+                <option value="">選択してください</option>
+                <option value="fullday">全日</option>
+                <option value="halfday">半日</option>
+                <option value="hourly">時給</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="work-category">作業大項目</label>
+              <select id="work-category" name="work_category" onchange="updateWorkDetailOptions()">
+                <option value="">選択してください</option>
+                <option value="jotou">上棟</option>
+                <option value="keisagyo">軽作業</option>
+                <option value="niage">荷揚げ</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="work-detail">作業詳細</label>
+              <select id="work-detail" name="work_detail" disabled>
+                <option value="">先に大項目を選択</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label for="status">ステータス</label>
               <select id="status" name="status">
                 <option value="pending">未配置</option>
@@ -533,6 +710,24 @@
               </div>
             </div>
           </details>
+
+          <div class="form-group flags-group">
+            <label>フラグ</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-damaged" name="is_damaged">
+                <span class="flag-text flag-damaged">破損</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-uncollected" name="is_uncollected">
+                <span class="flag-text flag-uncollected">未回収</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-claimed" name="is_claimed">
+                <span class="flag-text flag-claimed">クレーム</span>
+              </label>
+            </div>
+          </div>
 
           <div class="form-group">
             <label for="notes">備考</label>
@@ -644,6 +839,46 @@
       outline: none;
       border-color: var(--color-secondary);
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .flags-group .checkbox-row {
+      display: flex;
+      gap: var(--spacing-lg);
+      margin-top: var(--spacing-sm);
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .flag-text {
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .flag-damaged {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .flag-uncollected {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .flag-claimed {
+      background: #fce7f3;
+      color: #db2777;
     }
 
     /* Autocomplete */
@@ -881,6 +1116,21 @@
           .getServerDate();
       });
 
+      // Date picker change event
+      const datePicker = document.getElementById('date-picker');
+      datePicker.addEventListener('change', (e) => {
+        const dateValue = e.target.value;
+        if (dateValue) {
+          currentDate = new Date(dateValue + 'T00:00:00');
+          loadDashboard();
+        }
+      });
+
+      // Print button
+      document.getElementById('print-btn').addEventListener('click', () => {
+        window.print();
+      });
+
       document.getElementById('add-job-btn').addEventListener('click', () => {
         openJobModal(null);
       });
@@ -913,13 +1163,11 @@
         <div class="column" data-slot="${slot}">
           <div class="column-header">
             <span class="column-title">${TIME_SLOT_LABELS[slot]}</span>
-            <div class="column-count">
-              <div>
-                <span class="total" id="col-total-${slot}">-</span>
-                <span class="total-label">件</span>
-              </div>
-              <span class="shortage" id="col-shortage-${slot}">-</span>
-            </div>
+            <span class="column-info">
+              <span class="count" id="col-total-${slot}">-</span>件
+              (<span id="col-assigned-${slot}">-</span>/<span id="col-required-${slot}">-</span>人)
+              <span class="column-shortage" id="col-shortage-${slot}">-</span>
+            </span>
           </div>
           <div class="column-cards" id="col-cards-${slot}">
             <div class="loading"><div class="spinner"></div>読み込み中...</div>
@@ -931,6 +1179,7 @@
     function loadDashboard() {
       const dateStr = formatDate(currentDate);
       document.getElementById('current-date').textContent = formatDisplayDate(currentDate);
+      document.getElementById('date-picker').value = dateStr;
 
       // キャッシュがあれば即座に表示
       const cached = dateCache.get(dateStr);
@@ -1019,24 +1268,32 @@
       document.getElementById('stats-assigned').textContent = stats.assigned;
       document.getElementById('stats-pending').textContent = stats.pending;
 
+      // 全体の人数表示
+      document.getElementById('stats-required-total').textContent = stats.requiredTotal || 0;
+      document.getElementById('stats-assigned-total').textContent = stats.assignedTotal || 0;
+
       // Update columns
       TIME_SLOT_ORDER.forEach(slot => {
         const slotStats = stats.byTimeSlot[slot];
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
+
+        // 人数表示（配置済み/必要人数）
+        document.getElementById(`col-assigned-${slot}`).textContent = slotStats.assigned;
+        document.getElementById(`col-required-${slot}`).textContent = slotStats.required;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
         const shortage = slotStats.shortage;  // required - assigned
         if (shortage > 0) {
           // 不足（必要 > 配置済み）
           shortageEl.textContent = `${shortage}名不足`;
-          shortageEl.className = 'shortage negative';
+          shortageEl.className = 'column-shortage negative';
         } else if (shortage < 0) {
           // 余裕（配置済み > 必要）
           shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
-          shortageEl.className = 'shortage positive';
+          shortageEl.className = 'column-shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
-          shortageEl.className = 'shortage neutral';
+          shortageEl.className = 'column-shortage neutral';
         }
 
         // Render cards
@@ -1150,19 +1407,23 @@
         const slotStats = dashboardData.stats.byTimeSlot[slot];
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
 
+        // 人数表示（配置済み/必要人数）
+        document.getElementById(`col-assigned-${slot}`).textContent = slotStats.assigned;
+        document.getElementById(`col-required-${slot}`).textContent = slotStats.required;
+
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
         const shortage = slotStats.shortage;  // required - assigned
         if (shortage > 0) {
           // 不足（必要 > 配置済み）
           shortageEl.textContent = `${shortage}名不足`;
-          shortageEl.className = 'shortage negative';
+          shortageEl.className = 'column-shortage negative';
         } else if (shortage < 0) {
           // 余裕（配置済み > 必要）
           shortageEl.textContent = `+${Math.abs(shortage)}名余裕`;
-          shortageEl.className = 'shortage positive';
+          shortageEl.className = 'column-shortage positive';
         } else {
           shortageEl.textContent = '過不足なし';
-          shortageEl.className = 'shortage neutral';
+          shortageEl.className = 'column-shortage neutral';
         }
       });
 
@@ -1170,6 +1431,8 @@
       document.getElementById('stats-total').textContent = dashboardData.stats.total;
       document.getElementById('stats-assigned').textContent = dashboardData.stats.assigned;
       document.getElementById('stats-pending').textContent = dashboardData.stats.pending;
+      document.getElementById('stats-required-total').textContent = dashboardData.stats.requiredTotal || 0;
+      document.getElementById('stats-assigned-total').textContent = dashboardData.stats.assignedTotal || 0;
 
       // キャッシュも更新
       saveToCachedDate(dashboardData.date, dashboardData);
@@ -1190,6 +1453,7 @@
       };
 
       let total = 0, assigned = 0, pending = 0;
+      let requiredTotal = 0, assignedTotal = 0;
 
       for (const job of jobs) {
         total++;
@@ -1198,6 +1462,10 @@
         } else if (job.status === 'pending') {
           pending++;
         }
+
+        // 全体の人数を集計
+        requiredTotal += Number(job.required_count) || 0;
+        assignedTotal += Number(job.assigned_count) || 0;
 
         const slot = job.time_slot;
         if (byTimeSlot[slot]) {
@@ -1213,7 +1481,7 @@
         byTimeSlot[slot].shortage = byTimeSlot[slot].required - byTimeSlot[slot].assigned;
       }
 
-      dashboardData.stats = { total, assigned, pending, byTimeSlot };
+      dashboardData.stats = { total, assigned, pending, requiredTotal, assignedTotal, byTimeSlot };
     }
 
     function openJobModal(jobId) {
@@ -1250,8 +1518,14 @@
           document.getElementById('start-time').value = cachedJob.start_time || '';
           document.getElementById('required-count').value = cachedJob.required_count || 1;
           document.getElementById('job-type').value = cachedJob.job_type || '';
+          document.getElementById('pay-unit').value = cachedJob.pay_unit || '';
+          document.getElementById('work-category').value = cachedJob.work_category || '';
+          updateWorkDetailOptions(cachedJob.work_detail || '');
           document.getElementById('status').value = cachedJob.status || 'pending';
           document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
+          document.getElementById('is-damaged').checked = cachedJob.is_damaged === true || cachedJob.is_damaged === 'true';
+          document.getElementById('is-uncollected').checked = cachedJob.is_uncollected === true || cachedJob.is_uncollected === 'true';
+          document.getElementById('is-claimed').checked = cachedJob.is_claimed === true || cachedJob.is_claimed === 'true';
           document.getElementById('notes').value = cachedJob.notes || '';
         }
 
@@ -1440,6 +1714,37 @@
       document.getElementById('job-modal').style.display = 'none';
     }
 
+    // 作業詳細の選択肢を大項目に応じて更新
+    const WORK_DETAIL_LABELS = {
+      sekkou: '石膏ボード',
+      tategu: '建具',
+      kitchen: 'キッチン',
+      unit_bath: 'ユニットバス',
+      other: 'その他'
+    };
+
+    const WORK_DETAIL_OPTIONS = {
+      jotou: [],  // 上棟は詳細なし
+      keisagyo: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other'],
+      niage: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other']
+    };
+
+    function updateWorkDetailOptions(selectedValue = '') {
+      const category = document.getElementById('work-category').value;
+      const detailSelect = document.getElementById('work-detail');
+
+      if (!category || !WORK_DETAIL_OPTIONS[category] || WORK_DETAIL_OPTIONS[category].length === 0) {
+        detailSelect.innerHTML = '<option value="">大項目を選択してください</option>';
+        detailSelect.disabled = true;
+        return;
+      }
+
+      const options = WORK_DETAIL_OPTIONS[category];
+      detailSelect.innerHTML = '<option value="">選択してください</option>' +
+        options.map(opt => `<option value="${opt}"${opt === selectedValue ? ' selected' : ''}>${WORK_DETAIL_LABELS[opt]}</option>`).join('');
+      detailSelect.disabled = false;
+    }
+
     function loadJobData(jobId) {
       google.script.run
         .withSuccessHandler((response) => {
@@ -1456,12 +1761,18 @@
             document.getElementById('start-time').value = job.start_time || '';
             document.getElementById('required-count').value = job.required_count || 1;
             document.getElementById('job-type').value = job.job_type || '';
+            document.getElementById('pay-unit').value = job.pay_unit || '';
+            document.getElementById('work-category').value = job.work_category || '';
+            updateWorkDetailOptions(job.work_detail || '');
             document.getElementById('status').value = job.status || 'pending';
             document.getElementById('supervisor-name').value = job.supervisor_name || '';
             document.getElementById('order-number').value = job.order_number || '';
             document.getElementById('branch-office').value = job.branch_office || '';
             document.getElementById('property-code').value = job.property_code || '';
             document.getElementById('construction-div').value = job.construction_div || '';
+            document.getElementById('is-damaged').checked = job.is_damaged === true || job.is_damaged === 'true';
+            document.getElementById('is-uncollected').checked = job.is_uncollected === true || job.is_uncollected === 'true';
+            document.getElementById('is-claimed').checked = job.is_claimed === true || job.is_claimed === 'true';
             document.getElementById('notes').value = job.notes || '';
           } else {
             showToast('案件データの取得に失敗しました', true);
@@ -1504,6 +1815,11 @@
       if (job.required_count) {
         job.required_count = parseInt(job.required_count, 10);
       }
+
+      // チェックボックスの値を明示的に設定（チェックされていない場合もfalseを設定）
+      job.is_damaged = document.getElementById('is-damaged').checked;
+      job.is_uncollected = document.getElementById('is-uncollected').checked;
+      job.is_claimed = document.getElementById('is-claimed').checked;
 
       const jobId = document.getElementById('job-id').value;
       const updatedAt = document.getElementById('job-updated-at').value;

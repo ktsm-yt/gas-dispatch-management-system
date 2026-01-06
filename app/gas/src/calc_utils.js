@@ -126,14 +126,19 @@ function getDailyRateByJobType_(staff, jobType) {
   if (!staff) return 0;
 
   switch (jobType) {
-    case 'tobi':
-      return staff.daily_rate_tobi || 0;
-    case 'age':
-      return staff.daily_rate_age || 0;
-    case 'tobiage':
-      return staff.daily_rate_tobiage || 0;
     case 'half':
       return staff.daily_rate_half || 0;
+    case 'basic':
+      return staff.daily_rate_basic || 0;
+    case 'fullday':
+      return staff.daily_rate_fullday || 0;
+    case 'night':
+      return staff.daily_rate_night || 0;
+    case 'tobi':
+      return staff.daily_rate_tobi || 0;
+    case 'tobiage':
+      // 鳶揚げは鳶の1.5倍
+      return Math.floor((staff.daily_rate_tobi || 0) * 1.5);
     default:
       return 0;
   }

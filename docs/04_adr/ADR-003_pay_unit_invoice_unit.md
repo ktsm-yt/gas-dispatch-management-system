@@ -31,7 +31,7 @@
 | カラム | 用途 | 例 |
 | --- | --- | --- |
 | `display_time_slot` | ダッシュボード表示列 | AM, PM, NIGHT等 |
-| `pay_unit` | 給与計算区分 | FULLDAY, HALFDAY, HOURLY |
+| `pay_unit` | 給与計算区分 | basic, half, fullday, night, tobi, tobiage |
 | `invoice_unit` | 請求計算区分 | AM, PM, FULLDAY等 |
 | `wage_rate` | 給与単価（上書き用） | 18000 |
 | `invoice_rate` | 請求単価（上書き用） | 22000 |

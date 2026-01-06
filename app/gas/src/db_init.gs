@@ -26,8 +26,8 @@ const TABLE_DEFINITIONS = {
     sheetName: 'スタッフ',
     headers: [
       'staff_id', 'name', 'name_kana', 'phone', 'line_id', 'postal_code',
-      'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
-      'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'staff_type',
+      'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_half',
+      'daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_tobi', 'staff_type',
       'subcontractor_id', 'ccus_id', 'birth_date', 'gender', 'blood_type',
       'emergency_contact', 'job_title', 'health_insurance_type', 'pension_type',
       'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
@@ -64,8 +64,10 @@ const TABLE_DEFINITIONS = {
     sheetName: '案件',
     headers: [
       'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
-      'time_slot', 'start_time', 'required_count', 'job_type', 'supervisor_name',
-      'order_number', 'branch_office', 'property_code', 'construction_div', 'status',
+      'time_slot', 'start_time', 'required_count', 'job_type',
+      'pay_unit', 'work_category', 'work_detail',
+      'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div', 'status',
+      'is_damaged', 'is_uncollected', 'is_claimed',
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
     ]
   },

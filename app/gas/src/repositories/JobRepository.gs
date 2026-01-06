@@ -222,9 +222,10 @@ const JobRepository = {
     // 更新可能フィールド（ホワイトリスト）
     const updatableFields = [
       'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
-      'start_time', 'required_count', 'job_type', 'supervisor_name',
-      'order_number', 'branch_office', 'property_code', 'construction_div',
-      'status', 'notes'
+      'start_time', 'required_count', 'job_type',
+      'pay_unit', 'work_category', 'work_detail',
+      'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+      'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
     ];
 
     const updatedJob = { ...currentJob };

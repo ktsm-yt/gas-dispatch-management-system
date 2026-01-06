@@ -46,6 +46,35 @@ const PAY_UNITS = {
 };
 
 /**
+ * 作業大項目の有効値
+ */
+const WORK_CATEGORIES = {
+  JOTOU: 'jotou',       // 上棟
+  KEISAGYO: 'keisagyo', // 軽作業
+  NIAGE: 'niage'        // 荷揚げ
+};
+
+/**
+ * 作業詳細の有効値
+ */
+const WORK_DETAILS = {
+  SEKKOU: 'sekkou',       // 石膏ボード
+  TATEGU: 'tategu',       // 建具
+  KITCHEN: 'kitchen',     // キッチン
+  UNIT_BATH: 'unit_bath', // ユニットバス
+  OTHER: 'other'          // その他
+};
+
+/**
+ * 大項目別の詳細選択肢
+ */
+const WORK_DETAIL_OPTIONS = {
+  jotou: [],  // 上棟は詳細なし
+  keisagyo: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other'],
+  niage: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other']
+};
+
+/**
  * 請求書フォーマットの有効値
  * @see docs/03_spec/05_database.md M_Customers.invoice_format
  */
@@ -547,20 +576,24 @@ function validateStaff_(staff, isNew = false) {
     validateEnum_(staff.staff_type, 'スタッフ種別', STAFF_TYPES);
   }
 
-  if (staff.daily_rate_tobi !== undefined) {
-    validateNumber_(staff.daily_rate_tobi, '日給（鳶）', { min: 0 });
-  }
-
-  if (staff.daily_rate_age !== undefined) {
-    validateNumber_(staff.daily_rate_age, '日給（揚げ）', { min: 0 });
-  }
-
-  if (staff.daily_rate_tobiage !== undefined) {
-    validateNumber_(staff.daily_rate_tobiage, '日給（鳶揚げ）', { min: 0 });
-  }
-
   if (staff.daily_rate_half !== undefined) {
     validateNumber_(staff.daily_rate_half, '日給（ハーフ）', { min: 0 });
+  }
+
+  if (staff.daily_rate_basic !== undefined) {
+    validateNumber_(staff.daily_rate_basic, '日給（基本）', { min: 0 });
+  }
+
+  if (staff.daily_rate_fullday !== undefined) {
+    validateNumber_(staff.daily_rate_fullday, '日給（終日）', { min: 0 });
+  }
+
+  if (staff.daily_rate_night !== undefined) {
+    validateNumber_(staff.daily_rate_night, '日給（夜間）', { min: 0 });
+  }
+
+  if (staff.daily_rate_tobi !== undefined) {
+    validateNumber_(staff.daily_rate_tobi, '日給（鳶）', { min: 0 });
   }
 
   // 外注の場合は外注先IDが必要

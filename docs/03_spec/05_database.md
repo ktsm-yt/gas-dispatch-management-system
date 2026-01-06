@@ -129,10 +129,11 @@ WebUI 請求書一覧
 | has_motorbike | BOOLEAN | - | バイク保有フラグ（有/無）※単価とは自動連動しない |
 | skills | STRING | - | スキル（鳶/揚げ/鳶揚げ）カンマ区切り |
 | ng_customers | STRING | - | NG顧客ID一覧（カンマ区切り） |
-| daily_rate_tobi | NUMBER | - | 日給（鳶） |
-| daily_rate_age | NUMBER | - | 日給（揚げ） |
-| daily_rate_tobiage | NUMBER | - | 日給（鳶揚げ） |
 | daily_rate_half | NUMBER | - | 日給（ハーフ/半日） |
+| daily_rate_basic | NUMBER | - | 日給（基本） |
+| daily_rate_fullday | NUMBER | - | 日給（終日） |
+| daily_rate_night | NUMBER | - | 日給（夜間） |
+| daily_rate_tobi | NUMBER | - | 日給（鳶）※鳶揚げは鳶×1.5で計算 |
 | staff_type | STRING | ○ | 種別（regular/subcontract） |
 | employment_type | STRING | - | 雇用形態（employee/sole_proprietor）※2025/12/19追加 |
 | withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（employee=true、sole_proprietor=false）※2025/12/19追加 |
