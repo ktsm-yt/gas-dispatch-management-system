@@ -423,6 +423,12 @@
       gap: var(--spacing-md);
     }
 
+    .form-row-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 12px;
+    }
+
     .form-row-4 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -521,10 +527,12 @@
         <option value="subcontract">外注</option>
       </select>
       <select id="rate-type" class="type-filter-select">
-        <option value="tobi">鳶日給</option>
-        <option value="age">揚げ日給</option>
-        <option value="tobiage">鳶揚げ日給</option>
-        <option value="half">ハーフ日給</option>
+        <option value="basic">基本</option>
+        <option value="half">ハーフ</option>
+        <option value="fullday">終日</option>
+        <option value="night">夜間</option>
+        <option value="tobi">鳶</option>
+        <option value="tobiage">鳶揚げ</option>
       </select>
       <label class="filter-toggle">
         <input type="checkbox" id="show-inactive">
@@ -650,26 +658,26 @@
           <!-- 給与設定 -->
           <div class="form-section">
             <div class="form-section-title">日給設定</div>
-            <div class="form-row-4">
-              <div class="form-group">
-                <label for="daily-rate-tobi">鳶</label>
-                <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100" placeholder="15000">
-              </div>
-              <div class="form-group">
-                <label for="daily-rate-age">揚げ</label>
-                <input type="number" id="daily-rate-age" name="daily_rate_age" min="0" step="100" placeholder="13000">
-              </div>
-              <div class="form-group">
-                <label for="daily-rate-tobiage">鳶揚げ</label>
-                <input type="number" id="daily-rate-tobiage" name="daily_rate_tobiage" min="0" step="100" placeholder="16000">
-              </div>
+            <div class="form-row-5">
               <div class="form-group">
                 <label for="daily-rate-half">ハーフ</label>
                 <input type="number" id="daily-rate-half" name="daily_rate_half" min="0" step="100" placeholder="8000">
               </div>
               <div class="form-group">
+                <label for="daily-rate-basic">基本</label>
+                <input type="number" id="daily-rate-basic" name="daily_rate_basic" min="0" step="100" placeholder="11000">
+              </div>
+              <div class="form-group">
                 <label for="daily-rate-fullday">終日</label>
-                <input type="number" id="daily-rate-fullday" name="daily_rate_fullday" min="0" step="100" placeholder="18000">
+                <input type="number" id="daily-rate-fullday" name="daily_rate_fullday" min="0" step="100" placeholder="14000">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-night">夜間</label>
+                <input type="number" id="daily-rate-night" name="daily_rate_night" min="0" step="100" placeholder="13000">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-tobi">鳶</label>
+                <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100" placeholder="17000">
               </div>
             </div>
           </div>
@@ -1044,18 +1052,19 @@
 
     function getRateByType(staff, rateType) {
       switch (rateType) {
-        case 'tobi': return staff.daily_rate_tobi;
-        case 'age': return staff.daily_rate_age;
-        case 'tobiage': return staff.daily_rate_tobiage;
         case 'half': return staff.daily_rate_half;
+        case 'basic': return staff.daily_rate_basic;
         case 'fullday': return staff.daily_rate_fullday;
-        default: return staff.daily_rate_tobi;
+        case 'night': return staff.daily_rate_night;
+        case 'tobi': return staff.daily_rate_tobi;
+        case 'tobiage': return Math.floor((staff.daily_rate_tobi || 0) * 1.5);
+        default: return staff.daily_rate_basic;
       }
     }
 
     function updateRateHeader() {
       const rateType = document.getElementById('rate-type').value;
-      const labels = { tobi: '鳶日給', age: '揚げ日給', tobiage: '鳶揚げ日給', half: 'ハーフ日給' };
+      const labels = { half: 'ハーフ', basic: '基本', fullday: '終日', night: '夜間', tobi: '鳶', tobiage: '鳶揚げ' };
       document.getElementById('rate-header').textContent = labels[rateType] || '日給';
     }
 
@@ -1124,11 +1133,11 @@
       document.getElementById('emergency-contact').value = staff.emergency_contact || '';
       document.getElementById('postal-code').value = staff.postal_code || '';
       document.getElementById('address').value = staff.address || '';
-      document.getElementById('daily-rate-tobi').value = staff.daily_rate_tobi || '';
-      document.getElementById('daily-rate-age').value = staff.daily_rate_age || '';
-      document.getElementById('daily-rate-tobiage').value = staff.daily_rate_tobiage || '';
       document.getElementById('daily-rate-half').value = staff.daily_rate_half || '';
+      document.getElementById('daily-rate-basic').value = staff.daily_rate_basic || '';
       document.getElementById('daily-rate-fullday').value = staff.daily_rate_fullday || '';
+      document.getElementById('daily-rate-night').value = staff.daily_rate_night || '';
+      document.getElementById('daily-rate-tobi').value = staff.daily_rate_tobi || '';
       document.getElementById('birth-date').value = staff.birth_date || '';
       document.getElementById('gender').value = staff.gender || '';
       document.getElementById('blood-type').value = staff.blood_type || '';
@@ -1174,7 +1183,7 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'daily_rate_fullday'].includes(key)) {
+          if (['daily_rate_half', 'daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_tobi'].includes(key)) {
             staff[key] = value ? Number(value) : null;
           } else if (key === 'is_active' || key === 'has_motorbike') {
             staff[key] = value === 'true';

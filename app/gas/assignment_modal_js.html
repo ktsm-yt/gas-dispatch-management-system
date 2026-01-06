@@ -107,7 +107,7 @@ function handleAssignmentData(response) {
   document.getElementById('modal-job-name').textContent = job.site_name || '-';
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
-  document.getElementById('modal-job-type').textContent = job.job_type || '-';
+  document.getElementById('modal-job-type').textContent = job.work_category || '-';
 
   // Update stats
   updateModalStats();
@@ -217,7 +217,7 @@ function filterStaffList() {
 function renderStaffList() {
   const container = document.getElementById('staff-list');
   const staff = assignmentModalState.filteredStaff;
-  const jobType = assignmentModalState.job?.job_type;
+  const workCategory = assignmentModalState.job?.work_category;
 
   // Build assignment map for quick lookup
   const assignmentMap = {};
@@ -394,6 +394,8 @@ function saveAllChanges() {
 
   const payUnit = document.getElementById('form-pay-unit').value;
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
+  const wageRateInput = document.getElementById('form-wage-rate').value;
+  const invoiceRateInput = document.getElementById('form-invoice-rate').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
   const assignmentRole = document.getElementById('form-assignment-role').value;
@@ -421,6 +423,18 @@ function saveAllChanges() {
 
     if (assignmentMap[staffId]) {
       data.assignment_id = assignmentMap[staffId];
+    }
+
+    // 単価上書き（空欄の場合はnullで自動計算）
+    if (wageRateInput !== '') {
+      data.wage_rate = Number(wageRateInput);
+    } else {
+      data.wage_rate = null;
+    }
+    if (invoiceRateInput !== '') {
+      data.invoice_rate = Number(invoiceRateInput);
+    } else {
+      data.invoice_rate = null;
     }
 
     if (transportArea) {
@@ -631,7 +645,7 @@ function generateLineTemplate() {
 ◉リーダー：${leaderWithPhone}
 ◉人数：${activeAssignments.length}名
 ◉メンバー：${memberStr || '-'}
-◉作業内容：${job.job_type || ''}
+◉作業内容：${job.work_category || ''}
 ◉単価：${payUnitLabel}
 ◉装備品：
 ◉詳細

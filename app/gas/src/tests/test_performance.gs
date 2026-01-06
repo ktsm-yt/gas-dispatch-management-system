@@ -250,7 +250,7 @@ function testSaveJob() {
       time_slot: 'shuujitsu',
       start_time: '08:00',
       required_count: 2,
-      job_type: 'tobi',
+      pay_unit: 'tobi',
       status: 'pending'
     };
 
@@ -379,7 +379,7 @@ function testBulkOperations() {
       time_slot: ['shuujitsu', 'am', 'pm'][i % 3],
       start_time: '08:00',
       required_count: 1,
-      job_type: 'tobi',
+      pay_unit: 'tobi',
       status: 'pending'
     });
   }
@@ -495,7 +495,7 @@ function testOptimisticLocking() {
       time_slot: 'shuujitsu',
       start_time: '08:00',
       required_count: 1,
-      job_type: 'tobi',
+      pay_unit: 'tobi',
       status: 'pending'
     };
 

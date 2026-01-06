@@ -87,7 +87,7 @@ const JobService = {
         site_address: job.site_address || '',
         time_slot: job.time_slot,
         start_time: job.start_time,
-        job_type: job.job_type,
+        work_category: job.work_category,
         required_count: job.required_count,
         assigned_count: uniqueStaffIds.size,
         status: job.status,
@@ -286,6 +286,8 @@ const JobService = {
     let total = 0;
     let assigned = 0;
     let pending = 0;
+    let requiredTotal = 0;
+    let assignedTotal = 0;
 
     for (const job of jobs) {
       total++;
@@ -295,6 +297,10 @@ const JobService = {
       } else if (job.status === 'pending') {
         pending++;
       }
+
+      // 全体の人数を集計
+      requiredTotal += Number(job.required_count) || 0;
+      assignedTotal += Number(job.assigned_count) || 0;
 
       const slot = job.time_slot;
       if (byTimeSlot[slot]) {
@@ -313,6 +319,8 @@ const JobService = {
       total: total,
       assigned: assigned,
       pending: pending,
+      requiredTotal: requiredTotal,
+      assignedTotal: assignedTotal,
       byTimeSlot: byTimeSlot
     };
   }

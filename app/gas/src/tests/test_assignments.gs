@@ -49,7 +49,7 @@ function testAssignmentRepositoryInsert() {
     work_date: '2099-12-31',
     time_slot: 'shuujitsu',
     required_count: 2,
-    job_type: '揚げ'
+    pay_unit: 'basic'
   });
 
   try {
@@ -92,7 +92,7 @@ function testAssignmentRepositoryFindByJobId() {
     work_date: '2099-12-31',
     time_slot: 'am',
     required_count: 3,
-    job_type: '鳶'
+    pay_unit: 'tobi'
   });
 
   try {
@@ -143,7 +143,7 @@ function testAssignmentRepositoryUpdate() {
     work_date: '2099-12-31',
     time_slot: 'pm',
     required_count: 1,
-    job_type: '揚げ'
+    pay_unit: 'basic'
   });
 
   const assignment = AssignmentRepository.insert({
@@ -192,7 +192,7 @@ function testAssignmentRepositorySoftDelete() {
     work_date: '2099-12-31',
     time_slot: 'jotou',
     required_count: 1,
-    job_type: '鳶揚げ'
+    pay_unit: 'tobiage'
   });
 
   const assignment = AssignmentRepository.insert({
@@ -237,7 +237,7 @@ function testAssignmentServiceGetShortage() {
     work_date: '2099-12-31',
     time_slot: 'shuujitsu',
     required_count: 3,
-    job_type: '揚げ'
+    pay_unit: 'basic'
   });
 
   const assignment1 = AssignmentRepository.insert({
@@ -280,7 +280,7 @@ function testAssignmentServiceCheckDuplicate() {
     work_date: '2099-12-31',
     time_slot: 'am',
     required_count: 2,
-    job_type: '鳶'
+    pay_unit: 'tobi'
   });
 
   const assignment = AssignmentRepository.insert({
@@ -329,7 +329,7 @@ function testSaveAssignmentsAPI() {
     work_date: '2099-12-31',
     time_slot: 'pm',
     required_count: 2,
-    job_type: '揚げ'
+    pay_unit: 'basic'
   });
 
   try {

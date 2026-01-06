@@ -46,11 +46,11 @@
     <?!= include('nav_styles'); ?>
     <?!= include('assignment_modal_styles'); ?>
 
-    /* Date Navigation */
+    /* Date Navigation - Compact */
     .date-nav {
       background: var(--bg-card);
       border-bottom: 1px solid var(--border-color);
-      padding: var(--spacing-md) var(--spacing-lg);
+      padding: 6px var(--spacing-md);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -59,38 +59,56 @@
     .date-nav-center {
       display: flex;
       align-items: center;
-      gap: var(--spacing-md);
+      gap: 6px;
     }
 
     .date-btn {
       background: white;
       border: 1px solid var(--border-color);
-      padding: var(--spacing-sm) var(--spacing-md);
+      padding: 4px 10px;
       border-radius: var(--radius-sm);
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .date-btn:hover {
       background: var(--bg-hover);
     }
 
+    .date-picker-input {
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      cursor: pointer;
+      width: 36px;
+      height: 32px;
+      background: white;
+    }
+
+    .date-picker-input::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      margin: 0;
+      width: 18px;
+      height: 18px;
+    }
+
     .current-date {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
     }
 
     .date-stats {
       display: flex;
-      gap: var(--spacing-lg);
-      font-size: 14px;
+      gap: var(--spacing-md);
+      font-size: 13px;
       color: var(--text-muted);
     }
 
     .date-stats span {
       display: flex;
       align-items: center;
-      gap: var(--spacing-xs);
+      gap: 2px;
     }
 
     .date-stats .count {
@@ -143,6 +161,13 @@
       font-size: 16px;
       font-weight: 700;
       color: var(--color-primary);
+      line-height: 1;
+    }
+
+    .column-count .member-fraction {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--color-accent);
       line-height: 1;
     }
 
@@ -386,6 +411,69 @@
     .add-btn:hover {
       background: var(--color-accent);
     }
+
+    /* Print Styles */
+    @media print {
+      /* Hide non-essential elements */
+      nav, .nav-bar, .add-btn,
+      .date-btn, .date-picker-input,
+      .modal-overlay, .toast {
+        display: none !important;
+      }
+
+      /* Reset layout */
+      body {
+        background: white;
+        font-size: 11px;
+      }
+
+      .date-nav {
+        background: white;
+        border-bottom: 2px solid #333;
+        padding: 8px 0;
+      }
+
+      .current-date {
+        font-size: 18px;
+        font-weight: bold;
+      }
+
+      .date-stats {
+        font-size: 12px;
+      }
+
+      .dashboard {
+        padding: 8px;
+      }
+
+      .dashboard-columns {
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+      }
+
+      .column {
+        background: white;
+        border: 1px solid #ccc;
+        padding: 4px;
+        break-inside: avoid;
+      }
+
+      .column-header {
+        border-bottom: 1px solid #333;
+      }
+
+      .job-card {
+        border: 1px solid #ddd;
+        padding: 4px;
+        margin-bottom: 4px;
+        break-inside: avoid;
+      }
+
+      .job-card:hover {
+        transform: none;
+        box-shadow: none;
+      }
+    }
   </style>
 </head>
 <body>
@@ -396,6 +484,7 @@
     <div class="date-nav-center">
       <button class="date-btn" id="prev-day">&lt; 前日</button>
       <span class="current-date" id="current-date">-</span>
+      <input type="date" id="date-picker" class="date-picker-input">
       <button class="date-btn" id="next-day">翌日 &gt;</button>
       <button class="date-btn" id="today-btn">今日</button>
     </div>
@@ -483,12 +572,38 @@
               <input type="number" id="required-count" name="required_count" min="1" value="1" required>
             </div>
             <div class="form-group">
-              <label for="job-type">作業種別 *</label>
-              <select id="job-type" name="job_type" required>
+              <label for="pay-unit">給与区分 *</label>
+              <select id="pay-unit" name="pay_unit" required>
                 <option value="">選択してください</option>
+                <option value="basic">基本</option>
+                <option value="half">ハーフ</option>
+                <option value="fullday">終日</option>
+                <option value="night">夜勤</option>
                 <option value="tobi">鳶</option>
-                <option value="age">揚げ</option>
                 <option value="tobiage">鳶揚げ</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="work-category">作業カテゴリ</label>
+              <select id="work-category" name="work_category">
+                <option value="">選択してください</option>
+                <option value="jotou">上棟</option>
+                <option value="keisagyo">軽作業</option>
+                <option value="niage">荷揚げ</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="work-detail">作業詳細</label>
+              <select id="work-detail" name="work_detail">
+                <option value="">選択してください</option>
+                <option value="sekkou">ボード</option>
+                <option value="tategu">建具</option>
+                <option value="kitchen">キッチン</option>
+                <option value="unit_bath">ユニットバス</option>
+                <option value="other">その他</option>
               </select>
             </div>
           </div>
@@ -809,25 +924,18 @@
 
     const TIME_SLOT_ORDER = ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'];
 
-    // Job type to tag class (English keys)
-    const JOB_TYPE_TAG = {
-      'tobi': 'tag-tobi',
-      'age': 'tag-age',
-      'tobiage': 'tag-tobiage',
-      // 後方互換性のため日本語キーも維持
-      '鳶': 'tag-tobi',
-      '揚げ': 'tag-age',
-      '鳶揚げ': 'tag-tobiage'
+    // Work category to tag class
+    const WORK_CATEGORY_TAG = {
+      'jotou': 'tag-jotou',
+      'keisagyo': 'tag-keisagyo',
+      'niage': 'tag-niage'
     };
 
-    // Job type English to Japanese label
-    const JOB_TYPE_LABEL = {
-      'tobi': '鳶',
-      'age': '揚げ',
-      'tobiage': '鳶揚げ',
-      '鳶': '鳶',
-      '揚げ': '揚げ',
-      '鳶揚げ': '鳶揚げ'
+    // Work category to Japanese label
+    const WORK_CATEGORY_LABEL = {
+      'jotou': '上棟',
+      'keisagyo': '軽作業',
+      'niage': '荷揚げ'
     };
 
     // Initialize
@@ -881,6 +989,14 @@
           .getServerDate();
       });
 
+      // カレンダー日付選択
+      document.getElementById('date-picker').addEventListener('change', (e) => {
+        if (e.target.value) {
+          currentDate = new Date(e.target.value + 'T00:00:00');
+          loadDashboard();
+        }
+      });
+
       document.getElementById('add-job-btn').addEventListener('click', () => {
         openJobModal(null);
       });
@@ -917,6 +1033,10 @@
               <div>
                 <span class="total" id="col-total-${slot}">-</span>
                 <span class="total-label">件</span>
+              </div>
+              <div>
+                <span class="member-fraction" id="col-member-${slot}">-/-</span>
+                <span class="total-label">名</span>
               </div>
               <span class="shortage" id="col-shortage-${slot}">-</span>
             </div>
@@ -1023,6 +1143,7 @@
       TIME_SLOT_ORDER.forEach(slot => {
         const slotStats = stats.byTimeSlot[slot];
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
+        document.getElementById(`col-member-${slot}`).textContent = `${slotStats.assigned}/${slotStats.required}`;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
         const shortage = slotStats.shortage;  // required - assigned
@@ -1054,15 +1175,15 @@
       }
 
       container.innerHTML = jobs.map(job => {
-        const tagClass = JOB_TYPE_TAG[job.job_type] || 'tag-age';
-        const jobTypeLabel = JOB_TYPE_LABEL[job.job_type] || job.job_type;
+        const tagClass = WORK_CATEGORY_TAG[job.work_category] || '';
+        const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '';
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
 
         return `
           <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
             <div class="job-card-header">
-              <span class="tag ${tagClass}">${jobTypeLabel}</span>
+              ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${job.customer_name || '-'}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
@@ -1110,7 +1231,7 @@
         site_address: savedJob.site_address || '',
         time_slot: savedJob.time_slot,
         start_time: savedJob.start_time || '',
-        job_type: savedJob.job_type,
+        work_category: savedJob.work_category,
         required_count: savedJob.required_count,
         assigned_count: 0,
         status: savedJob.status,
@@ -1149,6 +1270,7 @@
         // カラムヘッダーの統計更新
         const slotStats = dashboardData.stats.byTimeSlot[slot];
         document.getElementById(`col-total-${slot}`).textContent = slotStats.total;
+        document.getElementById(`col-member-${slot}`).textContent = `${slotStats.assigned}/${slotStats.required}`;
 
         const shortageEl = document.getElementById(`col-shortage-${slot}`);
         const shortage = slotStats.shortage;  // required - assigned
@@ -1249,7 +1371,9 @@
           document.getElementById('time-slot').value = cachedJob.time_slot || 'am';
           document.getElementById('start-time').value = cachedJob.start_time || '';
           document.getElementById('required-count').value = cachedJob.required_count || 1;
-          document.getElementById('job-type').value = cachedJob.job_type || '';
+          document.getElementById('pay-unit').value = cachedJob.pay_unit || '';
+          document.getElementById('work-category').value = cachedJob.work_category || '';
+          document.getElementById('work-detail').value = cachedJob.work_detail || '';
           document.getElementById('status').value = cachedJob.status || 'pending';
           document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
           document.getElementById('notes').value = cachedJob.notes || '';
@@ -1455,7 +1579,9 @@
             document.getElementById('time-slot').value = job.time_slot || 'am';
             document.getElementById('start-time').value = job.start_time || '';
             document.getElementById('required-count').value = job.required_count || 1;
-            document.getElementById('job-type').value = job.job_type || '';
+            document.getElementById('pay-unit').value = job.pay_unit || '';
+            document.getElementById('work-category').value = job.work_category || '';
+            document.getElementById('work-detail').value = job.work_detail || '';
             document.getElementById('status').value = job.status || 'pending';
             document.getElementById('supervisor-name').value = job.supervisor_name || '';
             document.getElementById('order-number').value = job.order_number || '';
