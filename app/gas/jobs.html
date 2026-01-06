@@ -398,6 +398,16 @@
           <option value="cancelled">キャンセル</option>
         </select>
       </div>
+      <div class="filter-group">
+        <label>フラグ</label>
+        <select id="flag-filter">
+          <option value="">すべて</option>
+          <option value="is_damaged">破損</option>
+          <option value="is_uncollected">未回収</option>
+          <option value="is_claimed">クレーム</option>
+          <option value="has_any">いずれかあり</option>
+        </select>
+      </div>
       <div class="search-box">
         <input type="text" id="search-input" placeholder="顧客名・現場名で検索...">
       </div>
@@ -425,6 +435,7 @@
             <th>種別</th>
             <th>人数</th>
             <th>ステータス</th>
+            <th>フラグ</th>
           </tr>
         </thead>
         <tbody id="job-table-body">
@@ -524,6 +535,36 @@
 
           <div class="form-row">
             <div class="form-group">
+              <label for="pay-unit">給与区分</label>
+              <select id="pay-unit" name="pay_unit">
+                <option value="">選択してください</option>
+                <option value="basic">基本</option>
+                <option value="half">ハーフ</option>
+                <option value="fullday">終日</option>
+                <option value="night">夜間</option>
+                <option value="tobi">鳶</option>
+                <option value="tobiage">鳶揚げ</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="work-category">作業大項目</label>
+              <select id="work-category" name="work_category" onchange="updateWorkDetailOptions()">
+                <option value="">選択してください</option>
+                <option value="jotou">上棟</option>
+                <option value="keisagyo">軽作業</option>
+                <option value="niage">荷揚げ</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="work-detail">作業詳細</label>
+              <select id="work-detail" name="work_detail" disabled>
+                <option value="">先に大項目を選択</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label for="status">ステータス</label>
               <select id="status" name="status">
                 <option value="pending">未配置</option>
@@ -562,6 +603,24 @@
               </div>
             </div>
           </details>
+
+          <div class="form-group flags-group">
+            <label>フラグ</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-damaged" name="is_damaged">
+                <span class="flag-text flag-damaged">破損</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-uncollected" name="is_uncollected">
+                <span class="flag-text flag-uncollected">未回収</span>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="is-claimed" name="is_claimed">
+                <span class="flag-text flag-claimed">クレーム</span>
+              </label>
+            </div>
+          </div>
 
           <div class="form-group">
             <label for="notes">備考</label>
@@ -673,6 +732,58 @@
       outline: none;
       border-color: var(--color-secondary);
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .flags-group .checkbox-row {
+      display: flex;
+      gap: var(--spacing-lg);
+      margin-top: var(--spacing-sm);
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .flag-text {
+      font-size: 13px;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .flag-damaged {
+      background: #fee2e2;
+      color: #dc2626;
+    }
+
+    .flag-uncollected {
+      background: #fef3c7;
+      color: #d97706;
+    }
+
+    .flag-claimed {
+      background: #fce7f3;
+      color: #db2777;
+    }
+
+    .flag-badge {
+      display: inline-block;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      margin-right: 2px;
+    }
+
+    .cell-flags {
+      white-space: nowrap;
     }
 
     .form-row {
@@ -835,6 +946,7 @@
       document.getElementById('date-from').addEventListener('change', () => loadJobs(1));
       document.getElementById('status-filter').addEventListener('change', () => loadJobs(1));
       document.getElementById('time-slot-filter').addEventListener('change', () => loadJobs(1));
+      document.getElementById('flag-filter').addEventListener('change', () => loadJobs(1));
 
       // 検索ボックス - 入力中にリアルタイム検索（デバウンス付き）
       let searchTimeout;
@@ -962,6 +1074,21 @@
       }
 
       allJobs = response.data.jobs || [];
+
+      // フラグフィルターを適用
+      const flagFilter = document.getElementById('flag-filter').value;
+      if (flagFilter) {
+        if (flagFilter === 'has_any') {
+          allJobs = allJobs.filter(job =>
+            job.is_damaged === true || job.is_damaged === 'true' ||
+            job.is_uncollected === true || job.is_uncollected === 'true' ||
+            job.is_claimed === true || job.is_claimed === 'true'
+          );
+        } else {
+          allJobs = allJobs.filter(job => job[flagFilter] === true || job[flagFilter] === 'true');
+        }
+      }
+
       totalCount = allJobs.length;
       totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
@@ -1020,7 +1147,7 @@
       if (jobs.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8">
+            <td colspan="9">
               <div class="empty-state">案件が見つかりません</div>
             </td>
           </tr>
@@ -1036,6 +1163,13 @@
         // 種別ラベル：job_typeがある場合のみ表示
         const jobTypeHtml = jobTypeLabel ? `<span class="tag ${tagClass}">${escapeHtml(jobTypeLabel)}</span>` : '-';
 
+        // フラグバッジを生成
+        const flags = [];
+        if (job.is_damaged === true || job.is_damaged === 'true') flags.push('<span class="flag-badge flag-damaged">破損</span>');
+        if (job.is_uncollected === true || job.is_uncollected === 'true') flags.push('<span class="flag-badge flag-uncollected">未回収</span>');
+        if (job.is_claimed === true || job.is_claimed === 'true') flags.push('<span class="flag-badge flag-claimed">クレーム</span>');
+        const flagsHtml = flags.length > 0 ? flags.join(' ') : '-';
+
         return `
           <tr onclick="openJob('${job.job_id}')">
             <td>${formatDisplayDate(job.work_date)}</td>
@@ -1046,6 +1180,7 @@
             <td>${jobTypeHtml}</td>
             <td class="cell-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count || 0}/${job.required_count}</td>
             <td><span class="status-badge ${statusClass}">${STATUS_LABELS[job.status] || job.status || '-'}</span></td>
+            <td class="cell-flags">${flagsHtml}</td>
           </tr>
         `;
       }).join('');
@@ -1165,8 +1300,14 @@
           document.getElementById('start-time').value = formatStartTime(cachedJob.start_time) || '';
           document.getElementById('required-count').value = cachedJob.required_count || 1;
           document.getElementById('job-type').value = cachedJob.job_type || '';
+          document.getElementById('pay-unit').value = cachedJob.pay_unit || '';
+          document.getElementById('work-category').value = cachedJob.work_category || '';
+          updateWorkDetailOptions(cachedJob.work_detail || '');
           document.getElementById('status').value = cachedJob.status || 'pending';
           document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
+          document.getElementById('is-damaged').checked = cachedJob.is_damaged === true || cachedJob.is_damaged === 'true';
+          document.getElementById('is-uncollected').checked = cachedJob.is_uncollected === true || cachedJob.is_uncollected === 'true';
+          document.getElementById('is-claimed').checked = cachedJob.is_claimed === true || cachedJob.is_claimed === 'true';
           document.getElementById('notes').value = cachedJob.notes || '';
         }
         // Load full data in background
@@ -1206,12 +1347,18 @@
             document.getElementById('start-time').value = job.start_time || '';
             document.getElementById('required-count').value = job.required_count || 1;
             document.getElementById('job-type').value = job.job_type || '';
+            document.getElementById('pay-unit').value = job.pay_unit || '';
+            document.getElementById('work-category').value = job.work_category || '';
+            updateWorkDetailOptions(job.work_detail || '');
             document.getElementById('status').value = job.status || 'pending';
             document.getElementById('supervisor-name').value = job.supervisor_name || '';
             document.getElementById('order-number').value = job.order_number || '';
             document.getElementById('branch-office').value = job.branch_office || '';
             document.getElementById('property-code').value = job.property_code || '';
             document.getElementById('construction-div').value = job.construction_div || '';
+            document.getElementById('is-damaged').checked = job.is_damaged === true || job.is_damaged === 'true';
+            document.getElementById('is-uncollected').checked = job.is_uncollected === true || job.is_uncollected === 'true';
+            document.getElementById('is-claimed').checked = job.is_claimed === true || job.is_claimed === 'true';
             document.getElementById('notes').value = job.notes || '';
           }
         })
@@ -1247,6 +1394,11 @@
       if (job.required_count) {
         job.required_count = parseInt(job.required_count, 10);
       }
+
+      // チェックボックスの値を明示的に設定（チェックされていない場合もfalseを設定）
+      job.is_damaged = document.getElementById('is-damaged').checked;
+      job.is_uncollected = document.getElementById('is-uncollected').checked;
+      job.is_claimed = document.getElementById('is-claimed').checked;
 
       const jobId = document.getElementById('job-id').value;
       const updatedAt = document.getElementById('job-updated-at').value;
@@ -1462,6 +1614,37 @@
           clearInterval(retryInterval);
         }
       }, 200);
+    }
+
+    // 作業詳細の選択肢を大項目に応じて更新
+    const WORK_DETAIL_LABELS = {
+      sekkou: '石膏ボード',
+      tategu: '建具',
+      kitchen: 'キッチン',
+      unit_bath: 'ユニットバス',
+      other: 'その他'
+    };
+
+    const WORK_DETAIL_OPTIONS = {
+      jotou: [],  // 上棟は詳細なし
+      keisagyo: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other'],
+      niage: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other']
+    };
+
+    function updateWorkDetailOptions(selectedValue = '') {
+      const category = document.getElementById('work-category').value;
+      const detailSelect = document.getElementById('work-detail');
+
+      if (!category || !WORK_DETAIL_OPTIONS[category] || WORK_DETAIL_OPTIONS[category].length === 0) {
+        detailSelect.innerHTML = '<option value="">大項目を選択してください</option>';
+        detailSelect.disabled = true;
+        return;
+      }
+
+      const options = WORK_DETAIL_OPTIONS[category];
+      detailSelect.innerHTML = '<option value="">選択してください</option>' +
+        options.map(opt => `<option value="${opt}"${opt === selectedValue ? ' selected' : ''}>${WORK_DETAIL_LABELS[opt]}</option>`).join('');
+      detailSelect.disabled = false;
     }
 
     function escapeHtml(text) {

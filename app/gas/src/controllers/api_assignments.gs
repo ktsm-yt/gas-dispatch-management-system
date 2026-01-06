@@ -371,10 +371,11 @@ function getAvailableStaff(options = {}) {
       skills: s.skills,
       has_motorbike: s.has_motorbike,
       staff_type: s.staff_type,
-      daily_rate_tobi: s.daily_rate_tobi,
-      daily_rate_age: s.daily_rate_age,
-      daily_rate_tobiage: s.daily_rate_tobiage,
-      daily_rate_half: s.daily_rate_half
+      daily_rate_half: s.daily_rate_half,
+      daily_rate_basic: s.daily_rate_basic,
+      daily_rate_fullday: s.daily_rate_fullday,
+      daily_rate_night: s.daily_rate_night,
+      daily_rate_tobi: s.daily_rate_tobi
     }));
 
     return buildSuccessResponse({ staff: staffList }, requestId);

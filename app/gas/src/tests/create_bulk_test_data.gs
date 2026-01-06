@@ -289,10 +289,11 @@ function createBulkStaff() {
       has_motorbike: i % 3 === 0,
       skills: skills[i % skills.length],
       ng_customers: ngCustomers,
-      daily_rate_tobi: 14000 + (i % 10) * 500,
-      daily_rate_age: 12000 + (i % 10) * 500,
-      daily_rate_tobiage: 15000 + (i % 10) * 500,
-      daily_rate_half: 7000 + (i % 10) * 200,
+      daily_rate_half: 7500 + (i % 10) * 100,
+      daily_rate_basic: 10000 + (i % 10) * 200,
+      daily_rate_fullday: 13000 + (i % 10) * 100,
+      daily_rate_night: 13000,
+      daily_rate_tobi: 17000 + (i % 10) * 100,
       staff_type: isSubcontract ? 'subcontract' : 'regular',
       employment_type: employmentType,
       withholding_tax_applicable: employmentType === 'employee',
@@ -492,9 +493,9 @@ function createBulkAssignments() {
       const transportArea = randomPick(transportAreas);
 
       // 給与単価決定（スタッフマスターから）
-      let wageRate = staff.daily_rate_tobi || 15000;
-      if (jobType === 'age') wageRate = staff.daily_rate_age || 12000;
-      if (jobType === 'tobiage') wageRate = staff.daily_rate_tobiage || 16000;
+      let wageRate = staff.daily_rate_basic || 11000;
+      if (jobType === 'tobi') wageRate = staff.daily_rate_tobi || 17000;
+      if (jobType === 'tobiage') wageRate = Math.floor((staff.daily_rate_tobi || 17000) * 1.5);
 
       // 請求単価決定（顧客マスターから）
       let invoiceRate = customer.unit_price_tobi || 25000;
