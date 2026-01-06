@@ -15,6 +15,12 @@ const RoundingMode = {
   ROUND: 'round'        // 四捨五入
 };
 
+/**
+ * 鳶揚げ係数（鳶日給に対する倍率）
+ * 業務要件: 鳶揚げ = 鳶 × 1.5
+ */
+const TOBIAGE_MULTIPLIER = 1.5;
+
 // ============================================
 // 基本的な金額計算
 // ============================================
@@ -137,8 +143,8 @@ function getDailyRateByJobType_(staff, jobType) {
     case 'tobi':
       return staff.daily_rate_tobi || 0;
     case 'tobiage':
-      // 鳶揚げは鳶の1.5倍
-      return Math.floor((staff.daily_rate_tobi || 0) * 1.5);
+      // 鳶揚げは鳶の係数倍（TOBIAGE_MULTIPLIER参照）
+      return Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     default:
       return 0;
   }

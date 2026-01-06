@@ -56,3 +56,24 @@
 - 配置登録時にデフォルト値を自動設定するロジックが必要
 - 給与/請求レポートは各unitを参照して集計
 - UIは通常`display_time_slot`のみ表示し、詳細編集で単価区分を変更可能に
+
+## 計算ルール
+
+### 端数処理
+
+給与・請求金額の端数は **切り捨て（floor）** で統一する。
+
+```javascript
+Math.floor(baseRate * multiplier)
+```
+
+### 鳶揚げ係数
+
+鳶揚げ日給は鳶日給の **1.5倍** で自動計算する（個別入力不可）。
+
+```javascript
+const TOBIAGE_MULTIPLIER = 1.5;
+daily_rate_tobiage = Math.floor(daily_rate_tobi * TOBIAGE_MULTIPLIER);
+```
+
+この係数は業務要件に基づく固定値であり、変更が必要な場合はコード修正を行う。
