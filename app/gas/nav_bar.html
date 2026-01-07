@@ -7,6 +7,7 @@
     <a href="#" id="nav-assignments">配置管理</a>
     <a href="#" id="nav-customers">顧客</a>
     <a href="#" id="nav-staff">スタッフ</a>
+    <a href="#" id="nav-invoices">請求</a>
     <div class="nav-dropdown">
       <a href="#" id="nav-settings">設定</a>
       <div class="nav-dropdown-menu" id="settings-menu">
@@ -30,6 +31,7 @@ function initNavBar(currentPage, pageTitle) {
     'assignments': 'nav-assignments',
     'customers': 'nav-customers',
     'staff': 'nav-staff',
+    'invoices': 'nav-invoices',
     'subcontractors': 'nav-settings',
     'transportFees': 'nav-settings',
     'company': 'nav-settings'
@@ -60,6 +62,10 @@ function initNavBar(currentPage, pageTitle) {
   document.getElementById('nav-staff').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('staff');
+  });
+  document.getElementById('nav-invoices').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('invoices');
   });
 
   // Settings dropdown
