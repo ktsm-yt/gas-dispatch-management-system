@@ -6,6 +6,23 @@
  */
 
 /**
+ * 顧客一覧を取得（請求画面用）
+ * @returns {Object} { ok: true, data: { customers: [] } }
+ */
+function getCustomers() {
+  try {
+    const result = listCustomers({ includeInactive: false });
+    if (result.ok) {
+      return buildSuccessResponse({ customers: result.data });
+    }
+    return result;
+  } catch (error) {
+    console.error('getCustomers error:', error);
+    return buildErrorResponse('SYSTEM_ERROR', error.message);
+  }
+}
+
+/**
  * 請求書を生成
  * @param {string} customerId - 顧客ID
  * @param {string} ym - 対象年月（YYYY-MM形式）
