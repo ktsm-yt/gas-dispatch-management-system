@@ -11,7 +11,7 @@
  */
 function getCustomers() {
   try {
-    const result = listCustomers({ includeInactive: false });
+    const result = listCustomers({ activeOnly: true });
     if (result.ok) {
       // listCustomers returns { items: [...], count: N }
       return buildSuccessResponse({ customers: result.data.items || [] });
