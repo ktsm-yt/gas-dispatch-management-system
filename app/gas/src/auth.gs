@@ -147,6 +147,17 @@ function getUserRole(email) {
  * @returns {Object} { allowed: boolean, userRole: string, message: string }
  */
 function checkPermission(requiredRole) {
+  const prop = PropertiesService.getScriptProperties();
+
+  // DEMO_MODE: 全権限を許可
+  if (prop.getProperty('DEMO_MODE') === 'true') {
+    return {
+      allowed: true,
+      userRole: ROLES.ADMIN,
+      message: 'OK (Demo Mode)'
+    };
+  }
+
   const domainCheck = checkDomain();
 
   if (!domainCheck.allowed) {
