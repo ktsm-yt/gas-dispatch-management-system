@@ -13,7 +13,8 @@ function getCustomers() {
   try {
     const result = listCustomers({ includeInactive: false });
     if (result.ok) {
-      return buildSuccessResponse({ customers: result.data });
+      // listCustomers returns { items: [...], count: N }
+      return buildSuccessResponse({ customers: result.data.items || [] });
     }
     return result;
   } catch (error) {
