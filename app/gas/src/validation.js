@@ -657,3 +657,137 @@ function validateInvoice_(invoice, isNew = false) {
     validateNumber_(invoice.total_amount, '合計金額', { min: 0 });
   }
 }
+
+// ============================================
+// ステータス遷移ルール
+// ============================================
+
+/**
+ * 案件ステータスの遷移ルール
+ * キー: 現在のステータス、値: 遷移可能なステータスの配列
+ */
+const JOB_STATUS_TRANSITIONS = {
+  'pending': ['assigned', 'hold', 'cancelled'],
+  'assigned': ['pending', 'completed', 'hold', 'cancelled'],
+  'hold': ['pending', 'assigned', 'cancelled'],
+  'completed': [],  // 完了からは遷移不可
+  'cancelled': []   // キャンセルからは遷移不可
+};
+
+/**
+ * 配置ステータスの遷移ルール
+ */
+const ASSIGNMENT_STATUS_TRANSITIONS = {
+  'assigned': ['confirmed', 'cancelled'],
+  'confirmed': ['cancelled'],
+  'cancelled': []  // キャンセルからは遷移不可
+};
+
+/**
+ * 請求ステータスの遷移ルール
+ */
+const INVOICE_STATUS_TRANSITIONS = {
+  'draft': ['issued', 'cancelled'],
+  'issued': ['sent', 'paid', 'cancelled'],
+  'sent': ['paid', 'cancelled'],
+  'paid': [],       // 入金済みからは遷移不可
+  'cancelled': []   // キャンセルからは遷移不可
+};
+
+/**
+ * ステータス遷移が有効かどうかチェック
+ * @param {string} from - 現在のステータス
+ * @param {string} to - 遷移先のステータス
+ * @param {Object} transitionMap - 遷移ルールマップ
+ * @returns {boolean} 遷移が有効ならtrue
+ */
+function isValidTransition_(from, to, transitionMap) {
+  if (!transitionMap[from]) return false;
+  return transitionMap[from].includes(to);
+}
+
+// ============================================
+// ステータスラベル
+// ============================================
+
+/**
+ * 案件ステータスのラベルマップ
+ */
+const JOB_STATUS_LABELS = {
+  'pending': '未配置',
+  'assigned': '配置済',
+  'hold': '保留',
+  'completed': '完了',
+  'cancelled': 'キャンセル'
+};
+
+/**
+ * 時間区分のラベルマップ
+ */
+const TIME_SLOT_LABELS = {
+  'jotou': '上棟',
+  'shuujitsu': '終日',
+  'am': 'AM',
+  'pm': 'PM',
+  'yakin': '夜勤',
+  'mitei': '未定'
+};
+
+/**
+ * 案件ステータスのラベルを取得
+ * @param {string} status - ステータス
+ * @returns {string} ラベル
+ */
+function getJobStatusLabel_(status) {
+  return JOB_STATUS_LABELS[status] || status;
+}
+
+/**
+ * 時間区分のラベルを取得
+ * @param {string} slot - 時間区分
+ * @returns {string} ラベル
+ */
+function getTimeSlotLabel_(slot) {
+  return TIME_SLOT_LABELS[slot] || slot;
+}
+
+// ============================================
+// 編集可能チェック
+// ============================================
+
+/**
+ * 案件が編集可能かチェック
+ * @param {string} status - ステータス
+ * @returns {boolean} 編集可能ならtrue
+ */
+function isJobEditable_(status) {
+  // 完了・キャンセル以外は編集可能
+  return status !== 'completed' && status !== 'cancelled';
+}
+
+/**
+ * 請求が編集可能かチェック
+ * @param {string} status - ステータス
+ * @returns {boolean} 編集可能ならtrue
+ */
+function isInvoiceEditable_(status) {
+  // 下書きのみ編集可能
+  return status === 'draft';
+}
+
+// ============================================
+// ステータス自動計算
+// ============================================
+
+/**
+ * 案件のステータスを配置状況から計算
+ * @param {number} requiredCount - 必要人数
+ * @param {number} assignedCount - 配置済み人数
+ * @returns {string} 計算されたステータス
+ */
+function calculateJobStatus_(requiredCount, assignedCount) {
+  if (assignedCount >= requiredCount) {
+    return 'assigned';
+  }
+  return 'pending';
+}
