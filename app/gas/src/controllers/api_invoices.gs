@@ -11,7 +11,7 @@
  */
 function getCustomers() {
   try {
-    const result = listCustomers({ includeInactive: false });
+    const result = listCustomers({ activeOnly: true });
     if (result.ok) {
       // listCustomers returns { items: [...], count: N }
       return buildSuccessResponse({ customers: result.data.items || [] });
@@ -447,8 +447,12 @@ function exportBillingData(ym, format = 'xlsx') {
 
     blob.setName(fileName);
 
+    // エクスポートフォルダをセットアップ（未設定なら自動作成）
+    const folderInfo = InvoiceExportService.setupExportFolder();
+    const folder = DriveApp.getFolderById(folderInfo.folderId);
+
     // ファイルを保存
-    const file = DriveApp.createFile(blob);
+    const file = folder.createFile(blob);
 
     // 一時スプレッドシートを削除
     DriveApp.getFileById(spreadsheetId).setTrashed(true);

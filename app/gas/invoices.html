@@ -402,7 +402,10 @@
   <div class="toolbar">
     <div class="filter-group">
       <label>年月:</label>
-      <input type="month" id="filterYm" />
+      <select id="filterYear"></select>
+      <span>年</span>
+      <select id="filterMonth"></select>
+      <span>月</span>
       <label>顧客:</label>
       <select id="filterCustomer">
         <option value="">全て</option>
@@ -462,7 +465,10 @@
         </div>
         <div class="form-group">
           <label>対象年月 *</label>
-          <input type="month" id="generateYm" required />
+          <select id="generateYear" required></select>
+          <span>年</span>
+          <select id="generateMonth" required></select>
+          <span>月</span>
         </div>
       </div>
       <div class="modal-footer">
@@ -487,17 +493,42 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
+      initNavBar('invoices', '請求管理');
       initFilters();
       loadCustomers();
       loadInvoices();
     });
 
     function initFilters() {
-      // Set default date to current month
       const now = new Date();
-      const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-      document.getElementById('filterYm').value = ym;
-      document.getElementById('generateYm').value = ym;
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+
+      // 年の選択肢を生成（過去2年〜来年）
+      const yearSelects = ['filterYear', 'generateYear'];
+      yearSelects.forEach(id => {
+        const select = document.getElementById(id);
+        for (let y = currentYear - 2; y <= currentYear + 1; y++) {
+          const option = document.createElement('option');
+          option.value = y;
+          option.textContent = y;
+          if (y === currentYear) option.selected = true;
+          select.appendChild(option);
+        }
+      });
+
+      // 月の選択肢を生成
+      const monthSelects = ['filterMonth', 'generateMonth'];
+      monthSelects.forEach(id => {
+        const select = document.getElementById(id);
+        for (let m = 1; m <= 12; m++) {
+          const option = document.createElement('option');
+          option.value = String(m).padStart(2, '0');
+          option.textContent = m;
+          if (m === currentMonth) option.selected = true;
+          select.appendChild(option);
+        }
+      });
     }
 
     function loadCustomers() {
@@ -536,13 +567,13 @@
     function loadInvoices() {
       showLoading();
 
-      const ym = document.getElementById('filterYm').value;
+      const year = document.getElementById('filterYear').value;
+      const month = document.getElementById('filterMonth').value;
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
 
       const query = {};
-      if (ym) {
-        const [year, month] = ym.split('-');
+      if (year && month) {
         query.billing_year = parseInt(year);
         query.billing_month = parseInt(month);
       }
@@ -620,14 +651,16 @@
 
     function generateInvoice() {
       const customerId = document.getElementById('generateCustomer').value;
-      const ym = document.getElementById('generateYm').value;
+      const year = document.getElementById('generateYear').value;
+      const month = document.getElementById('generateMonth').value;
+      const ym = year && month ? `${year}-${month}` : '';
 
       if (!customerId) {
         showToast('顧客を選択してください', 'error');
         return;
       }
       if (!ym) {
-        showToast('対象年月を入力してください', 'error');
+        showToast('対象年月を選択してください', 'error');
         return;
       }
 
@@ -691,7 +724,9 @@
     }
 
     function exportBillingData() {
-      const ym = document.getElementById('filterYm').value;
+      const year = document.getElementById('filterYear').value;
+      const month = document.getElementById('filterMonth').value;
+      const ym = year && month ? `${year}-${month}` : '';
       if (!ym) {
         showToast('年月を選択してください', 'error');
         return;
