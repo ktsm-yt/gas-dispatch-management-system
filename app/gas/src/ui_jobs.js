@@ -19,7 +19,9 @@ function doGet(e) {
     staff: { file: 'staff', title: 'スタッフマスター' },
     subcontractors: { file: 'subcontractors', title: '外注先マスター' },
     transportFees: { file: 'transportFees', title: '交通費マスター' },
-    company: { file: 'company', title: '自社情報' }
+    company: { file: 'company', title: '自社情報' },
+    // P2-1: 請求管理
+    invoices: { file: 'invoices', title: '請求管理' }
   };
 
   const config = pages[page] || pages.dashboard;
