@@ -675,7 +675,11 @@ function formatLineTemplateDate(dateStr) {
 function formatAssignmentModalDate(dateStr) {
   if (!dateStr) return '-';
   const date = new Date(dateStr + 'T00:00:00');
-  return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', weekday: 'short' });
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const w = weekdays[date.getDay()];
+  return `${m}月${d}日(${w})`;
 }
 
 function formatPayUnitLabel(unit) {

@@ -789,8 +789,12 @@
     }
 
     function updateDateDisplay() {
-      const options = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' };
-      document.getElementById('current-date').textContent = currentDate.toLocaleDateString('ja-JP', options);
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      const y = currentDate.getFullYear();
+      const m = currentDate.getMonth() + 1;
+      const d = currentDate.getDate();
+      const w = days[currentDate.getDay()];
+      document.getElementById('current-date').textContent = `${y}年${m}月${d}日(${w})`;
     }
 
     function formatDateISO(date) {

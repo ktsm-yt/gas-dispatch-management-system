@@ -591,6 +591,31 @@ const InvoiceExportService = {
   },
 
   /**
+   * エクスポート用フォルダをセットアップ
+   * フォルダが未設定の場合は自動作成し、ScriptPropertyに保存
+   * @returns {Object} { folderId: string, url: string, created: boolean }
+   */
+  setupExportFolder: function() {
+    const props = PropertiesService.getScriptProperties();
+    let folderId = props.getProperty(this.OUTPUT_FOLDER_KEY);
+    let created = false;
+
+    if (!folderId) {
+      // デフォルトフォルダを作成
+      const folder = DriveApp.createFolder('請求書エクスポート');
+      folderId = folder.getId();
+      props.setProperty(this.OUTPUT_FOLDER_KEY, folderId);
+      created = true;
+    }
+
+    return {
+      folderId: folderId,
+      url: `https://drive.google.com/drive/folders/${folderId}`,
+      created: created
+    };
+  },
+
+  /**
    * ファイル名を生成
    * @param {Object} invoice - 請求書データ
    * @param {Object} customer - 顧客データ
