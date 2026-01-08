@@ -278,3 +278,300 @@ function cleanupInvoiceTestData() {
 
   Logger.log(`Cleaned up ${cleaned} test invoices`);
 }
+
+/**
+ * FORMAT2エクスポートテスト
+ * GASエディタから直接実行可能
+ */
+function testFormat2Export() {
+  Logger.log('=== FORMAT2 Export Test ===');
+
+  // テスト用請求書データを作成
+  const testCustomerId = 'test_customer_' + Date.now();
+  const testInvoice = InvoiceRepository.insert({
+    customer_id: testCustomerId,
+    billing_year: 2025,
+    billing_month: 1,
+    subtotal: 100000,
+    tax_amount: 10000,
+    total_amount: 110000,
+    invoice_format: 'format2',
+    status: 'draft',
+    shipper_name: 'テスト荷主'
+  });
+  Logger.log(`✓ 請求書作成: ${testInvoice.invoice_id}`);
+
+  // テスト用明細を追加
+  const testLines = [
+    {
+      invoice_id: testInvoice.invoice_id,
+      work_date: '2025-01-15',
+      site_name: 'テスト現場A',
+      order_number: 'ORD-001',
+      branch_office: '東京営業所',
+      item_name: '荷揚げ',
+      time_note: '8:00-17:00',
+      quantity: 2,
+      unit: '人',
+      unit_price: 18000,
+      amount: 36000
+    },
+    {
+      invoice_id: testInvoice.invoice_id,
+      work_date: '2025-01-16',
+      site_name: 'テスト現場B',
+      order_number: 'ORD-002',
+      branch_office: '埼玉営業所',
+      item_name: '鳶作業',
+      time_note: '9:00-18:00',
+      quantity: 3,
+      unit: '人',
+      unit_price: 21333,
+      amount: 64000
+    }
+  ];
+
+  for (const line of testLines) {
+    InvoiceLineRepository.insert(line);
+  }
+  Logger.log(`✓ 明細追加: ${testLines.length}件`);
+
+  // テスト用顧客データ（M_Customerがなければダミー）
+  let testCustomer;
+  try {
+    const customers = getAllRecords('M_Customer');
+    testCustomer = customers.find(c => c.customer_id === testCustomerId) || {
+      customer_id: testCustomerId,
+      company_name: 'テスト株式会社',
+      shipper_name: 'テスト荷主名'
+    };
+  } catch (e) {
+    testCustomer = {
+      customer_id: testCustomerId,
+      company_name: 'テスト株式会社',
+      shipper_name: 'テスト荷主名'
+    };
+  }
+
+  // エクスポート実行（編集用シート作成）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+
+  if (result.success) {
+    Logger.log(`✓ エクスポート成功!`);
+    Logger.log(`  シートURL: ${result.url}`);
+    Logger.log(`  シートID: ${result.sheetFileId}`);
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+    if (result.details) {
+      Logger.log(`  詳細: ${JSON.stringify(result.details)}`);
+    }
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}
+
+/**
+ * 顧客マスタベースでFORMAT2エクスポートテスト
+ * GASエディタから直接実行可能
+ */
+function testFormat2ExportFromCustomer() {
+  Logger.log('=== FORMAT2 Export Test (From Customer) ===');
+
+  // 顧客マスタから取得（荷主名設定済みを優先）
+  const customers = getAllRecords('M_Customers');
+  Logger.log(`顧客マスタ: ${customers.length}件`);
+
+  if (customers.length === 0) {
+    Logger.log('✗ 顧客が見つかりません');
+    return { success: false, error: 'NO_CUSTOMERS' };
+  }
+
+  // 荷主名が設定されている顧客を優先、なければ最初の顧客
+  let customer = customers.find(c => c.shipper_name && c.shipper_name.trim() !== '');
+  if (!customer) {
+    customer = customers[0];
+    Logger.log('※ 荷主名設定済み顧客なし、最初の顧客を使用');
+  }
+  Logger.log(`✓ 顧客: ${customer.company_name} (${customer.customer_id})`);
+  Logger.log(`  荷主名: ${customer.shipper_name || '(未設定)'}`);
+
+  // この顧客の請求書を検索
+  const invoices = InvoiceRepository.search({ customer_id: customer.customer_id });
+  Logger.log(`  請求書: ${invoices.length}件`);
+
+  let invoiceId;
+
+  if (invoices.length > 0) {
+    // 既存の請求書を使用
+    invoiceId = invoices[0].invoice_id;
+    Logger.log(`✓ 既存請求書を使用: ${invoiceId}`);
+  } else {
+    // 新規請求書を作成
+    const newInvoice = InvoiceRepository.insert({
+      customer_id: customer.customer_id,
+      billing_year: 2025,
+      billing_month: 1,
+      subtotal: 100000,
+      tax_amount: 10000,
+      total_amount: 110000,
+      invoice_format: 'format2',
+      status: 'draft',
+      shipper_name: customer.shipper_name || ''
+    });
+    invoiceId = newInvoice.invoice_id;
+    Logger.log(`✓ 新規請求書作成: ${invoiceId}`);
+
+    // 明細も追加
+    InvoiceLineRepository.insert({
+      invoice_id: invoiceId,
+      work_date: '2025-01-15',
+      site_name: 'テスト現場',
+      order_number: 'ORD-001',
+      branch_office: '東京',
+      item_name: '荷揚げ',
+      time_note: '9:00～',
+      quantity: 2,
+      unit: '人',
+      unit_price: 18000,
+      amount: 36000
+    });
+  }
+
+  // エクスポート実行
+  const result = InvoiceExportService.export(invoiceId, 'edit', { keepSheet: true });
+
+  if (result.success) {
+    Logger.log(`✓ エクスポート成功!`);
+    Logger.log(`  シートURL: ${result.url}`);
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}
+
+/**
+ * 既存の請求書でFORMAT2エクスポートテスト
+ * GASエディタから直接実行可能
+ */
+function testFormat2ExportWithExistingInvoice() {
+  Logger.log('=== FORMAT2 Export Test (Existing Invoice) ===');
+
+  // 既存のformat2請求書を検索
+  const invoices = InvoiceRepository.search({ invoice_format: 'format2' });
+
+  if (invoices.length === 0) {
+    Logger.log('✗ format2の請求書が見つかりません');
+    return { success: false, error: 'NO_FORMAT2_INVOICE' };
+  }
+
+  // 最初の請求書を使用
+  const invoice = invoices[0];
+  Logger.log(`✓ 請求書を使用: ${invoice.invoice_id} (${invoice.invoice_number || 'No number'})`);
+
+  // エクスポート実行（編集用シート作成）
+  const result = InvoiceExportService.export(invoice.invoice_id, 'edit', { keepSheet: true });
+
+  if (result.success) {
+    Logger.log(`✓ エクスポート成功!`);
+    Logger.log(`  シートURL: ${result.url}`);
+    Logger.log(`  シートID: ${result.sheetFileId}`);
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+    if (result.details) {
+      Logger.log(`  詳細: ${JSON.stringify(result.details)}`);
+    }
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}
+
+/**
+ * 複数ページFORMAT2テスト（3シート構成）
+ * 多数の明細行を生成してPDF出力を確認
+ * GASエディタから直接実行可能
+ */
+function testFormat2MultiPage() {
+  Logger.log('=== FORMAT2 Multi-Page Test ===');
+
+  // 顧客マスタから取得
+  const customers = getAllRecords('M_Customers');
+  if (customers.length === 0) {
+    Logger.log('✗ 顧客が見つかりません');
+    return { success: false, error: 'NO_CUSTOMERS' };
+  }
+
+  let customer = customers.find(c => c.shipper_name && c.shipper_name.trim() !== '') || customers[0];
+  Logger.log(`✓ 顧客: ${customer.company_name} (${customer.customer_id})`);
+
+  // 新規請求書を作成（多数の明細用）
+  // 発行日・支払期限を顧客設定から計算
+  const closingDay = customer.closing_day || 31;
+  const paymentDay = customer.payment_day || 31;
+  const paymentMonthOffset = customer.payment_month_offset || 1;
+
+  // 発行日（末日締め→翌月1日発行）
+  const issueDate = closingDay >= 28 ? '2025-02-01' : `2025-01-${String(closingDay + 1).padStart(2, '0')}`;
+
+  // 支払期限（翌月または翌々月の支払日）
+  const dueMonth = 1 + paymentMonthOffset;
+  const dueDate = `2025-${String(dueMonth).padStart(2, '0')}-${String(paymentDay).padStart(2, '0')}`;
+
+  // 請求番号を生成
+  const invoiceNumber = InvoiceRepository.generateInvoiceNumber(2025, 1, customer.customer_id);
+
+  const newInvoice = InvoiceRepository.insert({
+    customer_id: customer.customer_id,
+    billing_year: 2025,
+    billing_month: 1,
+    invoice_number: invoiceNumber,
+    issue_date: issueDate,
+    due_date: dueDate,
+    subtotal: 500000,
+    tax_amount: 50000,
+    total_amount: 550000,
+    invoice_format: 'format2',
+    status: 'draft',
+    shipper_name: customer.shipper_name || ''
+  });
+  const invoiceId = newInvoice.invoice_id;
+  Logger.log(`✓ 新規請求書作成: ${invoiceId}`);
+
+  // 30行の明細を追加（複数ページになる）
+  const itemNames = ['荷揚げ', '作業員', '運搬', '搬入', '据付'];
+  const branches = ['東京', '埼玉', '神奈川', '千葉'];
+  for (let i = 0; i < 30; i++) {
+    InvoiceLineRepository.insert({
+      invoice_id: invoiceId,
+      work_date: `2025-01-${String((i % 28) + 1).padStart(2, '0')}`,
+      site_name: `現場${String.fromCharCode(65 + (i % 10))}`,
+      order_number: `ORD-${String(i + 1).padStart(3, '0')}`,
+      branch_office: branches[i % branches.length],
+      item_name: itemNames[i % itemNames.length],
+      time_note: '9:00～',
+      quantity: (i % 3) + 1,
+      unit: '人',
+      unit_price: 15000 + (i % 5) * 1000,
+      amount: ((i % 3) + 1) * (15000 + (i % 5) * 1000)
+    });
+  }
+  Logger.log(`✓ 30件の明細を追加`);
+
+  // PDFエクスポート実行（3シート構成を確認）
+  const result = InvoiceExportService.export(invoiceId, 'pdf', { keepSheet: true });
+
+  if (result.success) {
+    Logger.log(`✓ エクスポート成功!`);
+    Logger.log(`  PDF URL: ${result.url}`);
+    Logger.log(`  ※ PDFを確認して、表紙（1ページ目）と明細（2ページ目以降）を確認してください`);
+    Logger.log(`  ※ 明細ページには列ヘッダーが繰り返されるはずです`);
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}

@@ -82,7 +82,7 @@ const INVOICE_FORMATS = {
   FORMAT1: 'format1',     // 様式1
   FORMAT2: 'format2',     // 様式2
   FORMAT3: 'format3',     // 様式3
-  ATAMAGAMI: 'atamagami'  // 頭紙
+  ATAMAGAMI: 'atamagami'  // 頭紙（非推奨: 様式1,2のオプション「頭紙を付ける」を使用）
 };
 
 /**
@@ -657,58 +657,11 @@ function validateInvoice_(invoice, isNew = false) {
     validateNumber_(invoice.total_amount, '合計金額', { min: 0 });
   }
 }
-
-// ============================================
-// ステータス遷移ルール
-// ============================================
-
-/**
- * 案件ステータスの遷移ルール
- * キー: 現在のステータス、値: 遷移可能なステータスの配列
- */
-const JOB_STATUS_TRANSITIONS = {
-  'pending': ['assigned', 'hold', 'cancelled'],
-  'assigned': ['pending', 'completed', 'hold', 'cancelled'],
-  'hold': ['pending', 'assigned', 'cancelled'],
-  'completed': [],  // 完了からは遷移不可
-  'cancelled': []   // キャンセルからは遷移不可
-};
-
-/**
- * 配置ステータスの遷移ルール
- */
-const ASSIGNMENT_STATUS_TRANSITIONS = {
-  'assigned': ['confirmed', 'cancelled'],
-  'confirmed': ['cancelled'],
-  'cancelled': []  // キャンセルからは遷移不可
-};
-
-/**
- * 請求ステータスの遷移ルール
- */
-const INVOICE_STATUS_TRANSITIONS = {
-  'draft': ['issued', 'cancelled'],
-  'issued': ['sent', 'paid', 'cancelled'],
-  'sent': ['paid', 'cancelled'],
-  'paid': [],       // 入金済みからは遷移不可
-  'cancelled': []   // キャンセルからは遷移不可
-};
-
-/**
- * ステータス遷移が有効かどうかチェック
- * @param {string} from - 現在のステータス
- * @param {string} to - 遷移先のステータス
- * @param {Object} transitionMap - 遷移ルールマップ
- * @returns {boolean} 遷移が有効ならtrue
- */
-function isValidTransition_(from, to, transitionMap) {
-  if (!transitionMap[from]) return false;
-  return transitionMap[from].includes(to);
-}
-
 // ============================================
 // ステータスラベル
 // ============================================
+// 注: ステータス遷移ルール（JOB_STATUS_TRANSITIONS等）は
+// status_rules.js で定義されています
 
 /**
  * 案件ステータスのラベルマップ
