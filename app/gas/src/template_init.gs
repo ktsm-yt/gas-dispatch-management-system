@@ -8,11 +8,20 @@
 // テンプレートID定義
 // ============================================================
 const TEMPLATE_IDS = {
+  // 様式1（顧客D型）- 結合セル多め
+  FORMAT1: '1GirBy63Cc3d-zLgZFBk4c2lDHHhXy9TLX8JW8COE0Ag',
+
   // 様式2（元）- Excelからインポートした元データ
   FORMAT2_ORIGINAL: '1PrrFQTsWOCh3jbi18ZFsLcHX6VjRtGCwC4HJ0blCGYc',
 
-  // 様式2（分離版）- 発注No/営業所を分離したテンプレート
-  FORMAT2_SEPARATED: '1fSnhdU3AjwpZae5jFzV1s98oEyvOuxcgUlMaLwW4SO8',
+  // 様式2（分離版）- 発注No/営業所を分離したテンプレート（最新版）
+  FORMAT2_SEPARATED: '1u-TlPQZSh5E2bljT-5vWeDaz7rNe9_JbIzFl0gmXSXI',
+
+  // 様式3（顧客B型）- シンプル一覧形式
+  FORMAT3: '19SrETjdFI8PMesLDP3BUBnrbWCCSiiiwK_8Mm06dDZc',
+
+  // 頭紙（顧客C型）- サマリー形式
+  ATAMAGAMI: '1yknAt_VqChIznk5Vc45XkVDD1feMtq-qXZ4j70gRBSs',
 };
 
 /**
@@ -219,16 +228,16 @@ function registerTemplateIds() {
 
   const templateIds = {
     // 様式1（顧客D型）
-    // TEMPLATE_FORMAT1_ID: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    TEMPLATE_FORMAT1_ID: TEMPLATE_IDS.FORMAT1,
 
     // 様式2（分離版）
-    // TEMPLATE_FORMAT2_ID: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    TEMPLATE_FORMAT2_ID: TEMPLATE_IDS.FORMAT2_SEPARATED,
 
     // 様式3（顧客B型）
-    // TEMPLATE_FORMAT3_ID: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    TEMPLATE_FORMAT3_ID: TEMPLATE_IDS.FORMAT3,
 
     // 頭紙（顧客C型）
-    // TEMPLATE_ATAMAGAMI_ID: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    TEMPLATE_ATAMAGAMI_ID: TEMPLATE_IDS.ATAMAGAMI,
   };
 
   for (const [key, value] of Object.entries(templateIds)) {
