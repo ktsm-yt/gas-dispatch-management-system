@@ -644,13 +644,21 @@
                   <option value="format1">様式1</option>
                   <option value="format2">様式2</option>
                   <option value="format3">様式3</option>
-                  <option value="atamagami">頭紙</option>
                 </select>
+              </div>
+              <div class="form-group">
+                <label for="include-cover-page">頭紙（表紙）</label>
+                <div style="display: flex; align-items: center; height: 38px;">
+                  <input type="checkbox" id="include-cover-page" name="include_cover_page" style="width: auto; margin-right: 8px;">
+                  <span style="font-size: 14px; color: #666;">様式1,2に頭紙を付ける</span>
+                </div>
               </div>
               <div class="form-group">
                 <label for="tax-rate">消費税率(%)</label>
                 <input type="number" id="tax-rate" name="tax_rate" min="0" max="100" step="1" value="10">
               </div>
+            </div>
+            <div class="form-row-3">
               <div class="form-group">
                 <label for="expense-rate">諸経費率(%)</label>
                 <input type="number" id="expense-rate" name="expense_rate" min="0" max="100" step="0.1" placeholder="0">
@@ -684,8 +692,19 @@
                 </select>
               </div>
               <div class="form-group">
-                <label for="folder-id">フォルダID</label>
-                <input type="text" id="folder-id" name="folder_id" placeholder="Google DriveフォルダID">
+                <label for="folder-id">フォルダ</label>
+                <input type="hidden" id="folder-id" name="folder_id">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <a id="open-folder-link" href="#" target="_blank" class="btn btn-secondary" style="display: none;">
+                    フォルダを開く
+                  </a>
+                  <span id="folder-not-set" class="text-muted" style="font-size: 0.9em;">
+                    未設定（新規登録時に自動作成）
+                  </span>
+                  <button type="button" id="create-folder-btn" class="btn btn-secondary" onclick="createFolder()" style="display: none;">
+                    フォルダ作成
+                  </button>
+                </div>
               </div>
             </div>
             <div class="form-group">
@@ -939,7 +958,11 @@
         document.getElementById('tax-rate').value = '10';
         document.getElementById('honorific').value = '様';
         document.getElementById('invoice-format').value = 'format1';
+        document.getElementById('include-cover-page').checked = false;
         document.getElementById('payment-month-offset').value = '1';
+
+        // フォルダUI初期化（新規作成モード）
+        updateFolderUI(null, null);
       }
 
       modal.style.display = 'flex';
@@ -967,6 +990,7 @@
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
       document.getElementById('payment-day').value = customer.payment_day || '';
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
+      document.getElementById('include-cover-page').checked = customer.include_cover_page === true || customer.include_cover_page === 'true';
       document.getElementById('tax-rate').value = customer.tax_rate ?? 10;
       document.getElementById('expense-rate').value = customer.expense_rate || '';
       document.getElementById('shipper-name').value = customer.shipper_name || '';
@@ -975,7 +999,75 @@
       document.getElementById('folder-id').value = customer.folder_id || '';
       document.getElementById('notes').value = customer.notes || '';
       document.getElementById('is-active').value = customer.is_active ? 'true' : 'false';
+
+      // フォルダUI更新
+      updateFolderUI(customer.folder_id, customer.customer_id);
     }
+
+    // フォルダ関連UIを更新
+    function updateFolderUI(folderId, customerId) {
+      const openLink = document.getElementById('open-folder-link');
+      const notSetText = document.getElementById('folder-not-set');
+      const createBtn = document.getElementById('create-folder-btn');
+
+      if (folderId) {
+        // フォルダがある場合: リンクを表示
+        openLink.href = `https://drive.google.com/drive/folders/${folderId}`;
+        openLink.style.display = 'inline-block';
+        notSetText.style.display = 'none';
+        createBtn.style.display = 'none';
+      } else if (customerId) {
+        // 既存顧客でフォルダがない場合: 作成ボタンを表示
+        openLink.style.display = 'none';
+        notSetText.style.display = 'none';
+        createBtn.style.display = 'inline-block';
+      } else {
+        // 新規顧客: 「未設定」を表示
+        openLink.style.display = 'none';
+        notSetText.style.display = 'inline';
+        createBtn.style.display = 'none';
+      }
+    }
+
+    // 個別フォルダ作成
+    function createFolder() {
+      const customerId = document.getElementById('customer-id').value;
+
+      if (!customerId) {
+        showToast('顧客を保存してからフォルダを作成してください', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('create-folder-btn');
+      btn.disabled = true;
+      btn.textContent = '作成中...';
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          btn.disabled = false;
+          btn.textContent = 'フォルダ作成';
+
+          if (response.ok) {
+            document.getElementById('folder-id').value = response.data.folderId;
+            updateFolderUI(response.data.folderId, customerId);
+            showToast('フォルダを作成しました', 'success');
+
+            // ローカルデータも更新
+            if (currentCustomer) {
+              currentCustomer.folder_id = response.data.folderId;
+            }
+          } else {
+            showToast(response.error?.message || 'フォルダ作成に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler((error) => {
+          btn.disabled = false;
+          btn.textContent = 'フォルダ作成';
+          showToast(error.message, 'error');
+        })
+        .createCustomerFolder(customerId);
+    }
+
 
     function closeModal() {
       document.getElementById('customer-modal').style.display = 'none';
@@ -1007,6 +1099,9 @@
           }
         }
       });
+
+      // Handle checkbox (FormData only includes checked checkboxes)
+      customer.include_cover_page = document.getElementById('include-cover-page').checked;
 
       const customerId = document.getElementById('customer-id').value;
       const updatedAt = document.getElementById('customer-updated-at').value;
