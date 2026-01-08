@@ -282,17 +282,15 @@ const InvoiceRepository = {
     try {
       const yy = String(year).slice(-2);
       const mm = String(month).padStart(2, '0');
+      const prefix = `${yy}${mm}_`;
 
       for (let retry = 0; retry < MAX_RETRIES; retry++) {
-        // 顧客の既存請求書から最大連番を取得
+        // 全請求書から同じYYMM_で始まる番号の最大連番を取得
         const records = getAllRecords(this.TABLE_NAME);
-        const customerInvoices = records.filter(r =>
-          r.customer_id === customerId && !r.is_deleted
-        );
 
         let maxSeq = 0;
-        for (const inv of customerInvoices) {
-          if (inv.invoice_number) {
+        for (const inv of records) {
+          if (!inv.is_deleted && inv.invoice_number && inv.invoice_number.startsWith(prefix)) {
             const parts = inv.invoice_number.split('_');
             if (parts.length === 2) {
               const seq = parseInt(parts[1], 10);
@@ -304,9 +302,9 @@ const InvoiceRepository = {
         }
 
         const candidateSeq = maxSeq + 1 + retry; // リトライ時はインクリメント
-        const candidateNumber = `${yy}${mm}_${candidateSeq}`;
+        const candidateNumber = `${prefix}${candidateSeq}`;
 
-        // 一意性チェック（全顧客で重複がないか確認）
+        // 一意性チェック
         const isDuplicate = records.some(r =>
           !r.is_deleted && r.invoice_number === candidateNumber
         );
@@ -332,6 +330,23 @@ const InvoiceRepository = {
   isInvoiceNumberAvailable: function(invoiceNumber) {
     const records = getAllRecords(this.TABLE_NAME);
     return !records.some(r => !r.is_deleted && r.invoice_number === invoiceNumber);
+  },
+
+  /**
+   * 顧客IDと年月で請求書を検索（一括生成の重複チェック用）
+   * @param {string} customerId - 顧客ID
+   * @param {number} year - 請求年
+   * @param {number} month - 請求月
+   * @returns {Object|null} 請求書またはnull
+   */
+  findByCustomerAndPeriod: function(customerId, year, month) {
+    const results = this.search({
+      customer_id: customerId,
+      billing_year: year,
+      billing_month: month,
+      limit: 1
+    });
+    return results.length > 0 ? results[0] : null;
   },
 
   /**
