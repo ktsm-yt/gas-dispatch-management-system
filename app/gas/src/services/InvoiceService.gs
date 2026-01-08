@@ -270,6 +270,89 @@ const InvoiceService = {
   },
 
   /**
+   * 請求書を一括生成（全アクティブ顧客）
+   * @param {number} year - 請求年
+   * @param {number} month - 請求月
+   * @param {Object} options - オプション
+   * @param {boolean} options.overwrite - 既存を上書きするか
+   * @param {number} options.offset - 開始位置（デフォルト0）
+   * @param {number} options.limit - 処理件数（デフォルト10）
+   * @returns {Object} 生成結果 { success, skippedNoData, skippedExisting, failed, progress }
+   */
+  bulkGenerate: function(year, month, options = {}) {
+    const offset = options.offset || 0;
+    const limit = options.limit || 10;
+
+    const results = {
+      success: [],
+      skippedNoData: [],
+      skippedExisting: [],
+      failed: [],
+      progress: { processed: 0, total: 0, hasMore: false }
+    };
+
+    // アクティブな全顧客を取得
+    const customersResult = listCustomers({ activeOnly: true });
+    if (!customersResult.ok) {
+      return { success: [], skippedNoData: [], skippedExisting: [], failed: [{ error: 'Failed to fetch customers' }], progress: { processed: 0, total: 0, hasMore: false } };
+    }
+
+    const allCustomers = customersResult.data?.items || [];
+    const totalCount = allCustomers.length;
+
+    // offset から limit 件だけ処理
+    const customers = allCustomers.slice(offset, offset + limit);
+
+    results.progress.total = totalCount;
+    results.progress.processed = Math.min(offset + customers.length, totalCount);
+    results.progress.hasMore = offset + limit < totalCount;
+
+    for (const customer of customers) {
+      const customerId = customer.customer_id;
+      const companyName = customer.company_name || '';
+
+      try {
+        // 既存チェック
+        const existing = InvoiceRepository.findByCustomerAndPeriod(customerId, year, month);
+        if (existing) {
+          if (options.overwrite) {
+            // 上書きモード: 既存を削除
+            const deleteResult = this.delete(existing.invoice_id, existing.updated_at);
+            if (!deleteResult.success) {
+              results.failed.push({ customerId, companyName, error: `削除失敗: ${deleteResult.error}` });
+              continue;
+            }
+          } else {
+            results.skippedExisting.push({ customerId, companyName });
+            continue;
+          }
+        }
+
+        // 請求書を生成（allowEmpty=false で配置データなしはエラー）
+        const generateResult = this.generate(customerId, year, month, { allowEmpty: false, allowDuplicate: true });
+
+        if (generateResult.success) {
+          results.success.push({
+            customerId,
+            companyName,
+            invoiceId: generateResult.invoice.invoice_id,
+            invoiceNumber: generateResult.invoice.invoice_number
+          });
+        } else if (generateResult.error === 'NO_ASSIGNMENTS_FOUND') {
+          results.skippedNoData.push({ customerId, companyName });
+        } else {
+          results.failed.push({ customerId, companyName, error: generateResult.error });
+        }
+      } catch (e) {
+        console.error(`BulkGenerate error for customer ${customerId}:`, e);
+        results.failed.push({ customerId, companyName, error: e.message || 'UNKNOWN_ERROR' });
+      }
+    }
+
+    return results;
+  },
+
+  /**
    * 請求書を再生成（既存の請求書を削除して新規作成）
    * @param {string} invoiceId - 請求ID
    * @returns {Object} 再生成結果

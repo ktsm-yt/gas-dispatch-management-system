@@ -86,6 +86,41 @@ function generateInvoice(customerId, ym, options = {}) {
 }
 
 /**
+ * 請求書を一括生成（全アクティブ顧客）
+ * @param {string} ym - 対象年月（YYYY-MM形式）
+ * @param {Object} options - オプション { overwrite: false }
+ * @returns {Object} APIレスポンス { success, skippedNoData, skippedExisting, failed }
+ */
+function bulkGenerateInvoices(ym, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'ym must be in YYYY-MM format', {}, requestId);
+    }
+
+    // 年月を分解
+    const [year, month] = ym.split('-').map(Number);
+
+    // Service呼び出し
+    const result = InvoiceService.bulkGenerate(year, month, options || {});
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    Logger.log(`bulkGenerateInvoices error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
  * 請求書一覧を検索
  * @param {Object} query - 検索条件
  * @returns {Object} APIレスポンス
