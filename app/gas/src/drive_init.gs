@@ -27,6 +27,7 @@ const FOLDER_STRUCTURE = {
     '出力',
     '出力/請求書',
     '出力/給与明細',
+    '顧客',  // 顧客専用フォルダの親（会社別フォルダはここに作成）
     'アーカイブ',
     'ドキュメント',
     'ドキュメント/仕様書'
@@ -60,6 +61,13 @@ function initDriveFolders() {
     // ScriptProperties に保存
     const prop = PropertiesService.getScriptProperties();
     prop.setProperty('DRIVE_ROOT_FOLDER_ID', rootFolderId);
+
+    // 顧客フォルダ親のIDを保存
+    const customerFolder = findFolderByName('顧客', rootFolder);
+    if (customerFolder) {
+      prop.setProperty('CUSTOMER_FOLDERS_PARENT_ID', customerFolder.getId());
+      Logger.log(`✓ 顧客フォルダ親を設定: ${customerFolder.getId()}`);
+    }
 
     Logger.log('\n=== Drive フォルダ初期化完了 ===');
     Logger.log(`Root Folder ID: ${rootFolderId}`);
