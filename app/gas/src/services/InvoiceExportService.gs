@@ -375,16 +375,29 @@ const InvoiceExportService = {
       const coverTemplateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEYS.atamagami);
       if (coverTemplateId) {
         const coverTemplate = SpreadsheetApp.openById(coverTemplateId);
-        const coverSourceSheet = coverTemplate.getSheets()[0];
+        const coverSourceSheet = coverTemplate.getSheetByName('原本') || coverTemplate.getSheets()[0];
+        const coverDataSheet = coverTemplate.getSheetByName('データ');
 
-        // 頭紙シートをコピー（先頭に挿入）
+        // 頭紙の原本シートをコピー（先頭に挿入）
         const coverSheet = coverSourceSheet.copyTo(spreadsheet);
         coverSheet.setName('頭紙');
         spreadsheet.setActiveSheet(coverSheet);
         spreadsheet.moveActiveSheet(1); // 先頭に移動
 
+        // 頭紙のデータシートもコピー（数式参照用）
+        let coverDataSheetCopy = null;
+        if (coverDataSheet) {
+          coverDataSheetCopy = coverDataSheet.copyTo(spreadsheet);
+          coverDataSheetCopy.setName('頭紙データ');
+        }
+
         // 頭紙にデータを入力
         this._populateAtagami(coverSheet, invoice, lines, customer, company);
+
+        // 頭紙データシートを非表示
+        if (coverDataSheetCopy) {
+          coverDataSheetCopy.hideSheet();
+        }
       }
     }
 
@@ -535,7 +548,15 @@ const InvoiceExportService = {
 
   /**
    * 頭紙のデータを入力
-   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
+   * テンプレートの「データ」シートに値を書き込み、「原本」シートは数式で自動参照
+   *
+   * セルマッピング:
+   * - データ!B2: 発行日 (YYYY-MM-DD) → 原本!AO2 で数式参照
+   * - データ!B3: No → 原本!AO3 で数式参照
+   * - データ!B4: 年, B5: 月, B6: 日 → 原本!H11, L11, O11 で数式参照
+   * - データ!B7: 請求金額 → 原本!I13 で数式参照
+   *
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - 原本シート
    * @param {Object} invoice - 請求書データ
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
@@ -548,14 +569,21 @@ const InvoiceExportService = {
     console.log('invoice.invoice_number:', invoice.invoice_number);
     console.log('invoice.due_date:', invoice.due_date);
     console.log('invoice.total_amount:', invoice.total_amount);
-    console.log('invoice.subtotal:', invoice.subtotal);
-    console.log('invoice.expense_amount:', invoice.expense_amount);
-    console.log('customer.company_name:', customer.company_name);
-    console.log('customer.contact_name:', customer.contact_name);
 
-    // === ヘッダー部分 ===
+    // データシートを取得（「データ」または「頭紙データ」を探す）
+    const spreadsheet = sheet.getParent();
+    let dataSheet = spreadsheet.getSheetByName('データ');
+    if (!dataSheet) {
+      dataSheet = spreadsheet.getSheetByName('頭紙データ');
+    }
 
-    // 顧客情報（郵便番号・住所）
+    if (!dataSheet) {
+      console.error('データシートが見つかりません。従来の方式で書き込みます。');
+      this._populateAtagamiLegacy(sheet, invoice, lines, customer, company);
+      return;
+    }
+
+    // === 顧客情報（原本シートに直接書き込み） ===
     if (customer.postal_code) {
       sheet.getRange('F2').setValue(customer.postal_code);
     }
@@ -563,70 +591,155 @@ const InvoiceExportService = {
       sheet.getRange('E3').setValue(customer.address);
     }
 
-    // 顧客名＋担当者名（E5: スペース区切りで同一セル）
+    // 顧客名＋担当者名
     let customerDisplay = customer.company_name || '';
     if (customer.contact_name) {
-      customerDisplay += `　${customer.contact_name}様`;  // 全角スペース
+      customerDisplay += `　${customer.contact_name}様`;
     }
     sheet.getRange('E5').setValue(customerDisplay);
 
-    // === 直接書き込み（ラベル+値を連結、マージセル対応） ===
-    // 発行日（AG2: マージセル、ラベル+値を連結）
+    // === 動的フィールド ===
+    // データシートに書き込み + 原本シートの値セルにも直接書き込み
+    // （シートコピー時に数式の参照先シート名がずれる問題を回避）
+
+    // 発行日
     if (invoice.issue_date) {
       const parts = invoice.issue_date.split('-');
       const issueDateFormatted = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
-      const issueDateWithLabel = `発行日　${issueDateFormatted}`;
-      console.log('Writing issue_date to AG2:', issueDateWithLabel);
-      sheet.getRange('AG2').setValue(issueDateWithLabel);
+      dataSheet.getRange('B2').setValue(invoice.issue_date);
+      sheet.getRange('AO2').setValue(issueDateFormatted);  // 原本シートの値セルに直接書き込み
+      console.log('Writing issue_date:', issueDateFormatted);
     }
 
-    // 請求書No（AG3: マージセル、ラベル+値を連結）
+    // No
     if (invoice.invoice_number) {
-      const invoiceNoWithLabel = `No　${invoice.invoice_number}`;
-      console.log('Writing invoice_number to AG3:', invoiceNoWithLabel);
-      sheet.getRange('AG3').setValue(invoiceNoWithLabel);
+      dataSheet.getRange('B3').setValue(invoice.invoice_number);
+      sheet.getRange('AO3').setValue(invoice.invoice_number);  // 原本シートの値セルに直接書き込み
+      console.log('Writing invoice_number:', invoice.invoice_number);
     }
 
-    // 支払期限（J11, M11, P11: 個別セル）
+    // 支払期限 年/月/日
     if (invoice.due_date) {
       const dueParts = invoice.due_date.split('-');
       const dueYear = parseInt(dueParts[0]);
       const dueMonth = parseInt(dueParts[1]);
       let dueDay = parseInt(dueParts[2]);
-      // 月末を超える日は月末に調整（例: 2月31日→2月28日）
+      // 月末を超える日は月末に調整
       const lastDayOfMonth = new Date(dueYear, dueMonth, 0).getDate();
       if (dueDay > lastDayOfMonth) {
         dueDay = lastDayOfMonth;
       }
-      console.log('Writing due_date - year:', dueYear, 'month:', dueMonth, 'day:', dueDay);
-      sheet.getRange('J11').setValue(dueYear);
-      sheet.getRange('M11').setValue(dueMonth);
-      sheet.getRange('P11').setValue(dueDay);
+      dataSheet.getRange('B4').setValue(dueYear);
+      dataSheet.getRange('B5').setValue(dueMonth);
+      dataSheet.getRange('B6').setValue(dueDay);
+      // 原本シートの値セルに直接書き込み
+      sheet.getRange('H11').setValue(dueYear);
+      sheet.getRange('L11').setValue(dueMonth);
+      sheet.getRange('O11').setValue(dueDay);
+      console.log('Writing due_date:', dueYear, dueMonth, dueDay);
     }
 
-    // ご請求金額（A13: マージセル、ラベル+値を連結）
-    const totalAmountFormatted = (invoice.total_amount || 0).toLocaleString();
-    const totalAmountWithLabel = `ご請求金額　　　　　　　　¥${totalAmountFormatted}`;
-    console.log('Writing total_amount to A13:', totalAmountWithLabel);
-    sheet.getRange('A13').setValue(totalAmountWithLabel);
+    // 請求金額
+    const totalAmount = invoice.total_amount || 0;
+    const totalAmountFormatted = totalAmount.toLocaleString();
+    dataSheet.getRange('B7').setValue(totalAmount);
+    sheet.getRange('I13').setValue(totalAmountFormatted);  // 原本シートの値セルに直接書き込み
+    console.log('Writing total_amount:', totalAmountFormatted);
 
-    // === 明細部分 ===
+    // === 自社情報（IMPORTRANGEはコピー時に権限問題があるため、GASから直接書き込み） ===
+    // セルマッピング: AD12=会社名, AQ13=郵便番号, AF14=住所, AO15=TEL, AO16=FAX, AM17=登録番号
+    if (company.company_name) {
+      sheet.getRange('AD12').setValue(company.company_name);
+    }
+    if (company.postal_code) {
+      sheet.getRange('AQ13').setValue(company.postal_code);
+    }
+    if (company.address) {
+      sheet.getRange('AF14').setValue(company.address);
+    }
+    if (company.phone) {
+      sheet.getRange('AO15').setValue(company.phone);
+    }
+    if (company.fax) {
+      sheet.getRange('AO16').setValue(company.fax);
+    }
+    if (company.invoice_registration_number) {
+      sheet.getRange('AM17').setValue(company.invoice_registration_number);
+    }
 
-    // 年月日（A23: 作業費行）
+    // === 銀行情報 ===
+    // セルマッピング: F35=銀行名, F36=支店, F37=口座番号, F38=口座名義
+    if (company.bank_name) {
+      sheet.getRange('F35').setValue(company.bank_name);
+    }
+    if (company.bank_branch) {
+      sheet.getRange('F36').setValue(company.bank_branch);
+    }
+    if (company.bank_account_number) {
+      sheet.getRange('F37').setValue(company.bank_account_number);
+    }
+    if (company.bank_account_name) {
+      sheet.getRange('F38').setValue(company.bank_account_name);
+    }
+
+    // データシートを非表示
+    dataSheet.hideSheet();
+
+    // === 明細部分（原本シートに直接書き込み） ===
     const billingPeriod = `${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}`;
     sheet.getRange('A23').setValue(billingPeriod);
 
-    // 品目名
     sheet.getRange('F23').setValue('作業費');
     sheet.getRange('F24').setValue('諸経費');
 
-    // 作業費金額（AI23）
     sheet.getRange('AI23').setValue(invoice.subtotal || 0);
-
-    // 諸経費金額（AI24）
     sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
+  },
 
-    // 小計・消費税・合計（AI34, AI36, AI37）は数式で自動計算
+  /**
+   * 頭紙のデータを入力（従来方式 - フォールバック用）
+   * データシートがない場合に使用
+   */
+  _populateAtagamiLegacy: function(sheet, invoice, lines, customer, company) {
+    // 顧客情報
+    if (customer.postal_code) sheet.getRange('F2').setValue(customer.postal_code);
+    if (customer.address) sheet.getRange('E3').setValue(customer.address);
+
+    let customerDisplay = customer.company_name || '';
+    if (customer.contact_name) customerDisplay += `　${customer.contact_name}様`;
+    sheet.getRange('E5').setValue(customerDisplay);
+
+    // 発行日（ラベル+値を連結）
+    if (invoice.issue_date) {
+      const parts = invoice.issue_date.split('-');
+      const formatted = `発行日　${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+      sheet.getRange('AG2').setValue(formatted);
+    }
+
+    // No
+    if (invoice.invoice_number) {
+      sheet.getRange('AG3').setValue(`No　${invoice.invoice_number}`);
+    }
+
+    // 支払期限
+    if (invoice.due_date) {
+      const dueParts = invoice.due_date.split('-');
+      sheet.getRange('J11').setValue(parseInt(dueParts[0]));
+      sheet.getRange('M11').setValue(parseInt(dueParts[1]));
+      sheet.getRange('P11').setValue(parseInt(dueParts[2]));
+    }
+
+    // 請求金額
+    const totalFormatted = (invoice.total_amount || 0).toLocaleString();
+    sheet.getRange('A13').setValue(`ご請求金額　　　　　　　　¥${totalFormatted}`);
+
+    // 明細
+    const billingPeriod = `${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}`;
+    sheet.getRange('A23').setValue(billingPeriod);
+    sheet.getRange('F23').setValue('作業費');
+    sheet.getRange('F24').setValue('諸経費');
+    sheet.getRange('AI23').setValue(invoice.subtotal || 0);
+    sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
   },
 
   /**
