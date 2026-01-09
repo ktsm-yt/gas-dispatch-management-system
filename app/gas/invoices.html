@@ -244,7 +244,7 @@
 
     .action-btn.pdf { color: #DC3545; border-color: #DC3545; }
     .action-btn.excel { color: #28A745; border-color: #28A745; }
-    .action-btn.edit { color: #139BC4; border-color: #139BC4; }
+    .action-btn.excel-cover { color: #6F42C1; border-color: #6F42C1; }
 
     /* Modal */
     .modal-overlay {
@@ -657,8 +657,8 @@
           <td><span class="status-badge status-${inv.status}">${getStatusLabel(inv.status)}</span></td>
           <td class="actions" onclick="event.stopPropagation()">
             <button class="action-btn pdf" onclick="exportPdf('${inv.invoice_id}')" title="PDF出力">PDF</button>
-            <button class="action-btn excel" onclick="exportExcel('${inv.invoice_id}')" title="Excel出力">Excel</button>
-            <button class="action-btn edit" onclick="exportEdit('${inv.invoice_id}')" title="編集して出力">編集</button>
+            <button class="action-btn excel" onclick="exportExcel('${inv.invoice_id}')" title="Excel出力（詳細のみ）">Excel</button>
+            <button class="action-btn excel-cover" onclick="exportExcelWithCover('${inv.invoice_id}')" title="Excel出力（頭紙付き）">頭紙</button>
           </td>
         </tr>
       `).join('');
@@ -830,11 +830,57 @@
       exportInvoice(invoiceId, 'excel');
     }
 
-    function exportEdit(invoiceId) {
-      exportInvoice(invoiceId, 'edit');
+    function exportExcelWithCover(invoiceId) {
+      exportInvoice(invoiceId, 'excel', { includeCoverPage: true });
     }
 
-    function exportInvoice(invoiceId, mode) {
+    function exportInvoice(invoiceId, mode, options = {}) {
+      // ユーザーアクション時に先にタブを開く（ポップアップブロック回避）
+      const newTab = window.open('about:blank', '_blank');
+
+      // 新しいタブにローディングメッセージを表示
+      if (newTab) {
+        const label = options.includeCoverPage ? 'Excel（頭紙付き）' : mode.toUpperCase();
+        newTab.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>ファイル生成中...</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+                color: #333;
+              }
+              .spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #e0e0e0;
+                border-top-color: #1a73e8;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 20px;
+              }
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+              .message { font-size: 16px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="spinner"></div>
+            <div class="message">${label} ファイルを生成しています...</div>
+          </body>
+          </html>
+        `);
+        newTab.document.close();
+      }
       showLoading();
 
       google.script.run
@@ -842,23 +888,27 @@
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
-            if (url) {
-              window.open(url, '_blank');
-              showToast(`${mode.toUpperCase()}を出力しました`, 'success');
+            if (url && newTab) {
+              newTab.location.href = url;
+              const label = options.includeCoverPage ? 'EXCEL（頭紙付き）' : mode.toUpperCase();
+              showToast(`${label}を出力しました`, 'success');
             } else {
+              if (newTab) newTab.close();
               showToast('出力に成功しました', 'success');
             }
             // Update invoice list to show new file IDs
             loadInvoices();
           } else {
+            if (newTab) newTab.close();
             showToast(result.error?.message || '出力に失敗しました', 'error');
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
+          if (newTab) newTab.close();
           handleError(error);
         })
-        .exportInvoice(invoiceId, mode);
+        .exportInvoice(invoiceId, mode, options);
     }
 
     function exportBillingData() {

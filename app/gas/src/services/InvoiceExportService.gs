@@ -361,13 +361,18 @@ const InvoiceExportService = {
     const sheet = spreadsheet.getSheets()[0];
 
     // 頭紙（表紙）を追加するかどうか判定
-    const includeCoverPage = customer.include_cover_page === true || customer.include_cover_page === 'true';
+    // - PDF出力時: 顧客設定(include_cover_page)に従う
+    // - Excel出力時: options.includeCoverPageで明示指定された場合のみ
+    const customerWantsCover = customer.include_cover_page === true || customer.include_cover_page === 'true';
     const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
-    const hasCoverPage = includeCoverPage && supportsCoverPage;
+    const includeCoverByOption = options.includeCoverPage === true;
+    const hasCoverPage = supportsCoverPage && (forPdf ? customerWantsCover : includeCoverByOption);
 
     // デバッグログ
     console.log('=== Cover Page Debug ===');
-    console.log('includeCoverPage:', includeCoverPage);
+    console.log('forPdf:', forPdf);
+    console.log('customerWantsCover:', customerWantsCover);
+    console.log('includeCoverByOption:', includeCoverByOption);
     console.log('supportsCoverPage:', supportsCoverPage);
     console.log('hasCoverPage:', hasCoverPage);
     console.log('invoice_format:', invoice.invoice_format);
@@ -549,6 +554,9 @@ const InvoiceExportService = {
         '#000000', SpreadsheetApp.BorderStyle.SOLID
       );
     }
+
+    // データシートを非表示（PDF/Excel出力時に見えないように）
+    dataSheet.hideSheet();
   },
 
   /**
