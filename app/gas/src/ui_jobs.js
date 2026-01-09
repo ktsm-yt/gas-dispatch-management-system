@@ -21,7 +21,9 @@ function doGet(e) {
     transportFees: { file: 'transportFees', title: '交通費マスター' },
     company: { file: 'company', title: '自社情報' },
     // P2-1: 請求管理
-    invoices: { file: 'invoices', title: '請求管理' }
+    invoices: { file: 'invoices', title: '請求管理' },
+    // P2-3: 支払管理
+    payouts: { file: 'payouts', title: '支払管理' }
   };
 
   const config = pages[page] || pages.dashboard;
