@@ -624,10 +624,10 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateFormat3: function(sheet, invoice, lines, customer, company) {
-    // タイトル
-    sheet.getRange('A1').setValue(`${customer.company_name || ''} ${invoice.billing_year}年${invoice.billing_month}月 追加請求一覧`);
+    // タイトル（B1に配置、顧客Bフォーマット準拠）
+    sheet.getRange('B1').setValue(`${customer.company_name || ''} ${invoice.billing_year}年${invoice.billing_month}月 追加請求一覧`);
 
-    // 明細行（A3から開始）
+    // 明細行（A3から開始、9列構成：№, 担当工事課, 担当監督名, 物件コード, 現場名, 施工日, 内容, 金額（税抜）, 金額（税込）
     const startRow = 3;
     const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
 
@@ -636,14 +636,15 @@ const InvoiceExportService = {
       const line = lines[i];
       const taxIncluded = Math.floor((line.amount || 0) * (1 + taxRate));
 
-      sheet.getRange(row, 1).setValue(line.construction_div || '');  // A: 担当工事課
-      sheet.getRange(row, 2).setValue(line.supervisor_name || '');   // B: 担当監督名
-      sheet.getRange(row, 3).setValue(line.property_code || '');     // C: 物件コード
-      sheet.getRange(row, 4).setValue(line.site_name || '');         // D: 現場名
-      sheet.getRange(row, 5).setValue(line.work_date || '');         // E: 施工日
-      sheet.getRange(row, 6).setValue(line.item_name || '');         // F: 内容
-      sheet.getRange(row, 7).setValue(line.amount || 0);             // G: 金額（税抜）
-      sheet.getRange(row, 8).setValue(taxIncluded);                  // H: 金額（税込）
+      sheet.getRange(row, 1).setValue(i + 1);                        // A: № (連番)
+      sheet.getRange(row, 2).setValue(line.construction_div || '');  // B: 担当工事課
+      sheet.getRange(row, 3).setValue(line.supervisor_name || '');   // C: 担当監督名
+      sheet.getRange(row, 4).setValue(line.property_code || '');     // D: 物件コード
+      sheet.getRange(row, 5).setValue(line.site_name || '');         // E: 現場名
+      sheet.getRange(row, 6).setValue(line.work_date || '');         // F: 施工日
+      sheet.getRange(row, 7).setValue(line.item_name || '');         // G: 内容
+      sheet.getRange(row, 8).setValue(line.amount || 0);             // H: 金額（税抜）
+      sheet.getRange(row, 9).setValue(taxIncluded);                  // I: 金額（税込）
     }
   },
 

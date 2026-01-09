@@ -575,3 +575,169 @@ function testFormat2MultiPage() {
   Logger.log('=== Test Complete ===');
   return result;
 }
+
+/**
+ * FORMAT3（顧客B型）エクスポートテスト
+ * GASエディタから直接実行可能
+ *
+ * 列構成: №, 担当工事課, 担当監督名, 物件コード, 現場名, 施工日, 内容, 金額（税抜）, 金額（税込）
+ */
+function testFormat3Export() {
+  Logger.log('=== FORMAT3 Export Test (顧客B型) ===');
+
+  // テスト用請求書データを作成
+  const testCustomerId = 'test_polatech_' + Date.now();
+
+  // 請求書を作成
+  const testInvoice = InvoiceRepository.insert({
+    customer_id: testCustomerId,
+    billing_year: 2025,
+    billing_month: 1,
+    subtotal: 200000,
+    tax_amount: 20000,
+    total_amount: 220000,
+    invoice_format: 'format3',
+    status: 'draft'
+  });
+  Logger.log(`✓ 請求書作成: ${testInvoice.invoice_id}`);
+
+  // テスト用明細を追加（format3固有フィールドを含む）
+  const testLines = [
+    {
+      invoice_id: testInvoice.invoice_id,
+      construction_div: '埼玉中央工事課',
+      supervisor_name: '山田',
+      property_code: 'EWC161',
+      site_name: '和光16-1-2',
+      work_date: '2025-01-22',
+      item_name: '荷揚げ3名   上棟荷揚げ',
+      quantity: 3,
+      unit: '人',
+      unit_price: 18000,
+      amount: 54000
+    },
+    {
+      invoice_id: testInvoice.invoice_id,
+      construction_div: '千葉西工事課',
+      supervisor_name: '二宮',
+      property_code: '',
+      site_name: '北小金66-1-7',
+      work_date: '2025-01-22',
+      item_name: '荷揚げ1名   資材',
+      quantity: 1,
+      unit: '人',
+      unit_price: 13000,
+      amount: 13000
+    },
+    {
+      invoice_id: testInvoice.invoice_id,
+      construction_div: '千葉西工事課',
+      supervisor_name: '橘高',
+      property_code: 'EWB201',
+      site_name: '柏B20-1',
+      work_date: '2025-01-23',
+      item_name: '荷揚げ4名   資材',
+      quantity: 4,
+      unit: '人',
+      unit_price: 18000,
+      amount: 72000
+    },
+    {
+      invoice_id: testInvoice.invoice_id,
+      construction_div: '東京西工事課',
+      supervisor_name: '室井',
+      property_code: '12501039',
+      site_name: 'PO多摩市AS.AS様邸',
+      work_date: '2025-01-23',
+      item_name: '荷揚げ2名   資材',
+      quantity: 2,
+      unit: '人',
+      unit_price: 18000,
+      amount: 36000
+    },
+    {
+      invoice_id: testInvoice.invoice_id,
+      construction_div: '千葉西工事課',
+      supervisor_name: '尾張',
+      property_code: 'EKD691',
+      site_name: '北小金69-1-4',
+      work_date: '2025-01-24',
+      item_name: '荷揚げ2名   上棟荷揚げ',
+      quantity: 2,
+      unit: '人',
+      unit_price: 18000,
+      amount: 36000
+    }
+  ];
+
+  for (const line of testLines) {
+    InvoiceLineRepository.insert(line);
+  }
+  Logger.log(`✓ 明細追加: ${testLines.length}件`);
+
+  // エクスポート実行（編集用シート作成）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+
+  if (result.success) {
+    Logger.log(`✓ エクスポート成功!`);
+    Logger.log(`  シートURL: ${result.url}`);
+    Logger.log(`  シートID: ${result.sheetFileId}`);
+    Logger.log('');
+    Logger.log('確認ポイント:');
+    Logger.log('  1. タイトル: B1に「(顧客名) 2025年1月 追加請求一覧」');
+    Logger.log('  2. ヘッダー: 2行目に №, 担当工事課, ... , 金額（税込）');
+    Logger.log('  3. データ: 3行目から5件の明細、A列に連番1-5');
+    Logger.log('  4. 金額: H列に税抜、I列に税込（税込計算済み）');
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+    if (result.details) {
+      Logger.log(`  詳細: ${JSON.stringify(result.details)}`);
+    }
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}
+
+/**
+ * FORMAT3（顧客B型）PDFエクスポートテスト
+ * GASエディタから直接実行可能
+ */
+function testFormat3ExportPdf() {
+  Logger.log('=== FORMAT3 PDF Export Test (顧客B型) ===');
+
+  // まずformat3の請求書を検索
+  const invoices = InvoiceRepository.search({ invoice_format: 'format3' });
+
+  if (invoices.length === 0) {
+    Logger.log('format3の請求書がないため、新規作成します...');
+    const editResult = testFormat3Export();
+    if (!editResult.success) {
+      return editResult;
+    }
+    // 作成した請求書を再検索
+    const newInvoices = InvoiceRepository.search({ invoice_format: 'format3' });
+    if (newInvoices.length === 0) {
+      return { success: false, error: 'NO_FORMAT3_INVOICE' };
+    }
+    var invoice = newInvoices[0];
+  } else {
+    var invoice = invoices[0];
+  }
+
+  Logger.log(`✓ 請求書を使用: ${invoice.invoice_id}`);
+
+  // PDFエクスポート実行
+  const result = InvoiceExportService.export(invoice.invoice_id, 'pdf', { keepSheet: false });
+
+  if (result.success) {
+    Logger.log(`✓ PDFエクスポート成功!`);
+    Logger.log(`  PDF URL: ${result.url}`);
+    Logger.log(`  PDF ID: ${result.pdfFileId}`);
+  } else {
+    Logger.log(`✗ エクスポート失敗: ${result.error}`);
+  }
+
+  Logger.log('=== Test Complete ===');
+  return result;
+}
