@@ -540,10 +540,10 @@ function testFormat2MultiPage() {
   const invoiceId = newInvoice.invoice_id;
   Logger.log(`✓ 新規請求書作成: ${invoiceId}`);
 
-  // 30行の明細を追加（複数ページになる）
+  // 100行の明細を追加（4ページにまたがる）
   const itemNames = ['荷揚げ', '作業員', '運搬', '搬入', '据付'];
   const branches = ['東京', '埼玉', '神奈川', '千葉'];
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 100; i++) {
     InvoiceLineRepository.insert({
       invoice_id: invoiceId,
       work_date: `2025-01-${String((i % 28) + 1).padStart(2, '0')}`,
@@ -558,16 +558,16 @@ function testFormat2MultiPage() {
       amount: ((i % 3) + 1) * (15000 + (i % 5) * 1000)
     });
   }
-  Logger.log(`✓ 30件の明細を追加`);
+  Logger.log(`✓ 100件の明細を追加（4ページ分）`);
 
-  // PDFエクスポート実行（3シート構成を確認）
+  // PDFエクスポート実行（4ページ分を確認）
   const result = InvoiceExportService.export(invoiceId, 'pdf', { keepSheet: true });
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
     Logger.log(`  PDF URL: ${result.url}`);
-    Logger.log(`  ※ PDFを確認して、表紙（1ページ目）と明細（2ページ目以降）を確認してください`);
-    Logger.log(`  ※ 明細ページには列ヘッダーが繰り返されるはずです`);
+    Logger.log(`  ※ PDFを確認して、表紙（1ページ目）と明細（4ページ分）を確認してください`);
+    Logger.log(`  ※ 明細ページには列ヘッダーが繰り返され、ページ境界にパディング行が挿入されます`);
   } else {
     Logger.log(`✗ エクスポート失敗: ${result.error}`);
   }

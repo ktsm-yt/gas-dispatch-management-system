@@ -155,8 +155,8 @@ const InvoiceExportService = {
    */
   exportToPdf: function(invoice, lines, customer, company, options = {}) {
     try {
-      // スプレッドシートを作成
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company);
+      // スプレッドシートを作成（PDF用：ページ分割あり）
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: true });
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -211,8 +211,8 @@ const InvoiceExportService = {
    */
   exportToExcel: function(invoice, lines, customer, company, options = {}) {
     try {
-      // スプレッドシートを作成
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company);
+      // スプレッドシートを作成（Excel用：ページ分割なし、連続データ）
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: false });
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -261,8 +261,8 @@ const InvoiceExportService = {
    */
   createEditSheet: function(invoice, lines, customer, company, options = {}) {
     try {
-      // スプレッドシートを作成
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company);
+      // スプレッドシートを作成（編集用：ページ分割なし、連続データ）
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: false });
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -340,9 +340,11 @@ const InvoiceExportService = {
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
+   * @param {Object} options - オプション（forPdf: PDF用処理を行うか）
    * @returns {Object} { success, spreadsheet, sheet, hasCoverPage }
    */
-  _createFilledSheet: function(invoice, lines, customer, company) {
+  _createFilledSheet: function(invoice, lines, customer, company, options = {}) {
+    const forPdf = options.forPdf !== false;  // デフォルトはtrue（後方互換）
     // テンプレートIDを取得
     const templateKey = this.TEMPLATE_KEYS[invoice.invoice_format] || this.TEMPLATE_KEYS.format1;
     const templateId = PropertiesService.getScriptProperties().getProperty(templateKey);
@@ -419,9 +421,9 @@ const InvoiceExportService = {
         this._populateFormat1(sheet, invoice, lines, customer, company);
     }
 
-    // FORMAT2の場合、印刷用の3シート構成を作成
+    // FORMAT2のPDF出力の場合、ページ分割された印刷用シートを作成
     let hasPrintSheets = false;
-    if (invoice.invoice_format === 'format2' && lines.length > 0) {
+    if (invoice.invoice_format === 'format2' && lines.length > 0 && forPdf) {
       this._createPrintSheetsForFormat2(spreadsheet, sheet, lines);
       hasPrintSheets = true;
     }
@@ -483,21 +485,47 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateFormat2: function(sheet, invoice, lines, customer, company) {
-    // ヘッダー部分（ラベルセルを上書きしない）
-    sheet.getRange('A2').setValue(customer.company_name || '');
-    sheet.getRange('B5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // B5に作業年月（A5はラベル）
-    sheet.getRange('I5').setValue(invoice.total_amount);  // I5に合計金額
+    // データシートを取得（atamagamiと同じアーキテクチャ）
+    const spreadsheet = sheet.getParent();
+    let dataSheet = spreadsheet.getSheetByName('データ');
 
-    // 荷主名（A6はラベル、B6に値）
-    sheet.getRange('B6').setValue(customer.shipper_name || '');
-
-    // 自社情報
-    if (company.company_name) {
-      sheet.getRange('G2').setValue(company.company_name);
+    if (!dataSheet) {
+      console.error('データシートが見つかりません。従来の方式で書き込みます。');
+      // フォールバック: 従来の直接書き込み
+      this._populateFormat2Legacy(sheet, invoice, lines, customer, company);
+      return;
     }
 
-    // 明細行（A10から開始、視認性のため1行おき）
+    // === ヘッダー情報をデータシートに書き込み ===
+    // （売上シートは数式で自動参照）
+    dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
+    dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
+    dataSheet.getRange('B4').setValue(invoice.total_amount || 0);  // 合計金額
+    dataSheet.getRange('B5').setValue(invoice.shipper_name || '');  // 荷主名（format1と統一）
+    dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
+    dataSheet.getRange('B7').setValue(company.postal_code ? '〒' + company.postal_code : '');  // 自社郵便番号
+    dataSheet.getRange('B8').setValue(company.address || '');  // 自社住所
+
+    // === 明細行を売上シートに直接書き込み ===
+    // （A10から開始、視認性のため1行おき）
     const startRow = 10;
+    const templateFormatRow = 10;  // 書式コピー元の行（テンプレートの最初のデータ行）
+    const lastTemplateRow = sheet.getLastRow();  // テンプレートの最終行
+    const lastNeededRow = startRow + ((lines.length - 1) * 2);  // 必要な最終行
+
+    // テンプレートの行数が足りない場合、書式をコピーして拡張
+    if (lastNeededRow > lastTemplateRow) {
+      // 書式コピー元の行（データ行と空白行の2行セット）
+      const sourceRange = sheet.getRange(templateFormatRow, 1, 2, 10);
+
+      // 不足している行数分だけ書式をコピー
+      for (let row = lastTemplateRow + 1; row <= lastNeededRow + 1; row += 2) {
+        const targetRange = sheet.getRange(row, 1, 2, 10);
+        sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT);
+      }
+      console.log(`書式を拡張: 行${lastTemplateRow} → 行${lastNeededRow}`);
+    }
+
     for (let i = 0; i < lines.length; i++) {
       const row = startRow + (i * 2);  // 1行おきに入力
       const line = lines[i];
@@ -511,6 +539,79 @@ const InvoiceExportService = {
       sheet.getRange(row, 8).setValue(line.unit || '人');          // H: 単位
       sheet.getRange(row, 9).setValue(line.unit_price || 0);       // I: 単価
       sheet.getRange(row, 10).setValue(line.amount || 0);          // J: 金額
+    }
+
+    // === 最終行に閉じる罫線を追加 ===
+    if (lines.length > 0) {
+      const lastRow = startRow + ((lines.length - 1) * 2);
+      sheet.getRange(lastRow, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+    }
+  },
+
+  /**
+   * 様式2のデータを入力（レガシー：データシートがない場合のフォールバック）
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
+   * @param {Object} invoice - 請求書データ
+   * @param {Object[]} lines - 明細データ
+   * @param {Object} customer - 顧客データ
+   * @param {Object} company - 自社データ
+   */
+  _populateFormat2Legacy: function(sheet, invoice, lines, customer, company) {
+    // ヘッダー部分（ラベルセルを上書きしない）
+    sheet.getRange('B2').setValue(customer.company_name || '');
+    sheet.getRange('B5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
+    sheet.getRange('I5').setValue(invoice.total_amount);
+    sheet.getRange('B6').setValue(invoice.shipper_name || '');
+    if (company.company_name) {
+      sheet.getRange('G2').setValue(company.company_name);
+    }
+    if (company.postal_code) {
+      sheet.getRange('G3').setValue('〒' + company.postal_code);
+    }
+    if (company.address) {
+      sheet.getRange('I3').setValue(company.address);
+    }
+
+    // 明細行
+    const startRow = 10;
+    const templateFormatRow = 10;
+    const lastTemplateRow = sheet.getLastRow();
+    const lastNeededRow = startRow + ((lines.length - 1) * 2);
+
+    // テンプレートの行数が足りない場合、書式をコピーして拡張
+    if (lastNeededRow > lastTemplateRow) {
+      const sourceRange = sheet.getRange(templateFormatRow, 1, 2, 10);
+      for (let row = lastTemplateRow + 1; row <= lastNeededRow + 1; row += 2) {
+        const targetRange = sheet.getRange(row, 1, 2, 10);
+        sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT);
+      }
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      const row = startRow + (i * 2);
+      const line = lines[i];
+      sheet.getRange(row, 1).setValue(line.work_date || '');
+      sheet.getRange(row, 2).setValue(line.site_name || '');
+      sheet.getRange(row, 3).setValue(line.order_number || '');
+      sheet.getRange(row, 4).setValue(line.branch_office || '');
+      sheet.getRange(row, 5).setValue(line.item_name || '');
+      sheet.getRange(row, 6).setValue(line.time_note || '');
+      sheet.getRange(row, 7).setValue(line.quantity || 0);
+      sheet.getRange(row, 8).setValue(line.unit || '人');
+      sheet.getRange(row, 9).setValue(line.unit_price || 0);
+      sheet.getRange(row, 10).setValue(line.amount || 0);
+    }
+
+    // 最終行に閉じる罫線
+    if (lines.length > 0) {
+      const lastRow = startRow + ((lines.length - 1) * 2);
+      sheet.getRange(lastRow, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
     }
   },
 
@@ -752,33 +853,123 @@ const InvoiceExportService = {
    * @param {Array} lines - 明細行データ
    */
   _createPrintSheetsForFormat2: function(spreadsheet, dataSheet, lines) {
-    // 印刷用シート作成（単一シートに全データを統合）
-    const printSheet = spreadsheet.insertSheet('印刷用');
+    // === 2シート構成アプローチ（改良版） ===
+    // 1. 表紙シート: 行1-9（ヘッダー全体）+ 1ページ目のデータ
+    // 2. 明細シート: 行9（列ヘッダー）を凍結 + 残りのデータ
+    // → fzr=true で凍結行が各ページに自動繰り返し
 
-    // 明細データの最終行を計算（1行おきなので）
-    const startRow = 10;
-    const lastDataRow = startRow + ((lines.length - 1) * 2);
+    console.log(`=== FORMAT2 2シート構成（改良版） ===`);
+    console.log(`明細行数: ${lines.length}`);
 
-    // データシートの全コンテンツを印刷用シートにコピー（行1〜最終データ行）
-    const fullRange = dataSheet.getRange(`A1:J${lastDataRow}`);
-    fullRange.copyTo(printSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
-    fullRange.copyTo(printSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    // 1ページ目に入るデータ行数（控えめに設定）
+    const FIRST_PAGE_DATA_ROWS = 27;
+    const dataStartRow = 10;
 
-    // 列幅をデータシートに合わせる
+    // 表紙に入れるデータ行数
+    const coverDataRows = Math.min(FIRST_PAGE_DATA_ROWS, lines.length);
+    // 明細シートに入れるデータ行数
+    const detailDataRows = lines.length - coverDataRows;
+
+    console.log(`表紙データ行: ${coverDataRows}, 明細データ行: ${detailDataRows}`);
+
+    // === 1. 表紙シートを作成 ===
+    const coverSheet = spreadsheet.insertSheet('表紙');
+
+    // 列幅をコピー
     for (let col = 1; col <= 10; col++) {
-      printSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+      coverSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
     }
 
-    // 行の高さもコピー
-    for (let row = 1; row <= lastDataRow; row++) {
-      printSheet.setRowHeight(row, dataSheet.getRowHeight(row));
+    // 行1-9（ヘッダー全体）をコピー
+    const headerRange = dataSheet.getRange('A1:J9');
+    headerRange.copyTo(coverSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+    headerRange.copyTo(coverSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+    // 行高さをコピー（行1-9）
+    for (let row = 1; row <= 9; row++) {
+      coverSheet.setRowHeight(row, dataSheet.getRowHeight(row));
     }
 
-    // 凍結なし：全ページを連続的に流す（ヘッダー繰り返しなし）
-    // ページ間の違和感を解消するため、自然に連続させる
+    // 表紙にデータ行をコピー（行10以降）
+    let coverRow = 10;
+    for (let i = 0; i < coverDataRows; i++) {
+      const sourceRow = dataStartRow + i * 2;  // データシートは1行おき
 
-    // データシートを非表示にして印刷用シートのみ表示
+      // データ行をコピー
+      const dataRange = dataSheet.getRange(`A${sourceRow}:J${sourceRow}`);
+      dataRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      dataRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      coverSheet.setRowHeight(coverRow, dataSheet.getRowHeight(sourceRow));
+      coverRow++;
+
+      // 空白行をコピー
+      const blankRange = dataSheet.getRange(`A${sourceRow + 1}:J${sourceRow + 1}`);
+      blankRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      blankRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      coverSheet.setRowHeight(coverRow, dataSheet.getRowHeight(sourceRow + 1));
+      coverRow++;
+    }
+
+    console.log(`表紙シート作成完了: ${coverRow - 1}行`);
+
+    // === 2. 明細シートを作成（残りデータがある場合のみ） ===
+    if (detailDataRows > 0) {
+      const detailSheet = spreadsheet.insertSheet('明細');
+
+      // 列幅をコピー
+      for (let col = 1; col <= 10; col++) {
+        detailSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+      }
+
+      // 行9（列ヘッダー）を明細シートの1行目にコピー
+      const columnHeaderRange = dataSheet.getRange('A9:J9');
+      columnHeaderRange.copyTo(detailSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      columnHeaderRange.copyTo(detailSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      detailSheet.setRowHeight(1, dataSheet.getRowHeight(9));
+
+      // 1行目を凍結（各ページで繰り返される）
+      detailSheet.setFrozenRows(1);
+
+      // 残りのデータ行をコピー
+      let detailRow = 2;
+      for (let i = coverDataRows; i < lines.length; i++) {
+        const sourceRow = dataStartRow + i * 2;  // データシートは1行おき
+
+        // データ行をコピー
+        const dataRange = dataSheet.getRange(`A${sourceRow}:J${sourceRow}`);
+        dataRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        dataRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        detailSheet.setRowHeight(detailRow, dataSheet.getRowHeight(sourceRow));
+        detailRow++;
+
+        // 空白行をコピー
+        const blankRange = dataSheet.getRange(`A${sourceRow + 1}:J${sourceRow + 1}`);
+        blankRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        blankRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        detailSheet.setRowHeight(detailRow, dataSheet.getRowHeight(sourceRow + 1));
+        detailRow++;
+      }
+
+      // 最終行に閉じる罫線
+      detailSheet.getRange(detailRow - 1, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+
+      console.log(`明細シート作成完了: ${detailRow - 1}行`);
+    } else {
+      // データが1ページに収まる場合は表紙の最終行に罫線
+      coverSheet.getRange(coverRow - 1, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+      console.log(`明細シート不要（1ページで収まる）`);
+    }
+
+    // データシートを非表示
     dataSheet.hideSheet();
+
+    console.log(`2シート構成完了`);
   },
 
   /**
@@ -802,7 +993,8 @@ const InvoiceExportService = {
       `&printtitle=false` +
       `&pagenumbers=false` +
       `&gridlines=false` +
-      `&fzr=true`;  // 凍結行を各ページで繰り返し
+      `&fzr=true` +  // 凍結行を各ページで繰り返し
+      `&horizontal_alignment=CENTER`;  // 水平方向中央揃え
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
@@ -820,6 +1012,7 @@ const InvoiceExportService = {
   _exportSpreadsheetToPdf: function(spreadsheetId) {
     // gidパラメータを省略して全シートを出力
     // fitw=trueで幅を1ページに収め、fzr=trueで凍結行繰り返し
+    // horizontal_alignment=CENTERで水平方向中央揃え
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
       `format=pdf` +
       `&portrait=true` +
@@ -831,7 +1024,8 @@ const InvoiceExportService = {
       `&pagenumbers=false` +
       `&gridlines=false` +
       `&fzr=true` +  // 凍結行を各ページで繰り返し
-      `&printheadings=false`;
+      `&printheadings=false` +
+      `&horizontal_alignment=CENTER`;  // 水平方向中央揃え
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
