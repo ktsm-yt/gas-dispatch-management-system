@@ -202,14 +202,9 @@
       text-transform: uppercase;
     }
 
-    .status-draft {
+    .status-unsent, .status-draft, .status-issued {
       background: #E5E7EB;
       color: #4B5563;
-    }
-
-    .status-issued {
-      background: #DBEAFE;
-      color: #1D4ED8;
     }
 
     .status-sent {
@@ -217,9 +212,31 @@
       color: #D97706;
     }
 
+    .status-unpaid {
+      background: #FEE2E2;
+      color: #DC2626;
+    }
+
     .status-paid {
       background: #D1FAE5;
       color: #059669;
+    }
+
+    /* Bulk Action Bar */
+    .bulk-action-bar {
+      background: var(--bg-secondary);
+      padding: var(--spacing-sm) var(--spacing-lg);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .bulk-action-bar select {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-primary);
     }
 
     /* Actions */
@@ -320,12 +337,95 @@
     }
 
     .form-group select,
-    .form-group input {
+    .form-group input[type="text"],
+    .form-group input[type="number"] {
       width: 100%;
       padding: var(--spacing-sm);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-sm);
       font-size: 14px;
+    }
+
+    /* Year-Month Row */
+    .year-month-row {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .year-month-row select {
+      width: auto;
+      min-width: 80px;
+      padding: var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+    }
+
+    .unit-label {
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    /* Radio Group */
+    .radio-group {
+      display: flex;
+      gap: var(--spacing-lg);
+    }
+
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .radio-label input[type="radio"] {
+      margin: 0;
+      cursor: pointer;
+    }
+
+    /* Progress */
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: var(--spacing-xs);
+      color: var(--text-muted);
+    }
+
+    .progress-bar-container {
+      height: 8px;
+      background: var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--color-primary);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-bar.loading {
+      width: 30%;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; width: 20%; }
+      50% { opacity: 1; width: 40%; }
+    }
+
+    /* Result Box */
+    .result-box {
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
     }
 
     /* Toast */
@@ -355,6 +455,10 @@
 
     .toast.success {
       background: var(--color-success);
+    }
+
+    .toast.warning {
+      background: #f59e0b;
     }
 
     /* Loading */
@@ -413,17 +517,47 @@
       <label>ステータス:</label>
       <select id="filterStatus">
         <option value="">全て</option>
-        <option value="draft">下書き</option>
-        <option value="issued">発行済み</option>
-        <option value="sent">送付済み</option>
-        <option value="paid">入金済み</option>
+        <option value="unsent">未送付</option>
+        <option value="sent">送付済</option>
+        <option value="unpaid">未回収</option>
+        <option value="paid">入金済</option>
       </select>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
     </div>
     <div class="toolbar-actions">
       <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
       <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
-      <button class="btn btn-secondary" onclick="exportBillingData()">集計エクスポート</button>
+      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+    </div>
+  </div>
+
+  <!-- 一括操作バー -->
+  <div id="bulkActionBar" class="bulk-action-bar">
+    <span id="selectedCount">0件選択中</span>
+    <select id="bulkStatusSelect">
+      <option value="">ステータス変更...</option>
+      <option value="unsent">未送付</option>
+      <option value="sent">送付済</option>
+      <option value="unpaid">未回収</option>
+      <option value="paid">入金済</option>
+    </select>
+    <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
+    <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
+  </div>
+
+  <!-- ステータス変更確認モーダル -->
+  <div class="modal-overlay" id="statusConfirmModal">
+    <div class="modal" style="max-width: 360px;">
+      <div class="modal-header">
+        <h2>確認</h2>
+      </div>
+      <div class="modal-body" id="statusConfirmBody">
+        <!-- 動的に設定 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeStatusConfirm()">キャンセル</button>
+        <button class="btn btn-primary" id="statusConfirmBtn" onclick="executeStatusUpdate()">変更する</button>
+      </div>
     </div>
   </div>
 
@@ -432,6 +566,7 @@
       <table class="data-table">
         <thead>
           <tr>
+            <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th>請求番号</th>
             <th>顧客名</th>
             <th>請求年月</th>
@@ -451,8 +586,8 @@
   </div>
 
   <!-- Generate Invoice Modal -->
-  <div class="modal-overlay" id="generateModal">
-    <div class="modal">
+  <div class="modal-overlay" id="generateModal" onclick="handleModalOverlayClick(event, 'generateModal')">
+    <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
         <h2>請求書生成</h2>
         <button class="modal-close" onclick="closeGenerateModal()">&times;</button>
@@ -466,10 +601,12 @@
         </div>
         <div class="form-group">
           <label>対象年月 *</label>
-          <select id="generateYear" required></select>
-          <span>年</span>
-          <select id="generateMonth" required></select>
-          <span>月</span>
+          <div class="year-month-row">
+            <select id="generateYear" required></select>
+            <span class="unit-label">年</span>
+            <select id="generateMonth" required></select>
+            <span class="unit-label">月</span>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -480,38 +617,86 @@
   </div>
 
   <!-- Bulk Generate Invoice Modal -->
-  <div class="modal-overlay" id="bulkGenerateModal">
-    <div class="modal" style="max-width: 340px;">
-      <div class="modal-header" style="padding: 10px 16px;">
-        <h2 style="font-size: 15px;">請求書一括生成</h2>
+  <div class="modal-overlay" id="bulkGenerateModal" onclick="handleModalOverlayClick(event, 'bulkGenerateModal')">
+    <div class="modal" style="max-width: 420px;">
+      <div class="modal-header">
+        <h2>請求書一括生成</h2>
         <button class="modal-close" onclick="closeBulkGenerateModal()">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 10px 16px;">
-        <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 8px;">
-          <span style="font-size: 12px;">対象:</span>
-          <select id="bulkGenerateYear" required style="width: auto; padding: 2px 4px; font-size: 12px;"></select>
-          <span style="font-size: 12px;">年</span>
-          <select id="bulkGenerateMonth" required style="width: auto; padding: 2px 4px; font-size: 12px;"></select>
-          <span style="font-size: 12px;">月</span>
-          <span style="font-size: 11px; margin-left: 8px;">重複:</span>
-          <label style="font-size: 11px; cursor: pointer;"><input type="radio" name="bulkOverwrite" value="false" checked style="margin-right: 2px;">スキップ</label>
-          <label style="font-size: 11px; cursor: pointer;"><input type="radio" name="bulkOverwrite" value="true" style="margin-right: 2px;">上書き</label>
-        </div>
-        <div id="bulkGenerateProgress" style="display: none; margin-bottom: 8px;">
-          <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 2px;">
-            <span id="bulkProgressText">進捗: 0/0社</span>
-            <span id="bulkProgressPercent">0%</span>
-          </div>
-          <div style="height: 6px; background: var(--border-color); border-radius: 3px; overflow: hidden;">
-            <div id="bulkProgressBar" style="height: 100%; background: var(--color-primary); width: 0%; transition: width 0.3s;"></div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>対象年月 *</label>
+          <div class="year-month-row">
+            <select id="bulkGenerateYear" required></select>
+            <span class="unit-label">年</span>
+            <select id="bulkGenerateMonth" required></select>
+            <span class="unit-label">月</span>
           </div>
         </div>
-        <div id="bulkGenerateResult" style="display: none; padding: 8px; background: var(--bg-card); border-radius: 4px; font-size: 11px;"></div>
+        <div class="form-group">
+          <label>既存の請求書</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="bulkOverwrite" value="false" checked>
+              <span>スキップ</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="bulkOverwrite" value="true">
+              <span>上書き</span>
+            </label>
+          </div>
+        </div>
+        <div id="bulkGenerateProgress" style="display: none;">
+          <div class="progress-info">
+            <span id="bulkProgressText">処理を開始しています...</span>
+            <span id="bulkProgressPercent"></span>
+          </div>
+          <div class="progress-bar-container">
+            <div id="bulkProgressBar" class="progress-bar"></div>
+          </div>
+          <div id="bulkProgressDetail" style="font-size: 12px; color: #666; margin-top: 8px;"></div>
+        </div>
+        <div id="bulkGenerateResult" class="result-box" style="display: none;"></div>
+        <div class="form-group" id="bulkAutoGenerateGroup" style="margin-top: 12px;">
+          <label class="checkbox-label" style="display: inline-flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="bulkAutoGenerate" checked>
+            <span>自動で続ける（最後まで連続実行）</span>
+          </label>
+        </div>
       </div>
-      <div class="modal-footer" style="padding: 8px 16px;">
-        <button class="btn btn-secondary" onclick="closeBulkGenerateModal()" style="padding: 6px 12px; font-size: 12px;">閉じる</button>
-        <button class="btn btn-primary" id="bulkGenerateBtn" onclick="bulkGenerateInvoices()" style="padding: 6px 12px; font-size: 12px;">開始</button>
-        <button class="btn btn-success" id="bulkContinueBtn" onclick="bulkGenerateContinue()" style="display: none; padding: 6px 12px; font-size: 12px;">次の10社</button>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBulkGenerateModal()">キャンセル</button>
+        <button class="btn btn-danger" id="bulkStopBtn" onclick="stopBulkGenerate()" style="display: none;">停止</button>
+        <button class="btn btn-primary" id="bulkGenerateBtn" onclick="bulkGenerateInvoices()">開始</button>
+        <button class="btn btn-success" id="bulkContinueBtn" onclick="bulkGenerateContinue()" style="display: none;">次の10社</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Billing Export Modal -->
+  <div class="modal-overlay" id="billingExportModal" onclick="handleModalOverlayClick(event, 'billingExportModal')">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>集計エクスポート</h2>
+        <button class="modal-close" onclick="closeBillingExportModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>対象年月 *</label>
+          <div class="year-month-row">
+            <select id="billingExportYear" required></select>
+            <span class="unit-label">年</span>
+            <select id="billingExportMonth" required></select>
+            <span class="unit-label">月</span>
+          </div>
+        </div>
+        <p style="color: #666; font-size: 13px; margin-top: 8px;">
+          選択した年月の全請求書データをExcel形式でエクスポートします。
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeBillingExportModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="executeBillingExport()">エクスポート</button>
       </div>
     </div>
   </div>
@@ -535,7 +720,39 @@
       initFilters();
       loadCustomers();
       loadInvoices();
+      initModalHandlers();
     });
+
+    // Modal ESC key and click-outside handlers
+    function initModalHandlers() {
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+          const generateModal = document.getElementById('generateModal');
+          const bulkModal = document.getElementById('bulkGenerateModal');
+          const billingModal = document.getElementById('billingExportModal');
+          if (generateModal.classList.contains('active')) {
+            closeGenerateModal();
+          } else if (bulkModal.classList.contains('active')) {
+            closeBulkGenerateModal();
+          } else if (billingModal.classList.contains('active')) {
+            closeBillingExportModal();
+          }
+        }
+      });
+    }
+
+    function handleModalOverlayClick(event, modalId) {
+      // Close only if clicked on overlay itself, not the modal content
+      if (event.target.id === modalId) {
+        if (modalId === 'generateModal') {
+          closeGenerateModal();
+        } else if (modalId === 'bulkGenerateModal') {
+          closeBulkGenerateModal();
+        } else if (modalId === 'billingExportModal') {
+          closeBillingExportModal();
+        }
+      }
+    }
 
     function initFilters() {
       const now = new Date();
@@ -543,7 +760,7 @@
       const currentMonth = now.getMonth() + 1;
 
       // 年の選択肢を生成（過去2年〜来年）
-      const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear'];
+      const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear', 'billingExportYear'];
       yearSelects.forEach(id => {
         const select = document.getElementById(id);
         for (let y = currentYear - 2; y <= currentYear + 1; y++) {
@@ -556,9 +773,16 @@
       });
 
       // 月の選択肢を生成
-      const monthSelects = ['filterMonth', 'generateMonth', 'bulkGenerateMonth'];
+      const monthSelects = ['filterMonth', 'generateMonth', 'bulkGenerateMonth', 'billingExportMonth'];
       monthSelects.forEach(id => {
         const select = document.getElementById(id);
+        // filterMonthのみ「全て」オプションを追加（年単位検索用）
+        if (id === 'filterMonth') {
+          const allOption = document.createElement('option');
+          allOption.value = '';
+          allOption.textContent = '全て';
+          select.appendChild(allOption);
+        }
         for (let m = 1; m <= 12; m++) {
           const option = document.createElement('option');
           option.value = String(m).padStart(2, '0');
@@ -603,16 +827,26 @@
     }
 
     function loadInvoices() {
-      showLoading();
+      clearSelection();
 
       const year = document.getElementById('filterYear').value;
       const month = document.getElementById('filterMonth').value;
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
 
+      // 顧客未選択時は月の指定が必須
+      if (!customerId && !month) {
+        showToast('顧客を選択するか、月を指定してください', 'warning');
+        return;
+      }
+
+      showLoading();
+
       const query = {};
-      if (year && month) {
+      if (year) {
         query.billing_year = parseInt(year);
+      }
+      if (month) {
         query.billing_month = parseInt(month);
       }
       if (customerId) query.customer_id = customerId;
@@ -648,7 +882,10 @@
       emptyState.style.display = 'none';
 
       tbody.innerHTML = invoices.map(inv => `
-        <tr onclick="viewInvoice('${inv.invoice_id}')">
+        <tr onclick="toggleRowCheckbox('${inv.invoice_id}')" data-invoice-id="${inv.invoice_id}" style="cursor: pointer;">
+          <td onclick="event.stopPropagation()">
+            <input type="checkbox" class="invoice-checkbox" data-invoice-id="${inv.invoice_id}" data-updated-at="${inv.updated_at || ''}" onchange="updateBulkActionBar()">
+          </td>
           <td>${escapeHtml(inv.invoice_number)}</td>
           <td>${escapeHtml(inv.customer?.company_name || '')}</td>
           <td>${inv.billing_year}/${String(inv.billing_month).padStart(2, '0')}</td>
@@ -662,22 +899,169 @@
           </td>
         </tr>
       `).join('');
+      // チェックボックス状態をリセット
+      document.getElementById('selectAll').checked = false;
+      updateBulkActionBar();
     }
 
     function getStatusLabel(status) {
       const labels = {
-        draft: '下書き',
-        issued: '発行済み',
-        sent: '送付済み',
-        paid: '入金済み'
+        unsent: '未送付',
+        sent: '送付済',
+        unpaid: '未回収',
+        paid: '入金済',
+        // 後方互換性
+        draft: '未送付',
+        issued: '未送付'
       };
       return labels[status] || status;
     }
 
     function viewInvoice(invoiceId) {
-      // TODO: Implement invoice detail view
-      showToast('請求書詳細画面は準備中です');
+      // TODO: Implement invoice detail view (保留)
     }
+
+    // ========== 一括選択・更新機能 ==========
+
+    function toggleSelectAll() {
+      const selectAll = document.getElementById('selectAll');
+      const checkboxes = document.querySelectorAll('.invoice-checkbox');
+      checkboxes.forEach(cb => cb.checked = selectAll.checked);
+      updateBulkActionBar();
+    }
+
+    function updateBulkActionBar() {
+      const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
+      const countSpan = document.getElementById('selectedCount');
+
+      countSpan.textContent = checkboxes.length > 0 ? `${checkboxes.length}件選択中` : '選択なし';
+
+      // 全選択チェックボックスの状態を更新
+      const allCheckboxes = document.querySelectorAll('.invoice-checkbox');
+      const selectAll = document.getElementById('selectAll');
+      selectAll.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+    }
+
+    function toggleRowCheckbox(invoiceId) {
+      const checkbox = document.querySelector(`.invoice-checkbox[data-invoice-id="${invoiceId}"]`);
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        updateBulkActionBar();
+      }
+    }
+
+    function clearSelection() {
+      document.getElementById('selectAll').checked = false;
+      document.querySelectorAll('.invoice-checkbox').forEach(cb => cb.checked = false);
+      updateBulkActionBar();
+    }
+
+    function updateInvoiceStatusInDOM(invoiceId, newStatus) {
+      // メモリ上のinvoices配列を更新
+      const inv = invoices.find(i => i.invoice_id === invoiceId);
+      if (inv) {
+        inv.status = newStatus;
+      }
+      // DOMのステータスバッジを更新
+      const row = document.querySelector(`tr[data-invoice-id="${invoiceId}"]`);
+      if (row) {
+        const badge = row.querySelector('.status-badge');
+        if (badge) {
+          badge.className = `status-badge status-${newStatus}`;
+          badge.textContent = getStatusLabel(newStatus);
+        }
+      }
+    }
+
+    // 確認モーダル用の一時データ
+    let pendingStatusUpdate = null;
+
+    function showStatusConfirm() {
+      const status = document.getElementById('bulkStatusSelect').value;
+      if (!status) {
+        showToast('ステータスを選択してください', 'warning');
+        return;
+      }
+
+      const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
+      if (checkboxes.length === 0) {
+        showToast('請求書を選択してください', 'warning');
+        return;
+      }
+
+      const updates = Array.from(checkboxes).map(cb => ({
+        invoiceId: cb.dataset.invoiceId,
+        updatedAt: cb.dataset.updatedAt
+      }));
+
+      const statusLabel = {
+        unsent: '未送付',
+        sent: '送付済',
+        unpaid: '未回収',
+        paid: '入金済'
+      }[status];
+
+      // 確認モーダルを表示
+      pendingStatusUpdate = { updates, status, statusLabel };
+      document.getElementById('statusConfirmBody').innerHTML =
+        `<p>${updates.length}件の請求書のステータスを<br><strong>「${statusLabel}」</strong>に変更します。</p>`;
+      document.getElementById('statusConfirmBtn').disabled = false;
+      document.getElementById('statusConfirmBtn').textContent = '変更する';
+      document.getElementById('statusConfirmModal').classList.add('active');
+    }
+
+    function closeStatusConfirm() {
+      document.getElementById('statusConfirmModal').classList.remove('active');
+      pendingStatusUpdate = null;
+    }
+
+    function executeStatusUpdate() {
+      if (!pendingStatusUpdate) return;
+
+      const { updates, status } = pendingStatusUpdate;
+      const confirmBtn = document.getElementById('statusConfirmBtn');
+
+      // ローディング表示
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '更新中...';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          console.log('bulkUpdateStatus result:', result);
+          closeStatusConfirm();
+          if (result.ok) {
+            const data = result.data || {};
+            const msg = data.failed > 0
+              ? `${data.updated}件更新、${data.failed}件失敗`
+              : `${data.updated}件のステータスを更新しました`;
+            showToast(msg, data.failed > 0 ? 'warning' : 'success');
+            if (data.errors) {
+              console.warn('Update errors:', data.errors);
+            }
+            // 差分更新: 成功した行のステータスバッジのみ更新
+            const failedIds = new Set((data.errors || []).map(e => e.invoiceId));
+            updates.forEach(u => {
+              if (!failedIds.has(u.invoiceId)) {
+                updateInvoiceStatusInDOM(u.invoiceId, status);
+              }
+            });
+            clearSelection();
+            document.getElementById('bulkStatusSelect').value = '';
+          } else {
+            console.error('bulkUpdateStatus error:', result);
+            const errorMsg = result.error?.message || result.error || '更新に失敗しました';
+            showToast(errorMsg, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          closeStatusConfirm();
+          console.error('bulkUpdateStatus failure:', error);
+          showToast('更新に失敗しました: ' + error.message, 'error');
+        })
+        .bulkUpdateInvoiceStatus(updates, status);
+    }
+
+    // ========== モーダル機能 ==========
 
     function openGenerateModal() {
       document.getElementById('generateModal').classList.add('active');
@@ -723,30 +1107,57 @@
     }
 
     // Bulk Generate Modal
-    let bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0 };
+    let bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0, stopRequested: false, isRunning: false };
 
     function openBulkGenerateModal() {
-      bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0 };
+      bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0, stopRequested: false, isRunning: false };
       document.getElementById('bulkGenerateResult').style.display = 'none';
       document.getElementById('bulkGenerateProgress').style.display = 'none';
       document.getElementById('bulkGenerateBtn').style.display = '';
       document.getElementById('bulkGenerateBtn').disabled = false;
       document.getElementById('bulkContinueBtn').style.display = 'none';
+      document.getElementById('bulkStopBtn').style.display = 'none';
+      document.getElementById('bulkAutoGenerateGroup').style.display = '';
       document.getElementById('bulkGenerateModal').classList.add('active');
     }
 
     function closeBulkGenerateModal() {
+      // 実行中なら停止
+      if (bulkState.isRunning) {
+        bulkState.stopRequested = true;
+      }
       document.getElementById('bulkGenerateModal').classList.remove('active');
-      loadInvoices();
+      // 生成が実行された場合のみリロード
+      if (bulkState.totalSuccess > 0) {
+        loadInvoices();
+      }
+      // リセット
+      document.getElementById('bulkGenerateProgress').style.display = 'none';
+      document.getElementById('bulkGenerateResult').style.display = 'none';
+      document.getElementById('bulkGenerateBtn').style.display = '';
+      document.getElementById('bulkContinueBtn').style.display = 'none';
+      document.getElementById('bulkStopBtn').style.display = 'none';
+      document.getElementById('bulkAutoGenerateGroup').style.display = '';
+      document.getElementById('bulkProgressBar').className = 'progress-bar';
+      document.getElementById('bulkProgressBar').style.width = '0%';
     }
 
     function bulkGenerateInvoices() {
-      bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0 };
+      bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0, stopRequested: false, isRunning: true };
       runBulkGenerate(0);
     }
 
     function bulkGenerateContinue() {
+      bulkState.stopRequested = false;
+      bulkState.isRunning = true;
       runBulkGenerate(bulkState.offset);
+    }
+
+    function stopBulkGenerate() {
+      bulkState.stopRequested = true;
+      document.getElementById('bulkStopBtn').disabled = true;
+      document.getElementById('bulkStopBtn').textContent = '停止中...';
+      document.getElementById('bulkProgressDetail').textContent = '停止処理中...';
     }
 
     function runBulkGenerate(offset) {
@@ -763,23 +1174,36 @@
 
       document.getElementById('bulkGenerateBtn').style.display = 'none';
       document.getElementById('bulkContinueBtn').style.display = 'none';
+      document.getElementById('bulkStopBtn').style.display = '';
+      document.getElementById('bulkStopBtn').disabled = false;
+      document.getElementById('bulkStopBtn').textContent = '停止';
+      document.getElementById('bulkAutoGenerateGroup').style.display = 'none';
       document.getElementById('bulkGenerateProgress').style.display = 'block';
-      showLoading();
+      document.getElementById('bulkProgressText').textContent = '処理を開始しています...';
+      document.getElementById('bulkProgressPercent').textContent = '';
+      document.getElementById('bulkProgressBar').className = 'progress-bar loading';
+      document.getElementById('bulkProgressBar').style.width = '';
+      document.getElementById('bulkProgressDetail').textContent = '顧客データを読み込んでいます';
+      // ローディングオーバーレイは使わない（停止ボタンを押せるようにするため）
 
       google.script.run
         .withSuccessHandler(function(result) {
-          hideLoading();
           if (result.ok) {
             showBulkGenerateResult(result.data);
           } else {
             showToast(result.error?.message || '一括生成に失敗しました', 'error');
             document.getElementById('bulkGenerateBtn').style.display = '';
+            document.getElementById('bulkStopBtn').style.display = 'none';
+            document.getElementById('bulkAutoGenerateGroup').style.display = '';
+            bulkState.isRunning = false;
           }
         })
         .withFailureHandler(function(error) {
-          hideLoading();
           handleError(error);
           document.getElementById('bulkGenerateBtn').style.display = '';
+          document.getElementById('bulkStopBtn').style.display = 'none';
+          document.getElementById('bulkAutoGenerateGroup').style.display = '';
+          bulkState.isRunning = false;
         })
         .bulkGenerateInvoices(ym, { overwrite, offset, limit: 10 });
     }
@@ -789,6 +1213,7 @@
       const processed = progress.processed || 0;
       const total = progress.total || 0;
       const hasMore = progress.hasMore || false;
+      const autoGenerate = document.getElementById('bulkAutoGenerate').checked;
 
       // Update cumulative totals
       bulkState.totalSuccess += (result.success?.length || 0);
@@ -800,6 +1225,7 @@
       const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
       document.getElementById('bulkProgressText').textContent = `進捗: ${processed}/${total}社`;
       document.getElementById('bulkProgressPercent').textContent = `${percent}%`;
+      document.getElementById('bulkProgressBar').className = 'progress-bar';
       document.getElementById('bulkProgressBar').style.width = `${percent}%`;
 
       // Update result display
@@ -812,11 +1238,45 @@
       resultDiv.innerHTML = html;
       resultDiv.style.display = 'block';
 
-      // Show buttons
+      // Handle stop request
+      if (bulkState.stopRequested) {
+        bulkState.isRunning = false;
+        document.getElementById('bulkStopBtn').style.display = 'none';
+        document.getElementById('bulkAutoGenerateGroup').style.display = '';
+        document.getElementById('bulkProgressDetail').textContent = '停止しました';
+        if (hasMore) {
+          document.getElementById('bulkContinueBtn').style.display = '';
+          document.getElementById('bulkContinueBtn').textContent = '続きを実行';
+        }
+        showToast(`停止: ${bulkState.totalSuccess}件生成済み`, 'info');
+        return;
+      }
+
+      // Auto-continue or show buttons
       if (hasMore) {
-        document.getElementById('bulkContinueBtn').style.display = '';
-        document.getElementById('bulkContinueBtn').textContent = `次の10社`;
+        if (autoGenerate) {
+          // 自動連続実行：次のバッチを500ms後に実行
+          document.getElementById('bulkProgressDetail').textContent = '次のバッチを実行中...';
+          setTimeout(function() {
+            if (!bulkState.stopRequested) {
+              runBulkGenerate(processed);
+            }
+          }, 500);
+        } else {
+          // 手動モード：ボタンを表示
+          document.getElementById('bulkProgressDetail').textContent = '次のバッチを待機中...';
+          document.getElementById('bulkStopBtn').style.display = 'none';
+          document.getElementById('bulkAutoGenerateGroup').style.display = '';
+          document.getElementById('bulkContinueBtn').style.display = '';
+          document.getElementById('bulkContinueBtn').textContent = '次の10社';
+          bulkState.isRunning = false;
+        }
       } else {
+        // 完了
+        bulkState.isRunning = false;
+        document.getElementById('bulkProgressDetail').textContent = '処理完了';
+        document.getElementById('bulkStopBtn').style.display = 'none';
+        document.getElementById('bulkAutoGenerateGroup').style.display = '';
         document.getElementById('bulkContinueBtn').style.display = 'none';
         showToast(`完了: ${bulkState.totalSuccess}件生成`, 'success');
       }
@@ -902,6 +1362,14 @@
               if (newTab) newTab.close();
               showToast('出力に成功しました', 'success');
             }
+
+            // 警告がある場合は表示（例: 頭紙テンプレート未設定など）
+            if (result.data.warning) {
+              setTimeout(() => {
+                showToast(result.data.warning, 'warning');
+              }, 500); // 成功トーストと重ならないように少し遅延
+            }
+
             // Update invoice list to show new file IDs
             loadInvoices();
           } else {
@@ -917,13 +1385,61 @@
         .exportInvoice(invoiceId, mode, options);
     }
 
-    function exportBillingData() {
-      const year = document.getElementById('filterYear').value;
-      const month = document.getElementById('filterMonth').value;
+    // Billing Export Modal
+    function openBillingExportModal() {
+      // フィルターの年月をモーダルにコピー
+      const filterYear = document.getElementById('filterYear').value;
+      const filterMonth = document.getElementById('filterMonth').value;
+      if (filterYear) {
+        document.getElementById('billingExportYear').value = filterYear;
+      }
+      if (filterMonth) {
+        document.getElementById('billingExportMonth').value = filterMonth;
+      }
+      document.getElementById('billingExportModal').classList.add('active');
+    }
+
+    function closeBillingExportModal() {
+      document.getElementById('billingExportModal').classList.remove('active');
+    }
+
+    function executeBillingExport() {
+      const year = document.getElementById('billingExportYear').value;
+      const month = document.getElementById('billingExportMonth').value;
       const ym = year && month ? `${year}-${month}` : '';
       if (!ym) {
         showToast('年月を選択してください', 'error');
         return;
+      }
+
+      closeBillingExportModal();
+
+      const label = '集計データ';
+
+      // 新しいタブを先に開く（ポップアップブロック対策）
+      const newTab = window.open('about:blank', '_blank');
+      if (newTab) {
+        newTab.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>${label}を生成中...</title>
+            <style>
+              body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+              .loader { text-align: center; }
+              .spinner { width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+              @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+          </head>
+          <body>
+            <div class="loader">
+              <div class="spinner"></div>
+              <p>${label}を生成中...</p>
+            </div>
+          </body>
+          </html>
+        `);
+        newTab.document.close();
       }
 
       showLoading();
@@ -933,16 +1449,26 @@
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
-            if (url) {
-              window.open(url, '_blank');
-              showToast('集計データをエクスポートしました', 'success');
+            if (url && newTab) {
+              // 正常ケース: 新しいタブでURLを開く
+              newTab.location.href = url;
+              showToast(`${label}をエクスポートしました`, 'success');
+            } else if (url && !newTab) {
+              // ポップアップブロック時: リンクを表示
+              showToast(`${label}をエクスポートしました。ポップアップがブロックされた可能性があります。`, 'success');
+              showFileLink(url, label);
+            } else {
+              if (newTab) newTab.close();
+              showToast('エクスポートに成功しました', 'success');
             }
           } else {
+            if (newTab) newTab.close();
             showToast(result.error?.message || 'エクスポートに失敗しました', 'error');
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
+          if (newTab) newTab.close();
           handleError(error);
         })
         .exportBillingData(ym, 'xlsx');
