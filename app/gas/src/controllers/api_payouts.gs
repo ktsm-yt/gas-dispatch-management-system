@@ -106,13 +106,13 @@ function getUnpaidStaffList(endDate) {
 }
 
 /**
- * 支払いを生成
+ * 支払いを支払済として記録
  * @param {string} staffId - スタッフID
  * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション { adjustment_amount, notes }
+ * @param {Object} options - オプション { adjustment_amount, notes, paid_date }
  * @returns {Object} APIレスポンス
  */
-function generatePayout(staffId, endDate, options = {}) {
+function markAsPaid(staffId, endDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -131,8 +131,13 @@ function generatePayout(staffId, endDate, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
+    // paid_dateの検証（指定された場合）
+    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+    }
+
     // Service呼び出し
-    const result = PayoutService.generatePayout(staffId, endDate, options);
+    const result = PayoutService.markAsPaid(staffId, endDate, options);
 
     if (!result.success) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error, { message: result.message }, requestId);
@@ -141,18 +146,27 @@ function generatePayout(staffId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('generatePayout error:', error);
+    console.error('markAsPaid error:', error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
 
 /**
- * 複数スタッフの支払いを一括生成
+ * 支払いを生成（後方互換性のため残す - markAsPaidを使用推奨）
+ * @deprecated markAsPaid() を使用してください
+ */
+function generatePayout(staffId, endDate, options = {}) {
+  return markAsPaid(staffId, endDate, options);
+}
+
+/**
+ * 複数スタッフの支払いを一括で支払済にする
  * @param {string[]} staffIds - スタッフID配列
  * @param {string} endDate - 集計終了日
+ * @param {Object} options - オプション { paid_date, adjustments: { [staffId]: { adjustment_amount, notes } } }
  * @returns {Object} APIレスポンス
  */
-function bulkGeneratePayouts(staffIds, endDate) {
+function bulkMarkAsPaid(staffIds, endDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -171,15 +185,28 @@ function bulkGeneratePayouts(staffIds, endDate) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
+    // paid_dateの検証（指定された場合）
+    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+    }
+
     // Service呼び出し
-    const result = PayoutService.bulkGenerate(staffIds, endDate);
+    const result = PayoutService.bulkMarkAsPaid(staffIds, endDate, options);
 
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('bulkGeneratePayouts error:', error);
+    console.error('bulkMarkAsPaid error:', error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
+}
+
+/**
+ * 複数スタッフの支払いを一括生成（後方互換性のため残す）
+ * @deprecated bulkMarkAsPaid() を使用してください
+ */
+function bulkGeneratePayouts(staffIds, endDate) {
+  return bulkMarkAsPaid(staffIds, endDate);
 }
 
 /**
@@ -279,11 +306,12 @@ function getPayoutHistory(staffId, options = {}) {
 }
 
 /**
- * 支払いステータスを更新
+ * 支払いステータスを更新（簡素化版 - paid のみ）
  * @param {string} payoutId - 支払ID
- * @param {string} status - 新ステータス（draft/confirmed/paid）
+ * @param {string} status - 新ステータス（paid のみ）
  * @param {string} expectedUpdatedAt - 楽観ロック用
  * @returns {Object} APIレスポンス
+ * @deprecated 通常は markAsPaid() で直接 paid ステータスで作成するため、このAPIは使用しません
  */
 function updatePayoutStatus(payoutId, status, expectedUpdatedAt) {
   const requestId = generateRequestId();
@@ -300,9 +328,9 @@ function updatePayoutStatus(payoutId, status, expectedUpdatedAt) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
     }
 
-    const validStatuses = ['draft', 'confirmed', 'paid'];
-    if (!validStatuses.includes(status)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `status must be one of: ${validStatuses.join(', ')}`, {}, requestId);
+    // 簡素化: paid のみ許可
+    if (status !== 'paid') {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'status must be "paid". Use undoPayout() to cancel.', {}, requestId);
     }
 
     // Service呼び出し
@@ -324,12 +352,12 @@ function updatePayoutStatus(payoutId, status, expectedUpdatedAt) {
 }
 
 /**
- * 支払いを削除
+ * 支払いを取り消し（未払い状態に戻す）
  * @param {string} payoutId - 支払ID
  * @param {string} expectedUpdatedAt - 楽観ロック用
  * @returns {Object} APIレスポンス
  */
-function deletePayout(payoutId, expectedUpdatedAt) {
+function undoPayout(payoutId, expectedUpdatedAt) {
   const requestId = generateRequestId();
 
   try {
@@ -344,7 +372,7 @@ function deletePayout(payoutId, expectedUpdatedAt) {
     }
 
     // Service呼び出し
-    const result = PayoutService.delete(payoutId, expectedUpdatedAt);
+    const result = PayoutService.undoPayout(payoutId, expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
@@ -356,9 +384,19 @@ function deletePayout(payoutId, expectedUpdatedAt) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('deletePayout error:', error);
+    console.error('undoPayout error:', error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
+}
+
+/**
+ * 支払いを削除（undoPayoutのエイリアス）
+ * @param {string} payoutId - 支払ID
+ * @param {string} expectedUpdatedAt - 楽観ロック用
+ * @returns {Object} APIレスポンス
+ */
+function deletePayout(payoutId, expectedUpdatedAt) {
+  return undoPayout(payoutId, expectedUpdatedAt);
 }
 
 /**
