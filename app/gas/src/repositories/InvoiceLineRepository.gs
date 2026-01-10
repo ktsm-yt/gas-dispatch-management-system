@@ -273,6 +273,52 @@ const InvoiceLineRepository = {
   },
 
   /**
+   * 複数請求IDに紐づく明細を一括論理削除（最適化版）
+   * @param {string[]} invoiceIds - 請求ID配列
+   * @returns {Object} 削除結果 { success: boolean, deleted: number }
+   */
+  bulkDeleteByInvoiceIds: function(invoiceIds) {
+    if (!invoiceIds || invoiceIds.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { success: true, deleted: 0 };
+    }
+
+    // 全データを一度に取得
+    const allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    const invoiceIdSet = new Set(invoiceIds);
+    const invoiceIdCol = headers.indexOf('invoice_id');
+    const isDeletedCol = headers.indexOf('is_deleted');
+    const updatedAtCol = headers.indexOf('updated_at');
+
+    const now = getCurrentTimestamp();
+    let deleted = 0;
+
+    // 対象行を更新（メモリ上）
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      if (invoiceIdSet.has(row[invoiceIdCol]) && !row[isDeletedCol]) {
+        row[isDeletedCol] = true;
+        row[updatedAtCol] = now;
+        deleted++;
+      }
+    }
+
+    // 一括で書き戻し
+    if (deleted > 0) {
+      sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+    }
+
+    return { success: true, deleted };
+  },
+
+  /**
    * 明細の行番号を再採番
    * @param {string} invoiceId - 請求ID
    * @returns {Object} 結果 { success: boolean, reordered: number }

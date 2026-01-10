@@ -500,33 +500,33 @@ function runStatusRulesTests() {
 }
 
 function testJobStatusTransitions() {
-  // 有効な遷移
-  assertTrue(isValidTransition_('pending', 'assigned', JOB_STATUS_TRANSITIONS), 'pending -> assigned');
-  assertTrue(isValidTransition_('pending', 'hold', JOB_STATUS_TRANSITIONS), 'pending -> hold');
-  assertTrue(isValidTransition_('assigned', 'completed', JOB_STATUS_TRANSITIONS), 'assigned -> completed');
+  // 有効な遷移（引数順序: transitions, fromStatus, toStatus）
+  assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'pending', 'assigned'), 'pending -> assigned');
+  assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'pending', 'hold'), 'pending -> hold');
+  assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'assigned', 'completed'), 'assigned -> completed');
 
   // 無効な遷移
-  assertFalse(isValidTransition_('completed', 'pending', JOB_STATUS_TRANSITIONS), 'completed -> pending');
-  assertFalse(isValidTransition_('cancelled', 'assigned', JOB_STATUS_TRANSITIONS), 'cancelled -> assigned');
+  assertFalse(isValidTransition_(JOB_STATUS_TRANSITIONS, 'completed', 'pending'), 'completed -> pending');
+  assertFalse(isValidTransition_(JOB_STATUS_TRANSITIONS, 'cancelled', 'assigned'), 'cancelled -> assigned');
 }
 
 function testAssignmentStatusTransitions() {
-  // 有効な遷移
-  assertTrue(isValidTransition_('assigned', 'confirmed', ASSIGNMENT_STATUS_TRANSITIONS), 'assigned -> confirmed');
-  assertTrue(isValidTransition_('assigned', 'cancelled', ASSIGNMENT_STATUS_TRANSITIONS), 'assigned -> cancelled');
+  // 有効な遷移（引数順序: transitions, fromStatus, toStatus）
+  assertTrue(isValidTransition_(ASSIGNMENT_STATUS_TRANSITIONS, 'assigned', 'confirmed'), 'assigned -> confirmed');
+  assertTrue(isValidTransition_(ASSIGNMENT_STATUS_TRANSITIONS, 'assigned', 'cancelled'), 'assigned -> cancelled');
 
   // 無効な遷移
-  assertFalse(isValidTransition_('cancelled', 'assigned', ASSIGNMENT_STATUS_TRANSITIONS), 'cancelled -> assigned');
+  assertFalse(isValidTransition_(ASSIGNMENT_STATUS_TRANSITIONS, 'cancelled', 'assigned'), 'cancelled -> assigned');
 }
 
 function testInvoiceStatusTransitions() {
-  // 有効な遷移
-  assertTrue(isValidTransition_('draft', 'issued', INVOICE_STATUS_TRANSITIONS), 'draft -> issued');
-  assertTrue(isValidTransition_('issued', 'sent', INVOICE_STATUS_TRANSITIONS), 'issued -> sent');
-  assertTrue(isValidTransition_('sent', 'paid', INVOICE_STATUS_TRANSITIONS), 'sent -> paid');
+  // 有効な遷移（引数順序: transitions, fromStatus, toStatus）
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'unsent', 'sent'), 'unsent -> sent');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'sent', 'paid'), 'sent -> paid');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'sent', 'unsent'), 'sent -> unsent (取消)');
 
   // 無効な遷移
-  assertFalse(isValidTransition_('paid', 'draft', INVOICE_STATUS_TRANSITIONS), 'paid -> draft');
+  assertFalse(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'paid', 'unsent'), 'paid -> unsent');
 }
 
 function testGetStatusLabels() {
@@ -549,21 +549,40 @@ function testIsEditable() {
   assertFalse(isJobEditable_('cancelled'), 'cancelled job is not editable');
 
   // Invoice editability
-  assertTrue(isInvoiceEditable_('draft'), 'draft invoice is editable');
-  assertFalse(isInvoiceEditable_('issued'), 'issued invoice is not editable');
+  assertTrue(isInvoiceEditable_('unsent'), 'unsent invoice is editable');
+  assertTrue(isInvoiceEditable_('draft'), 'draft invoice is editable (後方互換)');
+  assertFalse(isInvoiceEditable_('sent'), 'sent invoice is not editable');
 }
 
 function testCalculateJobStatus() {
-  // 配置なし -> pending
-  assertEqual(calculateJobStatus_(3, 0), 'pending', '0 assigned = pending');
+  // calculateJobStatus_(job, assignments) は job オブジェクトと assignments 配列を受け取る
+  // テスト用のモックオブジェクトを作成
 
-  // 一部配置 -> pending
-  assertEqual(calculateJobStatus_(3, 1), 'pending', 'partial = pending');
-  assertEqual(calculateJobStatus_(3, 2), 'pending', 'partial = pending');
+  // 配置なし -> pending
+  const job1 = { status: 'pending', required_count: 3 };
+  assertEqual(calculateJobStatus_(job1, []), 'pending', '0 assigned = pending');
+
+  // 一部配置 -> 配置ありなので assigned
+  const job2 = { status: 'pending', required_count: 3 };
+  const oneAssignment = [{ status: 'assigned', is_deleted: false }];
+  assertEqual(calculateJobStatus_(job2, oneAssignment), 'assigned', 'partial = assigned');
 
   // 全員配置 -> assigned
-  assertEqual(calculateJobStatus_(3, 3), 'assigned', 'full = assigned');
-  assertEqual(calculateJobStatus_(3, 4), 'assigned', 'over = assigned');
+  const job3 = { status: 'pending', required_count: 3 };
+  const fullAssignments = [
+    { status: 'assigned', is_deleted: false },
+    { status: 'assigned', is_deleted: false },
+    { status: 'assigned', is_deleted: false }
+  ];
+  assertEqual(calculateJobStatus_(job3, fullAssignments), 'assigned', 'full = assigned');
+
+  // キャンセル済みは変更なし
+  const job4 = { status: 'cancelled', required_count: 3 };
+  assertEqual(calculateJobStatus_(job4, fullAssignments), 'cancelled', 'cancelled stays cancelled');
+
+  // 完了済みは変更なし
+  const job5 = { status: 'completed', required_count: 3 };
+  assertEqual(calculateJobStatus_(job5, fullAssignments), 'completed', 'completed stays completed');
 }
 
 // ============================================================

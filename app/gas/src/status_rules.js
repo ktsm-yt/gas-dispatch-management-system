@@ -34,12 +34,12 @@ const ASSIGNMENT_STATUS_TRANSITIONS = {
  * 請求ステータスの遷移ルール
  */
 const INVOICE_STATUS_TRANSITIONS = {
-  // 下書き → 発行済/（削除）
-  draft: ['issued'],
-  // 発行済 → 送付済/下書き（発行取消）
-  issued: ['sent', 'draft'],
-  // 送付済 → 入金済/発行済（送付取消）
-  sent: ['paid', 'issued'],
+  // 未送付 → 送付済
+  unsent: ['sent'],
+  // 送付済 → 入金済/未回収/未送付（送付取消）
+  sent: ['paid', 'unpaid', 'unsent'],
+  // 未回収 → 入金済/送付済（状態戻し）
+  unpaid: ['paid', 'sent'],
   // 入金済 → 送付済（入金取消）
   paid: ['sent']
 };
@@ -177,10 +177,13 @@ function getAssignmentStatusLabel_(status) {
  */
 function getInvoiceStatusLabel_(status) {
   const labels = {
-    draft: '下書き',
-    issued: '発行済',
+    unsent: '未送付',
     sent: '送付済',
-    paid: '入金済'
+    unpaid: '未回収',
+    paid: '入金済',
+    // 後方互換性のため旧ステータスもサポート
+    draft: '未送付',
+    issued: '未送付'
   };
   return labels[status] || status;
 }
@@ -304,8 +307,8 @@ function isJobEditable_(status) {
  * @returns {boolean} 編集可能ならtrue
  */
 function isInvoiceEditable_(status) {
-  // 下書きのみ編集可能
-  return status === 'draft';
+  // 未送付のみ編集可能（後方互換: draft/issuedも許可）
+  return status === 'unsent' || status === 'draft' || status === 'issued';
 }
 
 /**
@@ -314,8 +317,8 @@ function isInvoiceEditable_(status) {
  * @returns {boolean} 削除可能ならtrue
  */
 function isInvoiceDeletable_(status) {
-  // 下書きのみ削除可能
-  return status === 'draft';
+  // 未送付のみ削除可能（後方互換: draft/issuedも許可）
+  return status === 'unsent' || status === 'draft' || status === 'issued';
 }
 
 /**

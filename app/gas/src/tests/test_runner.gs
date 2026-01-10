@@ -127,14 +127,14 @@ function runQuickTests() {
       const result = formatDate_(addDays_(parseDate_('2025-12-24'), 7));
       if (result !== '2025-12-31') throw new Error(`Expected 2025-12-31, got ${result}`);
     }},
-    // 金額計算
+    // 金額計算（税率は0.10形式で渡す）
     { name: 'calculateTaxIncluded_', fn: () => {
-      const result = calculateTaxIncluded_(10000, 10);
+      const result = calculateTaxIncluded_(10000, 0.10);
       if (result !== 11000) throw new Error(`Expected 11000, got ${result}`);
     }},
-    // ステータス
+    // ステータス（引数順序: transitions, fromStatus, toStatus）
     { name: 'isValidTransition_', fn: () => {
-      if (!isValidTransition_('pending', 'assigned', JOB_STATUS_TRANSITIONS)) {
+      if (!isValidTransition_(JOB_STATUS_TRANSITIONS, 'pending', 'assigned')) {
         throw new Error('Should be valid transition');
       }
     }}
