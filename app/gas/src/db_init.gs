@@ -251,6 +251,73 @@ function addIncludeCoverPageColumn() {
 }
 
 /**
+ * invoice_format='atamagami' の顧客を format1 + include_cover_page=true に移行
+ * GASエディタから実行: migrateAtagamiToFormat1()
+ *
+ * 移行内容:
+ *   - invoice_format: 'atamagami' → 'format1'
+ *   - include_cover_page: false → true
+ */
+function migrateAtagamiToFormat1() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('顧客');
+
+  if (!sheet) {
+    Logger.log('✗ 顧客シートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const invoiceFormatCol = headers.indexOf('invoice_format') + 1;
+  const includeCoverCol = headers.indexOf('include_cover_page') + 1;
+  const companyNameCol = headers.indexOf('company_name') + 1;
+
+  if (invoiceFormatCol === 0) {
+    Logger.log('✗ invoice_format カラムが見つかりません');
+    return;
+  }
+  if (includeCoverCol === 0) {
+    Logger.log('✗ include_cover_page カラムが見つかりません。先に addIncludeCoverPageColumn() を実行してください');
+    return;
+  }
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    Logger.log('✓ 顧客データがありません');
+    return;
+  }
+
+  // 全データを取得
+  const data = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  let migratedCount = 0;
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const invoiceFormat = row[invoiceFormatCol - 1];
+
+    if (invoiceFormat === 'atamagami') {
+      const rowNum = i + 2;
+      const companyName = row[companyNameCol - 1] || `行${rowNum}`;
+
+      // format1 に更新
+      sheet.getRange(rowNum, invoiceFormatCol).setValue('format1');
+      // include_cover_page を true に
+      sheet.getRange(rowNum, includeCoverCol).setValue(true);
+
+      Logger.log(`✓ 移行: ${companyName} (行${rowNum}): atamagami → format1 + 頭紙あり`);
+      migratedCount++;
+    }
+  }
+
+  Logger.log(`\n=== 移行完了 ===`);
+  Logger.log(`移行した顧客数: ${migratedCount}`);
+
+  if (migratedCount === 0) {
+    Logger.log('atamagami形式の顧客は見つかりませんでした');
+  }
+}
+
+/**
  * 既存の DB Spreadsheet をリセット（開発用）
  * ※本番環境では使用厳禁
  */

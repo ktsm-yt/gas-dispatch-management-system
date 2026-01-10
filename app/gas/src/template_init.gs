@@ -9,7 +9,7 @@
 // ============================================================
 const TEMPLATE_IDS = {
   // 様式1（オープンアーキ型）- 結合セル多め
-  FORMAT1: '1GirBy63Cc3d-zLgZFBk4c2lDHHhXy9TLX8JW8COE0Ag',
+  FORMAT1: '{{TEMPLATE_ID_FORMAT1}}',
 
   // 様式2（元）- Excelからインポートした元データ
   FORMAT2_ORIGINAL: '{{TEMPLATE_ID_FORMAT2_ORIGINAL}}',
@@ -17,8 +17,8 @@ const TEMPLATE_IDS = {
   // 様式2（分離版）- 発注No/営業所を分離したテンプレート（最新版）
   FORMAT2_SEPARATED: '{{TEMPLATE_ID_FORMAT2_SEPARATED}}',
 
-  // 様式3（ポラテック型）- シンプル一覧形式
-  FORMAT3: '19SrETjdFI8PMesLDP3BUBnrbWCCSiiiwK_8Mm06dDZc',
+  // 様式3（ポラテック型）- シンプル一覧形式（№列付き9列構成）
+  FORMAT3: '{{TEMPLATE_ID_FORMAT3}}',
 
   // 頭紙（グランド産業型）- サマリー形式
   ATAMAGAMI: '{{TEMPLATE_ID_ATAMAGAMI}}',
@@ -143,11 +143,12 @@ function createFormat2Template() {
 }
 
 /**
- * 様式3テンプレートを作成（シンプル一覧形式）
+ * 様式3テンプレートを作成（ポラテック型 - 9列構成）
+ * 列構成: №, 担当工事課, 担当監督名, 物件コード, 現場名, 施工日, 内容, 金額（税抜）, 金額（税込）
  */
 function createFormat3Template() {
   try {
-    Logger.log('様式3テンプレートを作成中...');
+    Logger.log('様式3テンプレート（ポラテック型）を作成中...');
 
     const prop = PropertiesService.getScriptProperties();
     const rootFolderId = prop.getProperty('DRIVE_ROOT_FOLDER_ID');
@@ -160,17 +161,17 @@ function createFormat3Template() {
     const format3Folder = templateFolder.getFoldersByName('様式3').next();
 
     // スプレッドシートを作成
-    const ss = SpreadsheetApp.create('様式3_テンプレート');
+    const ss = SpreadsheetApp.create('様式3_ポラテック_テンプレート');
     const sheet = ss.getSheets()[0];
-    sheet.setName('追加請求一覧');
+    sheet.setName('追加請求一覧（改1）');
 
-    // タイトル行
-    sheet.getRange('A1').setValue('追加請求一覧');
-    sheet.getRange('A1').setFontSize(14).setFontWeight('bold');
+    // タイトル行（B1に配置）
+    sheet.getRange('B1').setValue('追加請求一覧（改1）');
+    sheet.getRange('B1').setFontSize(14).setFontWeight('bold');
 
-    // ヘッダー行
+    // ヘッダー行（9列構成、№列付き）
     const headers = [
-      '担当工事課', '担当監督名', '物件コード', '現場名',
+      '№', '担当工事課', '担当監督名', '物件コード', '現場名',
       '施工日', '内容', '金額（税抜）', '金額（税込）'
     ];
     const headerRange = sheet.getRange(2, 1, 1, headers.length);
@@ -178,21 +179,21 @@ function createFormat3Template() {
     headerRange.setBackground('#E8F4F8');
     headerRange.setFontWeight('bold');
 
-    // 列幅を設定
-    const columnWidths = [120, 100, 100, 200, 100, 150, 100, 100];
+    // 列幅を設定（9列）
+    const columnWidths = [40, 120, 100, 100, 200, 100, 150, 100, 100];
     for (let i = 0; i < columnWidths.length; i++) {
       sheet.setColumnWidth(i + 1, columnWidths[i]);
     }
 
-    // サンプルデータ
+    // サンプルデータ（9列、№列付き）
     const sampleData = [
-      ['工事1課', '山田', 'P001', '○○邸', '2025/01/15', '荷揚げ作業', 36000, '=G3*1.1'],
-      ['工事2課', '鈴木', 'P002', '△△マンション', '2025/01/16', '鳶作業', 45000, '=G4*1.1']
+      [1, '工事1課', '山田', 'P001', '○○邸', '2025/01/15', '荷揚げ作業', 36000, '=H3*1.1'],
+      [2, '工事2課', '鈴木', 'P002', '△△マンション', '2025/01/16', '鳶作業', 45000, '=H4*1.1']
     ];
     sheet.getRange(3, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
 
-    // 金額列のフォーマット
-    sheet.getRange('G:H').setNumberFormat('#,##0');
+    // 金額列のフォーマット（H列とI列）
+    sheet.getRange('H:I').setNumberFormat('#,##0');
 
     // フリーズペイン
     sheet.setFrozenRows(2);
@@ -204,7 +205,7 @@ function createFormat3Template() {
     // ScriptProperties に登録
     prop.setProperty('TEMPLATE_FORMAT3_ID', ss.getId());
 
-    Logger.log('✓ 様式3テンプレート作成完了');
+    Logger.log('✓ 様式3テンプレート（ポラテック型）作成完了');
     Logger.log(`  ID: ${ss.getId()}`);
     Logger.log(`  URL: ${ss.getUrl()}`);
 
