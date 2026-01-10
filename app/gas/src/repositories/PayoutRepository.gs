@@ -105,7 +105,8 @@ const PayoutRepository = {
    * @param {string} query.payout_type - 種別（STAFF/SUBCONTRACTOR）
    * @param {string} query.staff_id - スタッフID
    * @param {string} query.subcontractor_id - 外注先ID
-   * @param {string} query.status - ステータス
+   * @param {string} query.status - ステータス（単一）
+   * @param {string[]} query.status_in - ステータス（複数、OR検索）
    * @param {string} query.period_start_from - 期間開始日（以降）
    * @param {string} query.period_end_to - 期間終了日（以前）
    * @param {number} query.limit - 取得件数制限
@@ -132,9 +133,14 @@ const PayoutRepository = {
       records = records.filter(r => r.subcontractor_id === query.subcontractor_id);
     }
 
-    // ステータスで絞り込み
+    // ステータスで絞り込み（単一）
     if (query.status) {
       records = records.filter(r => r.status === query.status);
+    }
+
+    // ステータスで絞り込み（複数）
+    if (query.status_in && Array.isArray(query.status_in)) {
+      records = records.filter(r => query.status_in.includes(r.status));
     }
 
     // 期間開始日（以降）で絞り込み
