@@ -90,10 +90,10 @@ const INVOICE_FORMATS = {
  * @see docs/03_spec/05_database.md T_Invoices.status
  */
 const INVOICE_STATUSES = {
-  DRAFT: 'draft',     // 下書き
-  ISSUED: 'issued',   // 発行済み
-  SENT: 'sent',       // 送付済み
-  PAID: 'paid'        // 入金済み
+  UNSENT: 'unsent',   // 未送付
+  SENT: 'sent',       // 送付済
+  UNPAID: 'unpaid',   // 未回収
+  PAID: 'paid'        // 入金済
 };
 
 /**
@@ -724,8 +724,8 @@ function isJobEditable_(status) {
  * @returns {boolean} 編集可能ならtrue
  */
 function isInvoiceEditable_(status) {
-  // 下書きのみ編集可能
-  return status === 'draft';
+  // 未送付のみ編集可能（後方互換: draft/issuedも許可）
+  return status === 'unsent' || status === 'draft' || status === 'issued';
 }
 
 // ============================================
