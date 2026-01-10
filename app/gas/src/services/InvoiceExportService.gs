@@ -21,6 +21,42 @@ const InvoiceExportService = {
   OUTPUT_FOLDER_KEY: 'OUTPUT_FOLDER_ID',
 
   /**
+   * テンプレートスプレッドシートを取得（エラーハンドリング付き）
+   * ScriptPropertyからテンプレートIDを取得し、スプレッドシートを開く
+   * 未設定や不正なIDの場合は明確なエラーメッセージを生成
+   *
+   * @param {string} templateKey - ScriptPropertyのキー名（TEMPLATE_FORMAT1_ID等）
+   * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} テンプレートスプレッドシート
+   * @throws {Error} テンプレートID未設定または無効な場合
+   */
+  _getTemplateSpreadsheet: function(templateKey) {
+    const props = PropertiesService.getScriptProperties();
+    const templateId = props.getProperty(templateKey);
+
+    if (!templateId) {
+      throw new Error(
+        `テンプレートID未設定: ${templateKey}\n` +
+        `以下の手順で設定してください:\n` +
+        `1. GASエディタで [プロジェクトの設定] を開く\n` +
+        `2. [スクリプトプロパティ] に以下を追加:\n` +
+        `   - プロパティ名: ${templateKey}\n` +
+        `   - 値: GoogleスプレッドシートのテンプレートファイルID\n` +
+        `または setInvoiceTemplateIds() 関数を実行してください。`
+      );
+    }
+
+    try {
+      return SpreadsheetApp.openById(templateId);
+    } catch (e) {
+      throw new Error(
+        `テンプレートを開けません: ${templateKey}=${templateId}\n` +
+        `原因: ${e.message}\n` +
+        `ファイルが削除されたか、アクセス権限がない可能性があります。`
+      );
+    }
+  },
+
+  /**
    * テンプレート設定を検証
    * @param {string} format - 請求書フォーマット
    * @returns {Object} { valid: boolean, missingKey?: string, setupGuide?: string }
@@ -188,12 +224,19 @@ const InvoiceExportService = {
       // 請求書のファイルIDを更新
       InvoiceRepository.updateFileIds(invoice.invoice_id, { pdf_file_id: file.getId() });
 
-      return {
+      const result = {
         success: true,
         fileId: file.getId(),
         url: file.getUrl(),
         invoiceId: invoice.invoice_id
       };
+
+      // 警告があれば追加（例: 頭紙テンプレート未設定）
+      if (sheetResult.warning) {
+        result.warning = sheetResult.warning;
+      }
+
+      return result;
     } catch (error) {
       console.error('exportToPdf error:', error);
       return { success: false, error: error.message || 'PDF_EXPORT_ERROR' };
@@ -239,12 +282,19 @@ const InvoiceExportService = {
       // 請求書のファイルIDを更新
       InvoiceRepository.updateFileIds(invoice.invoice_id, { excel_file_id: file.getId() });
 
-      return {
+      const result = {
         success: true,
         fileId: file.getId(),
         url: file.getUrl(),
         invoiceId: invoice.invoice_id
       };
+
+      // 警告があれば追加（例: 頭紙テンプレート未設定）
+      if (sheetResult.warning) {
+        result.warning = sheetResult.warning;
+      }
+
+      return result;
     } catch (error) {
       console.error('exportToExcel error:', error);
       return { success: false, error: error.message || 'EXCEL_EXPORT_ERROR' };
@@ -351,11 +401,32 @@ const InvoiceExportService = {
     const templateId = PropertiesService.getScriptProperties().getProperty(templateKey);
 
     if (!templateId) {
-      return { success: false, error: 'TEMPLATE_NOT_FOUND' };
+      return {
+        success: false,
+        error: 'TEMPLATE_NOT_FOUND',
+        details: {
+          missingKey: templateKey,
+          setupGuide: `テンプレートIDが未設定です。ScriptPropertiesに${templateKey}を設定してください。`
+        }
+      };
     }
 
-    // テンプレートをコピー
-    const templateFile = DriveApp.getFileById(templateId);
+    // テンプレートをコピー（エラーハンドリング付き）
+    let templateFile;
+    try {
+      templateFile = DriveApp.getFileById(templateId);
+    } catch (e) {
+      return {
+        success: false,
+        error: 'TEMPLATE_ACCESS_ERROR',
+        details: {
+          templateKey: templateKey,
+          templateId: templateId,
+          message: `テンプレートファイルにアクセスできません: ${e.message}`
+        }
+      };
+    }
+
     const copyName = `請求書_${invoice.invoice_number}_temp`;
     const copy = templateFile.makeCopy(copyName);
     const spreadsheet = SpreadsheetApp.openById(copy.getId());
@@ -384,31 +455,39 @@ const InvoiceExportService = {
       const coverTemplateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEYS.atamagami);
       if (!coverTemplateId) {
         console.warn('頭紙テンプレートが設定されていません（TEMPLATE_ATAMAGAMI_ID）');
-        coverPageWarning = '頭紙テンプレートが未設定のため、頭紙なしで出力しました';
+        coverPageWarning = '頭紙テンプレートが未設定のため、頭紙なしで出力しました。ScriptPropertiesにTEMPLATE_ATAMAGAMI_IDを設定してください。';
       } else {
-        const coverTemplate = SpreadsheetApp.openById(coverTemplateId);
-        const coverSourceSheet = coverTemplate.getSheetByName('原本') || coverTemplate.getSheets()[0];
-        const coverDataSheet = coverTemplate.getSheetByName('データ');
-
-        // 頭紙の原本シートをコピー（先頭に挿入）
-        const coverSheet = coverSourceSheet.copyTo(spreadsheet);
-        coverSheet.setName('頭紙');
-        spreadsheet.setActiveSheet(coverSheet);
-        spreadsheet.moveActiveSheet(1); // 先頭に移動
-
-        // 頭紙のデータシートもコピー（数式参照用）
-        let coverDataSheetCopy = null;
-        if (coverDataSheet) {
-          coverDataSheetCopy = coverDataSheet.copyTo(spreadsheet);
-          coverDataSheetCopy.setName('頭紙データ');
+        let coverTemplate;
+        try {
+          coverTemplate = SpreadsheetApp.openById(coverTemplateId);
+        } catch (e) {
+          console.warn(`頭紙テンプレートにアクセスできません: ${e.message}`);
+          coverPageWarning = `頭紙テンプレートにアクセスできません（ID: ${coverTemplateId}）。ファイルが削除されたか、アクセス権限がない可能性があります。`;
         }
+        if (coverTemplate) {
+          const coverSourceSheet = coverTemplate.getSheetByName('原本') || coverTemplate.getSheets()[0];
+          const coverDataSheet = coverTemplate.getSheetByName('データ');
 
-        // 頭紙にデータを入力
-        this._populateAtagami(coverSheet, invoice, lines, customer, company);
+          // 頭紙の原本シートをコピー（先頭に挿入）
+          const coverSheet = coverSourceSheet.copyTo(spreadsheet);
+          coverSheet.setName('頭紙');
+          spreadsheet.setActiveSheet(coverSheet);
+          spreadsheet.moveActiveSheet(1); // 先頭に移動
 
-        // 頭紙データシートを非表示
-        if (coverDataSheetCopy) {
-          coverDataSheetCopy.hideSheet();
+          // 頭紙のデータシートもコピー（数式参照用）
+          let coverDataSheetCopy = null;
+          if (coverDataSheet) {
+            coverDataSheetCopy = coverDataSheet.copyTo(spreadsheet);
+            coverDataSheetCopy.setName('頭紙データ');
+          }
+
+          // 頭紙にデータを入力
+          this._populateAtagami(coverSheet, invoice, lines, customer, company);
+
+          // 頭紙データシートを非表示
+          if (coverDataSheetCopy) {
+            coverDataSheetCopy.hideSheet();
+          }
         }
       }
     }
@@ -524,17 +603,10 @@ const InvoiceExportService = {
     const lastTemplateRow = sheet.getLastRow();  // テンプレートの最終行
     const lastNeededRow = startRow + ((lines.length - 1) * 2);  // 必要な最終行
 
-    // テンプレートの行数が足りない場合、書式をコピーして拡張
+    // テンプレートの行数が足りない場合、書式を一括拡張（パフォーマンス最適化）
     if (lastNeededRow > lastTemplateRow) {
-      // 書式コピー元の行（データ行と空白行の2行セット）
-      const sourceRange = sheet.getRange(templateFormatRow, 1, 2, 10);
-
-      // 不足している行数分だけ書式をコピー
-      for (let row = lastTemplateRow + 1; row <= lastNeededRow + 1; row += 2) {
-        const targetRange = sheet.getRange(row, 1, 2, 10);
-        sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT);
-      }
-      console.log(`書式を拡張: 行${lastTemplateRow} → 行${lastNeededRow}`);
+      const rowsToExtend = lastNeededRow - lastTemplateRow + 1;
+      this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
     for (let i = 0; i < lines.length; i++) {
@@ -595,13 +667,10 @@ const InvoiceExportService = {
     const lastTemplateRow = sheet.getLastRow();
     const lastNeededRow = startRow + ((lines.length - 1) * 2);
 
-    // テンプレートの行数が足りない場合、書式をコピーして拡張
+    // テンプレートの行数が足りない場合、書式を一括拡張（パフォーマンス最適化）
     if (lastNeededRow > lastTemplateRow) {
-      const sourceRange = sheet.getRange(templateFormatRow, 1, 2, 10);
-      for (let row = lastTemplateRow + 1; row <= lastNeededRow + 1; row += 2) {
-        const targetRange = sheet.getRange(row, 1, 2, 10);
-        sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT);
-      }
+      const rowsToExtend = lastNeededRow - lastTemplateRow + 1;
+      this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
     for (let i = 0; i < lines.length; i++) {
@@ -858,6 +927,104 @@ const InvoiceExportService = {
     sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
   },
 
+  // ============================================
+  // Batch Copy Helpers（パフォーマンス最適化）
+  // ============================================
+
+  /**
+   * 交互配置の行を一括コピー（バッチ処理）
+   * データシートの交互配置（データ行、空白行、データ行...）を
+   * ターゲットシートに一括でコピーする
+   *
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sourceSheet - コピー元シート
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} targetSheet - コピー先シート
+   * @param {number} sourceStartRow - コピー元の開始行（1-based）
+   * @param {number} targetStartRow - コピー先の開始行（1-based）
+   * @param {number} itemCount - コピーするアイテム数（1アイテム=2行）
+   * @param {number} columnsCount - コピーする列数
+   * @param {boolean} includeFormat - 書式もコピーするか
+   */
+  _batchCopyInterleavedRows: function(sourceSheet, targetSheet, sourceStartRow, targetStartRow, itemCount, columnsCount, includeFormat) {
+    if (itemCount === 0) return;
+
+    const sourceRowCount = itemCount * 2;
+
+    // 一括でソース範囲を取得
+    const sourceRange = sourceSheet.getRange(sourceStartRow, 1, sourceRowCount, columnsCount);
+    const targetRange = targetSheet.getRange(targetStartRow, 1, sourceRowCount, columnsCount);
+
+    // 値を一括コピー
+    targetRange.setValues(sourceRange.getValues());
+
+    // 書式を一括コピー
+    if (includeFormat) {
+      sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    }
+
+    // 行高さを一括設定
+    this._batchSetRowHeights(sourceSheet, targetSheet, sourceStartRow, targetStartRow, sourceRowCount);
+
+    console.log(`バッチコピー完了: ${itemCount}アイテム (${sourceRowCount}行)`);
+  },
+
+  /**
+   * 行高さを一括設定（同じ高さの行をグループ化して効率化）
+   *
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sourceSheet - コピー元シート
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} targetSheet - コピー先シート
+   * @param {number} sourceStartRow - コピー元の開始行
+   * @param {number} targetStartRow - コピー先の開始行
+   * @param {number} rowCount - 行数
+   */
+  _batchSetRowHeights: function(sourceSheet, targetSheet, sourceStartRow, targetStartRow, rowCount) {
+    if (rowCount === 0) return;
+
+    // ソースの行高さを収集
+    const heights = [];
+    for (let i = 0; i < rowCount; i++) {
+      heights.push(sourceSheet.getRowHeight(sourceStartRow + i));
+    }
+
+    // 連続する同じ高さの行をグループ化して一括設定
+    let groupStart = 0;
+    let currentHeight = heights[0];
+
+    for (let i = 1; i <= heights.length; i++) {
+      if (i === heights.length || heights[i] !== currentHeight) {
+        // グループを一括設定
+        const groupRowCount = i - groupStart;
+        targetSheet.setRowHeights(targetStartRow + groupStart, groupRowCount, currentHeight);
+
+        if (i < heights.length) {
+          groupStart = i;
+          currentHeight = heights[i];
+        }
+      }
+    }
+  },
+
+  /**
+   * 書式パターンを繰り返し適用（バッチ処理）
+   * 2行パターン（データ行+空白行）を必要な行数分だけ一括拡張
+   *
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
+   * @param {number} sourceRow - 書式コピー元の開始行
+   * @param {number} targetStartRow - 書式適用先の開始行
+   * @param {number} targetRowCount - 適用する行数
+   * @param {number} columnsCount - 列数
+   */
+  _batchExtendFormat: function(sheet, sourceRow, targetStartRow, targetRowCount, columnsCount) {
+    if (targetRowCount <= 0) return;
+
+    const sourceRange = sheet.getRange(sourceRow, 1, 2, columnsCount);
+    const targetRange = sheet.getRange(targetStartRow, 1, targetRowCount, columnsCount);
+
+    // 書式を一括コピー（copyToは範囲全体に適用される）
+    sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+    console.log(`書式を一括拡張: 行${targetStartRow} から ${targetRowCount}行`);
+  },
+
   /**
    * FORMAT2用の印刷用シートを作成（単一シート統合版）
    * - 行1-8: ヘッダー情報
@@ -905,27 +1072,13 @@ const InvoiceExportService = {
       coverSheet.setRowHeight(row, dataSheet.getRowHeight(row));
     }
 
-    // 表紙にデータ行をコピー（行10以降）
-    let coverRow = 10;
-    for (let i = 0; i < coverDataRows; i++) {
-      const sourceRow = dataStartRow + i * 2;  // データシートは1行おき
-
-      // データ行をコピー
-      const dataRange = dataSheet.getRange(`A${sourceRow}:J${sourceRow}`);
-      dataRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
-      dataRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-      coverSheet.setRowHeight(coverRow, dataSheet.getRowHeight(sourceRow));
-      coverRow++;
-
-      // 空白行をコピー
-      const blankRange = dataSheet.getRange(`A${sourceRow + 1}:J${sourceRow + 1}`);
-      blankRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
-      blankRange.copyTo(coverSheet.getRange(`A${coverRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-      coverSheet.setRowHeight(coverRow, dataSheet.getRowHeight(sourceRow + 1));
-      coverRow++;
+    // 表紙にデータ行をバッチコピー（行10以降）- パフォーマンス最適化
+    if (coverDataRows > 0) {
+      this._batchCopyInterleavedRows(dataSheet, coverSheet, dataStartRow, 10, coverDataRows, 10, true);
     }
+    const coverLastRow = 9 + coverDataRows * 2;
 
-    console.log(`表紙シート作成完了: ${coverRow - 1}行`);
+    console.log(`表紙シート作成完了（バッチ処理）: ${coverLastRow}行`);
 
     // === 2. 明細シートを作成（残りデータがある場合のみ） ===
     if (detailDataRows > 0) {
@@ -945,36 +1098,21 @@ const InvoiceExportService = {
       // 1行目を凍結（各ページで繰り返される）
       detailSheet.setFrozenRows(1);
 
-      // 残りのデータ行をコピー
-      let detailRow = 2;
-      for (let i = coverDataRows; i < lines.length; i++) {
-        const sourceRow = dataStartRow + i * 2;  // データシートは1行おき
-
-        // データ行をコピー
-        const dataRange = dataSheet.getRange(`A${sourceRow}:J${sourceRow}`);
-        dataRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
-        dataRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-        detailSheet.setRowHeight(detailRow, dataSheet.getRowHeight(sourceRow));
-        detailRow++;
-
-        // 空白行をコピー
-        const blankRange = dataSheet.getRange(`A${sourceRow + 1}:J${sourceRow + 1}`);
-        blankRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
-        blankRange.copyTo(detailSheet.getRange(`A${detailRow}`), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
-        detailSheet.setRowHeight(detailRow, dataSheet.getRowHeight(sourceRow + 1));
-        detailRow++;
-      }
+      // 残りのデータ行をバッチコピー - パフォーマンス最適化
+      const detailSourceStart = dataStartRow + coverDataRows * 2;  // 表紙分をスキップ
+      this._batchCopyInterleavedRows(dataSheet, detailSheet, detailSourceStart, 2, detailDataRows, 10, true);
+      const detailLastRow = 1 + detailDataRows * 2;
 
       // 最終行に閉じる罫線
-      detailSheet.getRange(detailRow - 1, 1, 1, 10).setBorder(
+      detailSheet.getRange(detailLastRow, 1, 1, 10).setBorder(
         null, null, true, null, null, null,
         '#000000', SpreadsheetApp.BorderStyle.SOLID
       );
 
-      console.log(`明細シート作成完了: ${detailRow - 1}行`);
+      console.log(`明細シート作成完了（バッチ処理）: ${detailLastRow}行`);
     } else {
       // データが1ページに収まる場合は表紙の最終行に罫線
-      coverSheet.getRange(coverRow - 1, 1, 1, 10).setBorder(
+      coverSheet.getRange(coverLastRow, 1, 1, 10).setBorder(
         null, null, true, null, null, null,
         '#000000', SpreadsheetApp.BorderStyle.SOLID
       );
@@ -1182,3 +1320,14 @@ const InvoiceExportService = {
     return `${year}年${month}月${day}日`;
   }
 };
+
+/**
+ * 出力先フォルダを設定（GASエディタから一度だけ実行）
+ * gas-dispatch-system > 出力 > 請求
+ */
+function setOutputFolderId() {
+  const folderId = '1yfVVTmRpeizoM9AR1_zgbcLriCZxGCj5';
+  PropertiesService.getScriptProperties().setProperty('OUTPUT_FOLDER_ID', folderId);
+  Logger.log('Output folder set to: ' + folderId);
+  Logger.log('URL: https://drive.google.com/drive/folders/' + folderId);
+}

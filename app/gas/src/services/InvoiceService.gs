@@ -33,8 +33,9 @@ const InvoiceService = {
         };
       }
 
-      // 3. 対象期間の配置データを取得
-      const assignments = this._getAssignmentsForPeriod(customerId, year, month);
+      // 3. 対象期間の配置データを取得（顧客の締め日を考慮）
+      const closingDay = customer.closing_day || 31;
+      const assignments = this._getAssignmentsForPeriod(customerId, year, month, closingDay);
       if (assignments.length === 0 && !options.allowEmpty) {
         return { success: false, error: 'NO_ASSIGNMENTS_FOUND' };
       }
@@ -67,7 +68,7 @@ const InvoiceService = {
         total_amount: totals.totalAmount,
         invoice_format: customer.invoice_format || 'format1',
         shipper_name: customer.shipper_name || customer.company_name || '',
-        status: 'draft'
+        status: 'unsent'
       });
 
       // 9. 明細行を作成
@@ -223,7 +224,7 @@ const InvoiceService = {
    */
   updateStatus: function(invoiceId, status, expectedUpdatedAt) {
     // ステータス遷移の検証
-    const validStatuses = ['draft', 'issued', 'sent', 'paid'];
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
     if (!validStatuses.includes(status)) {
       return { success: false, error: 'INVALID_STATUS' };
     }
@@ -233,9 +234,16 @@ const InvoiceService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // ステータス遷移ルール（逆戻りは基本的に不可、ただしdraftへの戻しは許可）
-    const statusOrder = { draft: 0, issued: 1, sent: 2, paid: 3 };
-    if (status !== 'draft' && statusOrder[status] < statusOrder[current.status]) {
+    // ステータス遷移ルール（status_rules.js の INVOICE_STATUS_TRANSITIONS に準拠）
+    // 旧ステータスも新ステータスにマッピング
+    const currentStatusNormalized = (current.status === 'draft' || current.status === 'issued') ? 'unsent' : current.status;
+    const allowedTransitions = {
+      unsent: ['sent'],
+      sent: ['paid', 'unpaid', 'unsent'],
+      unpaid: ['paid', 'sent'],
+      paid: ['sent']
+    };
+    if (currentStatusNormalized !== status && !allowedTransitions[currentStatusNormalized]?.includes(status)) {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
     }
 
@@ -257,9 +265,10 @@ const InvoiceService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // 発行済み以降は削除不可
-    if (invoice.status !== 'draft') {
-      return { success: false, error: 'CANNOT_DELETE_ISSUED_INVOICE' };
+    // 送付済み以降は削除不可（未送付/draft/issuedのみ削除可能）
+    const deletableStatuses = ['unsent', 'draft', 'issued'];
+    if (!deletableStatuses.includes(invoice.status)) {
+      return { success: false, error: 'CANNOT_DELETE_SENT_INVOICE' };
     }
 
     // 明細を削除
@@ -270,7 +279,8 @@ const InvoiceService = {
   },
 
   /**
-   * 請求書を一括生成（全アクティブ顧客）
+   * 請求書を一括生成（全アクティブ顧客）- 最適化版
+   * バッチ内でシートI/Oを集約し、パフォーマンスを大幅に向上
    * @param {number} year - 請求年
    * @param {number} month - 請求月
    * @param {Object} options - オプション
@@ -307,49 +317,282 @@ const InvoiceService = {
     results.progress.processed = Math.min(offset + customers.length, totalCount);
     results.progress.hasMore = offset + limit < totalCount;
 
-    for (const customer of customers) {
-      const customerId = customer.customer_id;
-      const companyName = customer.company_name || '';
+    if (customers.length === 0) {
+      return results;
+    }
 
-      try {
-        // 既存チェック
-        const existing = InvoiceRepository.findByCustomerAndPeriod(customerId, year, month);
-        if (existing) {
-          if (options.overwrite) {
-            // 上書きモード: 既存を削除
-            const deleteResult = this.delete(existing.invoice_id, existing.updated_at);
-            if (!deleteResult.success) {
-              results.failed.push({ customerId, companyName, error: `削除失敗: ${deleteResult.error}` });
+    try {
+      // === バッチ最適化: 1回だけシートを読み込み ===
+      const allJobs = getAllRecords('T_Jobs');
+      const allAssignments = getAllRecords('T_JobAssignments');
+      const allInvoices = getAllRecords('T_Invoices');
+
+      // インデックス構築: 顧客IDでグループ化
+      const jobsByCustomer = this._groupBy(allJobs, 'customer_id');
+      const assignmentsByJob = this._groupBy(allAssignments, 'job_id');
+
+      // 既存請求書のインデックス: {customerId_year_month: invoice}
+      const existingInvoiceIndex = {};
+      for (const inv of allInvoices) {
+        if (!inv.is_deleted) {
+          const key = `${inv.customer_id}_${inv.billing_year}_${inv.billing_month}`;
+          existingInvoiceIndex[key] = inv;
+        }
+      }
+
+      // 請求番号の開始連番を取得（ロック内で1回だけ）
+      const yy = String(year).slice(-2);
+      const mm = String(month).padStart(2, '0');
+      const prefix = `${yy}${mm}_`;
+      let maxSeq = this._getMaxInvoiceSequence(allInvoices, prefix);
+
+      // バッチ用の新規請求書・明細を集約
+      const newInvoices = [];
+      const newLines = [];
+
+      for (const customer of customers) {
+        const customerId = customer.customer_id;
+        const companyName = customer.company_name || '';
+
+        try {
+          // 既存チェック（メモリ上で高速判定）
+          const existingKey = `${customerId}_${year}_${month}`;
+          const existing = existingInvoiceIndex[existingKey];
+
+          if (existing) {
+            if (options.overwrite) {
+              // 上書きモード: 既存を削除
+              const deleteResult = this.delete(existing.invoice_id, existing.updated_at);
+              if (!deleteResult.success) {
+                results.failed.push({ customerId, companyName, error: `削除失敗: ${deleteResult.error}` });
+                continue;
+              }
+              // 削除成功したらインデックスからも除去
+              delete existingInvoiceIndex[existingKey];
+            } else {
+              results.skippedExisting.push({ customerId, companyName });
               continue;
             }
-          } else {
-            results.skippedExisting.push({ customerId, companyName });
+          }
+
+          // 対象期間の配置データを取得（メモリ上で処理）
+          const closingDay = customer.closing_day || 31;
+          const assignments = this._getAssignmentsFromCache(
+            customerId, year, month, closingDay,
+            jobsByCustomer, assignmentsByJob
+          );
+
+          if (assignments.length === 0) {
+            results.skippedNoData.push({ customerId, companyName });
             continue;
           }
-        }
 
-        // 請求書を生成（allowEmpty=false で配置データなしはエラー）
-        const generateResult = this.generate(customerId, year, month, { allowEmpty: false, allowDuplicate: true });
+          // 明細行を生成
+          const lines = this._generateLines(assignments, customer);
 
-        if (generateResult.success) {
+          // 合計金額を計算
+          const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
+          const expenseRate = customer.expense_rate || 0;
+          const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format);
+
+          // 請求番号を生成（メモリ上で連番配布）
+          maxSeq++;
+          const invoiceNumber = `${prefix}${maxSeq}`;
+
+          // 発行日・支払期限を計算
+          const dates = this._calculateDates(customer, year, month);
+
+          // 請求書データを作成
+          const invoiceId = generateId('inv');
+          const user = getCurrentUserEmail();
+          const now = getCurrentTimestamp();
+
+          const invoice = {
+            invoice_id: invoiceId,
+            invoice_number: invoiceNumber,
+            customer_id: customerId,
+            billing_year: year,
+            billing_month: month,
+            issue_date: dates.issueDate,
+            due_date: dates.dueDate,
+            subtotal: totals.subtotal,
+            expense_amount: totals.expenseAmount,
+            tax_amount: totals.taxAmount,
+            total_amount: totals.totalAmount,
+            invoice_format: customer.invoice_format || 'format1',
+            shipper_name: customer.shipper_name || customer.company_name || '',
+            pdf_file_id: '',
+            excel_file_id: '',
+            sheet_file_id: '',
+            status: 'unsent',
+            notes: '',
+            created_at: now,
+            created_by: user,
+            updated_at: now,
+            is_deleted: false
+          };
+
+          newInvoices.push(invoice);
+
+          // 明細データを作成
+          for (let i = 0; i < lines.length; i++) {
+            newLines.push({
+              ...lines[i],
+              line_id: generateId('line'),
+              invoice_id: invoiceId,
+              line_number: i + 1,
+              created_at: now,
+              created_by: user,
+              updated_at: now,
+              is_deleted: false
+            });
+          }
+
           results.success.push({
             customerId,
             companyName,
-            invoiceId: generateResult.invoice.invoice_id,
-            invoiceNumber: generateResult.invoice.invoice_number
+            invoiceId: invoiceId,
+            invoiceNumber: invoiceNumber
           });
-        } else if (generateResult.error === 'NO_ASSIGNMENTS_FOUND') {
-          results.skippedNoData.push({ customerId, companyName });
-        } else {
-          results.failed.push({ customerId, companyName, error: generateResult.error });
+
+        } catch (e) {
+          console.error(`BulkGenerate error for customer ${customerId}:`, e);
+          results.failed.push({ customerId, companyName, error: e.message || 'UNKNOWN_ERROR' });
         }
-      } catch (e) {
-        console.error(`BulkGenerate error for customer ${customerId}:`, e);
-        results.failed.push({ customerId, companyName, error: e.message || 'UNKNOWN_ERROR' });
+      }
+
+      // === 一括挿入（シート書き込みを最小化）===
+      if (newInvoices.length > 0) {
+        insertRecords('T_Invoices', newInvoices);
+      }
+      if (newLines.length > 0) {
+        insertRecords('T_InvoiceLines', newLines);
+      }
+
+    } catch (e) {
+      console.error('BulkGenerate batch error:', e);
+      // バッチ全体のエラーは全顧客に影響
+      for (const customer of customers) {
+        if (!results.success.find(s => s.customerId === customer.customer_id) &&
+            !results.skippedExisting.find(s => s.customerId === customer.customer_id) &&
+            !results.skippedNoData.find(s => s.customerId === customer.customer_id) &&
+            !results.failed.find(f => f.customerId === customer.customer_id)) {
+          results.failed.push({
+            customerId: customer.customer_id,
+            companyName: customer.company_name || '',
+            error: e.message || 'BATCH_ERROR'
+          });
+        }
       }
     }
 
     return results;
+  },
+
+  /**
+   * 配列をキーでグループ化
+   * @param {Object[]} array - 配列
+   * @param {string} key - グループ化キー
+   * @returns {Object} { keyValue: [items...], ... }
+   */
+  _groupBy: function(array, key) {
+    const result = {};
+    for (const item of array) {
+      const keyValue = item[key];
+      if (!result[keyValue]) {
+        result[keyValue] = [];
+      }
+      result[keyValue].push(item);
+    }
+    return result;
+  },
+
+  /**
+   * 請求番号の最大連番を取得
+   * @param {Object[]} invoices - 請求書配列
+   * @param {string} prefix - プレフィックス（YYMM_）
+   * @returns {number} 最大連番（なければ0）
+   */
+  _getMaxInvoiceSequence: function(invoices, prefix) {
+    let maxSeq = 0;
+    for (const inv of invoices) {
+      if (!inv.is_deleted && inv.invoice_number && inv.invoice_number.startsWith(prefix)) {
+        const parts = inv.invoice_number.split('_');
+        if (parts.length === 2) {
+          const seq = parseInt(parts[1], 10);
+          if (!isNaN(seq) && seq > maxSeq) {
+            maxSeq = seq;
+          }
+        }
+      }
+    }
+    return maxSeq;
+  },
+
+  /**
+   * キャッシュから配置データを取得（メモリ上で処理）
+   * @param {string} customerId - 顧客ID
+   * @param {number} year - 年
+   * @param {number} month - 月
+   * @param {number} closingDay - 締め日
+   * @param {Object} jobsByCustomer - 顧客別案件インデックス
+   * @param {Object} assignmentsByJob - 案件別配置インデックス
+   * @returns {Object[]} 配置データ（案件情報付き）
+   */
+  _getAssignmentsFromCache: function(customerId, year, month, closingDay, jobsByCustomer, assignmentsByJob) {
+    const { startDate, endDate } = calculateClosingPeriod_(year, month, closingDay || 31);
+
+    const customerJobs = jobsByCustomer[customerId] || [];
+    const result = [];
+
+    for (const job of customerJobs) {
+      // 削除済み・キャンセル・保留は除外
+      if (job.is_deleted || job.status === 'cancelled' || job.status === 'hold') {
+        continue;
+      }
+
+      // 日付を正規化
+      let workDateStr = job.work_date;
+      if (job.work_date instanceof Date) {
+        workDateStr = Utilities.formatDate(job.work_date, 'Asia/Tokyo', 'yyyy-MM-dd');
+      } else if (typeof job.work_date === 'string') {
+        workDateStr = job.work_date.replace(/\//g, '-');
+      }
+
+      // 期間チェック
+      if (!workDateStr || workDateStr < startDate || workDateStr > endDate) {
+        continue;
+      }
+
+      // 案件の配置を取得
+      const assignments = assignmentsByJob[job.job_id] || [];
+      for (const assignment of assignments) {
+        // 削除済み・キャンセルは除外
+        if (assignment.is_deleted || assignment.status === 'CANCELLED') {
+          continue;
+        }
+
+        result.push({
+          ...assignment,
+          job: {
+            ...job,
+            work_date: workDateStr
+          }
+        });
+      }
+    }
+
+    // 作業日順でソート
+    result.sort((a, b) => {
+      const dateA = a.job.work_date || '';
+      const dateB = b.job.work_date || '';
+      if (dateA !== dateB) {
+        return dateA < dateB ? -1 : 1;
+      }
+      return (a.job.site_name || '').localeCompare(b.job.site_name || '');
+    });
+
+    return result;
   },
 
   /**
@@ -397,13 +640,12 @@ const InvoiceService = {
    * @param {string} customerId - 顧客ID
    * @param {number} year - 年
    * @param {number} month - 月
+   * @param {number} closingDay - 締め日（1-31、31=月末）
    * @returns {Object[]} 配置データ（案件情報付き）
    */
-  _getAssignmentsForPeriod: function(customerId, year, month) {
-    // 対象期間の開始日・終了日
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+  _getAssignmentsForPeriod: function(customerId, year, month, closingDay) {
+    // 対象期間の開始日・終了日（顧客の締め日に基づいて計算）
+    const { startDate, endDate } = calculateClosingPeriod_(year, month, closingDay || 31);
 
     // 顧客の案件を取得
     const jobs = JobRepository.search({
