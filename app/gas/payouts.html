@@ -269,14 +269,21 @@
       </div>
     </div>
 
+    <!-- 下書き管理 -->
+    <div id="draftSection" class="summary-card" style="display: none;">
+      <h3>下書き（未確定）</h3>
+      <div id="draftList">
+        <div class="loading">読み込み中...</div>
+      </div>
+    </div>
+
     <!-- 振込履歴 -->
     <div class="section-header">
       <h2>振込履歴</h2>
       <div class="filter-group">
         <label>ステータス:</label>
         <select id="statusFilter" onchange="loadHistory()">
-          <option value="">全て</option>
-          <option value="draft">下書き</option>
+          <option value="">確定・支払済</option>
           <option value="confirmed">確定</option>
           <option value="paid">支払済</option>
         </select>
@@ -302,6 +309,7 @@
       document.getElementById('endDateFilter').value = today;
 
       loadStaffList();
+      loadDrafts();
       loadHistory();
     }
 
@@ -471,13 +479,79 @@
       summaryDiv.innerHTML = html;
     }
 
-    // Load payment history
+    // Load drafts separately
+    function loadDrafts() {
+      const query = { status: 'draft', limit: 50 };
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            renderDrafts(result.data.payouts);
+          }
+        })
+        .withFailureHandler(err => console.error('Draft load error:', err))
+        .searchPayouts(query);
+    }
+
+    // Render draft list with edit actions
+    function renderDrafts(drafts) {
+      const section = document.getElementById('draftSection');
+      const container = document.getElementById('draftList');
+
+      if (drafts.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+
+      let html = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>スタッフ</th>
+              <th>期間</th>
+              <th>配置数</th>
+              <th>合計</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      drafts.forEach(p => {
+        html += `
+          <tr>
+            <td>${p.payout_id}</td>
+            <td>${p.target_name}</td>
+            <td>${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
+            <td>${p.assignment_count}件</td>
+            <td class="amount">${formatCurrency(p.total_amount)}</td>
+            <td>
+              <button class="btn btn-success" onclick="confirmPayout('${p.payout_id}', '${p.updated_at}')">確定</button>
+              <button class="btn btn-danger" onclick="deletePayout('${p.payout_id}', '${p.updated_at}')">削除</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    // Load payment history (confirmed and paid only)
     function loadHistory() {
       const status = document.getElementById('statusFilter').value;
       const staffId = document.getElementById('staffFilter').value;
 
       const query = {};
-      if (status) query.status = status;
+      // Default to confirmed+paid, or specific status if selected
+      if (status) {
+        query.status = status;
+      } else {
+        query.status_in = ['confirmed', 'paid'];
+      }
       if (staffId) query.staff_id = staffId;
       query.limit = 50;
 
@@ -499,7 +573,7 @@
         .searchPayouts(query);
     }
 
-    // Render history table
+    // Render history table (read-only, confirmed/paid only)
     function renderHistory(payouts) {
       const container = document.getElementById('historyTable');
 
@@ -520,11 +594,13 @@
               <th>交通費</th>
               <th>合計</th>
               <th>ステータス</th>
-              <th>操作</th>
+              ${payouts.some(p => p.status === 'confirmed') ? '<th>操作</th>' : ''}
             </tr>
           </thead>
           <tbody>
       `;
+
+      const hasConfirmed = payouts.some(p => p.status === 'confirmed');
 
       payouts.forEach(p => {
         html += `
@@ -537,15 +613,13 @@
             <td class="amount">${formatCurrency(p.transport_amount)}</td>
             <td class="amount">${formatCurrency(p.total_amount)}</td>
             <td><span class="status-badge ${p.status}">${getStatusLabel(p.status)}</span></td>
-            <td>
-              ${p.status === 'draft' ? `
-                <button class="btn btn-secondary" onclick="confirmPayout('${p.payout_id}', '${p.updated_at}')">確定</button>
-                <button class="btn btn-danger" onclick="deletePayout('${p.payout_id}', '${p.updated_at}')">削除</button>
-              ` : ''}
-              ${p.status === 'confirmed' ? `
-                <button class="btn btn-success" onclick="markAsPaid('${p.payout_id}', '${p.updated_at}')">支払済</button>
-              ` : ''}
-            </td>
+            ${hasConfirmed ? `
+              <td>
+                ${p.status === 'confirmed' ? `
+                  <button class="btn btn-success" onclick="markAsPaid('${p.payout_id}', '${p.updated_at}')">支払済</button>
+                ` : ''}
+              </td>
+            ` : ''}
           </tr>
         `;
       });
@@ -573,7 +647,7 @@
           if (result.ok) {
             showToast('success', '支払いを生成しました');
             loadUnpaidList();
-            loadHistory();
+            loadDrafts();
           } else {
             showToast('error', result.error);
           }
@@ -602,7 +676,7 @@
           if (result.ok) {
             showToast('success', `${result.data.success}件の支払いを生成しました`);
             loadUnpaidList();
-            loadHistory();
+            loadDrafts();
           } else {
             showToast('error', result.error);
           }
@@ -630,7 +704,8 @@
         .withSuccessHandler(result => {
           if (result.ok) {
             showToast('success', 'ステータスを更新しました');
-            loadHistory();
+            loadDrafts();  // 下書きから確定へ移動する可能性
+            loadHistory(); // 履歴を更新
           } else {
             showToast('error', result.error);
           }
@@ -648,7 +723,7 @@
         .withSuccessHandler(result => {
           if (result.ok) {
             showToast('success', '削除しました');
-            loadHistory();
+            loadDrafts();  // 下書きのみ削除可能なので下書きリストを更新
           } else {
             showToast('error', result.error);
           }
