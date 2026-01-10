@@ -106,10 +106,25 @@ function addDays_(date, days) {
  * @param {Date|string} date - 基準日
  * @param {number} months - 加算月数（負の値で減算）
  * @returns {Date} 計算後の日付
+ * @note 月末日の場合、加算先の月末日に調整される（例: 1/31 + 1ヶ月 = 2/28）
  */
 function addMonths_(date, months) {
   const d = typeof date === 'string' ? parseDate_(date) : new Date(date);
+  const originalDay = d.getDate();
+
+  // 月を加算
   d.setMonth(d.getMonth() + months);
+
+  // 月末日オーバーフロー対策
+  // 例: 1/31に1ヶ月加算すると、setMonthで2月になり、日付が31のまま
+  //     2/31は存在しないので自動的に3/3になってしまう
+  // 対策: 加算後の日付が元の日付と異なる場合、前月の末日に調整
+  if (d.getDate() !== originalDay) {
+    // 日付がずれた = 月末オーバーフローが発生
+    // setDate(0)で前月の末日を取得
+    d.setDate(0);
+  }
+
   return d;
 }
 

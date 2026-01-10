@@ -9,10 +9,10 @@ const InvoiceExportService = {
    * テンプレートIDのScriptProperty名
    */
   TEMPLATE_KEYS: {
-    format1: 'TEMPLATE_ID_FORMAT1',
-    format2: 'TEMPLATE_ID_FORMAT2',
-    format3: 'TEMPLATE_ID_FORMAT3',
-    atamagami: 'TEMPLATE_ID_ATAMAGAMI'
+    format1: 'TEMPLATE_FORMAT1_ID',
+    format2: 'TEMPLATE_FORMAT2_ID',
+    format3: 'TEMPLATE_FORMAT3_ID',
+    atamagami: 'TEMPLATE_ATAMAGAMI_ID'
   },
 
   /**
@@ -108,6 +108,12 @@ const InvoiceExportService = {
 
       const { invoice, lines, customer } = this._extractInvoiceData(invoiceData);
 
+      // デバッグログ
+      console.log('=== Export Debug ===');
+      console.log('invoice_format:', invoice.invoice_format);
+      console.log('customer.include_cover_page:', customer.include_cover_page);
+      console.log('customer keys:', Object.keys(customer).join(', '));
+
       // テンプレートIDの事前検証
       const templateValidation = this.validateTemplateConfig(invoice.invoice_format);
       if (!templateValidation.valid) {
@@ -158,8 +164,13 @@ const InvoiceExportService = {
       const spreadsheet = sheetResult.spreadsheet;
       const sheet = sheetResult.sheet;
 
-      // PDFに変換
-      const pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId());
+      // PDFに変換（複数シート構成の場合は全シート、そうでなければ単一シート）
+      let pdfBlob;
+      if (sheetResult.hasCoverPage || sheetResult.hasPrintSheets) {
+        pdfBlob = this._exportSpreadsheetToPdf(spreadsheet.getId());
+      } else {
+        pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId());
+      }
 
       // ファイル名を生成
       const fileName = this._generateFileName(invoice, customer, 'pdf');
@@ -329,7 +340,7 @@ const InvoiceExportService = {
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
-   * @returns {Object} { success, spreadsheet, sheet }
+   * @returns {Object} { success, spreadsheet, sheet, hasCoverPage }
    */
   _createFilledSheet: function(invoice, lines, customer, company) {
     // テンプレートIDを取得
@@ -346,6 +357,36 @@ const InvoiceExportService = {
     const copy = templateFile.makeCopy(copyName);
     const spreadsheet = SpreadsheetApp.openById(copy.getId());
     const sheet = spreadsheet.getSheets()[0];
+
+    // 頭紙（表紙）を追加するかどうか判定
+    const includeCoverPage = customer.include_cover_page === true || customer.include_cover_page === 'true';
+    const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
+    const hasCoverPage = includeCoverPage && supportsCoverPage;
+
+    // デバッグログ
+    console.log('=== Cover Page Debug ===');
+    console.log('includeCoverPage:', includeCoverPage);
+    console.log('supportsCoverPage:', supportsCoverPage);
+    console.log('hasCoverPage:', hasCoverPage);
+    console.log('invoice_format:', invoice.invoice_format);
+
+    // 頭紙を先に追加（PDF出力時に先頭に来るように）
+    if (hasCoverPage) {
+      const coverTemplateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEYS.atamagami);
+      if (coverTemplateId) {
+        const coverTemplate = SpreadsheetApp.openById(coverTemplateId);
+        const coverSourceSheet = coverTemplate.getSheets()[0];
+
+        // 頭紙シートをコピー（先頭に挿入）
+        const coverSheet = coverSourceSheet.copyTo(spreadsheet);
+        coverSheet.setName('頭紙');
+        spreadsheet.setActiveSheet(coverSheet);
+        spreadsheet.moveActiveSheet(1); // 先頭に移動
+
+        // 頭紙にデータを入力
+        this._populateAtagami(coverSheet, invoice, lines, customer, company);
+      }
+    }
 
     // フォーマットに応じてデータを入力
     switch (invoice.invoice_format) {
@@ -365,13 +406,22 @@ const InvoiceExportService = {
         this._populateFormat1(sheet, invoice, lines, customer, company);
     }
 
+    // FORMAT2の場合、印刷用の3シート構成を作成
+    let hasPrintSheets = false;
+    if (invoice.invoice_format === 'format2' && lines.length > 0) {
+      this._createPrintSheetsForFormat2(spreadsheet, sheet, lines);
+      hasPrintSheets = true;
+    }
+
     // 変更を反映
     SpreadsheetApp.flush();
 
     return {
       success: true,
       spreadsheet: spreadsheet,
-      sheet: sheet
+      sheet: sheet,
+      hasCoverPage: hasCoverPage,
+      hasPrintSheets: hasPrintSheets
     };
   },
 
@@ -420,20 +470,23 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateFormat2: function(sheet, invoice, lines, customer, company) {
-    // ヘッダー部分
+    // ヘッダー部分（ラベルセルを上書きしない）
     sheet.getRange('A2').setValue(customer.company_name || '');
-    sheet.getRange('C5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
-    sheet.getRange('J5').setValue(invoice.total_amount);
+    sheet.getRange('B5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // B5に作業年月（A5はラベル）
+    sheet.getRange('I5').setValue(invoice.total_amount);  // I5に合計金額
+
+    // 荷主名（A6はラベル、B6に値）
+    sheet.getRange('B6').setValue(customer.shipper_name || '');
 
     // 自社情報
     if (company.company_name) {
       sheet.getRange('G2').setValue(company.company_name);
     }
 
-    // 明細行（A10から開始）
+    // 明細行（A10から開始、視認性のため1行おき）
     const startRow = 10;
     for (let i = 0; i < lines.length; i++) {
-      const row = startRow + i;
+      const row = startRow + (i * 2);  // 1行おきに入力
       const line = lines[i];
       sheet.getRange(row, 1).setValue(line.work_date || '');       // A: 日付
       sheet.getRange(row, 2).setValue(line.site_name || '');       // B: 案件名
@@ -489,30 +542,130 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateAtagami: function(sheet, invoice, lines, customer, company) {
-    // 発行日
-    const formattedDate = this._formatDate(invoice.issue_date);
-    sheet.getRange('AP2').setValue(formattedDate);
+    // === デバッグログ ===
+    console.log('=== _populateAtagami Debug ===');
+    console.log('invoice.issue_date:', invoice.issue_date);
+    console.log('invoice.invoice_number:', invoice.invoice_number);
+    console.log('invoice.due_date:', invoice.due_date);
+    console.log('invoice.total_amount:', invoice.total_amount);
+    console.log('invoice.subtotal:', invoice.subtotal);
+    console.log('invoice.expense_amount:', invoice.expense_amount);
+    console.log('customer.company_name:', customer.company_name);
+    console.log('customer.contact_name:', customer.contact_name);
 
-    // 請求番号
-    sheet.getRange('AP3').setValue(invoice.invoice_number);
+    // === ヘッダー部分 ===
 
-    // 宛名
-    sheet.getRange('B5').setValue(`${customer.company_name || ''} 御中`);
-
-    // 合計金額
-    sheet.getRange('J14').setValue(invoice.total_amount);
-
-    // 自社情報
-    if (company.company_name) {
-      sheet.getRange('AB5').setValue(company.company_name);
+    // 顧客情報（郵便番号・住所）
+    if (customer.postal_code) {
+      sheet.getRange('F2').setValue(customer.postal_code);
+    }
+    if (customer.address) {
+      sheet.getRange('E3').setValue(customer.address);
     }
 
-    // 内訳
-    sheet.getRange('G10').setValue(invoice.subtotal);           // 作業費
-    sheet.getRange('G11').setValue(invoice.expense_amount);     // 諸経費
-    sheet.getRange('G12').setValue(invoice.subtotal + invoice.expense_amount); // 小計
-    sheet.getRange('G13').setValue(invoice.tax_amount);         // 消費税
-    sheet.getRange('G14').setValue(invoice.total_amount);       // 合計
+    // 顧客名＋担当者名（E5: スペース区切りで同一セル）
+    let customerDisplay = customer.company_name || '';
+    if (customer.contact_name) {
+      customerDisplay += `　${customer.contact_name}様`;  // 全角スペース
+    }
+    sheet.getRange('E5').setValue(customerDisplay);
+
+    // === 直接書き込み（ラベル+値を連結、マージセル対応） ===
+    // 発行日（AG2: マージセル、ラベル+値を連結）
+    if (invoice.issue_date) {
+      const parts = invoice.issue_date.split('-');
+      const issueDateFormatted = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+      const issueDateWithLabel = `発行日　${issueDateFormatted}`;
+      console.log('Writing issue_date to AG2:', issueDateWithLabel);
+      sheet.getRange('AG2').setValue(issueDateWithLabel);
+    }
+
+    // 請求書No（AG3: マージセル、ラベル+値を連結）
+    if (invoice.invoice_number) {
+      const invoiceNoWithLabel = `No　${invoice.invoice_number}`;
+      console.log('Writing invoice_number to AG3:', invoiceNoWithLabel);
+      sheet.getRange('AG3').setValue(invoiceNoWithLabel);
+    }
+
+    // 支払期限（J11, M11, P11: 個別セル）
+    if (invoice.due_date) {
+      const dueParts = invoice.due_date.split('-');
+      const dueYear = parseInt(dueParts[0]);
+      const dueMonth = parseInt(dueParts[1]);
+      let dueDay = parseInt(dueParts[2]);
+      // 月末を超える日は月末に調整（例: 2月31日→2月28日）
+      const lastDayOfMonth = new Date(dueYear, dueMonth, 0).getDate();
+      if (dueDay > lastDayOfMonth) {
+        dueDay = lastDayOfMonth;
+      }
+      console.log('Writing due_date - year:', dueYear, 'month:', dueMonth, 'day:', dueDay);
+      sheet.getRange('J11').setValue(dueYear);
+      sheet.getRange('M11').setValue(dueMonth);
+      sheet.getRange('P11').setValue(dueDay);
+    }
+
+    // ご請求金額（A13: マージセル、ラベル+値を連結）
+    const totalAmountFormatted = (invoice.total_amount || 0).toLocaleString();
+    const totalAmountWithLabel = `ご請求金額　　　　　　　　¥${totalAmountFormatted}`;
+    console.log('Writing total_amount to A13:', totalAmountWithLabel);
+    sheet.getRange('A13').setValue(totalAmountWithLabel);
+
+    // === 明細部分 ===
+
+    // 年月日（A23: 作業費行）
+    const billingPeriod = `${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}`;
+    sheet.getRange('A23').setValue(billingPeriod);
+
+    // 品目名
+    sheet.getRange('F23').setValue('作業費');
+    sheet.getRange('F24').setValue('諸経費');
+
+    // 作業費金額（AI23）
+    sheet.getRange('AI23').setValue(invoice.subtotal || 0);
+
+    // 諸経費金額（AI24）
+    sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
+
+    // 小計・消費税・合計（AI34, AI36, AI37）は数式で自動計算
+  },
+
+  /**
+   * FORMAT2用の印刷用シートを作成（単一シート統合版）
+   * - 行1-8: ヘッダー情報
+   * - 行9: 列ヘッダー（凍結 → 2ページ目以降で繰り返し）
+   * - 行10以降: 明細データ
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet - スプレッドシート
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} dataSheet - データシート
+   * @param {Array} lines - 明細行データ
+   */
+  _createPrintSheetsForFormat2: function(spreadsheet, dataSheet, lines) {
+    // 印刷用シート作成（単一シートに全データを統合）
+    const printSheet = spreadsheet.insertSheet('印刷用');
+
+    // 明細データの最終行を計算（1行おきなので）
+    const startRow = 10;
+    const lastDataRow = startRow + ((lines.length - 1) * 2);
+
+    // データシートの全コンテンツを印刷用シートにコピー（行1〜最終データ行）
+    const fullRange = dataSheet.getRange(`A1:J${lastDataRow}`);
+    fullRange.copyTo(printSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+    fullRange.copyTo(printSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+    // 列幅をデータシートに合わせる
+    for (let col = 1; col <= 10; col++) {
+      printSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+    }
+
+    // 行の高さもコピー
+    for (let row = 1; row <= lastDataRow; row++) {
+      printSheet.setRowHeight(row, dataSheet.getRowHeight(row));
+    }
+
+    // 凍結なし：全ページを連続的に流す（ヘッダー繰り返しなし）
+    // ページ間の違和感を解消するため、自然に連続させる
+
+    // データシートを非表示にして印刷用シートのみ表示
+    dataSheet.hideSheet();
   },
 
   /**
@@ -527,16 +680,45 @@ const InvoiceExportService = {
       `&gid=${sheetId}` +
       `&portrait=true` +
       `&size=A4` +
-      `&scale=4` + // Fit to page
-      `&top_margin=0.5` +
-      `&bottom_margin=0.5` +
-      `&left_margin=0.5` +
-      `&right_margin=0.5` +
+      `&scale=3` + // 複数ページ対応（フォントサイズ維持）
+      `&top_margin=0` +
+      `&bottom_margin=0` +
+      `&left_margin=0.1` +
+      `&right_margin=0` +
       `&sheetnames=false` +
       `&printtitle=false` +
       `&pagenumbers=false` +
       `&gridlines=false` +
-      `&fzr=false`;
+      `&fzr=true`;  // 凍結行を各ページで繰り返し
+
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    return response.getBlob().setContentType('application/pdf');
+  },
+
+  /**
+   * スプレッドシート全体をPDFに変換（複数シート対応）
+   * @param {string} spreadsheetId - スプレッドシートID
+   * @returns {GoogleAppsScript.Base.Blob} PDFブロブ
+   */
+  _exportSpreadsheetToPdf: function(spreadsheetId) {
+    // gidパラメータを省略して全シートを出力
+    // fitw=trueで幅を1ページに収め、fzr=trueで凍結行繰り返し
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
+      `format=pdf` +
+      `&portrait=true` +
+      `&size=A4` +
+      `&fitw=true` +  // 幅を1ページに収める
+      `&fith=false` + // 高さは複数ページ可
+      `&sheetnames=false` +
+      `&printtitle=false` +
+      `&pagenumbers=false` +
+      `&gridlines=false` +
+      `&fzr=true` +  // 凍結行を各ページで繰り返し
+      `&printheadings=false`;
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
@@ -564,20 +746,42 @@ const InvoiceExportService = {
 
   /**
    * 出力先フォルダを取得
+   * 顧客の会社フォルダ配下の「請求書」サブフォルダを返す
    * @param {Object} customer - 顧客データ（folder_idを持つ可能性あり）
    * @returns {GoogleAppsScript.Drive.Folder} フォルダ
    */
   _getOutputFolder: function(customer) {
-    // 顧客専用フォルダがあればそれを使用
+    // 顧客専用フォルダがあればその配下の「請求書」フォルダを使用
     if (customer && customer.folder_id) {
       try {
-        return DriveApp.getFolderById(customer.folder_id);
+        const invoiceFolder = CustomerFolderService.getInvoiceFolder(customer);
+        if (invoiceFolder) {
+          return invoiceFolder;
+        }
       } catch (e) {
-        // フォルダが見つからない場合はデフォルトを使用
+        Logger.log(`顧客フォルダ取得エラー: ${e.message}`);
       }
     }
 
-    // デフォルトの出力先フォルダ
+    // folder_id 未設定の場合、自動作成を試みる
+    if (customer && customer.customer_id && !customer.folder_id) {
+      try {
+        const folderResult = CustomerFolderService.createCustomerFolder(customer);
+        if (folderResult.folderId) {
+          CustomerFolderService._updateCustomerFolderId(
+            customer.customer_id,
+            folderResult.folderId
+          );
+          Logger.log(`請求書出力時に顧客フォルダを自動作成: ${customer.company_name}`);
+          // 請求書サブフォルダを返す
+          return DriveApp.getFolderById(folderResult.invoiceFolderId);
+        }
+      } catch (e) {
+        Logger.log(`フォルダ自動作成に失敗: ${e.message}`);
+      }
+    }
+
+    // デフォルトの出力先フォルダ（フォールバック）
     const folderId = PropertiesService.getScriptProperties().getProperty(this.OUTPUT_FOLDER_KEY);
     if (folderId) {
       try {

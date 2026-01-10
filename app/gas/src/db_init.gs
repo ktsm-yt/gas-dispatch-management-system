@@ -17,7 +17,7 @@ const TABLE_DEFINITIONS = {
       'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax',
       'email', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
       'unit_price_half', 'closing_day', 'payment_day', 'payment_month_offset',
-      'invoice_format', 'tax_rate', 'expense_rate', 'shipper_name',
+      'invoice_format', 'include_cover_page', 'tax_rate', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted'
     ]
@@ -210,6 +210,44 @@ function createSheet(ss, tableName, definition) {
 
   // フリーズペイン（ヘッダー行を固定）
   sheet.setFrozenRows(1);
+}
+
+/**
+ * 顧客テーブルに include_cover_page カラムを追加（マイグレーション）
+ * GASエディタから実行: addIncludeCoverPageColumn()
+ */
+function addIncludeCoverPageColumn() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('顧客');
+
+  if (!sheet) {
+    Logger.log('✗ 顧客シートが見つかりません');
+    return;
+  }
+
+  // 現在のヘッダーを取得
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // include_cover_page が既に存在するかチェック
+  if (headers.includes('include_cover_page')) {
+    Logger.log('✓ include_cover_page カラムは既に存在します');
+    return;
+  }
+
+  // invoice_format の位置を探す（その直後に挿入）
+  const invoiceFormatIndex = headers.indexOf('invoice_format');
+  if (invoiceFormatIndex === -1) {
+    Logger.log('✗ invoice_format カラムが見つかりません');
+    return;
+  }
+
+  // invoice_format の次の列に挿入
+  const insertIndex = invoiceFormatIndex + 2; // 1-based, invoice_format の次
+  sheet.insertColumnAfter(invoiceFormatIndex + 1);
+  sheet.getRange(1, insertIndex).setValue('include_cover_page');
+
+  Logger.log(`✓ include_cover_page カラムを列 ${insertIndex} に追加しました`);
+  Logger.log('顧客設定で「頭紙を付ける」を有効にするには、該当行に TRUE を設定してください');
 }
 
 /**
