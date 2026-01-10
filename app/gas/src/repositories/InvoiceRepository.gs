@@ -166,7 +166,7 @@ const InvoiceRepository = {
       pdf_file_id: invoice.pdf_file_id || '',
       excel_file_id: invoice.excel_file_id || '',
       sheet_file_id: invoice.sheet_file_id || '',
-      status: invoice.status || 'draft',
+      status: invoice.status || 'unsent',
       notes: invoice.notes || '',
       created_at: now,
       created_by: user,
