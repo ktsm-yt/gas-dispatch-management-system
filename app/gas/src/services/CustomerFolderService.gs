@@ -186,18 +186,22 @@ const CustomerFolderService = {
    * 顧客のfolder_idを更新
    * @param {string} customerId - 顧客ID
    * @param {string} folderId - フォルダID
+   * @returns {string} 新しいupdated_at
    */
   _updateCustomerFolderId: function(customerId, folderId) {
     const sheet = getSheetDirect('顧客');
     const row = findById(sheet, 'customer_id', customerId);
 
     if (row) {
+      const newUpdatedAt = getCurrentTimestamp();
       updateRow(sheet, row._rowIndex, {
         folder_id: folderId,
-        updated_at: getCurrentTimestamp(),
+        updated_at: newUpdatedAt,
         updated_by: getCurrentUserEmail()
       });
+      return newUpdatedAt;
     }
+    return null;
   },
 
   /**
@@ -249,7 +253,8 @@ function createCustomerFolder(customerId) {
 
     // folder_idをDBに更新（新規作成時のみ）
     if (result.created) {
-      CustomerFolderService._updateCustomerFolderId(customerId, result.folderId);
+      const newUpdatedAt = CustomerFolderService._updateCustomerFolderId(customerId, result.folderId);
+      result.updated_at = newUpdatedAt;
     }
 
     return successResponse(result, requestId);
