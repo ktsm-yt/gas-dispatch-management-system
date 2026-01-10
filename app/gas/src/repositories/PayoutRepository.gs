@@ -149,14 +149,15 @@ const PayoutRepository = {
       records = records.filter(r => new Date(r.period_end) <= toDate);
     }
 
-    // ソート（デフォルト: period_end降順）
+    // ソート（デフォルト: paid_date降順＝最新が上）
     const sortOrder = query.sort_order || 'desc';
-    const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
 
     records.sort((a, b) => {
-      const dateA = new Date(a.period_end);
-      const dateB = new Date(b.period_end);
-      return (dateB - dateA) * sortMultiplier;
+      // paid_dateがあればそれを優先、なければperiod_endを使用
+      const dateA = new Date(a.paid_date || a.period_end);
+      const dateB = new Date(b.paid_date || b.period_end);
+      // desc: 新しい順（dateB - dateA）、asc: 古い順（dateA - dateB）
+      return sortOrder === 'desc' ? (dateB - dateA) : (dateA - dateB);
     });
 
     // 件数制限
