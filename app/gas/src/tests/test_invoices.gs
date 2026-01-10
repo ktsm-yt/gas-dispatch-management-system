@@ -51,7 +51,7 @@ function testInvoiceRepository() {
     tax_amount: 10000,
     total_amount: 110000,
     invoice_format: 'format1',
-    status: 'draft'
+    status: 'unsent'
   };
 
   const inserted = InvoiceRepository.insert(testInvoice);
@@ -296,7 +296,7 @@ function testFormat2Export() {
     tax_amount: 10000,
     total_amount: 110000,
     invoice_format: 'format2',
-    status: 'draft',
+    status: 'unsent',
     shipper_name: 'テスト荷主'
   });
   Logger.log(`✓ 請求書作成: ${testInvoice.invoice_id}`);
@@ -416,7 +416,7 @@ function testFormat2ExportFromCustomer() {
       tax_amount: 10000,
       total_amount: 110000,
       invoice_format: 'format2',
-      status: 'draft',
+      status: 'unsent',
       shipper_name: customer.shipper_name || ''
     });
     invoiceId = newInvoice.invoice_id;
@@ -534,7 +534,7 @@ function testFormat2MultiPage() {
     tax_amount: 50000,
     total_amount: 550000,
     invoice_format: 'format2',
-    status: 'draft',
+    status: 'unsent',
     shipper_name: customer.shipper_name || ''
   });
   const invoiceId = newInvoice.invoice_id;
@@ -597,7 +597,7 @@ function testFormat3Export() {
     tax_amount: 20000,
     total_amount: 220000,
     invoice_format: 'format3',
-    status: 'draft'
+    status: 'unsent'
   });
   Logger.log(`✓ 請求書作成: ${testInvoice.invoice_id}`);
 
