@@ -888,10 +888,16 @@
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
+            const label = options.includeCoverPage ? 'EXCEL（頭紙付き）' : mode.toUpperCase();
+
             if (url && newTab) {
+              // 正常ケース: 新しいタブでURLを開く
               newTab.location.href = url;
-              const label = options.includeCoverPage ? 'EXCEL（頭紙付き）' : mode.toUpperCase();
               showToast(`${label}を出力しました`, 'success');
+            } else if (url && !newTab) {
+              // ポップアップブロック時: リンクを表示してクリックで開けるようにする
+              showToast(`${label}を出力しました。ポップアップがブロックされた可能性があります。`, 'success');
+              showFileLink(url, label);
             } else {
               if (newTab) newTab.close();
               showToast('出力に成功しました', 'success');
@@ -973,6 +979,41 @@
       setTimeout(() => {
         toast.classList.remove('show');
       }, 3000);
+    }
+
+    // ポップアップブロック時のフォールバック: ファイルリンクを表示
+    function showFileLink(url, label) {
+      // 既存のリンクボックスがあれば削除
+      const existingBox = document.getElementById('file-link-box');
+      if (existingBox) existingBox.remove();
+
+      const box = document.createElement('div');
+      box.id = 'file-link-box';
+      box.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        max-width: 320px;
+      `;
+      box.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="font-size: 14px;">${label} ファイル</strong>
+          <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #666;">&times;</button>
+        </div>
+        <a href="${url}" target="_blank" style="color: #1a73e8; word-break: break-all; font-size: 13px;">ファイルを開く</a>
+      `;
+      document.body.appendChild(box);
+
+      // 15秒後に自動で消える
+      setTimeout(() => {
+        if (box.parentElement) box.remove();
+      }, 15000);
     }
 
     function handleError(error) {

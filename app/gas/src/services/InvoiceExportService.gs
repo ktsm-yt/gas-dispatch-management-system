@@ -212,7 +212,8 @@ const InvoiceExportService = {
   exportToExcel: function(invoice, lines, customer, company, options = {}) {
     try {
       // スプレッドシートを作成（Excel用：ページ分割なし、連続データ）
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: false });
+      // optionsをマージ（includeCoverPage等を保持）
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, Object.assign({}, options, { forPdf: false }));
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -378,9 +379,13 @@ const InvoiceExportService = {
     console.log('invoice_format:', invoice.invoice_format);
 
     // 頭紙を先に追加（PDF出力時に先頭に来るように）
+    let coverPageWarning = null;
     if (hasCoverPage) {
       const coverTemplateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEYS.atamagami);
-      if (coverTemplateId) {
+      if (!coverTemplateId) {
+        console.warn('頭紙テンプレートが設定されていません（TEMPLATE_ATAMAGAMI_ID）');
+        coverPageWarning = '頭紙テンプレートが未設定のため、頭紙なしで出力しました';
+      } else {
         const coverTemplate = SpreadsheetApp.openById(coverTemplateId);
         const coverSourceSheet = coverTemplate.getSheetByName('原本') || coverTemplate.getSheets()[0];
         const coverDataSheet = coverTemplate.getSheetByName('データ');
@@ -440,8 +445,9 @@ const InvoiceExportService = {
       success: true,
       spreadsheet: spreadsheet,
       sheet: sheet,
-      hasCoverPage: hasCoverPage,
-      hasPrintSheets: hasPrintSheets
+      hasCoverPage: hasCoverPage && !coverPageWarning,  // 実際に頭紙が付いたかどうか
+      hasPrintSheets: hasPrintSheets,
+      warning: coverPageWarning  // テンプレート未設定時の警告
     };
   },
 

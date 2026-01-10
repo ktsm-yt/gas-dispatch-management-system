@@ -1056,6 +1056,14 @@
             if (currentCustomer) {
               currentCustomer.folder_id = response.data.folderId;
             }
+
+            // 楽観ロック用のupdated_atを更新（保存時の衝突を防止）
+            if (response.data.updated_at) {
+              document.getElementById('customer-updated-at').value = response.data.updated_at;
+              if (currentCustomer) {
+                currentCustomer.updated_at = response.data.updated_at;
+              }
+            }
           } else {
             showToast(response.error?.message || 'フォルダ作成に失敗しました', 'error');
           }
