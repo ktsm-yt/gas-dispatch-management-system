@@ -129,27 +129,24 @@ function createOrUpdateSheet_(db, sheetName, headers) {
 function setInvoiceTemplateIds() {
   const prop = PropertiesService.getScriptProperties();
 
-  // TODO: 実際のテンプレートファイルIDを設定
-  // Driveにテンプレートを配置後、IDを取得して以下を更新
-
+  // TEMPLATE_IDS は template_init.gs で定義
   const templateIds = {
-    'TEMPLATE_FORMAT1_ID': '',  // 様式1テンプレートのファイルID
-    'TEMPLATE_FORMAT2_ID': '',  // 様式2テンプレートのファイルID
-    'TEMPLATE_FORMAT3_ID': '',  // 様式3テンプレートのファイルID
-    'TEMPLATE_ATAMAGAMI_ID': '' // 頭紙テンプレートのファイルID
+    'TEMPLATE_FORMAT1_ID': TEMPLATE_IDS.FORMAT1,
+    'TEMPLATE_FORMAT2_ID': TEMPLATE_IDS.FORMAT2_SEPARATED,
+    'TEMPLATE_FORMAT3_ID': TEMPLATE_IDS.FORMAT3,
+    'TEMPLATE_ATAMAGAMI_ID': TEMPLATE_IDS.ATAMAGAMI
   };
 
   for (const [key, value] of Object.entries(templateIds)) {
     if (value) {
       prop.setProperty(key, value);
-      Logger.log(`Set ${key}: ${value}`);
+      Logger.log(`✓ Set ${key}: ${value}`);
     } else {
-      Logger.log(`Skipped ${key} (empty)`);
+      Logger.log(`✗ Skipped ${key} (empty)`);
     }
   }
 
   Logger.log('=== Template IDs Setup Complete ===');
-  Logger.log('Note: Update templateIds object with actual file IDs and re-run');
 }
 
 /**

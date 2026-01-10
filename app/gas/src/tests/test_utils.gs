@@ -304,20 +304,20 @@ function testDiffDays() {
 }
 
 function testCalculateClosingPeriod() {
-  // 月末締め
+  // 月末締め（プロパティ名はstartDate/endDate）
   const period1 = calculateClosingPeriod_(2025, 12, 31);
-  assertEqual(period1.start, '2025-12-01', 'month-end closing start');
-  assertEqual(period1.end, '2025-12-31', 'month-end closing end');
+  assertEqual(period1.startDate, '2025-12-01', 'month-end closing start');
+  assertEqual(period1.endDate, '2025-12-31', 'month-end closing end');
 
   // 25日締め
   const period2 = calculateClosingPeriod_(2025, 12, 25);
-  assertEqual(period2.start, '2025-11-26', '25th closing start');
-  assertEqual(period2.end, '2025-12-25', '25th closing end');
+  assertEqual(period2.startDate, '2025-11-26', '25th closing start');
+  assertEqual(period2.endDate, '2025-12-25', '25th closing end');
 
   // 15日締め
   const period3 = calculateClosingPeriod_(2025, 12, 15);
-  assertEqual(period3.start, '2025-11-16', '15th closing start');
-  assertEqual(period3.end, '2025-12-15', '15th closing end');
+  assertEqual(period3.startDate, '2025-11-16', '15th closing start');
+  assertEqual(period3.endDate, '2025-12-15', '15th closing end');
 }
 
 function testCalculatePaymentDate() {
@@ -331,27 +331,26 @@ function testCalculatePaymentDate() {
 }
 
 function testIsBusinessDay() {
+  // 祝日セットを取得
+  const holidays2025 = getJapaneseHolidays_(2025);
+
   // 平日
-  assertTrue(isBusinessDay_(parseDate_('2025-12-24')), '2025-12-24 is Wednesday');
+  assertTrue(isBusinessDay_(parseDate_('2025-12-24'), holidays2025), '2025-12-24 is Wednesday');
 
   // 土日
-  assertFalse(isBusinessDay_(parseDate_('2025-12-27')), '2025-12-27 is Saturday');
-  assertFalse(isBusinessDay_(parseDate_('2025-12-28')), '2025-12-28 is Sunday');
+  assertFalse(isBusinessDay_(parseDate_('2025-12-27'), holidays2025), '2025-12-27 is Saturday');
+  assertFalse(isBusinessDay_(parseDate_('2025-12-28'), holidays2025), '2025-12-28 is Sunday');
 
   // 祝日（元日）
-  assertFalse(isBusinessDay_(parseDate_('2025-01-01')), '2025-01-01 is holiday');
+  assertFalse(isBusinessDay_(parseDate_('2025-01-01'), holidays2025), '2025-01-01 is holiday');
 }
 
 function testCountBusinessDays() {
-  // 1週間（月〜金の5日間）
-  const start = parseDate_('2025-12-22'); // Monday
-  const end = parseDate_('2025-12-26');   // Friday
-  assertEqual(countBusinessDays_(start, end), 5, 'Mon-Fri should be 5 business days');
+  // 1週間（月〜金の5日間）- 日付は文字列形式で渡す
+  assertEqual(countBusinessDays_('2025-12-22', '2025-12-26'), 5, 'Mon-Fri should be 5 business days');
 
   // 週末を含む
-  const startWithWeekend = parseDate_('2025-12-22'); // Monday
-  const endWithWeekend = parseDate_('2025-12-28');   // Sunday
-  assertEqual(countBusinessDays_(startWithWeekend, endWithWeekend), 5, 'should exclude weekend');
+  assertEqual(countBusinessDays_('2025-12-22', '2025-12-28'), 5, 'should exclude weekend');
 }
 
 function testGetFiscalYear() {
@@ -397,41 +396,41 @@ function runCalcUtilsTests() {
 }
 
 function testApplyRounding() {
-  // 切り捨て
-  assertEqual(applyRounding_(1234.5, 'FLOOR'), 1234, 'FLOOR should round down');
-  assertEqual(applyRounding_(1234.9, 'FLOOR'), 1234, 'FLOOR should round down');
+  // 切り捨て（RoundingMode.FLOOR = 'floor'）
+  assertEqual(applyRounding_(1234.5, 'floor'), 1234, 'floor should round down');
+  assertEqual(applyRounding_(1234.9, 'floor'), 1234, 'floor should round down');
 
-  // 切り上げ
-  assertEqual(applyRounding_(1234.1, 'CEIL'), 1235, 'CEIL should round up');
-  assertEqual(applyRounding_(1234.0, 'CEIL'), 1234, 'CEIL exact should not change');
+  // 切り上げ（RoundingMode.CEIL = 'ceil'）
+  assertEqual(applyRounding_(1234.1, 'ceil'), 1235, 'ceil should round up');
+  assertEqual(applyRounding_(1234.0, 'ceil'), 1234, 'ceil exact should not change');
 
-  // 四捨五入
-  assertEqual(applyRounding_(1234.4, 'ROUND'), 1234, 'ROUND down');
-  assertEqual(applyRounding_(1234.5, 'ROUND'), 1235, 'ROUND up');
+  // 四捨五入（RoundingMode.ROUND = 'round'）
+  assertEqual(applyRounding_(1234.4, 'round'), 1234, 'round down');
+  assertEqual(applyRounding_(1234.5, 'round'), 1235, 'round up');
 }
 
 function testCalculateTaxIncluded() {
-  // 税率10%
-  assertEqual(calculateTaxIncluded_(10000, 10), 11000, '10000 + 10% = 11000');
-  assertEqual(calculateTaxIncluded_(25000, 10), 27500, '25000 + 10% = 27500');
+  // 税率10%（0.10形式で渡す）
+  assertEqual(calculateTaxIncluded_(10000, 0.10), 11000, '10000 + 10% = 11000');
+  assertEqual(calculateTaxIncluded_(25000, 0.10), 27500, '25000 + 10% = 27500');
 
-  // 端数処理
-  assertEqual(calculateTaxIncluded_(10001, 10), 11001, 'floor applied');
+  // 端数処理（10001 * 1.10 = 11001.1 → floor → 11001）
+  assertEqual(calculateTaxIncluded_(10001, 0.10), 11001, 'floor applied');
 }
 
 function testCalculateTaxExcluded() {
-  // 税率10%
-  assertEqual(calculateTaxExcluded_(11000, 10), 10000, '11000 / 1.10 = 10000');
-  assertEqual(calculateTaxExcluded_(27500, 10), 25000, '27500 / 1.10 = 25000');
+  // 税率10%（0.10形式で渡す）
+  assertEqual(calculateTaxExcluded_(11000, 0.10), 10000, '11000 / 1.10 = 10000');
+  assertEqual(calculateTaxExcluded_(27500, 0.10), 25000, '27500 / 1.10 = 25000');
 }
 
 function testCalculateTaxAmount() {
-  // 税率10%
-  assertEqual(calculateTaxAmount_(10000, 10), 1000, '10000 * 10% = 1000');
-  assertEqual(calculateTaxAmount_(25000, 10), 2500, '25000 * 10% = 2500');
+  // 税率10%（0.10形式で渡す）
+  assertEqual(calculateTaxAmount_(10000, 0.10), 1000, '10000 * 10% = 1000');
+  assertEqual(calculateTaxAmount_(25000, 0.10), 2500, '25000 * 10% = 2500');
 
-  // 端数処理
-  assertEqual(calculateTaxAmount_(10001, 10), 1000, 'floor applied');
+  // 端数処理（10001 * 0.10 = 1000.1 → floor → 1000）
+  assertEqual(calculateTaxAmount_(10001, 0.10), 1000, 'floor applied');
 }
 
 function testGetUnitMultiplier() {
@@ -454,11 +453,13 @@ function testCalculateInvoiceTotals() {
     { amount: 12500 }
   ];
 
-  const totals = calculateInvoiceTotals_(lines, 10);
+  // 税率は0.10形式で渡す
+  const totals = calculateInvoiceTotals_(lines, 0.10);
 
   assertEqual(totals.subtotal, 62500, 'subtotal = 62500');
   assertEqual(totals.taxAmount, 6250, 'tax = 6250');
-  assertEqual(totals.total, 68750, 'total = 68750');
+  // プロパティ名は totalAmount
+  assertEqual(totals.totalAmount, 68750, 'totalAmount = 68750');
 }
 
 function testFormatCurrency() {

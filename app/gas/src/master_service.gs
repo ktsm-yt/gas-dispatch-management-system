@@ -287,16 +287,36 @@ function validateCustomer(data) {
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
+
+  // 同名会社の重複チェック
+  const existingCustomers = listCustomers({ activeOnly: false });
+  if (existingCustomers.ok) {
+    const duplicate = existingCustomers.data.items.find(c =>
+      c.company_name === data.company_name.trim() &&
+      c.customer_id !== data.customer_id  // 自分自身は除外（更新時）
+    );
+    if (duplicate) {
+      return {
+        valid: false,
+        message: `同名の会社「${data.company_name}」が既に登録されています`,
+        details: { field: 'company_name', duplicateId: duplicate.customer_id }
+      };
+    }
+  }
+
   return { valid: true };
 }
 
 /**
  * 顧客を保存（新規/更新）
+ * 新規作成時は専用フォルダを自動作成
  * @param {Object} customer - 顧客データ
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveCustomer(customer, expectedUpdatedAt) {
-  return saveMasterRecord(
+  const isNew = !customer.customer_id;
+
+  const result = saveMasterRecord(
     SHEET_NAMES.CUSTOMERS,
     ID_COLUMNS.CUSTOMERS,
     'M_Customers',
@@ -304,6 +324,26 @@ function saveCustomer(customer, expectedUpdatedAt) {
     expectedUpdatedAt,
     validateCustomer
   );
+
+  // 新規作成成功時にフォルダを自動作成
+  if (result.ok && isNew && !customer.folder_id) {
+    try {
+      const folderResult = CustomerFolderService.createCustomerFolder(result.data);
+      if (folderResult.created) {
+        CustomerFolderService._updateCustomerFolderId(
+          result.data.customer_id,
+          folderResult.folderId
+        );
+        result.data.folder_id = folderResult.folderId;
+        Logger.log(`新規顧客フォルダを作成: ${result.data.company_name}`);
+      }
+    } catch (e) {
+      // フォルダ作成失敗は警告ログのみ（顧客作成自体は成功）
+      Logger.log(`Warning: 顧客フォルダ作成に失敗: ${e.message}`);
+    }
+  }
+
+  return result;
 }
 
 /**
