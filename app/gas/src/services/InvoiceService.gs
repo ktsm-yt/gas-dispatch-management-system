@@ -346,6 +346,27 @@ const InvoiceService = {
       const prefix = `${yy}${mm}_`;
       let maxSeq = this._getMaxInvoiceSequence(allInvoices, prefix);
 
+      // === 上書きモード: 既存請求書を一括削除（最適化） ===
+      if (options.overwrite) {
+        const toDeleteInvoiceIds = [];
+        for (const customer of customers) {
+          const existingKey = `${customer.customer_id}_${year}_${month}`;
+          const existing = existingInvoiceIndex[existingKey];
+          if (existing) {
+            toDeleteInvoiceIds.push(existing.invoice_id);
+            delete existingInvoiceIndex[existingKey];
+          }
+        }
+
+        if (toDeleteInvoiceIds.length > 0) {
+          // 明細を一括削除（1回のシートI/O）
+          InvoiceLineRepository.bulkDeleteByInvoiceIds(toDeleteInvoiceIds);
+          // 請求書を一括論理削除（1回のシートI/O）
+          InvoiceRepository.bulkSoftDelete(toDeleteInvoiceIds);
+          console.log(`BulkGenerate: 既存 ${toDeleteInvoiceIds.length} 件を一括削除`);
+        }
+      }
+
       // バッチ用の新規請求書・明細を集約
       const newInvoices = [];
       const newLines = [];
@@ -356,23 +377,14 @@ const InvoiceService = {
 
         try {
           // 既存チェック（メモリ上で高速判定）
+          // 注: 上書きモードの場合、既存請求書は事前に一括削除済みでインデックスからも除去済み
           const existingKey = `${customerId}_${year}_${month}`;
           const existing = existingInvoiceIndex[existingKey];
 
           if (existing) {
-            if (options.overwrite) {
-              // 上書きモード: 既存を削除
-              const deleteResult = this.delete(existing.invoice_id, existing.updated_at);
-              if (!deleteResult.success) {
-                results.failed.push({ customerId, companyName, error: `削除失敗: ${deleteResult.error}` });
-                continue;
-              }
-              // 削除成功したらインデックスからも除去
-              delete existingInvoiceIndex[existingKey];
-            } else {
-              results.skippedExisting.push({ customerId, companyName });
-              continue;
-            }
+            // overwrite=false の場合のみここに到達
+            results.skippedExisting.push({ customerId, companyName });
+            continue;
           }
 
           // 対象期間の配置データを取得（メモリ上で処理）

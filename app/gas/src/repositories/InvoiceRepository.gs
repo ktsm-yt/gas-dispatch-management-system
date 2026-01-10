@@ -261,6 +261,52 @@ const InvoiceRepository = {
   },
 
   /**
+   * 複数請求書を一括論理削除（最適化版）
+   * @param {string[]} invoiceIds - 請求ID配列
+   * @returns {Object} 削除結果 { success: boolean, deleted: number }
+   */
+  bulkSoftDelete: function(invoiceIds) {
+    if (!invoiceIds || invoiceIds.length === 0) {
+      return { success: true, deleted: 0 };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { success: true, deleted: 0 };
+    }
+
+    // 全データを一度に取得
+    const allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    const invoiceIdSet = new Set(invoiceIds);
+    const invoiceIdCol = headers.indexOf('invoice_id');
+    const isDeletedCol = headers.indexOf('is_deleted');
+    const updatedAtCol = headers.indexOf('updated_at');
+
+    const now = getCurrentTimestamp();
+    let deleted = 0;
+
+    // 対象行を更新（メモリ上）
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      if (invoiceIdSet.has(row[invoiceIdCol]) && !row[isDeletedCol]) {
+        row[isDeletedCol] = true;
+        row[updatedAtCol] = now;
+        deleted++;
+      }
+    }
+
+    // 一括で書き戻し
+    if (deleted > 0) {
+      sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+    }
+
+    return { success: true, deleted };
+  },
+
+  /**
    * 請求番号を生成（YYMM_SEQ形式）
    * 競合防止のためロックを取得し、一意性を保証する
    * @param {number} year - 年
