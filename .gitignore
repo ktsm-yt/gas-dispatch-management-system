@@ -58,3 +58,7 @@ secrets.*
 
 # Claude Code
 .claude/
+.github/settings.local.json
+
+# Worktree marker
+.current-branch
