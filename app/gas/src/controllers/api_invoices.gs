@@ -74,7 +74,13 @@ function generateInvoice(customerId, ym, options = {}) {
       const errorCode = result.error === 'INVOICE_ALREADY_EXISTS'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, { existingInvoice: result.existingInvoice }, requestId);
+      const errorMessages = {
+        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
+        'INVOICE_ALREADY_EXISTS': '既に請求書が存在します',
+        'CUSTOMER_NOT_FOUND': '顧客が見つかりません'
+      };
+      const message = errorMessages[result.error] || result.error;
+      return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
@@ -268,6 +274,70 @@ function updateInvoiceStatus(invoiceId, status, expectedUpdatedAt) {
 }
 
 /**
+ * 請求書ステータスを一括更新
+ * @param {Array} updates - 更新対象の配列 [{ invoiceId, updatedAt }, ...]
+ * @param {string} status - 新しいステータス
+ * @returns {Object} APIレスポンス { success, updated, failed, errors }
+ */
+function bulkUpdateInvoiceStatus(updates, status) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'updates is required', {}, requestId);
+    }
+
+    if (!status) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'status is required', {}, requestId);
+    }
+
+    // 有効なステータスチェック
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    if (!validStatuses.includes(status)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
+    }
+
+    let updated = 0;
+    let failed = 0;
+    const errors = [];
+
+    // 各請求書を更新
+    for (const item of updates) {
+      try {
+        const result = InvoiceService.updateStatus(item.invoiceId, status, item.updatedAt);
+        if (result.success) {
+          updated++;
+        } else {
+          failed++;
+          errors.push({ invoiceId: item.invoiceId, error: result.error });
+        }
+      } catch (e) {
+        failed++;
+        errors.push({ invoiceId: item.invoiceId, error: e.message });
+      }
+    }
+
+    return buildSuccessResponse({
+      success: true,
+      updated: updated,
+      failed: failed,
+      errors: errors.length > 0 ? errors : undefined
+    }, requestId);
+
+  } catch (error) {
+    Logger.log(`bulkUpdateInvoiceStatus error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
  * 請求書を出力（PDF/Excel/編集）
  * @param {string} invoiceId - 請求ID
  * @param {string} mode - 出力モード（pdf/excel/edit）
@@ -379,7 +449,13 @@ function regenerateInvoice(invoiceId) {
     const result = InvoiceService.regenerate(invoiceId);
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error, {}, requestId);
+      const errorMessages = {
+        'NOT_FOUND': '請求書が見つかりません',
+        'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再生成できません',
+        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません'
+      };
+      const message = errorMessages[result.error] || result.error;
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, message, {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);

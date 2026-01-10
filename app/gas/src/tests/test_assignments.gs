@@ -22,6 +22,7 @@ function runAssignmentTests() {
 
   let passed = 0;
   let failed = 0;
+  const errors = [];
 
   for (const test of tests) {
     try {
@@ -31,11 +32,12 @@ function runAssignmentTests() {
     } catch (e) {
       console.log(`[FAIL] ${test.name}: ${e.message}`);
       failed++;
+      errors.push({ test: test.name, error: e.message });
     }
   }
 
   console.log(`\nResults: ${passed} passed, ${failed} failed`);
-  return { passed, failed };
+  return { passed, failed, errors };
 }
 
 /**

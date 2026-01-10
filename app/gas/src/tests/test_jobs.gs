@@ -6,16 +6,40 @@
 
 /**
  * 全テスト実行
+ * @returns {Object} { passed, failed, errors }
  */
 function runAllJobTests() {
   Logger.log('=== 案件管理モジュール テスト開始 ===\n');
 
-  testUtils();
-  testJobRepository();
-  testJobService();
-  testJobApi();
+  const results = {
+    passed: 0,
+    failed: 0,
+    errors: []
+  };
+
+  const tests = [
+    { name: 'testUtils', fn: testUtils },
+    { name: 'testJobRepository', fn: testJobRepository },
+    { name: 'testJobService', fn: testJobService },
+    { name: 'testJobApi', fn: testJobApi }
+  ];
+
+  for (const test of tests) {
+    try {
+      test.fn();
+      results.passed++;
+      Logger.log(`✅ ${test.name}`);
+    } catch (e) {
+      results.failed++;
+      results.errors.push({ test: test.name, error: e.message });
+      Logger.log(`❌ ${test.name}: ${e.message}`);
+    }
+  }
 
   Logger.log('\n=== 全テスト完了 ===');
+  Logger.log(`結果: ${results.passed} passed, ${results.failed} failed`);
+
+  return results;
 }
 
 /**
