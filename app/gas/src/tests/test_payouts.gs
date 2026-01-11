@@ -14,7 +14,11 @@ function runPayoutTests() {
   const tests = [
     testPayoutRepository,
     testPayoutService,
-    testPayoutCalculations
+    testPayoutCalculations,
+    testConfirmedWorkflow,
+    testDoubleEntryPrevention,
+    testWithholdingTaxCalculation,
+    testPaidDateValidation
   ];
 
   let passed = 0;
@@ -565,5 +569,251 @@ function clearPayoutHistoryTestData() {
 
   Logger.log(`Deleted ${deleted} payout records`);
   Logger.log('=== Clear Complete ===');
+}
+
+// ========== P2-3改善版: 追加テスト ==========
+
+/**
+ * Confirmedワークフローのテスト
+ * confirmed → paid の2段階ワークフロー
+ */
+function testConfirmedWorkflow() {
+  Logger.log('--- testConfirmedWorkflow ---');
+
+  // 1. テストPayoutを confirmed ステータスで作成
+  const testStaffId = 'workflow_test_' + Date.now();
+  const testPayout = PayoutRepository.insert({
+    payout_type: 'STAFF',
+    staff_id: testStaffId,
+    period_start: '2025-01-01',
+    period_end: '2025-01-15',
+    assignment_count: 5,
+    base_amount: 50000,
+    transport_amount: 5000,
+    total_amount: 55000,
+    status: 'confirmed'
+  });
+
+  assertEqual(testPayout.status, 'confirmed', 'initial status should be confirmed');
+  Logger.log('  Create confirmed: OK');
+
+  // 2. confirmed → paid 遷移テスト
+  const payResult = PayoutService.payConfirmedPayout(testPayout.payout_id, {
+    paid_date: '2025-01-20',
+    expectedUpdatedAt: testPayout.updated_at
+  });
+
+  assert(payResult.success, 'payConfirmedPayout should succeed');
+  assertEqual(payResult.payout.status, 'paid', 'status should be paid');
+  assertEqual(payResult.payout.paid_date, '2025-01-20', 'paid_date should be set');
+  Logger.log('  Confirmed → Paid: OK');
+
+  // 3. paid から他ステータスへの変更は不可
+  const invalidStatusResult = PayoutService.updateStatus(
+    payResult.payout.payout_id,
+    'confirmed',
+    payResult.payout.updated_at
+  );
+  assert(!invalidStatusResult.success, 'changing from paid should fail');
+  assertEqual(invalidStatusResult.error, 'INVALID_STATUS', 'should return INVALID_STATUS');
+  Logger.log('  Status restriction: OK');
+
+  // 4. undoPayout でキャンセル可能
+  const undoResult = PayoutService.undoPayout(
+    payResult.payout.payout_id,
+    payResult.payout.updated_at
+  );
+  assert(undoResult.success, 'undoPayout should succeed');
+
+  const afterUndo = PayoutRepository.findById(payResult.payout.payout_id);
+  assert(!afterUndo, 'payout should not be found after undo');
+  Logger.log('  UndoPayout: OK');
+
+  Logger.log('--- testConfirmedWorkflow PASSED ---');
+}
+
+/**
+ * 二重計上防止のテスト
+ * Assignmentにpayout_idが設定されると、未払い一覧から除外される
+ */
+function testDoubleEntryPrevention() {
+  Logger.log('--- testDoubleEntryPrevention ---');
+
+  // テスト用スタッフを取得
+  const staffList = StaffRepository.search({ is_active: true, limit: 1 });
+  if (staffList.length === 0) {
+    Logger.log('  SKIP: No active staff found');
+    return;
+  }
+
+  const testStaffId = staffList[0].staff_id;
+  const endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // 1. 初回の未払い配置を取得
+  const initialAssignments = PayoutService.getUnpaidAssignments(testStaffId, endDate);
+  Logger.log(`  Initial unpaid assignments: ${initialAssignments.length}`);
+
+  if (initialAssignments.length === 0) {
+    Logger.log('  SKIP: No unpaid assignments found');
+    return;
+  }
+
+  // 2. confirmPayout でレコード作成（payout_id紐付け）
+  const confirmResult = PayoutService.confirmPayout(testStaffId, endDate, {
+    notes: '二重計上防止テスト'
+  });
+
+  assert(confirmResult.success, 'confirmPayout should succeed');
+  const payoutId = confirmResult.payout.payout_id;
+  Logger.log(`  Created payout: ${payoutId}`);
+
+  // 3. 同じスタッフで再度未払い取得 → 0件になるはず
+  const afterConfirmAssignments = PayoutService.getUnpaidAssignments(testStaffId, endDate);
+  Logger.log(`  After confirm unpaid: ${afterConfirmAssignments.length}`);
+
+  assertEqual(afterConfirmAssignments.length, 0, 'should have no unpaid after confirm');
+  Logger.log('  Double entry prevention: OK');
+
+  // 4. undoPayout で payout_id クリア確認
+  const undoResult = PayoutService.undoPayout(payoutId, confirmResult.payout.updated_at);
+  assert(undoResult.success, 'undoPayout should succeed');
+
+  // 5. 未払い配置が復元されるか確認
+  const afterUndoAssignments = PayoutService.getUnpaidAssignments(testStaffId, endDate);
+  Logger.log(`  After undo unpaid: ${afterUndoAssignments.length}`);
+
+  assertEqual(afterUndoAssignments.length, initialAssignments.length,
+    'should restore unpaid count after undo');
+  Logger.log('  Undo restore: OK');
+
+  Logger.log('--- testDoubleEntryPrevention PASSED ---');
+}
+
+/**
+ * 源泉徴収税計算のテスト
+ * withholding_tax_applicable = true の場合のみ 10.21% 控除
+ */
+function testWithholdingTaxCalculation() {
+  Logger.log('--- testWithholdingTaxCalculation ---');
+
+  const WITHHOLDING_TAX_RATE = 0.1021;
+
+  // 1. 源泉徴収対象スタッフのテスト
+  const staffWithTax = {
+    staff_id: 'tax_test_1',
+    name: 'テストスタッフ（源泉徴収あり）',
+    withholding_tax_applicable: true
+  };
+
+  const baseAmount1 = 100000;
+  const expectedTax = Math.floor(baseAmount1 * WITHHOLDING_TAX_RATE);  // 10,210
+
+  const tax1 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount1);
+  assertEqual(tax1, expectedTax, `withholding tax should be ${expectedTax}`);
+  Logger.log(`  Tax applicable (100,000): ${tax1} (expected ${expectedTax}): OK`);
+
+  // 2. 源泉徴収非対象スタッフのテスト
+  const staffWithoutTax = {
+    staff_id: 'tax_test_2',
+    name: 'テストスタッフ（源泉徴収なし）',
+    withholding_tax_applicable: false
+  };
+
+  const tax2 = PayoutService._calculateWithholdingTax(staffWithoutTax, baseAmount1);
+  assertEqual(tax2, 0, 'no tax for non-applicable staff');
+  Logger.log('  Tax not applicable: 0: OK');
+
+  // 3. withholding_tax_applicable 未設定の場合（falsy）
+  const staffNoFlag = {
+    staff_id: 'tax_test_3',
+    name: 'テストスタッフ（フラグなし）'
+  };
+
+  const tax3 = PayoutService._calculateWithholdingTax(staffNoFlag, baseAmount1);
+  assertEqual(tax3, 0, 'no tax when flag is undefined');
+  Logger.log('  Flag undefined: 0: OK');
+
+  // 4. null スタッフの場合
+  const tax4 = PayoutService._calculateWithholdingTax(null, baseAmount1);
+  assertEqual(tax4, 0, 'no tax when staff is null');
+  Logger.log('  Null staff: 0: OK');
+
+  // 5. 計算精度テスト（端数切り捨て確認）
+  const baseAmount2 = 123456;
+  const expectedTax2 = Math.floor(baseAmount2 * WITHHOLDING_TAX_RATE);  // 12,604
+  const tax5 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount2);
+  assertEqual(tax5, expectedTax2, 'should floor the tax amount');
+  Logger.log(`  Floor precision (123,456): ${tax5} (expected ${expectedTax2}): OK`);
+
+  Logger.log('--- testWithholdingTaxCalculation PASSED ---');
+}
+
+/**
+ * paid_dateバリデーションのテスト
+ * - period_end以降であること
+ * - 未来日は30日以内であること
+ */
+function testPaidDateValidation() {
+  Logger.log('--- testPaidDateValidation ---');
+
+  // テスト用Payoutを作成
+  const testPayout = PayoutRepository.insert({
+    payout_type: 'STAFF',
+    staff_id: 'validation_test_' + Date.now(),
+    period_start: '2025-06-01',
+    period_end: '2025-06-15',
+    assignment_count: 3,
+    base_amount: 30000,
+    total_amount: 30000,
+    status: 'confirmed'
+  });
+
+  const payoutId = testPayout.payout_id;
+  Logger.log(`  Created test payout: ${payoutId}, period_end: 2025-06-15`);
+
+  // 1. period_end より前の日付は不可（API層でバリデーション）
+  const validation1 = _validatePaidDate(payoutId, '2025-06-10');  // period_end (15) より前
+  assert(!validation1.valid, 'paid_date before period_end should be invalid');
+  assert(validation1.error.includes('period_end'), 'error should mention period_end');
+  Logger.log('  Before period_end: rejected: OK');
+
+  // 2. period_end と同日は OK
+  const validation2 = _validatePaidDate(payoutId, '2025-06-15');
+  assert(validation2.valid, 'paid_date equal to period_end should be valid');
+  Logger.log('  Equal to period_end: accepted: OK');
+
+  // 3. period_end より後は OK
+  const validation3 = _validatePaidDate(payoutId, '2025-06-20');
+  assert(validation3.valid, 'paid_date after period_end should be valid');
+  Logger.log('  After period_end: accepted: OK');
+
+  // 4. 30日以上先の未来日は不可
+  const today = new Date();
+  const farFuture = new Date(today);
+  farFuture.setDate(farFuture.getDate() + 60);
+  const farFutureStr = Utilities.formatDate(farFuture, 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // period_endを今日以前に設定した別のPayoutでテスト
+  const testPayout2 = PayoutRepository.insert({
+    payout_type: 'STAFF',
+    staff_id: 'future_test_' + Date.now(),
+    period_start: '2024-01-01',
+    period_end: '2024-01-15',  // 過去のperiod_end
+    assignment_count: 1,
+    base_amount: 10000,
+    total_amount: 10000,
+    status: 'confirmed'
+  });
+
+  const validation4 = _validatePaidDate(testPayout2.payout_id, farFutureStr);
+  assert(!validation4.valid, 'paid_date 60 days in future should be invalid');
+  assert(validation4.error.includes('30 days'), 'error should mention 30 days limit');
+  Logger.log('  Far future (60 days): rejected: OK');
+
+  // クリーンアップ
+  PayoutRepository.softDelete(payoutId, testPayout.updated_at);
+  PayoutRepository.softDelete(testPayout2.payout_id, testPayout2.updated_at);
+
+  Logger.log('--- testPaidDateValidation PASSED ---');
 }
 

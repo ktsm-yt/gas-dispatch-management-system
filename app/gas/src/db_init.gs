@@ -79,7 +79,9 @@ const TABLE_DEFINITIONS = {
       'display_time_slot', 'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
       'transport_area', 'transport_amount', 'transport_is_manual', 'site_role',
       'assignment_role', 'is_leader',
-      'entry_date', 'safety_training_date', 'status', 'notes', 'created_at', 'created_by',
+      'entry_date', 'safety_training_date', 'status',
+      'payout_id',  // P2-3: 二重計上防止のためのPayoutへの参照
+      'notes', 'created_at', 'created_by',
       'updated_at', 'updated_by', 'is_deleted'
     ]
   },
@@ -502,4 +504,61 @@ function migrateAddAssignmentRoleColumns() {
 
   Logger.log('\n=== マイグレーション完了 ===');
   Logger.log(`追加したカラム: ${columnsToAdd.join(', ')}`);
+}
+
+/**
+ * 既存の配置シートにpayout_idカラムを追加（二重計上防止用）
+ * GASエディタから実行: migrateAddPayoutIdColumn()
+ */
+function migrateAddPayoutIdColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('配置');
+
+  if (!sheet) {
+    Logger.log('✗ 配置シートが見つかりません');
+    return;
+  }
+
+  // 現在のヘッダーを取得
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log(`現在のカラム数: ${lastCol}`);
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // payout_idが既に存在するか確認
+  if (headers.includes('payout_id')) {
+    Logger.log('✓ payout_idカラムは既に存在します');
+    return;
+  }
+
+  // statusの後に挿入（statusの位置を見つける）
+  const statusIndex = headers.indexOf('status');
+  if (statusIndex === -1) {
+    Logger.log('✗ statusカラムが見つかりません。手動で追加してください。');
+    return;
+  }
+
+  // 挿入位置（statusの次）
+  const insertPosition = statusIndex + 2; // 1-indexed
+
+  // カラムを挿入
+  sheet.insertColumnAfter(insertPosition - 1);
+  sheet.getRange(1, insertPosition).setValue('payout_id');
+  Logger.log(`✓ カラム追加: payout_id (位置: ${insertPosition})`);
+
+  // ヘッダー行のスタイルを適用
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('\n=== マイグレーション完了 ===');
+  Logger.log('payout_idカラムを追加しました（二重計上防止用）');
 }

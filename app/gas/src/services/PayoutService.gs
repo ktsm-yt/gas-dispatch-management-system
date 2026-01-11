@@ -3,6 +3,11 @@
  *
  * 支払い管理のビジネスロジック
  * 差分支払い方式: 前回支払い以降の未払い配置を集計
+ *
+ * ワークフロー（P2-3改善版）:
+ * 1. confirmPayout() - confirmed状態で作成（Assignmentにpayout_id紐付け）
+ * 2. payConfirmedPayout() - confirmed → paid に変更
+ * 3. undoPayout() - 取り消し（Assignmentのpayout_idクリア）
  */
 
 const PayoutService = {
@@ -14,7 +19,7 @@ const PayoutService = {
    * @returns {Object[]} 未払い配置リスト（Job情報含む）
    */
   getUnpaidAssignments: function(staffId, endDate) {
-    // 1. 最後の支払いを取得
+    // 1. 最後の支払いを取得（confirmed/paid両方を考慮）
     const lastPayout = PayoutRepository.findLastPayout(staffId);
     const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
     Logger.log(`[getUnpaidAssignments] staffId=${staffId}, endDate=${endDate}, lastPayout period_end=${lastPayout?.period_end}, startDate=${startDate}`);
@@ -40,10 +45,11 @@ const PayoutService = {
     const allAssignments = AssignmentRepository.findByStaffId(staffId);
     Logger.log(`[getUnpaidAssignments] allAssignments for staff: ${allAssignments.length}`);
 
-    // 4. 該当Job内かつASSIGNEDの配置をフィルタリング
+    // 4. 該当Job内かつASSIGNEDかつpayout_id未設定の配置をフィルタリング（二重計上防止）
     const unpaidAssignments = allAssignments.filter(a =>
       !a.is_deleted &&
       a.status === 'ASSIGNED' &&
+      !a.payout_id &&  // 二重計上防止: payout_idが設定されていない配置のみ
       jobIds.includes(a.job_id)
     );
     Logger.log(`[getUnpaidAssignments] unpaidAssignments after filter: ${unpaidAssignments.length}`);
@@ -78,6 +84,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        taxAmount: 0,
         totalAmount: 0,
         periodStart: null,
         periodEnd: endDate
@@ -90,6 +97,9 @@ const PayoutService = {
     // 金額計算
     const result = calculateMonthlyPayout_(assignments, staff);
 
+    // 源泉徴収税を計算（STAFFで withholding_tax_applicable の場合のみ）
+    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount);
+
     // 期間を算出
     const dates = assignments.map(a => a.work_date).filter(d => d);
     const periodStart = dates.length > 0 ? dates[0] : endDate;
@@ -100,14 +110,127 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
-      totalAmount: result.totalAmount,
+      taxAmount: taxAmount,
+      totalAmount: result.totalAmount - taxAmount,  // 税引き後
       periodStart: periodStart,
       periodEnd: periodEnd
     };
   },
 
   /**
-   * 支払いを支払済として記録
+   * 支払いを確認済みとして記録（confirmed状態で作成）
+   * @param {string} staffId - スタッフID
+   * @param {string} endDate - 集計終了日
+   * @param {Object} options - オプション
+   * @param {number} options.adjustment_amount - 調整額
+   * @param {string} options.notes - 備考
+   * @returns {Object} { success, payout, error }
+   */
+  confirmPayout: function(staffId, endDate, options = {}) {
+    Logger.log(`[confirmPayout] staffId=${staffId}, endDate=${endDate}, options=${JSON.stringify(options)}`);
+
+    // 1. 未払い計算
+    const calc = this.calculatePayout(staffId, endDate);
+    Logger.log(`[confirmPayout] calc result: assignmentCount=${calc.assignmentCount}, totalAmount=${calc.totalAmount}`);
+
+    if (calc.assignmentCount === 0) {
+      return {
+        success: false,
+        error: 'NO_UNPAID_ASSIGNMENTS',
+        message: '未払いの配置がありません'
+      };
+    }
+
+    // 2. 調整額を適用
+    const adjustmentAmount = options.adjustment_amount || 0;
+    const totalAmount = calc.totalAmount + adjustmentAmount;
+
+    // 3. 支払いレコード作成（confirmed ステータスで保存）
+    const payout = PayoutRepository.insert({
+      payout_type: 'STAFF',
+      staff_id: staffId,
+      period_start: calc.periodStart,
+      period_end: calc.periodEnd,
+      assignment_count: calc.assignmentCount,
+      base_amount: calc.baseAmount,
+      transport_amount: calc.transportAmount,
+      adjustment_amount: adjustmentAmount,
+      tax_amount: calc.taxAmount,
+      total_amount: totalAmount,
+      status: 'confirmed',  // confirmed状態
+      paid_date: '',
+      notes: options.notes || ''
+    });
+
+    // 4. 対象Assignmentにpayout_idを設定（二重計上防止）
+    this._linkAssignmentsToPayout(calc.assignments, payout.payout_id);
+
+    // 5. 監査ログ
+    try {
+      logCreate('T_Payouts', payout.payout_id, payout);
+    } catch (e) {
+      Logger.log(`[confirmPayout] Audit log error: ${e.message}`);
+    }
+
+    // スタッフ名を付与して返す
+    return {
+      success: true,
+      payout: this._enrichPayout(payout)
+    };
+  },
+
+  /**
+   * 確認済み支払いを振込完了にする
+   * @param {string} payoutId - 支払ID
+   * @param {Object} options - オプション
+   * @param {string} options.paid_date - 支払日（省略時は本日）
+   * @param {string} options.expectedUpdatedAt - 楽観ロック用
+   * @returns {Object} { success, payout, error }
+   */
+  payConfirmedPayout: function(payoutId, options = {}) {
+    Logger.log(`[payConfirmedPayout] payoutId=${payoutId}, options=${JSON.stringify(options)}`);
+
+    const current = PayoutRepository.findById(payoutId);
+    if (!current) {
+      return { success: false, error: 'NOT_FOUND' };
+    }
+
+    // confirmedステータスからのみpaidに変更可能
+    if (current.status !== 'confirmed') {
+      return {
+        success: false,
+        error: 'INVALID_STATUS',
+        message: `confirmed状態のみ振込完了にできます（現在: ${current.status}）`
+      };
+    }
+
+    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+    const result = PayoutRepository.update({
+      payout_id: payoutId,
+      status: 'paid',
+      paid_date: paidDate
+    }, options.expectedUpdatedAt);
+
+    if (result.success) {
+      // 監査ログ
+      try {
+        logUpdate('T_Payouts', payoutId, result.before, result.payout);
+      } catch (e) {
+        Logger.log(`[payConfirmedPayout] Audit log error: ${e.message}`);
+      }
+
+      return {
+        success: true,
+        payout: this._enrichPayout(result.payout)
+      };
+    }
+
+    return result;
+  },
+
+  /**
+   * 支払いを支払済として記録（直接paid - 後方互換）
    * @param {string} staffId - スタッフID
    * @param {string} endDate - 集計終了日
    * @param {Object} options - オプション
@@ -148,12 +271,22 @@ const PayoutService = {
       base_amount: calc.baseAmount,
       transport_amount: calc.transportAmount,
       adjustment_amount: adjustmentAmount,
-      tax_amount: 0,
+      tax_amount: calc.taxAmount,
       total_amount: totalAmount,
       status: 'paid',
       paid_date: paidDate,
       notes: options.notes || ''
     });
+
+    // 5. 対象Assignmentにpayout_idを設定（二重計上防止）
+    this._linkAssignmentsToPayout(calc.assignments, payout.payout_id);
+
+    // 6. 監査ログ
+    try {
+      logCreate('T_Payouts', payout.payout_id, payout);
+    } catch (e) {
+      Logger.log(`[markAsPaid] Audit log error: ${e.message}`);
+    }
 
     // スタッフ名を付与して返す
     return {
@@ -168,6 +301,88 @@ const PayoutService = {
    */
   generatePayout: function(staffId, endDate, options = {}) {
     return this.markAsPaid(staffId, endDate, options);
+  },
+
+  /**
+   * 複数スタッフの支払いを一括確認
+   * @param {string[]} staffIds - スタッフID配列
+   * @param {string} endDate - 集計終了日
+   * @param {Object} options - オプション
+   * @param {Object} options.adjustments - スタッフIDをキーとした調整額・備考
+   * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
+   */
+  bulkConfirmPayouts: function(staffIds, endDate, options = {}) {
+    const results = [];
+    const payouts = [];
+    let success = 0;
+    let failed = 0;
+
+    const adjustments = options.adjustments || {};
+
+    for (const staffId of staffIds) {
+      const staffOptions = {
+        adjustment_amount: adjustments[staffId]?.adjustment_amount || 0,
+        notes: adjustments[staffId]?.notes || ''
+      };
+
+      const result = this.confirmPayout(staffId, endDate, staffOptions);
+      results.push({
+        staffId: staffId,
+        ...result
+      });
+
+      if (result.success) {
+        success++;
+        payouts.push(result.payout);
+      } else {
+        failed++;
+      }
+    }
+
+    return {
+      success: success,
+      failed: failed,
+      results: results,
+      payouts: payouts
+    };
+  },
+
+  /**
+   * 複数の確認済み支払いを一括振込完了にする
+   * @param {string[]} payoutIds - 支払ID配列
+   * @param {Object} options - オプション
+   * @param {string} options.paid_date - 支払日
+   * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
+   */
+  bulkPayConfirmed: function(payoutIds, options = {}) {
+    const results = [];
+    const payouts = [];
+    let success = 0;
+    let failed = 0;
+
+    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+    for (const payoutId of payoutIds) {
+      const result = this.payConfirmedPayout(payoutId, { paid_date: paidDate });
+      results.push({
+        payoutId: payoutId,
+        ...result
+      });
+
+      if (result.success) {
+        success++;
+        payouts.push(result.payout);
+      } else {
+        failed++;
+      }
+    }
+
+    return {
+      success: success,
+      failed: failed,
+      results: results,
+      payouts: payouts
+    };
   },
 
   /**
@@ -258,9 +473,9 @@ const PayoutService = {
   },
 
   /**
-   * ステータスを更新（簡素化版 - paid のみサポート）
+   * ステータスを更新
    * @param {string} payoutId - 支払ID
-   * @param {string} status - 新ステータス（'paid' のみ）
+   * @param {string} status - 新ステータス（'confirmed' or 'paid'）
    * @param {string} expectedUpdatedAt - 楽観ロック用
    * @returns {Object} 更新結果
    */
@@ -270,12 +485,18 @@ const PayoutService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // 簡素化: paid への変更のみ許可
-    if (status !== 'paid') {
+    // ステータス遷移の検証
+    const validTransitions = {
+      'confirmed': ['paid'],  // confirmed → paid
+      'paid': []              // paidからは変更不可（undoPayoutを使用）
+    };
+
+    const allowedNext = validTransitions[current.status] || [];
+    if (!allowedNext.includes(status)) {
       return {
         success: false,
         error: 'INVALID_STATUS',
-        message: 'ステータスは paid のみ設定可能です。取り消しは undoPayout() を使用してください。'
+        message: `${current.status} から ${status} への変更はできません。取り消しは undoPayout() を使用してください。`
       };
     }
 
@@ -294,8 +515,22 @@ const PayoutService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // 論理削除で取り消し（どのステータスからでも取り消し可能）
-    return PayoutRepository.softDelete(payoutId, expectedUpdatedAt);
+    // 1. 関連Assignmentのpayout_idをクリア
+    this._unlinkAssignmentsFromPayout(payoutId);
+
+    // 2. 論理削除で取り消し
+    const result = PayoutRepository.softDelete(payoutId, expectedUpdatedAt);
+
+    // 3. 監査ログ
+    if (result.success) {
+      try {
+        logDelete('T_Payouts', payoutId, current);
+      } catch (e) {
+        Logger.log(`[undoPayout] Audit log error: ${e.message}`);
+      }
+    }
+
+    return result;
   },
 
   /**
@@ -320,6 +555,20 @@ const PayoutService = {
   },
 
   /**
+   * 確認済み支払いを取得
+   * @param {Object} options - オプション
+   * @returns {Object[]} confirmed状態の支払い一覧
+   */
+  getConfirmedPayouts: function(options = {}) {
+    const query = {
+      ...options,
+      status: 'confirmed',
+      payout_type: options.payout_type || 'STAFF'
+    };
+    return this.search(query);
+  },
+
+  /**
    * 未払いがあるスタッフ一覧を取得（バルク処理版）
    * @param {string} endDate - 集計終了日
    * @returns {Object[]} { staffId, staffName, unpaidCount, estimatedAmount }
@@ -338,19 +587,30 @@ const PayoutService = {
     const jobMap = new Map(jobs.map(j => [j.job_id, j]));
     const jobIds = new Set(jobs.map(j => j.job_id));
 
-    // 3. 全Assignmentsを一括取得（ASSIGNEDのみ）
-    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+    // 3. 全Assignmentsを一括取得（ASSIGNEDかつpayout_id未設定のみ）
+    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' })
+      .filter(a => !a.payout_id);  // 二重計上防止
 
-    // 4. 支払済みPayoutsのみを取得（status: 'paid'のみ考慮）
-    const allPayouts = PayoutRepository.search({ payout_type: 'STAFF', status: 'paid' });
+    // 4. 支払済み/確認済みPayoutsを取得
+    const allPayouts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      status_in: ['confirmed', 'paid']
+    });
 
-    // 最新Payoutをスタッフごとにマップ
+    // 最新Payoutをスタッフごとにマップ（paid_date優先）
     const lastPayoutMap = new Map();
     for (const p of allPayouts) {
       if (!p.staff_id) continue;
       const existing = lastPayoutMap.get(p.staff_id);
-      if (!existing || (p.period_end && p.period_end > existing.period_end)) {
+      if (!existing) {
         lastPayoutMap.set(p.staff_id, p);
+      } else {
+        // paid_date優先で比較、なければperiod_endで比較
+        const existingDate = existing.paid_date || existing.period_end;
+        const newDate = p.paid_date || p.period_end;
+        if (newDate > existingDate) {
+          lastPayoutMap.set(p.staff_id, p);
+        }
       }
     }
 
@@ -387,6 +647,9 @@ const PayoutService = {
       // 金額計算
       const calcResult = calculateMonthlyPayout_(assignmentsWithJob, staff);
 
+      // 源泉徴収税を計算
+      const taxAmount = this._calculateWithholdingTax(staff, calcResult.baseAmount);
+
       const dates = assignmentsWithJob.map(a => a.work_date).filter(d => d);
       const periodStart = dates.length > 0 ? dates[0] : endDate;
 
@@ -394,7 +657,8 @@ const PayoutService = {
         staffId: staffId,
         staffName: staff.name,
         unpaidCount: staffAssignments.length,
-        estimatedAmount: calcResult.totalAmount,
+        estimatedAmount: calcResult.totalAmount - taxAmount,
+        taxAmount: taxAmount,
         periodStart: periodStart,
         periodEnd: endDate
       });
@@ -405,6 +669,62 @@ const PayoutService = {
   },
 
   // ========== Private Methods ==========
+
+  /**
+   * 対象AssignmentsにPayoutIDを紐付け（二重計上防止）
+   * @param {Object[]} assignments - 配置リスト
+   * @param {string} payoutId - 支払ID
+   */
+  _linkAssignmentsToPayout: function(assignments, payoutId) {
+    for (const assignment of assignments) {
+      try {
+        AssignmentRepository.update({
+          assignment_id: assignment.assignment_id,
+          payout_id: payoutId
+        });
+      } catch (e) {
+        Logger.log(`[_linkAssignmentsToPayout] Error updating assignment ${assignment.assignment_id}: ${e.message}`);
+      }
+    }
+  },
+
+  /**
+   * PayoutIDに紐付いたAssignmentsのpayout_idをクリア
+   * @param {string} payoutId - 支払ID
+   */
+  _unlinkAssignmentsFromPayout: function(payoutId) {
+    // payout_idで関連するAssignmentsを検索
+    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+    const linkedAssignments = allAssignments.filter(a => a.payout_id === payoutId);
+
+    for (const assignment of linkedAssignments) {
+      try {
+        AssignmentRepository.update({
+          assignment_id: assignment.assignment_id,
+          payout_id: ''
+        });
+      } catch (e) {
+        Logger.log(`[_unlinkAssignmentsFromPayout] Error clearing assignment ${assignment.assignment_id}: ${e.message}`);
+      }
+    }
+  },
+
+  /**
+   * 源泉徴収税を計算
+   * @param {Object} staff - スタッフ情報
+   * @param {number} baseAmount - 基本給
+   * @returns {number} 源泉徴収税額
+   */
+  _calculateWithholdingTax: function(staff, baseAmount) {
+    if (!staff) return 0;
+
+    // withholding_tax_applicable が true の場合のみ源泉徴収
+    if (!staff.withholding_tax_applicable) return 0;
+
+    // 源泉徴収税率 10.21%（復興特別所得税込み）
+    const WITHHOLDING_TAX_RATE = 0.1021;
+    return Math.floor(baseAmount * WITHHOLDING_TAX_RATE);
+  },
 
   /**
    * 支払いにスタッフ/外注先名を付与
@@ -429,6 +749,22 @@ const PayoutService = {
   },
 
   /**
+   * 日付文字列をローカルタイムゾーンでパース（UTC解釈回避）
+   * @param {string} dateStr - 日付文字列（YYYY-MM-DD形式）
+   * @returns {Date|null} パースされた日付またはnull
+   */
+  _parseLocalDate: function(dateStr) {
+    if (!dateStr) return null;
+
+    const normalized = String(dateStr).replace(/\//g, '-');
+    const parts = normalized.split('-');
+    if (parts.length !== 3) return new Date(dateStr); // フォールバック
+
+    const [y, m, d] = parts.map(Number);
+    return new Date(y, m - 1, d); // ローカルタイムゾーンで作成
+  },
+
+  /**
    * 日付に日数を加算
    * @param {string} dateStr - 日付（YYYY-MM-DD）
    * @param {number} days - 加算日数
@@ -436,7 +772,8 @@ const PayoutService = {
    */
   _addDays: function(dateStr, days) {
     if (!dateStr) return null;
-    const date = new Date(dateStr);
+    const date = this._parseLocalDate(dateStr);
+    if (!date) return null;
     date.setDate(date.getDate() + days);
     return Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
   }
