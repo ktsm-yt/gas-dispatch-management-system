@@ -389,10 +389,25 @@ const PayoutService = {
       Logger.log(`[bulkConfirmPayouts] Inserted ${insertedPayouts.length} payouts`);
     }
 
-    // 4. Assignment一括更新
+    // 4. Assignment一括更新（失敗時はPayoutをdraftに戻す）
+    let assignmentUpdateWarning = null;
     if (assignmentUpdates.length > 0) {
-      const updateResult = AssignmentRepository.bulkUpdatePayoutId(assignmentUpdates);
-      Logger.log(`[bulkConfirmPayouts] Updated ${updateResult.success} assignments`);
+      try {
+        const updateResult = AssignmentRepository.bulkUpdatePayoutId(assignmentUpdates);
+        Logger.log(`[bulkConfirmPayouts] Updated ${updateResult.success} assignments`);
+      } catch (e) {
+        Logger.log(`[bulkConfirmPayouts] Assignment update failed: ${e.message}`);
+        assignmentUpdateWarning = e.message;
+
+        // 挿入済みPayoutをdraftに戻す（リカバリ）
+        for (const payout of insertedPayouts) {
+          try {
+            PayoutRepository.update({ payout_id: payout.payout_id, status: 'draft' });
+          } catch (revertErr) {
+            Logger.log(`[bulkConfirmPayouts] Failed to revert payout ${payout.payout_id}: ${revertErr.message}`);
+          }
+        }
+      }
     }
 
     // 5. 監査ログ（一括）
@@ -407,12 +422,19 @@ const PayoutService = {
     // 6. スタッフ名を付与して返す
     const enrichedPayouts = insertedPayouts.map(p => this._enrichPayout(p));
 
-    return {
+    const result = {
       success: success,
       failed: failed,
       results: results,
       payouts: enrichedPayouts
     };
+
+    // Assignment更新失敗時は警告を付与
+    if (assignmentUpdateWarning) {
+      result.warning = 'Assignment更新に失敗しました。再実行してください: ' + assignmentUpdateWarning;
+    }
+
+    return result;
   },
 
   /**
