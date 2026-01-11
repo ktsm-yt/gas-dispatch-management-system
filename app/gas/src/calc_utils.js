@@ -22,6 +22,36 @@ const RoundingMode = {
 const TOBIAGE_MULTIPLIER = 1.5;
 
 // ============================================
+// 正規化ユーティリティ
+// ============================================
+
+/**
+ * 税率を小数に正規化
+ * UIは%表記（10）で保存、計算は小数（0.10）が必要なため変換
+ * @param {number} taxRate - 税率（10 or 0.10）
+ * @returns {number} 小数形式の税率（0.10）
+ */
+function normalizeTaxRate_(taxRate) {
+  if (taxRate == null || taxRate === '') return DEFAULT_TAX_RATE;
+  const rate = parseFloat(taxRate);
+  if (isNaN(rate)) return DEFAULT_TAX_RATE;
+  // 1以上なら%表記とみなして100で割る（10 → 0.10）
+  // 1未満ならそのまま（0.10 → 0.10）
+  return rate >= 1 ? rate / 100 : rate;
+}
+
+/**
+ * 給与/請求区分を小文字に正規化
+ * UIがFULLDAY/HALFDAYを送信する可能性があるため変換
+ * @param {string} unit - 区分（FULLDAY/fullday等）
+ * @returns {string} 小文字の区分（fullday）
+ */
+function normalizeUnit_(unit) {
+  if (!unit) return '';
+  return String(unit).toLowerCase().trim();
+}
+
+// ============================================
 // 基本的な金額計算
 // ============================================
 
@@ -46,39 +76,42 @@ function applyRounding_(value, mode = RoundingMode.FLOOR) {
 /**
  * 税抜金額から税込金額を計算
  * @param {number} amount - 税抜金額
- * @param {number} taxRate - 税率（0.10 = 10%）
+ * @param {number} taxRate - 税率（10 or 0.10、自動正規化）
  * @param {string} roundingMode - 端数処理方式
  * @returns {number} 税込金額
  */
 function calculateTaxIncluded_(amount, taxRate = DEFAULT_TAX_RATE, roundingMode = RoundingMode.FLOOR) {
   if (amount === null || amount === undefined || isNaN(amount)) return 0;
-  const taxIncluded = amount * (1 + taxRate);
+  const normalizedRate = normalizeTaxRate_(taxRate);
+  const taxIncluded = amount * (1 + normalizedRate);
   return applyRounding_(taxIncluded, roundingMode);
 }
 
 /**
  * 税込金額から税抜金額を計算
  * @param {number} amount - 税込金額
- * @param {number} taxRate - 税率（0.10 = 10%）
+ * @param {number} taxRate - 税率（10 or 0.10、自動正規化）
  * @param {string} roundingMode - 端数処理方式
  * @returns {number} 税抜金額
  */
 function calculateTaxExcluded_(amount, taxRate = DEFAULT_TAX_RATE, roundingMode = RoundingMode.FLOOR) {
   if (amount === null || amount === undefined || isNaN(amount)) return 0;
-  const taxExcluded = amount / (1 + taxRate);
+  const normalizedRate = normalizeTaxRate_(taxRate);
+  const taxExcluded = amount / (1 + normalizedRate);
   return applyRounding_(taxExcluded, roundingMode);
 }
 
 /**
  * 消費税額を計算
  * @param {number} amount - 税抜金額
- * @param {number} taxRate - 税率（0.10 = 10%）
+ * @param {number} taxRate - 税率（10 or 0.10、自動正規化）
  * @param {string} roundingMode - 端数処理方式
  * @returns {number} 消費税額
  */
 function calculateTaxAmount_(amount, taxRate = DEFAULT_TAX_RATE, roundingMode = RoundingMode.FLOOR) {
   if (amount === null || amount === undefined || isNaN(amount)) return 0;
-  const taxAmount = amount * taxRate;
+  const normalizedRate = normalizeTaxRate_(taxRate);
+  const taxAmount = amount * normalizedRate;
   return applyRounding_(taxAmount, roundingMode);
 }
 
@@ -152,11 +185,12 @@ function getDailyRateByJobType_(staff, jobType) {
 
 /**
  * 給与/請求区分に基づく係数を取得
- * @param {string} unit - 区分（fullday/halfday/hourly等）
+ * @param {string} unit - 区分（FULLDAY/fullday/halfday/hourly等、自動正規化）
  * @returns {number} 係数（1.0 = 全日、0.5 = 半日）
  */
 function getUnitMultiplier_(unit) {
-  switch (unit) {
+  const normalizedUnit = normalizeUnit_(unit);
+  switch (normalizedUnit) {
     case 'fullday':
     case 'shuujitsu':
     case 'jotou':

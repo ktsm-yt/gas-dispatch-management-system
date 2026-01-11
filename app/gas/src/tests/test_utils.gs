@@ -626,3 +626,139 @@ function assertNoThrow(fn, message) {
     throw new Error(`${message}: expected not to throw, but threw: ${e.message}`);
   }
 }
+
+// ============================================
+// 正規化関数テスト（KTSM-xxx 税率・大小文字不整合修正）
+// ============================================
+
+/**
+ * 税率正規化テスト
+ * UIは%表記（10）、計算は小数（0.10）が必要
+ */
+function testNormalizeTaxRate() {
+  console.log('=== testNormalizeTaxRate ===');
+
+  // %表記 → 小数
+  assertEqual(normalizeTaxRate_(10), 0.10, '10% → 0.10');
+  assertEqual(normalizeTaxRate_(8), 0.08, '8% → 0.08');
+  assertEqual(normalizeTaxRate_(100), 1.0, '100% → 1.0');
+
+  // 小数はそのまま
+  assertEqual(normalizeTaxRate_(0.10), 0.10, '0.10 → 0.10');
+  assertEqual(normalizeTaxRate_(0.08), 0.08, '0.08 → 0.08');
+
+  // null/undefined → デフォルト税率
+  assertEqual(normalizeTaxRate_(null), DEFAULT_TAX_RATE, 'null → DEFAULT_TAX_RATE');
+  assertEqual(normalizeTaxRate_(undefined), DEFAULT_TAX_RATE, 'undefined → DEFAULT_TAX_RATE');
+  assertEqual(normalizeTaxRate_(''), DEFAULT_TAX_RATE, 'empty string → DEFAULT_TAX_RATE');
+
+  console.log('testNormalizeTaxRate: PASSED');
+}
+
+/**
+ * 単位正規化テスト
+ * UIが大文字送信する可能性があるため変換
+ */
+function testNormalizeUnit() {
+  console.log('=== testNormalizeUnit ===');
+
+  // 大文字 → 小文字
+  assertEqual(normalizeUnit_('FULLDAY'), 'fullday', 'FULLDAY → fullday');
+  assertEqual(normalizeUnit_('HALFDAY'), 'halfday', 'HALFDAY → halfday');
+  assertEqual(normalizeUnit_('AM'), 'am', 'AM → am');
+  assertEqual(normalizeUnit_('PM'), 'pm', 'PM → pm');
+
+  // 小文字はそのまま
+  assertEqual(normalizeUnit_('fullday'), 'fullday', 'fullday → fullday');
+  assertEqual(normalizeUnit_('halfday'), 'halfday', 'halfday → halfday');
+
+  // 空白トリム
+  assertEqual(normalizeUnit_('  FULLDAY  '), 'fullday', 'trimmed');
+
+  // null/undefined → 空文字
+  assertEqual(normalizeUnit_(null), '', 'null → empty');
+  assertEqual(normalizeUnit_(undefined), '', 'undefined → empty');
+
+  console.log('testNormalizeUnit: PASSED');
+}
+
+/**
+ * 税額計算テスト（正規化込み）
+ * %表記でも小数表記でも同じ結果になることを確認
+ */
+function testCalculateTaxAmount_withNormalization() {
+  console.log('=== testCalculateTaxAmount_withNormalization ===');
+
+  // %表記（10）でも正しく計算
+  assertEqual(calculateTaxAmount_(10000, 10), 1000, '10000 * 10(%) = 1000');
+  assertEqual(calculateTaxAmount_(25000, 10), 2500, '25000 * 10(%) = 2500');
+
+  // 小数表記（0.10）でも正しく計算
+  assertEqual(calculateTaxAmount_(10000, 0.10), 1000, '10000 * 0.10 = 1000');
+  assertEqual(calculateTaxAmount_(25000, 0.10), 2500, '25000 * 0.10 = 2500');
+
+  // 8%でも正しく計算
+  assertEqual(calculateTaxAmount_(10000, 8), 800, '10000 * 8(%) = 800');
+  assertEqual(calculateTaxAmount_(10000, 0.08), 800, '10000 * 0.08 = 800');
+
+  console.log('testCalculateTaxAmount_withNormalization: PASSED');
+}
+
+/**
+ * 税込計算テスト（正規化込み）
+ */
+function testCalculateTaxIncluded_withNormalization() {
+  console.log('=== testCalculateTaxIncluded_withNormalization ===');
+
+  // %表記（10）でも正しく計算
+  assertEqual(calculateTaxIncluded_(10000, 10), 11000, '10000 + 10(%) = 11000');
+
+  // 小数表記（0.10）でも正しく計算
+  assertEqual(calculateTaxIncluded_(10000, 0.10), 11000, '10000 + 0.10 = 11000');
+
+  console.log('testCalculateTaxIncluded_withNormalization: PASSED');
+}
+
+/**
+ * 単位係数テスト（大文字入力対応）
+ */
+function testGetUnitMultiplier_withNormalization() {
+  console.log('=== testGetUnitMultiplier_withNormalization ===');
+
+  // 大文字でも正しく係数取得
+  assertEqual(getUnitMultiplier_('FULLDAY'), 1.0, 'FULLDAY → 1.0');
+  assertEqual(getUnitMultiplier_('HALFDAY'), 0.5, 'HALFDAY → 0.5');
+  assertEqual(getUnitMultiplier_('AM'), 0.5, 'AM → 0.5');
+  assertEqual(getUnitMultiplier_('PM'), 0.5, 'PM → 0.5');
+
+  // 小文字でも正しく係数取得
+  assertEqual(getUnitMultiplier_('fullday'), 1.0, 'fullday → 1.0');
+  assertEqual(getUnitMultiplier_('halfday'), 0.5, 'halfday → 0.5');
+
+  console.log('testGetUnitMultiplier_withNormalization: PASSED');
+}
+
+/**
+ * 正規化関数のテストを一括実行
+ */
+function runNormalizationTests() {
+  console.log('======================================');
+  console.log('Running Normalization Tests');
+  console.log('======================================');
+
+  try {
+    testNormalizeTaxRate();
+    testNormalizeUnit();
+    testCalculateTaxAmount_withNormalization();
+    testCalculateTaxIncluded_withNormalization();
+    testGetUnitMultiplier_withNormalization();
+
+    console.log('======================================');
+    console.log('All Normalization Tests PASSED!');
+    console.log('======================================');
+    return { success: true };
+  } catch (error) {
+    console.error('Test FAILED:', error.message);
+    return { success: false, error: error.message };
+  }
+}
