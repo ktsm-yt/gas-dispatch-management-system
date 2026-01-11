@@ -726,12 +726,12 @@ function exportPayouts(fromDate, toDate) {
     const result = PayoutExportService.exportToExcel(fromDate, toDate);
 
     // 監査ログ
-    AuditLogger.log('PAYOUT_EXPORT', {
+    console.log('PAYOUT_EXPORT', JSON.stringify({
       from_date: fromDate,
       to_date: toDate,
       file_id: result.fileId,
       record_count: result.recordCount
-    });
+    }));
 
     return buildSuccessResponse(result, requestId);
 
