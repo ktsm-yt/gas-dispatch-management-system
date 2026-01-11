@@ -569,6 +569,23 @@ const PayoutService = {
   },
 
   /**
+   * 期間内の支払済みレコードを取得（エクスポート用）
+   * @param {string} fromDate - 開始日（YYYY-MM-DD）
+   * @param {string} toDate - 終了日（YYYY-MM-DD）
+   * @returns {Object[]} スタッフ/外注先名を付与した支払い配列
+   */
+  getPayoutReport: function(fromDate, toDate) {
+    const payouts = PayoutRepository.search({
+      status: 'paid',
+      paid_date_from: fromDate,
+      paid_date_to: toDate,
+      sort_order: 'asc'  // 日付昇順でエクスポート
+    });
+
+    return payouts.map(p => this._enrichPayout(p));
+  },
+
+  /**
    * 未払いがあるスタッフ一覧を取得（バルク処理版）
    * @param {string} endDate - 集計終了日
    * @returns {Object[]} { staffId, staffName, unpaidCount, estimatedAmount }
