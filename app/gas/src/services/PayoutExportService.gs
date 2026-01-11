@@ -58,10 +58,19 @@ const PayoutExportService = {
     const headers = ['支払日', '支払先名', '区分', '基本金額', '交通費', '調整額', '源泉徴収', '合計金額', '備考'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
+    // 列幅を固定（A4印刷用、合計685px）
+    const columnWidths = [75, 120, 55, 70, 60, 60, 70, 75, 100];
+    columnWidths.forEach(function(width, i) {
+      sheet.setColumnWidth(i + 1, width);
+    });
+
     // ヘッダー行のスタイル設定
     const headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setBackground('#F7FAFC');
     headerRange.setFontWeight('bold');
+
+    // ヘッダー行をフリーズ（印刷時に各ページで繰り返し）
+    sheet.setFrozenRows(1);
 
     // データ行
     if (payouts.length === 0) {
@@ -89,11 +98,6 @@ const PayoutExportService = {
     amountColumns.forEach(function(col) {
       sheet.getRange(2, col, rows.length, 1).setNumberFormat('#,##0');
     });
-
-    // 列幅の自動調整
-    for (var i = 1; i <= headers.length; i++) {
-      sheet.autoResizeColumn(i);
-    }
   },
 
   /**
@@ -185,10 +189,14 @@ const PayoutExportService = {
       sheet.getRange(totalRow, col, 1, 1).setNumberFormat('#,##0');
     });
 
-    // 列幅の自動調整
-    for (var i = 1; i <= headers.length; i++) {
-      sheet.autoResizeColumn(i);
-    }
+    // 列幅を固定（A4印刷用、合計550px）
+    const columnWidths = [70, 50, 90, 80, 80, 90, 90];
+    columnWidths.forEach(function(width, i) {
+      sheet.setColumnWidth(i + 1, width);
+    });
+
+    // ヘッダー行をフリーズ（印刷時に各ページで繰り返し）
+    sheet.setFrozenRows(1);
   },
 
   /**
@@ -209,19 +217,17 @@ const PayoutExportService = {
 
   /**
    * 出力先フォルダを取得
+   * 給与明細フォルダ: gas-dispatch-system/出力/給与明細
    * @returns {Folder} 出力先フォルダ
    */
   _getOutputFolder: function() {
-    var folderId = PropertiesService.getScriptProperties()
-      .getProperty('PAYOUT_EXPORT_FOLDER_ID');
-    if (folderId) {
-      try {
-        return DriveApp.getFolderById(folderId);
-      } catch (e) {
-        console.warn('PAYOUT_EXPORT_FOLDER_ID is invalid, using root folder');
-      }
+    // 固定フォルダID: gas-dispatch-system/出力/給与明細
+    var folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+    try {
+      return DriveApp.getFolderById(folderId);
+    } catch (e) {
+      console.warn('Payout export folder not found, using root folder');
+      return DriveApp.getRootFolder();
     }
-    // フォールバック: ルートフォルダ
-    return DriveApp.getRootFolder();
   }
 };
