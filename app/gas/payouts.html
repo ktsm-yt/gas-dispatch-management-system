@@ -469,35 +469,35 @@
       to { transform: rotate(360deg); }
     }
 
-    /* ========== Button Styles ========== */
-
-    /* Floating Action Button (default) */
-    .fab {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: var(--color-primary);
-      color: white;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border: none;
-      border-radius: 28px;
-      box-shadow: 0 4px 12px rgba(23,45,144,0.4);
-      cursor: pointer;
-      font-weight: 500;
-      font-size: 14px;
-      z-index: 100;
+    /* ========== Bulk Action Bar ========== */
+    .bulk-action-bar {
       display: none;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #FFFFFF;
+      padding: var(--spacing-sm) var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
       align-items: center;
-      gap: var(--spacing-sm);
-      transition: transform 0.2s, opacity 0.2s;
+      gap: var(--spacing-md);
     }
 
-    .fab:hover {
-      transform: scale(1.05);
-    }
-
-    .fab.visible {
+    .bulk-action-bar.visible {
       display: flex;
+    }
+
+    .bulk-action-bar select {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: white;
+      font-size: 13px;
+    }
+
+    .bulk-action-bar .selected-count {
+      font-weight: 500;
+      color: var(--color-primary);
     }
   </style>
 </head>
@@ -570,6 +570,24 @@
     </div>
   </div>
 
+  <!-- File Overwrite Confirm Modal -->
+  <div class="modal-overlay" id="fileOverwriteModal" onclick="handleFileOverwriteModalOverlayClick(event)">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h2>同名ファイルが存在します</h2>
+        <button class="modal-close" onclick="closeFileOverwriteModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="fileOverwriteBody">
+        <!-- 動的に設定 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeFileOverwriteModal()">キャンセル</button>
+        <button class="btn btn-danger" onclick="confirmOverwrite()">上書き</button>
+        <button class="btn btn-primary" onclick="confirmRename()">別名保存</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toolbar">
     <div class="filter-group">
       <label>スタッフ:</label>
@@ -585,6 +603,23 @@
     <div class="toolbar-actions">
       <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
     </div>
+  </div>
+
+  <!-- 一括操作バー -->
+  <div id="bulkActionBar" class="bulk-action-bar">
+    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+      <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
+      全選択
+    </label>
+    <span class="selected-count"><span id="selectedCount">0</span>件選択中</span>
+    <select id="bulkStatusSelect">
+      <option value="">ステータス変更...</option>
+      <option value="confirmed">確認済みにする</option>
+      <option value="paid">振込済みにする</option>
+      <option value="unpaid">未払いに戻す</option>
+    </select>
+    <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
+    <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
   </div>
 
   <div class="main-content">
@@ -617,7 +652,8 @@
     // SessionStorage for unpaid data persistence
     const SS_KEY = 'payouts_unpaid_data';
     const SS_HISTORY_KEY = 'payouts_history_data';
-    const HISTORY_CACHE_TTL = 5 * 60 * 1000; // 5分
+    const SS_STAFF_KEY = 'payouts_staff_data';
+    const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分
 
     function saveToSession(data) {
       sessionStorage.setItem(SS_KEY, JSON.stringify(data));
@@ -659,6 +695,16 @@
       data.payouts = updater(data.payouts);
       data.timestamp = Date.now(); // refresh TTL
       sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify(data));
+    }
+
+    // Staff cache functions (no TTL - valid for session)
+    function saveStaffToCache(data) {
+      sessionStorage.setItem(SS_STAFF_KEY, JSON.stringify(data));
+    }
+
+    function loadStaffFromCache() {
+      const saved = sessionStorage.getItem(SS_STAFF_KEY);
+      return saved ? JSON.parse(saved) : null;
     }
 
     // Initialize
@@ -704,21 +750,37 @@
 
     // Load staff list for filter
     function loadStaffList() {
+      // Check cache first
+      const cached = loadStaffFromCache();
+      if (cached) {
+        staffList = cached;
+        populateStaffFilter();
+        return;
+      }
+
+      // Fetch from API
       google.script.run
         .withSuccessHandler(result => {
           if (result.ok) {
             staffList = result.data.staff;
-            const select = document.getElementById('staffFilter');
-            staffList.forEach(s => {
-              const option = document.createElement('option');
-              option.value = s.staff_id;
-              option.textContent = s.name;
-              select.appendChild(option);
-            });
+            saveStaffToCache(staffList);
+            populateStaffFilter();
           }
         })
         .withFailureHandler(err => showToast('error', err.message))
         .getStaffForPayouts();
+    }
+
+    function populateStaffFilter() {
+      const select = document.getElementById('staffFilter');
+      // Clear existing options (except first "全て" option)
+      select.innerHTML = '<option value="">全て</option>';
+      staffList.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.staff_id;
+        option.textContent = s.name;
+        select.appendChild(option);
+      });
     }
 
     // Load unpaid summary
@@ -998,7 +1060,7 @@
         ? `<span style="color: ${p.adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${p.adjustmentAmount > 0 ? '+' : ''}${formatCurrency(p.adjustmentAmount).replace('¥', '')}</span>`
         : '-';
       return `
-        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}">
+        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}" class="clickable-row" onclick="toggleRowCheck(this, event)">
           <td><input type="checkbox" class="payout-check" data-status="confirmed" value="${p.payoutId}"></td>
           <td>${p.staffName}</td>
           <td>${p.unpaidCount}件</td>
@@ -1515,18 +1577,31 @@
       // ボタン・input要素クリック時は除外
       if (event.target.closest('button, input')) return;
 
-      const checkbox = row.querySelector('.staff-check');
+      // 未払い行と確認済み行の両方に対応
+      const checkbox = row.querySelector('.staff-check, .payout-check');
       if (checkbox) {
         checkbox.checked = !checkbox.checked;
-        updateFab();
+        updateBulkActionBar();
       }
     }
 
     function toggleSelectAll(checkbox) {
-      document.querySelectorAll('.staff-check').forEach(cb => {
+      // 未払いと確認済み両方のチェックボックスを選択
+      document.querySelectorAll('.staff-check, .payout-check').forEach(cb => {
         cb.checked = checkbox.checked;
       });
-      updateFab();
+      updateBulkActionBar();
+    }
+
+    function toggleSelectAllFromBar() {
+      const bulkSelectAll = document.getElementById('bulkSelectAll');
+      const selectAll = document.getElementById('selectAll');
+      // 未払いと確認済み両方のチェックボックスを選択
+      document.querySelectorAll('.staff-check, .payout-check').forEach(cb => {
+        cb.checked = bulkSelectAll.checked;
+      });
+      if (selectAll) selectAll.checked = bulkSelectAll.checked;
+      updateBulkActionBar();
     }
 
     // ========== Payout Detail Modal ==========
@@ -1990,29 +2065,154 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
-    // ========== Floating Action Button ==========
+    // ========== Bulk Action Bar ==========
     function getSelectedCounts() {
       const unpaidCount = document.querySelectorAll('.staff-check[data-status="unpaid"]:checked').length;
       const confirmedCount = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked').length;
       return { unpaidCount, confirmedCount };
     }
 
-    function updateFab() {
+    function updateBulkActionBar() {
       const { unpaidCount, confirmedCount } = getSelectedCounts();
-      const fabConfirm = document.getElementById('fabConfirm');
-      const fabPay = document.getElementById('fabPay');
+      const bar = document.getElementById('bulkActionBar');
+      const countSpan = document.getElementById('selectedCount');
+      const statusSelect = document.getElementById('bulkStatusSelect');
+      const totalSelected = unpaidCount + confirmedCount;
 
-      if (fabConfirm) {
-        fabConfirm.classList.toggle('visible', unpaidCount > 0);
-        const fabConfirmCount = document.getElementById('fabConfirmCount');
-        if (fabConfirmCount) fabConfirmCount.textContent = unpaidCount;
+      if (bar) {
+        bar.classList.toggle('visible', totalSelected > 0);
       }
 
-      if (fabPay) {
-        fabPay.classList.toggle('visible', confirmedCount > 0);
-        const fabPayCount = document.getElementById('fabPayCount');
-        if (fabPayCount) fabPayCount.textContent = confirmedCount;
+      if (countSpan) {
+        countSpan.textContent = totalSelected;
       }
+
+      // 全選択チェックボックスの状態を同期
+      const allCheckboxes = document.querySelectorAll('.staff-check, .payout-check');
+      const checkedCount = document.querySelectorAll('.staff-check:checked, .payout-check:checked').length;
+      const isAllSelected = allCheckboxes.length > 0 && checkedCount === allCheckboxes.length;
+      const selectAll = document.getElementById('selectAll');
+      const bulkSelectAll = document.getElementById('bulkSelectAll');
+      if (selectAll) selectAll.checked = isAllSelected;
+      if (bulkSelectAll) bulkSelectAll.checked = isAllSelected;
+
+      // ステータスに応じて選択可能なオプションを調整
+      if (statusSelect) {
+        const confirmedOption = statusSelect.querySelector('option[value="confirmed"]');
+        const paidOption = statusSelect.querySelector('option[value="paid"]');
+        const unpaidOption = statusSelect.querySelector('option[value="unpaid"]');
+
+        // 未払い選択時のみ「確認済みにする」を有効化
+        if (confirmedOption) confirmedOption.disabled = unpaidCount === 0;
+        // 確認済み選択時のみ「振込済みにする」を有効化
+        if (paidOption) paidOption.disabled = confirmedCount === 0;
+        // 確認済み選択時のみ「未払いに戻す」を有効化
+        if (unpaidOption) unpaidOption.disabled = confirmedCount === 0;
+      }
+    }
+
+    // 後方互換性のためのエイリアス
+    function updateFab() {
+      updateBulkActionBar();
+    }
+
+    function executeBulkStatusChange() {
+      const statusSelect = document.getElementById('bulkStatusSelect');
+      const selectedStatus = statusSelect?.value;
+
+      if (!selectedStatus) {
+        showToast('error', 'ステータスを選択してください');
+        return;
+      }
+
+      switch (selectedStatus) {
+        case 'confirmed':
+          bulkConfirm();
+          break;
+        case 'paid':
+          bulkPayConfirmed();
+          break;
+        case 'unpaid':
+          bulkUndoConfirm();
+          break;
+        default:
+          showToast('error', '不明なステータスです');
+      }
+
+      // 選択をリセット
+      statusSelect.value = '';
+    }
+
+    function clearSelection() {
+      document.querySelectorAll('.staff-check:checked, .payout-check:checked').forEach(cb => {
+        cb.checked = false;
+      });
+      const selectAll = document.getElementById('selectAll');
+      if (selectAll) selectAll.checked = false;
+      updateBulkActionBar();
+    }
+
+    // 一括で確認済みを取り消し
+    function bulkUndoConfirm() {
+      const checkboxes = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked');
+      if (checkboxes.length === 0) {
+        showToast('error', '確認済みのスタッフを選択してください');
+        return;
+      }
+
+      const rows = Array.from(checkboxes).map(cb => {
+        const row = cb.closest('tr');
+        return {
+          payoutId: row.dataset.payoutId,
+          updatedAt: row.dataset.updatedAt,
+          staffName: row.querySelector('td:nth-child(2)')?.textContent || ''
+        };
+      });
+
+      showConfirmModal(
+        '一括取消',
+        `<p><strong>${rows.length}件</strong> の確認を取り消しますか？</p>
+         <p>取り消すと未払い状態に戻ります。</p>`,
+        '取り消す',
+        'btn-danger',
+        () => {
+          // 順番に処理（並列だとAPIリミットの問題があるため）
+          let processed = 0;
+          showLoading(`${rows.length}件を取消中...`);
+
+          function processNext() {
+            if (processed >= rows.length) {
+              hideLoading();
+              showToast('success', `${rows.length}件を取り消しました`);
+              clearSession();
+              updateBulkActionBar();
+              return;
+            }
+
+            const { payoutId, updatedAt } = rows[processed];
+            google.script.run
+              .withSuccessHandler(result => {
+                if (result.ok) {
+                  const undone = result.data?.undone;
+                  if (undone) {
+                    convertConfirmedToUnpaid(payoutId, undone);
+                  } else {
+                    removeConfirmedRow(payoutId);
+                  }
+                }
+                processed++;
+                processNext();
+              })
+              .withFailureHandler(() => {
+                processed++;
+                processNext();
+              })
+              .undoPayout(payoutId, updatedAt);
+          }
+
+          processNext();
+        }
+      );
     }
 
     // Checkbox change listener (delegate)
@@ -2020,7 +2220,7 @@
       if (e.target.classList.contains('staff-check') ||
           e.target.classList.contains('payout-check') ||
           e.target.id === 'selectAll') {
-        updateFab();
+        updateBulkActionBar();
       }
     });
 
@@ -2060,7 +2260,14 @@
       if (event.target.id === 'exportModal') closeExportModal();
     }
 
-    function executeExport() {
+    function handleFileOverwriteModalOverlayClick(event) {
+      if (event.target.id === 'fileOverwriteModal') closeFileOverwriteModal();
+    }
+
+    // エクスポート待機状態を保持
+    let pendingPayoutExport = null;
+
+    function executeExport(options = {}) {
       const fromDate = document.getElementById('exportFromDate').value;
       const toDate = document.getElementById('exportToDate').value;
 
@@ -2069,34 +2276,151 @@
         return;
       }
 
+      // actionが指定されていれば直接実行
+      if (options.action) {
+        doExport(fromDate, toDate, options);
+        return;
+      }
+
       closeExportModal();
+
+      // まず同名ファイルチェック
+      showLoading('ファイル確認中...');
+      google.script.run
+        .withSuccessHandler(result => {
+          hideLoading();
+          if (result.ok && result.data.exists) {
+            // 確認モーダル表示
+            pendingPayoutExport = { fromDate, toDate, existingFile: result.data.existingFile };
+            showFileOverwriteModal(result.data.existingFile);
+          } else {
+            // 直接エクスポート実行
+            doExport(fromDate, toDate, {});
+          }
+        })
+        .withFailureHandler(err => {
+          hideLoading();
+          // チェックに失敗しても続行（エクスポート実行）
+          console.warn('File check failed, proceeding with export:', err);
+          doExport(fromDate, toDate, {});
+        })
+        .checkPayoutExportFile(fromDate, toDate);
+    }
+
+    function doExport(fromDate, toDate, options) {
+      // ユーザーアクション時に先にタブを開く（ポップアップブロック回避）
+      const newTab = window.open('about:blank', '_blank');
+
+      // 新しいタブにローディングメッセージを表示
+      if (newTab) {
+        newTab.document.write(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>ファイル生成中...</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+                color: #333;
+              }
+              .spinner {
+                width: 40px;
+                height: 40px;
+                border: 4px solid #e0e0e0;
+                border-top-color: #1a73e8;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 20px;
+              }
+              @keyframes spin {
+                to { transform: rotate(360deg); }
+              }
+              .message { font-size: 16px; color: #666; }
+            </style>
+          </head>
+          <body>
+            <div class="spinner"></div>
+            <div class="message">振込集計ファイルを生成しています...</div>
+          </body>
+          </html>
+        `);
+        newTab.document.close();
+      }
       showLoading('エクスポート中...');
 
       google.script.run
         .withSuccessHandler(result => {
           hideLoading();
           if (result.ok) {
-            showToast('success', `エクスポート完了（${result.data.recordCount}件）`);
-            // Google Driveの新しいタブで開く
-            window.open(result.data.url, '_blank');
+            if (result.data.url && newTab) {
+              // 正常ケース: 新しいタブでURLを開く
+              newTab.location.href = result.data.url;
+              showToast('success', `エクスポート完了（${result.data.recordCount}件）`);
+            } else if (result.data.url && !newTab) {
+              // ポップアップブロック時
+              showToast('success', `エクスポート完了（${result.data.recordCount}件）。ポップアップがブロックされた可能性があります。`);
+              window.open(result.data.url, '_blank');
+            } else {
+              if (newTab) newTab.close();
+              showToast('success', 'エクスポート完了');
+            }
           } else {
+            if (newTab) newTab.close();
             showToast('error', result.error || 'エクスポートに失敗しました');
           }
         })
         .withFailureHandler(err => {
           hideLoading();
+          if (newTab) newTab.close();
           showToast('error', err.message);
         })
-        .exportPayouts(fromDate, toDate);
+        .exportPayouts(fromDate, toDate, options);
+    }
+
+    // ファイル上書き確認モーダル
+    function showFileOverwriteModal(existingFile) {
+      const body = document.getElementById('fileOverwriteBody');
+      const modifiedDate = new Date(existingFile.modifiedDate).toLocaleString('ja-JP');
+      body.innerHTML = `
+        <p style="margin-bottom: 12px;">以下の同名ファイルが既に存在します：</p>
+        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+          <div style="font-weight: 500; margin-bottom: 4px;">${existingFile.name}</div>
+          <div style="font-size: 13px; color: #666;">更新日時: ${modifiedDate}</div>
+        </div>
+        <p style="color: #666; font-size: 13px;">
+          <strong>上書き</strong>: 既存ファイルを削除して新規作成<br>
+          <strong>別名保存</strong>: 日付を追加して別ファイルとして保存
+        </p>
+      `;
+      document.getElementById('fileOverwriteModal').classList.add('active');
+    }
+
+    function closeFileOverwriteModal() {
+      document.getElementById('fileOverwriteModal').classList.remove('active');
+      pendingPayoutExport = null;
+    }
+
+    function confirmOverwrite() {
+      if (!pendingPayoutExport) return;
+      const { fromDate, toDate } = pendingPayoutExport;
+      closeFileOverwriteModal();
+      doExport(fromDate, toDate, { action: 'overwrite' });
+    }
+
+    function confirmRename() {
+      if (!pendingPayoutExport) return;
+      const { fromDate, toDate } = pendingPayoutExport;
+      closeFileOverwriteModal();
+      doExport(fromDate, toDate, { action: 'rename' });
     }
   </script>
 
-  <!-- Floating Action Buttons -->
-  <button class="fab" id="fabConfirm" onclick="bulkConfirm()" style="bottom: 80px;">
-    <span id="fabConfirmCount">0</span>名を確認済みにする
-  </button>
-  <button class="fab" id="fabPay" onclick="bulkPayConfirmed()" style="bottom: 24px; background: var(--color-success);">
-    <span id="fabPayCount">0</span>件を振込済みにする
-  </button>
 </body>
 </html>
