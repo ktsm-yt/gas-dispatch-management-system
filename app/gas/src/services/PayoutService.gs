@@ -312,39 +312,129 @@ const PayoutService = {
    * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
    */
   bulkConfirmPayouts: function(staffIds, endDate, options = {}) {
+    Logger.log(`[bulkConfirmPayouts] Starting bulk confirm for ${staffIds.length} staff`);
+
+    const adjustments = options.adjustments || {};
     const results = [];
-    const payouts = [];
+    const payoutsToInsert = [];
+    const assignmentUpdates = [];
     let success = 0;
     let failed = 0;
 
-    const adjustments = options.adjustments || {};
-
+    // 1. 全スタッフの未払い計算を一括で行う
+    const staffCalcMap = new Map();
     for (const staffId of staffIds) {
-      const staffOptions = {
-        adjustment_amount: adjustments[staffId]?.adjustment_amount || 0,
-        notes: adjustments[staffId]?.notes || ''
-      };
+      const calc = this.calculatePayout(staffId, endDate);
+      staffCalcMap.set(staffId, calc);
+    }
 
-      const result = this.confirmPayout(staffId, endDate, staffOptions);
-      results.push({
-        staffId: staffId,
-        ...result
+    // 2. 支払いレコードを準備
+    for (const staffId of staffIds) {
+      const calc = staffCalcMap.get(staffId);
+
+      if (!calc || calc.assignmentCount === 0) {
+        results.push({
+          staffId: staffId,
+          success: false,
+          error: 'NO_UNPAID_ASSIGNMENTS',
+          message: '未払いの配置がありません'
+        });
+        failed++;
+        continue;
+      }
+
+      const adjustmentAmount = adjustments[staffId]?.adjustment_amount || 0;
+      const notes = adjustments[staffId]?.notes || '';
+      const totalAmount = calc.totalAmount + adjustmentAmount;
+      const payoutId = generateId('pay');
+
+      // 支払いレコード準備
+      payoutsToInsert.push({
+        payout_id: payoutId,
+        payout_type: 'STAFF',
+        staff_id: staffId,
+        period_start: calc.periodStart,
+        period_end: calc.periodEnd,
+        assignment_count: calc.assignmentCount,
+        base_amount: calc.baseAmount,
+        transport_amount: calc.transportAmount,
+        adjustment_amount: adjustmentAmount,
+        tax_amount: calc.taxAmount,
+        total_amount: totalAmount,
+        status: 'confirmed',
+        paid_date: '',
+        notes: notes
       });
 
-      if (result.success) {
-        success++;
-        payouts.push(result.payout);
-      } else {
-        failed++;
+      // Assignment更新準備
+      for (const assignment of calc.assignments) {
+        assignmentUpdates.push({
+          assignment_id: assignment.assignment_id,
+          payout_id: payoutId
+        });
+      }
+
+      results.push({
+        staffId: staffId,
+        success: true,
+        payoutId: payoutId
+      });
+      success++;
+    }
+
+    // 3. 一括挿入
+    let insertedPayouts = [];
+    if (payoutsToInsert.length > 0) {
+      insertedPayouts = PayoutRepository.insertBulk(payoutsToInsert);
+      Logger.log(`[bulkConfirmPayouts] Inserted ${insertedPayouts.length} payouts`);
+    }
+
+    // 4. Assignment一括更新（失敗時はPayoutをdraftに戻す）
+    let assignmentUpdateWarning = null;
+    if (assignmentUpdates.length > 0) {
+      try {
+        const updateResult = AssignmentRepository.bulkUpdatePayoutId(assignmentUpdates);
+        Logger.log(`[bulkConfirmPayouts] Updated ${updateResult.success} assignments`);
+      } catch (e) {
+        Logger.log(`[bulkConfirmPayouts] Assignment update failed: ${e.message}`);
+        assignmentUpdateWarning = e.message;
+
+        // 挿入済みPayoutをdraftに戻す（リカバリ）
+        for (const payout of insertedPayouts) {
+          try {
+            PayoutRepository.update({ payout_id: payout.payout_id, status: 'draft' });
+          } catch (revertErr) {
+            Logger.log(`[bulkConfirmPayouts] Failed to revert payout ${payout.payout_id}: ${revertErr.message}`);
+          }
+        }
       }
     }
 
-    return {
+    // 5. 監査ログ（一括）
+    for (const payout of insertedPayouts) {
+      try {
+        logCreate('T_Payouts', payout.payout_id, payout);
+      } catch (e) {
+        Logger.log(`[bulkConfirmPayouts] Audit log error: ${e.message}`);
+      }
+    }
+
+    // 6. スタッフ名を付与して返す
+    const enrichedPayouts = insertedPayouts.map(p => this._enrichPayout(p));
+
+    const result = {
       success: success,
       failed: failed,
       results: results,
-      payouts: payouts
+      payouts: enrichedPayouts
     };
+
+    // Assignment更新失敗時は警告を付与
+    if (assignmentUpdateWarning) {
+      result.warning = 'Assignment更新に失敗しました。再実行してください: ' + assignmentUpdateWarning;
+    }
+
+    return result;
   },
 
   /**
@@ -528,6 +618,9 @@ const PayoutService = {
       } catch (e) {
         Logger.log(`[undoPayout] Audit log error: ${e.message}`);
       }
+
+      // 4. 取り消し後の情報を付与（差分リロード用）
+      result.undone = this._enrichPayout(current);
     }
 
     return result;
@@ -566,6 +659,23 @@ const PayoutService = {
       payout_type: options.payout_type || 'STAFF'
     };
     return this.search(query);
+  },
+
+  /**
+   * 期間内の支払済みレコードを取得（エクスポート用）
+   * @param {string} fromDate - 開始日（YYYY-MM-DD）
+   * @param {string} toDate - 終了日（YYYY-MM-DD）
+   * @returns {Object[]} スタッフ/外注先名を付与した支払い配列
+   */
+  getPayoutReport: function(fromDate, toDate) {
+    const payouts = PayoutRepository.search({
+      status: 'paid',
+      paid_date_from: fromDate,
+      paid_date_to: toDate,
+      sort_order: 'asc'  // 日付昇順でエクスポート
+    });
+
+    return payouts.map(p => this._enrichPayout(p));
   },
 
   /**

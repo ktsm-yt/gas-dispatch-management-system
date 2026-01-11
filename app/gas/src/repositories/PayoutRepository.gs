@@ -110,6 +110,8 @@ const PayoutRepository = {
    * @param {string[]} query.status_in - ステータス（複数、OR検索）
    * @param {string} query.period_start_from - 期間開始日（以降）
    * @param {string} query.period_end_to - 期間終了日（以前）
+   * @param {string} query.paid_date_from - 支払日（以降）
+   * @param {string} query.paid_date_to - 支払日（以前）
    * @param {number} query.limit - 取得件数制限
    * @returns {Object[]} 支払い配列
    */
@@ -154,6 +156,24 @@ const PayoutRepository = {
     if (query.period_end_to) {
       const toDate = this._parseLocalDate(query.period_end_to);
       records = records.filter(r => this._parseLocalDate(r.period_end) <= toDate);
+    }
+
+    // 支払日（以降）で絞り込み
+    if (query.paid_date_from) {
+      const fromDate = this._parseLocalDate(query.paid_date_from);
+      records = records.filter(r => {
+        const paidDate = this._parseLocalDate(r.paid_date);
+        return paidDate && paidDate >= fromDate;
+      });
+    }
+
+    // 支払日（以前）で絞り込み
+    if (query.paid_date_to) {
+      const toDate = this._parseLocalDate(query.paid_date_to);
+      records = records.filter(r => {
+        const paidDate = this._parseLocalDate(r.paid_date);
+        return paidDate && paidDate <= toDate;
+      });
     }
 
     // ソート（デフォルト: paid_date降順＝最新が上）
@@ -209,6 +229,46 @@ const PayoutRepository = {
     insertRecord(this.TABLE_NAME, newPayout);
 
     return newPayout;
+  },
+
+  /**
+   * 支払いを一括挿入
+   * @param {Object[]} payouts - 支払いデータ配列
+   * @returns {Object[]} 作成した支払い配列
+   */
+  insertBulk: function(payouts) {
+    if (!payouts || payouts.length === 0) {
+      return [];
+    }
+
+    const user = getCurrentUserEmail();
+    const now = getCurrentTimestamp();
+
+    const newPayouts = payouts.map(payout => ({
+      payout_id: payout.payout_id || generateId('pay'),
+      payout_type: payout.payout_type || 'STAFF',
+      staff_id: payout.staff_id || '',
+      subcontractor_id: payout.subcontractor_id || '',
+      period_start: payout.period_start || '',
+      period_end: payout.period_end || '',
+      assignment_count: payout.assignment_count || 0,
+      base_amount: payout.base_amount || 0,
+      transport_amount: payout.transport_amount || 0,
+      adjustment_amount: payout.adjustment_amount || 0,
+      tax_amount: payout.tax_amount || 0,
+      total_amount: payout.total_amount || 0,
+      status: payout.status || 'draft',
+      paid_date: payout.paid_date || '',
+      notes: payout.notes || '',
+      created_at: now,
+      created_by: user,
+      updated_at: now,
+      is_deleted: false
+    }));
+
+    insertRecords(this.TABLE_NAME, newPayouts);
+
+    return newPayouts;
   },
 
   /**
