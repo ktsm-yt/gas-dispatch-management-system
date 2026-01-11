@@ -224,12 +224,16 @@
 
     /* Bulk Action Bar */
     .bulk-action-bar {
-      background: var(--bg-secondary);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #FFFFFF;
       padding: var(--spacing-sm) var(--spacing-lg);
       display: flex;
       align-items: center;
       gap: var(--spacing-md);
       border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .bulk-action-bar select {
@@ -533,6 +537,10 @@
 
   <!-- 一括操作バー -->
   <div id="bulkActionBar" class="bulk-action-bar">
+    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+      <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
+      全選択
+    </label>
     <span id="selectedCount">0件選択中</span>
     <select id="bulkStatusSelect">
       <option value="">ステータス変更...</option>
@@ -572,7 +580,7 @@
             <th>請求年月</th>
             <th>発行日</th>
             <th class="amount">合計金額</th>
-            <th>ステータス</th>
+            <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス <span id="statusSortIcon">⇅</span></th>
             <th>帳票出力</th>
           </tr>
         </thead>
@@ -701,6 +709,24 @@
     </div>
   </div>
 
+  <!-- File Overwrite Confirm Modal -->
+  <div class="modal-overlay" id="fileOverwriteModal" onclick="handleModalOverlayClick(event, 'fileOverwriteModal')">
+    <div class="modal" style="max-width: 450px;">
+      <div class="modal-header">
+        <h2>同名ファイルが存在します</h2>
+        <button class="modal-close" onclick="closeFileOverwriteModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="fileOverwriteBody">
+        <!-- 動的に設定 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeFileOverwriteModal()">キャンセル</button>
+        <button class="btn btn-danger" onclick="confirmOverwrite()">上書き</button>
+        <button class="btn btn-primary" onclick="confirmRename()">別名保存</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Loading -->
   <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
@@ -714,12 +740,80 @@
     let invoices = [];
     let customers = [];
 
+    // SessionStorage keys and TTL
+    const SS_INVOICES_KEY = 'invoices_data';
+    const SS_CUSTOMERS_KEY = 'invoices_customers';
+    const SS_FILTER_KEY = 'invoices_filter';
+    const INVOICES_CACHE_TTL = 30 * 60 * 1000;  // 30分
+
+    // Cache functions - Invoices (with TTL)
+    function saveInvoicesToCache(data, query) {
+      sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        query: query,
+        invoices: data
+      }));
+    }
+
+    function loadInvoicesFromCache(currentQuery) {
+      const saved = sessionStorage.getItem(SS_INVOICES_KEY);
+      if (!saved) return null;
+
+      const data = JSON.parse(saved);
+      if (Date.now() - data.timestamp > INVOICES_CACHE_TTL) {
+        sessionStorage.removeItem(SS_INVOICES_KEY);
+        return null;
+      }
+      if (JSON.stringify(data.query) !== JSON.stringify(currentQuery)) {
+        return null;
+      }
+      return data.invoices;
+    }
+
+    // Cache functions - Customers (no TTL)
+    function saveCustomersToCache(data) {
+      sessionStorage.setItem(SS_CUSTOMERS_KEY, JSON.stringify(data));
+    }
+
+    function loadCustomersFromCache() {
+      const saved = sessionStorage.getItem(SS_CUSTOMERS_KEY);
+      return saved ? JSON.parse(saved) : null;
+    }
+
+    // Cache functions - Filter state (no TTL)
+    function saveFilterState() {
+      const filter = {
+        year: document.getElementById('filterYear').value,
+        month: document.getElementById('filterMonth').value,
+        customer: document.getElementById('filterCustomer').value,
+        status: document.getElementById('filterStatus').value
+      };
+      sessionStorage.setItem(SS_FILTER_KEY, JSON.stringify(filter));
+    }
+
+    function loadFilterState() {
+      const saved = sessionStorage.getItem(SS_FILTER_KEY);
+      return saved ? JSON.parse(saved) : null;
+    }
+
+    // Restore filter state (called after customers are loaded)
+    function restoreFilterState() {
+      const filter = loadFilterState();
+      if (!filter) return false;
+
+      if (filter.year) document.getElementById('filterYear').value = filter.year;
+      if (filter.month) document.getElementById('filterMonth').value = filter.month;
+      if (filter.customer) document.getElementById('filterCustomer').value = filter.customer;
+      if (filter.status) document.getElementById('filterStatus').value = filter.status;
+
+      return true;
+    }
+
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
       initNavBar('invoices', '請求管理');
       initFilters();
       loadCustomers();
-      loadInvoices();
       initModalHandlers();
     });
 
@@ -730,12 +824,15 @@
           const generateModal = document.getElementById('generateModal');
           const bulkModal = document.getElementById('bulkGenerateModal');
           const billingModal = document.getElementById('billingExportModal');
+          const fileOverwriteModal = document.getElementById('fileOverwriteModal');
           if (generateModal.classList.contains('active')) {
             closeGenerateModal();
           } else if (bulkModal.classList.contains('active')) {
             closeBulkGenerateModal();
           } else if (billingModal.classList.contains('active')) {
             closeBillingExportModal();
+          } else if (fileOverwriteModal.classList.contains('active')) {
+            closeFileOverwriteModal();
           }
         }
       });
@@ -750,6 +847,8 @@
           closeBulkGenerateModal();
         } else if (modalId === 'billingExportModal') {
           closeBillingExportModal();
+        } else if (modalId === 'fileOverwriteModal') {
+          closeFileOverwriteModal();
         }
       }
     }
@@ -794,11 +893,25 @@
     }
 
     function loadCustomers() {
+      // Check cache first
+      const cached = loadCustomersFromCache();
+      if (cached) {
+        customers = cached;
+        populateCustomerSelects();
+        restoreFilterState();
+        loadInvoices();
+        return;
+      }
+
+      // Fetch from API
       google.script.run
         .withSuccessHandler(function(result) {
           if (result.ok) {
             customers = result.data.customers || [];
+            saveCustomersToCache(customers);
             populateCustomerSelects();
+            restoreFilterState();
+            loadInvoices();
           }
         })
         .withFailureHandler(handleError)
@@ -826,7 +939,7 @@
       });
     }
 
-    function loadInvoices() {
+    function loadInvoices(skipCache = false) {
       clearSelection();
 
       const year = document.getElementById('filterYear').value;
@@ -840,8 +953,6 @@
         return;
       }
 
-      showLoading();
-
       const query = {};
       if (year) {
         query.billing_year = parseInt(year);
@@ -852,11 +963,27 @@
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
 
+      // Save filter state
+      saveFilterState();
+
+      // Check cache (unless skipCache is true)
+      if (!skipCache) {
+        const cached = loadInvoicesFromCache(query);
+        if (cached) {
+          invoices = cached;
+          renderInvoices();
+          return;
+        }
+      }
+
+      showLoading();
+
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
           if (result.ok) {
             invoices = result.data.invoices || [];
+            saveInvoicesToCache(invoices, query);
             renderInvoices();
           } else {
             showToast(result.error?.message || 'エラーが発生しました', 'error');
@@ -882,7 +1009,7 @@
       emptyState.style.display = 'none';
 
       tbody.innerHTML = invoices.map(inv => `
-        <tr onclick="toggleRowCheckbox('${inv.invoice_id}')" data-invoice-id="${inv.invoice_id}" style="cursor: pointer;">
+        <tr onclick="toggleRowCheckbox('${inv.invoice_id}')" data-invoice-id="${inv.invoice_id}" data-status="${inv.status}" style="cursor: pointer;">
           <td onclick="event.stopPropagation()">
             <input type="checkbox" class="invoice-checkbox" data-invoice-id="${inv.invoice_id}" data-updated-at="${inv.updated_at || ''}" onchange="updateBulkActionBar()">
           </td>
@@ -930,6 +1057,15 @@
       updateBulkActionBar();
     }
 
+    function toggleSelectAllFromBar() {
+      const bulkSelectAll = document.getElementById('bulkSelectAll');
+      const selectAll = document.getElementById('selectAll');
+      const checkboxes = document.querySelectorAll('.invoice-checkbox');
+      checkboxes.forEach(cb => cb.checked = bulkSelectAll.checked);
+      if (selectAll) selectAll.checked = bulkSelectAll.checked;
+      updateBulkActionBar();
+    }
+
     function updateBulkActionBar() {
       const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
       const countSpan = document.getElementById('selectedCount');
@@ -938,8 +1074,43 @@
 
       // 全選択チェックボックスの状態を更新
       const allCheckboxes = document.querySelectorAll('.invoice-checkbox');
+      const isAllSelected = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
       const selectAll = document.getElementById('selectAll');
-      selectAll.checked = allCheckboxes.length > 0 && checkboxes.length === allCheckboxes.length;
+      const bulkSelectAll = document.getElementById('bulkSelectAll');
+      if (selectAll) selectAll.checked = isAllSelected;
+      if (bulkSelectAll) bulkSelectAll.checked = isAllSelected;
+    }
+
+    // ========== ソート機能 ==========
+    let invoiceSortDirection = 0; // 0:なし, 1:昇順, -1:降順
+    const statusOrder = { 'unsent': 1, 'sent': 2, 'unpaid': 3, 'paid': 4, 'draft': 1, 'issued': 1 };
+
+    function toggleStatusSort() {
+      // ソート方向をトグル
+      if (invoiceSortDirection === 0 || invoiceSortDirection === -1) {
+        invoiceSortDirection = 1;
+      } else {
+        invoiceSortDirection = -1;
+      }
+
+      // アイコン更新
+      const icon = document.getElementById('statusSortIcon');
+      icon.textContent = invoiceSortDirection === 1 ? '↑' : '↓';
+
+      // テーブル行をソート
+      const tbody = document.getElementById('invoiceTableBody');
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      rows.sort((a, b) => {
+        const statusA = a.dataset.status || '';
+        const statusB = b.dataset.status || '';
+        const orderA = statusOrder[statusA] || 99;
+        const orderB = statusOrder[statusB] || 99;
+        return (orderA - orderB) * invoiceSortDirection;
+      });
+
+      // DOMを再構築
+      rows.forEach(row => tbody.appendChild(row));
     }
 
     function toggleRowCheckbox(invoiceId) {
@@ -1045,6 +1216,8 @@
                 updateInvoiceStatusInDOM(u.invoiceId, status);
               }
             });
+            // Clear cache since data changed
+            sessionStorage.removeItem(SS_INVOICES_KEY);
             clearSelection();
             document.getElementById('bulkStatusSelect').value = '';
           } else {
@@ -1094,7 +1267,7 @@
           hideLoading();
           if (result.ok) {
             showToast('請求書を生成しました', 'success');
-            loadInvoices();
+            loadInvoices(true);  // Skip cache after data change
           } else {
             showToast(result.error?.message || '生成に失敗しました', 'error');
           }
@@ -1129,7 +1302,7 @@
       document.getElementById('bulkGenerateModal').classList.remove('active');
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
-        loadInvoices();
+        loadInvoices(true);  // Skip cache after data change
       }
       // リセット
       document.getElementById('bulkGenerateProgress').style.display = 'none';
@@ -1282,6 +1455,9 @@
       }
     }
 
+    // エクスポート待機状態を保持
+    let pendingExport = null;
+
     function exportPdf(invoiceId) {
       exportInvoice(invoiceId, 'pdf');
     }
@@ -1295,6 +1471,36 @@
     }
 
     function exportInvoice(invoiceId, mode, options = {}) {
+      // actionが指定されていれば直接実行
+      if (options.action) {
+        executeInvoiceExport(invoiceId, mode, options);
+        return;
+      }
+
+      // まず同名ファイルチェック
+      showLoading('ファイル確認中...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result.ok && result.data.exists) {
+            // 確認モーダル表示
+            pendingExport = { invoiceId, mode, options, existingFile: result.data.existingFile };
+            showFileOverwriteModal(result.data.existingFile);
+          } else {
+            // 直接エクスポート実行
+            executeInvoiceExport(invoiceId, mode, options);
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          // チェックに失敗しても続行（エクスポート実行）
+          console.warn('File check failed, proceeding with export:', error);
+          executeInvoiceExport(invoiceId, mode, options);
+        })
+        .checkInvoiceExportFile(invoiceId, mode);
+    }
+
+    function executeInvoiceExport(invoiceId, mode, options) {
       // ユーザーアクション時に先にタブを開く（ポップアップブロック回避）
       const newTab = window.open('about:blank', '_blank');
 
@@ -1371,7 +1577,7 @@
             }
 
             // Update invoice list to show new file IDs
-            loadInvoices();
+            loadInvoices(true);  // Skip cache after data change
           } else {
             if (newTab) newTab.close();
             showToast(result.error?.message || '出力に失敗しました', 'error');
@@ -1383,6 +1589,43 @@
           handleError(error);
         })
         .exportInvoice(invoiceId, mode, options);
+    }
+
+    // ファイル上書き確認モーダル
+    function showFileOverwriteModal(existingFile) {
+      const body = document.getElementById('fileOverwriteBody');
+      const modifiedDate = new Date(existingFile.modifiedDate).toLocaleString('ja-JP');
+      body.innerHTML = `
+        <p style="margin-bottom: 12px;">以下の同名ファイルが既に存在します：</p>
+        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+          <div style="font-weight: 500; margin-bottom: 4px;">${existingFile.name}</div>
+          <div style="font-size: 13px; color: #666;">更新日時: ${modifiedDate}</div>
+        </div>
+        <p style="color: #666; font-size: 13px;">
+          <strong>上書き</strong>: 既存ファイルを削除して新規作成<br>
+          <strong>別名保存</strong>: 日付を追加して別ファイルとして保存
+        </p>
+      `;
+      document.getElementById('fileOverwriteModal').classList.add('active');
+    }
+
+    function closeFileOverwriteModal() {
+      document.getElementById('fileOverwriteModal').classList.remove('active');
+      pendingExport = null;
+    }
+
+    function confirmOverwrite() {
+      if (!pendingExport) return;
+      closeFileOverwriteModal();
+      executeInvoiceExport(pendingExport.invoiceId, pendingExport.mode,
+        { ...pendingExport.options, action: 'overwrite' });
+    }
+
+    function confirmRename() {
+      if (!pendingExport) return;
+      closeFileOverwriteModal();
+      executeInvoiceExport(pendingExport.invoiceId, pendingExport.mode,
+        { ...pendingExport.options, action: 'rename' });
     }
 
     // Billing Export Modal
