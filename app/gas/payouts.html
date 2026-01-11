@@ -75,6 +75,29 @@
       gap: var(--spacing-sm);
     }
 
+    /* Collapsible Section */
+    .collapsible-header {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+    }
+    .collapsible-header:hover {
+      opacity: 0.8;
+    }
+    .collapse-icon {
+      display: inline-block;
+      transition: transform 0.2s ease;
+      font-size: 12px;
+    }
+    .collapse-icon.collapsed {
+      transform: rotate(-90deg);
+    }
+    .collapsible-content.collapsed {
+      display: none;
+    }
+
     /* Buttons */
     .btn {
       display: inline-flex;
@@ -542,7 +565,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeExportModal()">キャンセル</button>
-        <button class="btn btn-primary" onclick="executeExport()">ダウンロード</button>
+        <button class="btn btn-primary" onclick="executeExport()">エクスポート</button>
       </div>
     </div>
   </div>
@@ -559,21 +582,26 @@
 
       <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
     </div>
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
+    </div>
   </div>
 
   <div class="main-content">
-    <!-- 未払いサマリー -->
+    <!-- 未払いサマリー（開閉可能） -->
     <div id="unpaidSection" class="summary-card">
-      <h3>未払い集計</h3>
-      <div id="unpaidSummary" class="loading">
+      <h3 class="collapsible-header" onclick="toggleUnpaidSection()">
+        <span class="collapse-icon" id="unpaidCollapseIcon">▼</span>
+        未払い集計
+      </h3>
+      <div id="unpaidSummary" class="collapsible-content">
         スタッフを選択して「集計」をクリックしてください
       </div>
     </div>
 
     <!-- 支払い履歴 -->
-    <div class="section-header" style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="section-header">
       <h2>支払い履歴</h2>
-      <button class="btn btn-secondary" onclick="showExportModal()">エクスポート</button>
     </div>
 
     <div id="historyTable">
@@ -668,7 +696,9 @@
         currentUnpaid = saved.data;
         renderUnpaidSummary(saved.data);
       } else if (saved.mode === 'list' && saved.data) {
-        renderUnpaidStaffList(saved.data);
+        // Restore with confirmed data if available
+        const confirmedData = saved.confirmedData || [];
+        renderUnpaidStaffList(saved.data, confirmedData);
       }
     }
 
@@ -731,31 +761,45 @@
           })
           .getUnpaidSummary(staffId, endDate);
       } else {
-        // 全スタッフの未払い一覧
-        showLoading('全スタッフの未払いを計算中...');
+        // 全スタッフの未払い一覧 + 確認済み一覧を並列取得
+        showLoading('データを読み込み中...');
+
+        let unpaidResult = null;
+        let confirmedResult = null;
+        let completed = 0;
+
+        function checkAndRender() {
+          completed++;
+          if (completed < 2) return;
+
+          hideLoading();
+
+          const unpaidData = unpaidResult?.ok ? unpaidResult.data : { staffList: [], totalCount: 0, totalAmount: 0 };
+          const confirmedData = confirmedResult?.ok ? confirmedResult.data.payouts : [];
+
+          renderUnpaidStaffList(unpaidData, confirmedData);
+
+          // Save to SessionStorage
+          saveToSession({
+            mode: 'list',
+            staffId: null,
+            endDate: endDate,
+            data: unpaidData,
+            confirmedData: confirmedData
+          });
+        }
+
+        // 未払い一覧を取得
         google.script.run
-          .withSuccessHandler(result => {
-            hideLoading();
-            if (result.ok) {
-              renderUnpaidStaffList(result.data);
-              // Save to SessionStorage
-              saveToSession({
-                mode: 'list',
-                staffId: null,
-                endDate: endDate,
-                data: result.data
-              });
-            } else {
-              summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
-              clearSession();
-            }
-          })
-          .withFailureHandler(err => {
-            hideLoading();
-            summaryDiv.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
-            clearSession();
-          })
+          .withSuccessHandler(result => { unpaidResult = result; checkAndRender(); })
+          .withFailureHandler(err => { unpaidResult = { ok: false, error: err.message }; checkAndRender(); })
           .getUnpaidStaffList(endDate);
+
+        // 確認済み一覧を取得
+        google.script.run
+          .withSuccessHandler(result => { confirmedResult = result; checkAndRender(); })
+          .withFailureHandler(err => { confirmedResult = { ok: false, data: { payouts: [] } }; checkAndRender(); })
+          .getConfirmedPayouts({});
       }
     }
 
@@ -823,25 +867,66 @@
       document.getElementById('singleTotalAmount').textContent = formatCurrency(total);
     }
 
-    // Render unpaid staff list
-    function renderUnpaidStaffList(data) {
+    // Render combined staff list (unpaid + confirmed)
+    function renderUnpaidStaffList(data, confirmedData = []) {
       const summaryDiv = document.getElementById('unpaidSummary');
       const today = new Date().toISOString().split('T')[0];
 
-      if (data.staffList.length === 0) {
-        summaryDiv.innerHTML = '<div class="empty-state">未払いのスタッフはいません</div>';
+      // Merge unpaid and confirmed data
+      const unpaidRows = (data.staffList || []).map(s => ({
+        ...s,
+        status: 'unpaid',
+        rowId: `unpaid-${s.staffId}`
+      }));
+
+      const confirmedRows = confirmedData.map(p => ({
+        staffId: p.staff_id,
+        staffName: p.target_name,
+        unpaidCount: p.assignment_count,
+        periodStart: p.period_start,
+        periodEnd: p.period_end,
+        estimatedAmount: p.total_amount,
+        baseAmount: p.base_amount,
+        transportAmount: p.transport_amount,
+        adjustmentAmount: p.adjustment_amount || 0,
+        notes: p.notes || '',
+        payoutId: p.payout_id,
+        updatedAt: p.updated_at,
+        status: 'confirmed',
+        rowId: `confirmed-${p.payout_id}`
+      }));
+
+      const allRows = [...unpaidRows, ...confirmedRows];
+
+      // Sort: confirmed first, then unpaid
+      allRows.sort((a, b) => {
+        if (a.status === b.status) return a.staffName.localeCompare(b.staffName);
+        return a.status === 'confirmed' ? -1 : 1;
+      });
+
+      if (allRows.length === 0) {
+        summaryDiv.innerHTML = '<div class="empty-state">対象のスタッフはいません</div>';
         return;
       }
+
+      const unpaidCount = unpaidRows.length;
+      const confirmedCount = confirmedRows.length;
+      const unpaidTotal = data.totalAmount || 0;
+      const confirmedTotal = confirmedData.reduce((sum, p) => sum + (p.total_amount || 0), 0);
 
       let html = `
         <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
           <div class="summary-item">
-            <div class="label">対象スタッフ</div>
-            <div class="value">${data.totalCount}名</div>
+            <div class="label">未払い</div>
+            <div class="value">${unpaidCount}名</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">確認済み</div>
+            <div class="value" style="color: var(--color-secondary);">${confirmedCount}名</div>
           </div>
           <div class="summary-item">
             <div class="label">合計金額</div>
-            <div class="value amount">${formatCurrency(data.totalAmount)}</div>
+            <div class="value amount">${formatCurrency(unpaidTotal + confirmedTotal)}</div>
           </div>
         </div>
         <div style="margin-bottom: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;">
@@ -850,7 +935,7 @@
             <input type="date" id="bulkPaidDate" value="${today}" />
           </div>
         </div>
-        <table class="data-table">
+        <table class="data-table" id="payoutTable">
           <thead>
             <tr>
               <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
@@ -860,30 +945,19 @@
               <th>基本金額</th>
               <th>調整額</th>
               <th>備考</th>
+              <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス ⇅</th>
               <th>操作</th>
             </tr>
           </thead>
-            <tbody>
+          <tbody>
       `;
 
-      data.staffList.forEach(s => {
-        html += `
-          <tr data-staff-id="${s.staffId}" class="clickable-row" onclick="toggleRowCheck(this, event)">
-            <td><input type="checkbox" class="staff-check" value="${s.staffId}"></td>
-            <td>${s.staffName}</td>
-            <td>${s.unpaidCount}件</td>
-            <td style="font-size:12px">${s.periodStart || '-'} ~ ${s.periodEnd}</td>
-            <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
-            <td style="white-space: nowrap;">
-              <button type="button" class="btn-sign positive" data-staff-id="${s.staffId}" onclick="toggleSign('${s.staffId}')">+</button>
-              <input type="number" class="adjustment-input" data-staff-id="${s.staffId}" value="0" min="0" />
-            </td>
-            <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
-            <td>
-              <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}')">詳細</button>
-            </td>
-          </tr>
-        `;
+      allRows.forEach(row => {
+        if (row.status === 'unpaid') {
+          html += renderUnpaidRow(row);
+        } else {
+          html += renderConfirmedRow(row);
+        }
       });
 
       html += `
@@ -892,8 +966,86 @@
       `;
 
       summaryDiv.innerHTML = html;
-      // Update FAB after rendering
+      currentSortOrder = 'unpaid-first';
       updateFab();
+    }
+
+    // Render a single unpaid row
+    function renderUnpaidRow(s) {
+      return `
+        <tr data-staff-id="${s.staffId}" data-status="unpaid" data-row-id="${s.rowId}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+          <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${s.staffId}"></td>
+          <td>${s.staffName}</td>
+          <td>${s.unpaidCount}件</td>
+          <td style="font-size:12px">${s.periodStart || '-'} ~ ${s.periodEnd}</td>
+          <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
+          <td style="white-space: nowrap;">
+            <button type="button" class="btn-sign positive" data-staff-id="${s.staffId}" onclick="toggleSign('${s.staffId}')">+</button>
+            <input type="number" class="adjustment-input" data-staff-id="${s.staffId}" value="0" min="0" />
+          </td>
+          <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
+          <td><span class="status-badge draft">未払い</span></td>
+          <td>
+            <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}')">詳細</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    // Render a single confirmed row
+    function renderConfirmedRow(p) {
+      const adjustmentDisplay = p.adjustmentAmount !== 0
+        ? `<span style="color: ${p.adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${p.adjustmentAmount > 0 ? '+' : ''}${formatCurrency(p.adjustmentAmount).replace('¥', '')}</span>`
+        : '-';
+      return `
+        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}">
+          <td><input type="checkbox" class="payout-check" data-status="confirmed" value="${p.payoutId}"></td>
+          <td>${p.staffName}</td>
+          <td>${p.unpaidCount}件</td>
+          <td style="font-size:12px">${p.periodStart || '-'} ~ ${p.periodEnd}</td>
+          <td class="amount">${formatCurrency(p.estimatedAmount)}</td>
+          <td class="amount">${adjustmentDisplay}</td>
+          <td style="max-width: 150px; white-space: normal;">${p.notes}</td>
+          <td><span class="status-badge confirmed">確認済み</span></td>
+          <td style="white-space: nowrap;">
+            <button class="btn btn-primary" onclick="payConfirmed('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">振込済み</button>
+            <button class="btn btn-secondary" onclick="undoConfirm('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">取消</button>
+          </td>
+        </tr>
+      `;
+    }
+
+    // Sort state
+    let currentSortOrder = 'confirmed-first';
+
+    // Toggle sort order
+    function toggleStatusSort() {
+      const tbody = document.querySelector('#payoutTable tbody');
+      if (!tbody) return;
+
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+
+      if (currentSortOrder === 'unpaid-first') {
+        // Sort confirmed first
+        rows.sort((a, b) => {
+          const statusA = a.dataset.status;
+          const statusB = b.dataset.status;
+          if (statusA === statusB) return 0;
+          return statusA === 'confirmed' ? -1 : 1;
+        });
+        currentSortOrder = 'confirmed-first';
+      } else {
+        // Sort unpaid first
+        rows.sort((a, b) => {
+          const statusA = a.dataset.status;
+          const statusB = b.dataset.status;
+          if (statusA === statusB) return 0;
+          return statusA === 'unpaid' ? -1 : 1;
+        });
+        currentSortOrder = 'unpaid-first';
+      }
+
+      rows.forEach(row => tbody.appendChild(row));
     }
 
     // Load payment history (paid only) with cache
@@ -1093,18 +1245,16 @@
       );
     }
 
-    // Bulk mark as paid
-    function bulkMarkAsPaid() {
-      const checkboxes = document.querySelectorAll('.staff-check:checked');
+    // Bulk confirm (unpaid → confirmed)
+    function bulkConfirm() {
+      const checkboxes = document.querySelectorAll('.staff-check[data-status="unpaid"]:checked');
       const staffIds = Array.from(checkboxes).map(cb => cb.value);
       const endDate = document.getElementById('endDateFilter').value;
 
       if (staffIds.length === 0) {
-        showToast('error', 'スタッフを選択してください');
+        showToast('error', '未払いスタッフを選択してください');
         return;
       }
-
-      const paidDate = document.getElementById('bulkPaidDate').value;
 
       // Collect adjustments and notes for each staff
       const adjustments = {};
@@ -1121,41 +1271,36 @@
       });
 
       showConfirmModal(
-        '一括支払済確認',
-        `<p><strong>${staffIds.length}名</strong> のスタッフを支払済にします。</p>
-         <p>支払日: ${paidDate}</p>
+        '一括確認',
+        `<p><strong>${staffIds.length}名</strong> のスタッフを確認済みにします。</p>
          <p>よろしいですか？</p>`,
-        '支払済にする',
+        '確認済みにする',
         'btn-primary',
         () => {
-          showLoading(`${staffIds.length}名の支払い処理中...`);
+          showLoading(`${staffIds.length}名を確認中...`);
           google.script.run
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', `${result.data.success}件を支払済にしました`);
-                // 差分リロード: 成功したスタッフの行を削除 + 履歴に追加
+                showToast('success', `${result.data.success}件を確認済みにしました`);
                 const data = result.data || {};
                 const payouts = data.payouts || [];
                 const results = data.results || [];
 
-                // 成功したスタッフIDを取得
+                // 成功したスタッフの行を確認済みに更新
                 const successStaffIds = results
                   .filter(r => r.success)
                   .map(r => r.staffId);
 
-                // 未払いリストから削除
-                successStaffIds.forEach(staffId => {
-                  removeUnpaidStaffRow(staffId);
+                successStaffIds.forEach((staffId, idx) => {
+                  const payout = payouts.find(p => p.staff_id === staffId);
+                  if (payout) {
+                    updateRowToConfirmed(staffId, payout);
+                  }
                 });
 
-                // 履歴に追加（新しい順で先頭に）
-                payouts.reverse().forEach(payout => {
-                  prependHistoryRow(payout);
-                });
-
-                // SessionStorageをクリア（古いデータが復元されないように）
                 clearSession();
+                updateFab();
               } else {
                 showToast('error', result.error);
               }
@@ -1164,15 +1309,175 @@
               hideLoading();
               showToast('error', err.message);
             })
-            .bulkMarkAsPaid(staffIds, endDate, {
-              paid_date: paidDate,
+            .bulkConfirmPayouts(staffIds, endDate, {
               adjustments: adjustments
             });
         }
       );
     }
 
-    // Undo payout (cancel payment)
+    // Bulk pay confirmed (confirmed → paid)
+    function bulkPayConfirmed() {
+      const checkboxes = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked');
+      const payoutIds = Array.from(checkboxes).map(cb => cb.value);
+
+      if (payoutIds.length === 0) {
+        showToast('error', '確認済みのスタッフを選択してください');
+        return;
+      }
+
+      const paidDate = document.getElementById('bulkPaidDate').value;
+
+      showConfirmModal(
+        '一括振込完了',
+        `<p><strong>${payoutIds.length}件</strong> を振込済みにします。</p>
+         <p>支払日: ${paidDate}</p>
+         <p>よろしいですか？</p>`,
+        '振込済みにする',
+        'btn-primary',
+        () => {
+          showLoading(`${payoutIds.length}件の振込処理中...`);
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', `${result.data.success}件を振込済みにしました`);
+                const data = result.data || {};
+                const payouts = data.payouts || [];
+                const results = data.results || [];
+
+                // 成功したpayoutの行を削除し、履歴に追加
+                const successPayoutIds = results
+                  .filter(r => r.success)
+                  .map(r => r.payoutId);
+
+                successPayoutIds.forEach(payoutId => {
+                  removeConfirmedRow(payoutId);
+                });
+
+                payouts.reverse().forEach(payout => {
+                  prependHistoryRow(payout);
+                });
+
+                clearSession();
+                updateFab();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .bulkPayConfirmed(payoutIds, { paid_date: paidDate });
+        }
+      );
+    }
+
+    // Pay single confirmed payout (confirmed → paid)
+    function payConfirmed(payoutId, updatedAt, staffName) {
+      const paidDate = document.getElementById('bulkPaidDate')?.value || new Date().toISOString().split('T')[0];
+
+      showConfirmModal(
+        '振込完了確認',
+        `<p><strong>${staffName}</strong> を振込済みにします。</p>
+         <p>支払日: ${paidDate}</p>`,
+        '振込済みにする',
+        'btn-primary',
+        () => {
+          showLoading('振込処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '振込済みにしました');
+                // 確認済み行を削除し、履歴に追加
+                removeConfirmedRow(payoutId);
+                if (result.data && result.data.payout) {
+                  prependHistoryRow(result.data.payout);
+                }
+                clearSession();
+                updateFab();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .payConfirmedPayout(payoutId, {
+              expected_updated_at: updatedAt,
+              paid_date: paidDate
+            });
+        }
+      );
+    }
+
+    // Undo confirm (confirmed → unpaid)
+    function undoConfirm(payoutId, updatedAt, staffName) {
+      showConfirmModal(
+        '確認取消',
+        `<p><strong>${staffName}</strong> の確認を取り消しますか？</p>
+         <p>取り消すと未払い状態に戻ります。</p>`,
+        '取り消す',
+        'btn-danger',
+        () => {
+          showLoading('取消処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '確認を取り消しました');
+                // 確認済み行を未払い行に変換
+                const undone = result.data?.undone;
+                if (undone) {
+                  convertConfirmedToUnpaid(payoutId, undone);
+                } else {
+                  // フォールバック: 行を削除のみ
+                  removeConfirmedRow(payoutId);
+                }
+                clearSession();
+                updateFab();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .undoPayout(payoutId, updatedAt);
+        }
+      );
+    }
+
+    /**
+     * 確認済み行を未払い行に変換
+     * @param {string} payoutId - 支払ID
+     * @param {Object} undone - 取り消されたpayoutデータ
+     */
+    function convertConfirmedToUnpaid(payoutId, undone) {
+      const row = document.querySelector(`tr[data-payout-id="${payoutId}"]`);
+      if (!row) return;
+
+      const unpaidRow = {
+        staffId: undone.staff_id,
+        staffName: undone.target_name,
+        unpaidCount: undone.assignment_count,
+        periodStart: undone.period_start,
+        periodEnd: undone.period_end,
+        estimatedAmount: (undone.base_amount || 0) + (undone.transport_amount || 0),
+        status: 'unpaid',
+        rowId: `unpaid-${undone.staff_id}`
+      };
+
+      const newRowHtml = renderUnpaidRow(unpaidRow);
+      row.outerHTML = newRowHtml;
+      updatePayoutSummary();
+    }
+
+    // Undo payout (cancel payment from history)
     function undoPayoutConfirm(payoutId, updatedAt, staffName) {
       showConfirmModal(
         '支払い取消確認',
@@ -1594,6 +1899,89 @@
       clearSession();
     }
 
+    /**
+     * 未払い行を確認済み行に更新
+     * @param {string} staffId - スタッフID
+     * @param {Object} payout - 確認済みの支払いデータ
+     */
+    function updateRowToConfirmed(staffId, payout) {
+      const row = document.querySelector(`tr[data-staff-id="${staffId}"][data-status="unpaid"]`);
+      if (!row) return;
+
+      const confirmedRow = {
+        staffId: payout.staff_id,
+        staffName: payout.target_name,
+        unpaidCount: payout.assignment_count,
+        periodStart: payout.period_start,
+        periodEnd: payout.period_end,
+        estimatedAmount: payout.total_amount,
+        adjustmentAmount: payout.adjustment_amount || 0,
+        notes: payout.notes || '',
+        payoutId: payout.payout_id,
+        updatedAt: payout.updated_at,
+        status: 'confirmed',
+        rowId: `confirmed-${payout.payout_id}`
+      };
+
+      const newRowHtml = renderConfirmedRow(confirmedRow);
+      row.outerHTML = newRowHtml;
+      updatePayoutSummary();
+    }
+
+    /**
+     * 確認済み行を削除
+     * @param {string} payoutId - 支払ID
+     */
+    function removeConfirmedRow(payoutId) {
+      const row = document.querySelector(`tr[data-payout-id="${payoutId}"]`);
+      if (row) {
+        row.remove();
+        updatePayoutSummary();
+      }
+    }
+
+    /**
+     * サマリー（未払い/確認済み/合計金額）を再計算
+     */
+    function updatePayoutSummary() {
+      const unpaidRows = document.querySelectorAll('#payoutTable tbody tr[data-status="unpaid"]');
+      const confirmedRows = document.querySelectorAll('#payoutTable tbody tr[data-status="confirmed"]');
+
+      let unpaidTotal = 0;
+      let confirmedTotal = 0;
+
+      unpaidRows.forEach(row => {
+        const amountCell = row.querySelector('td.amount');
+        if (amountCell) {
+          const amountText = amountCell.textContent.replace(/[¥￥,]/g, '');
+          unpaidTotal += Number(amountText) || 0;
+        }
+      });
+
+      confirmedRows.forEach(row => {
+        const amountCell = row.querySelector('td.amount');
+        if (amountCell) {
+          const amountText = amountCell.textContent.replace(/[¥￥,]/g, '');
+          confirmedTotal += Number(amountText) || 0;
+        }
+      });
+
+      // サマリーを更新
+      const summaryItems = document.querySelectorAll('#unpaidSummary .summary-item .value');
+      if (summaryItems.length >= 3) {
+        summaryItems[0].textContent = `${unpaidRows.length}名`;
+        summaryItems[1].textContent = `${confirmedRows.length}名`;
+        summaryItems[2].textContent = formatCurrency(unpaidTotal + confirmedTotal);
+      }
+
+      // 全員処理済みの場合
+      if (unpaidRows.length === 0 && confirmedRows.length === 0) {
+        const summaryDiv = document.getElementById('unpaidSummary');
+        summaryDiv.innerHTML = '<div class="empty-state">対象のスタッフはいません</div>';
+        clearSession();
+      }
+    }
+
     function showToast(type, message) {
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
@@ -1603,28 +1991,56 @@
     }
 
     // ========== Floating Action Button ==========
-    function getSelectedCount() {
-      return document.querySelectorAll('.staff-check:checked').length;
+    function getSelectedCounts() {
+      const unpaidCount = document.querySelectorAll('.staff-check[data-status="unpaid"]:checked').length;
+      const confirmedCount = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked').length;
+      return { unpaidCount, confirmedCount };
     }
 
     function updateFab() {
-      const count = getSelectedCount();
-      const fab = document.getElementById('fabButton');
-      if (fab) {
-        fab.classList.toggle('visible', count > 0);
-        const fabCount = document.getElementById('fabCount');
-        if (fabCount) fabCount.textContent = count;
+      const { unpaidCount, confirmedCount } = getSelectedCounts();
+      const fabConfirm = document.getElementById('fabConfirm');
+      const fabPay = document.getElementById('fabPay');
+
+      if (fabConfirm) {
+        fabConfirm.classList.toggle('visible', unpaidCount > 0);
+        const fabConfirmCount = document.getElementById('fabConfirmCount');
+        if (fabConfirmCount) fabConfirmCount.textContent = unpaidCount;
+      }
+
+      if (fabPay) {
+        fabPay.classList.toggle('visible', confirmedCount > 0);
+        const fabPayCount = document.getElementById('fabPayCount');
+        if (fabPayCount) fabPayCount.textContent = confirmedCount;
       }
     }
 
     // Checkbox change listener (delegate)
     document.addEventListener('change', (e) => {
-      if (e.target.classList.contains('staff-check') || e.target.id === 'selectAll') {
+      if (e.target.classList.contains('staff-check') ||
+          e.target.classList.contains('payout-check') ||
+          e.target.id === 'selectAll') {
         updateFab();
       }
     });
 
+    // ========== Collapsible Section ==========
+
+    function toggleUnpaidSection() {
+      const content = document.getElementById('unpaidSummary');
+      const icon = document.getElementById('unpaidCollapseIcon');
+      content.classList.toggle('collapsed');
+      icon.classList.toggle('collapsed');
+    }
+
     // ========== Export Functions ==========
+
+    function formatDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
 
     function showExportModal() {
       // デフォルト: 今月の1日〜今日
@@ -1675,9 +2091,12 @@
     }
   </script>
 
-  <!-- Floating Action Button -->
-  <button class="fab" id="fabButton" onclick="bulkMarkAsPaid()">
-    <span id="fabCount">0</span>名を支払済にする
+  <!-- Floating Action Buttons -->
+  <button class="fab" id="fabConfirm" onclick="bulkConfirm()" style="bottom: 80px;">
+    <span id="fabConfirmCount">0</span>名を確認済みにする
+  </button>
+  <button class="fab" id="fabPay" onclick="bulkPayConfirmed()" style="bottom: 24px; background: var(--color-success);">
+    <span id="fabPayCount">0</span>件を振込済みにする
   </button>
 </body>
 </html>
