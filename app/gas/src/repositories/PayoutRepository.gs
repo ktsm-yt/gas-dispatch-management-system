@@ -232,6 +232,46 @@ const PayoutRepository = {
   },
 
   /**
+   * 支払いを一括挿入
+   * @param {Object[]} payouts - 支払いデータ配列
+   * @returns {Object[]} 作成した支払い配列
+   */
+  insertBulk: function(payouts) {
+    if (!payouts || payouts.length === 0) {
+      return [];
+    }
+
+    const user = getCurrentUserEmail();
+    const now = getCurrentTimestamp();
+
+    const newPayouts = payouts.map(payout => ({
+      payout_id: payout.payout_id || generateId('pay'),
+      payout_type: payout.payout_type || 'STAFF',
+      staff_id: payout.staff_id || '',
+      subcontractor_id: payout.subcontractor_id || '',
+      period_start: payout.period_start || '',
+      period_end: payout.period_end || '',
+      assignment_count: payout.assignment_count || 0,
+      base_amount: payout.base_amount || 0,
+      transport_amount: payout.transport_amount || 0,
+      adjustment_amount: payout.adjustment_amount || 0,
+      tax_amount: payout.tax_amount || 0,
+      total_amount: payout.total_amount || 0,
+      status: payout.status || 'draft',
+      paid_date: payout.paid_date || '',
+      notes: payout.notes || '',
+      created_at: now,
+      created_by: user,
+      updated_at: now,
+      is_deleted: false
+    }));
+
+    insertRecords(this.TABLE_NAME, newPayouts);
+
+    return newPayouts;
+  },
+
+  /**
    * 支払いを更新（楽観ロック付き）
    * @param {Object} payout - 更新データ（payout_id必須）
    * @param {string} expectedUpdatedAt - 期待するupdated_at
