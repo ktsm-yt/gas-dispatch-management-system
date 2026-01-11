@@ -445,3 +445,244 @@ function savePayout(payout, expectedUpdatedAt) {
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
+
+// ========== P2-3 New APIs: Confirmed Workflow ==========
+
+/**
+ * 支払いを確認済みとして記録（confirmed状態）
+ * @param {string} staffId - スタッフID
+ * @param {string} endDate - 集計終了日
+ * @param {Object} options - オプション { adjustment_amount, notes }
+ * @returns {Object} APIレスポンス
+ */
+function confirmPayout(staffId, endDate, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!staffId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    // Service呼び出し
+    const result = PayoutService.confirmPayout(staffId, endDate, options);
+
+    if (!result.success) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error, { message: result.message }, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('confirmPayout error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 複数スタッフの支払いを一括確認
+ * @param {string[]} staffIds - スタッフID配列
+ * @param {string} endDate - 集計終了日
+ * @param {Object} options - オプション { adjustments: { [staffId]: { adjustment_amount, notes } } }
+ * @returns {Object} APIレスポンス
+ */
+function bulkConfirmPayouts(staffIds, endDate, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    // Service呼び出し
+    const result = PayoutService.bulkConfirmPayouts(staffIds, endDate, options);
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('bulkConfirmPayouts error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 確認済み支払いを振込完了にする
+ * @param {string} payoutId - 支払ID
+ * @param {Object} options - オプション { paid_date, expectedUpdatedAt }
+ * @returns {Object} APIレスポンス
+ */
+function payConfirmedPayout(payoutId, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!payoutId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
+    }
+
+    // paid_dateのフォーマット検証
+    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    // paid_dateの業務整合性検証
+    if (options.paid_date) {
+      const validationResult = _validatePaidDate(payoutId, options.paid_date);
+      if (!validationResult.valid) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, validationResult.error, {}, requestId);
+      }
+    }
+
+    // Service呼び出し
+    const result = PayoutService.payConfirmedPayout(payoutId, options);
+
+    if (!result.success) {
+      const errorCode = result.error === 'CONFLICT_ERROR'
+        ? ERROR_CODES.CONFLICT_ERROR
+        : ERROR_CODES.VALIDATION_ERROR;
+      return buildErrorResponse(errorCode, result.error, { message: result.message }, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('payConfirmedPayout error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 複数の確認済み支払いを一括振込完了にする
+ * @param {string[]} payoutIds - 支払ID配列
+ * @param {Object} options - オプション { paid_date }
+ * @returns {Object} APIレスポンス
+ */
+function bulkPayConfirmed(payoutIds, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!payoutIds || !Array.isArray(payoutIds) || payoutIds.length === 0) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutIds array is required', {}, requestId);
+    }
+
+    // paid_dateのフォーマット検証
+    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    // Service呼び出し
+    const result = PayoutService.bulkPayConfirmed(payoutIds, options);
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('bulkPayConfirmed error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 確認済み支払い一覧を取得
+ * @param {Object} options - オプション { payout_type }
+ * @returns {Object} APIレスポンス
+ */
+function getConfirmedPayouts(options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    const payouts = PayoutService.getConfirmedPayouts(options);
+
+    return buildSuccessResponse({
+      payouts: payouts,
+      count: payouts.length,
+      totalAmount: payouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
+    }, requestId);
+
+  } catch (error) {
+    console.error('getConfirmedPayouts error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+// ========== Validation Helpers ==========
+
+/**
+ * paid_dateの業務整合性を検証
+ * @param {string} payoutId - 支払ID
+ * @param {string} paidDate - 支払日
+ * @returns {Object} { valid: boolean, error?: string }
+ */
+function _validatePaidDate(payoutId, paidDate) {
+  const payout = PayoutRepository.findById(payoutId);
+  if (!payout) {
+    return { valid: false, error: 'Payout not found' };
+  }
+
+  const paidDateObj = new Date(paidDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 1. period_end以降であること
+  if (payout.period_end) {
+    const periodEndObj = new Date(payout.period_end);
+    if (paidDateObj < periodEndObj) {
+      return {
+        valid: false,
+        error: `paid_date must be on or after period_end (${payout.period_end})`
+      };
+    }
+  }
+
+  // 2. 未来日は30日以内であること
+  const maxFutureDate = new Date(today);
+  maxFutureDate.setDate(maxFutureDate.getDate() + 30);
+
+  if (paidDateObj > maxFutureDate) {
+    return {
+      valid: false,
+      error: 'paid_date cannot be more than 30 days in the future'
+    };
+  }
+
+  return { valid: true };
+}
