@@ -116,6 +116,14 @@ const AssignmentService = {
       // 追加/更新処理
       if (changes.upserts && changes.upserts.length > 0) {
         for (const assignment of changes.upserts) {
+          // pay_unit / invoice_unit を小文字に正規化（UI互換性のため）
+          if (assignment.pay_unit) {
+            assignment.pay_unit = String(assignment.pay_unit).toLowerCase().trim();
+          }
+          if (assignment.invoice_unit) {
+            assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
+          }
+
           // バリデーション
           const validation = this._validateAssignment(assignment);
           if (!validation.valid) {
