@@ -18,34 +18,42 @@ const PayoutExportService = {
 
     // 2. スプレッドシート作成（テンプレートなし、動的生成）
     const ss = SpreadsheetApp.create('振込集計_' + fromDate + '_' + toDate);
+    const ssId = ss.getId();
 
-    // 3. シート1: 支払い一覧
-    const sheet1 = ss.getActiveSheet();
-    sheet1.setName('支払い一覧');
-    this._populatePayoutList(sheet1, payouts);
+    try {
+      // 3. シート1: 支払い一覧
+      const sheet1 = ss.getActiveSheet();
+      sheet1.setName('支払い一覧');
+      this._populatePayoutList(sheet1, payouts);
 
-    // 4. シート2: 月別集計
-    const sheet2 = ss.insertSheet('月別集計');
-    this._populateMonthlyAggregation(sheet2, payouts);
+      // 4. シート2: 月別集計
+      const sheet2 = ss.insertSheet('月別集計');
+      this._populateMonthlyAggregation(sheet2, payouts);
 
-    // 5. xlsx変換
-    SpreadsheetApp.flush();
-    const xlsxBlob = this._exportToXlsx(ss.getId());
+      // 5. xlsx変換
+      SpreadsheetApp.flush();
+      const xlsxBlob = this._exportToXlsx(ssId);
 
-    // 6. 一時SSを削除、Driveに保存
-    DriveApp.getFileById(ss.getId()).setTrashed(true);
+      // 6. Driveに保存
+      const folder = this._getOutputFolder();
+      const fileName = '振込金額集計_' + fromDate + '_' + toDate + '.xlsx';
+      xlsxBlob.setName(fileName);
+      const file = folder.createFile(xlsxBlob);
 
-    const folder = this._getOutputFolder();
-    const fileName = '振込金額集計_' + fromDate + '_' + toDate + '.xlsx';
-    xlsxBlob.setName(fileName);
-    const file = folder.createFile(xlsxBlob);
-
-    return {
-      fileId: file.getId(),
-      url: file.getUrl(),
-      fileName: fileName,
-      recordCount: payouts.length
-    };
+      return {
+        fileId: file.getId(),
+        url: file.getUrl(),
+        fileName: fileName,
+        recordCount: payouts.length
+      };
+    } finally {
+      // 7. 一時SSを必ず削除（成功・失敗に関わらず）
+      try {
+        DriveApp.getFileById(ssId).setTrashed(true);
+      } catch (e) {
+        console.warn('Failed to trash temp spreadsheet: ' + e.message);
+      }
+    }
   },
 
   /**
@@ -217,16 +225,23 @@ const PayoutExportService = {
 
   /**
    * 出力先フォルダを取得
-   * 給与明細フォルダ: gas-dispatch-system/出力/給与明細
+   * 優先順位: PropertiesService > デフォルトID > ルートフォルダ
    * @returns {Folder} 出力先フォルダ
    */
   _getOutputFolder: function() {
-    // 固定フォルダID: gas-dispatch-system/出力/給与明細
-    var folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+    // 1. PropertiesServiceから取得を試みる
+    var folderId = PropertiesService.getScriptProperties()
+      .getProperty('PAYOUT_EXPORT_FOLDER_ID');
+
+    // 2. 未設定の場合はデフォルトIDを使用
+    if (!folderId) {
+      folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+    }
+
     try {
       return DriveApp.getFolderById(folderId);
     } catch (e) {
-      console.warn('Payout export folder not found, using root folder');
+      console.warn('Payout export folder not found (ID: ' + folderId + '), using root folder');
       return DriveApp.getRootFolder();
     }
   }
