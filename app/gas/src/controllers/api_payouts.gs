@@ -686,3 +686,57 @@ function _validatePaidDate(payoutId, paidDate) {
 
   return { valid: true };
 }
+
+// ========== Export API ==========
+
+/**
+ * 振込金額集計をExcelエクスポート
+ * @param {string} fromDate - 開始日（YYYY-MM-DD）
+ * @param {string} toDate - 終了日（YYYY-MM-DD）
+ * @returns {Object} { ok: true, data: { fileId, url, fileName, recordCount } }
+ */
+function exportPayouts(fromDate, toDate) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（MANAGER以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, '権限がありません', {}, requestId);
+    }
+
+    // 日付検証
+    if (!fromDate || !toDate) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '開始日と終了日を指定してください', {}, requestId);
+    }
+
+    // 日付形式検証
+    const fromDateObj = new Date(fromDate);
+    const toDateObj = new Date(toDate);
+
+    if (isNaN(fromDateObj.getTime()) || isNaN(toDateObj.getTime())) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '日付形式が不正です', {}, requestId);
+    }
+
+    if (fromDateObj > toDateObj) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '開始日は終了日以前を指定してください', {}, requestId);
+    }
+
+    // エクスポート実行
+    const result = PayoutExportService.exportToExcel(fromDate, toDate);
+
+    // 監査ログ
+    AuditLogger.log('PAYOUT_EXPORT', {
+      from_date: fromDate,
+      to_date: toDate,
+      file_id: result.fileId,
+      record_count: result.recordCount
+    });
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('exportPayouts error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}

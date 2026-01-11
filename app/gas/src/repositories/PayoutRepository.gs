@@ -110,6 +110,8 @@ const PayoutRepository = {
    * @param {string[]} query.status_in - ステータス（複数、OR検索）
    * @param {string} query.period_start_from - 期間開始日（以降）
    * @param {string} query.period_end_to - 期間終了日（以前）
+   * @param {string} query.paid_date_from - 支払日（以降）
+   * @param {string} query.paid_date_to - 支払日（以前）
    * @param {number} query.limit - 取得件数制限
    * @returns {Object[]} 支払い配列
    */
@@ -154,6 +156,24 @@ const PayoutRepository = {
     if (query.period_end_to) {
       const toDate = this._parseLocalDate(query.period_end_to);
       records = records.filter(r => this._parseLocalDate(r.period_end) <= toDate);
+    }
+
+    // 支払日（以降）で絞り込み
+    if (query.paid_date_from) {
+      const fromDate = this._parseLocalDate(query.paid_date_from);
+      records = records.filter(r => {
+        const paidDate = this._parseLocalDate(r.paid_date);
+        return paidDate && paidDate >= fromDate;
+      });
+    }
+
+    // 支払日（以前）で絞り込み
+    if (query.paid_date_to) {
+      const toDate = this._parseLocalDate(query.paid_date_to);
+      records = records.filter(r => {
+        const paidDate = this._parseLocalDate(r.paid_date);
+        return paidDate && paidDate <= toDate;
+      });
     }
 
     // ソート（デフォルト: paid_date降順＝最新が上）
