@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>支払管理</title>
+  <style>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-warning: #FFC107;
+      --color-danger: #DC3545;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    <?!= include('nav_styles'); ?>
+
+    /* Toolbar */
+    .toolbar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--spacing-md);
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    .filter-group label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .filter-group select,
+    .filter-group input {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary { background: var(--color-primary); color: white; }
+    .btn-primary:hover { background: var(--color-accent); }
+    .btn-secondary { background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-color); }
+    .btn-secondary:hover { background: var(--bg-hover); }
+    .btn-success { background: var(--color-success); color: white; }
+    .btn-danger { background: var(--color-danger); color: white; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Main Content */
+    .main-content { padding: var(--spacing-lg); }
+
+    /* Summary Card */
+    .summary-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .summary-card h3 {
+      font-size: 16px;
+      margin-bottom: var(--spacing-md);
+      color: var(--color-primary);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--spacing-md);
+    }
+
+    .summary-item {
+      text-align: center;
+      padding: var(--spacing-md);
+      background: white;
+      border-radius: var(--radius-sm);
+    }
+
+    .summary-item .label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .summary-item .value {
+      font-size: 24px;
+      font-weight: bold;
+      color: var(--text-primary);
+    }
+
+    .summary-item .value.amount {
+      color: var(--color-success);
+    }
+
+    /* Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: var(--spacing-sm) var(--spacing-md);
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .data-table th {
+      background: var(--bg-card);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .data-table tr:hover {
+      background: var(--bg-hover);
+    }
+
+    .data-table tbody tr.clickable-row {
+      cursor: pointer;
+    }
+
+    .data-table td.amount {
+      text-align: right;
+      font-family: 'Menlo', monospace;
+    }
+
+    .data-table input[type="number"],
+    .data-table input[type="text"] {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+      transition: border-color 0.15s;
+    }
+
+    .data-table input[type="number"]:focus,
+    .data-table input[type="text"]:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+
+    .data-table input[type="number"] {
+      width: 80px;
+      text-align: right;
+    }
+
+    .data-table input[type="text"] {
+      width: 120px;
+    }
+
+    .btn-sign {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: white;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-right: 4px;
+      transition: all 0.15s;
+    }
+
+    .btn-sign.positive {
+      color: var(--color-success);
+      border-color: var(--color-success);
+    }
+
+    .btn-sign.negative {
+      color: var(--color-danger);
+      border-color: var(--color-danger);
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .status-badge.draft { background: #E5E7EB; color: #374151; }
+    .status-badge.confirmed { background: #DBEAFE; color: #1D4ED8; }
+    .status-badge.paid { background: #D1FAE5; color: #047857; }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: var(--spacing-lg);
+      color: var(--text-muted);
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: var(--text-muted);
+    }
+
+    /* Section Header */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .section-header h2 {
+      font-size: 18px;
+      color: var(--text-primary);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: var(--spacing-md);
+      border-radius: var(--radius-sm);
+      color: white;
+      font-size: 14px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+
+    .toast.success { background: var(--color-success); }
+    .toast.error { background: var(--color-danger); }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: var(--radius-md);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .modal.modal-lg {
+      max-width: 700px;
+    }
+
+    .modal-two-col {
+      display: grid;
+      grid-template-columns: 1fr 180px;
+      gap: var(--spacing-lg);
+    }
+
+    .modal-history {
+      border-left: 1px solid var(--border-color);
+      padding-left: var(--spacing-md);
+    }
+
+    .modal-history h4 {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-sm);
+      text-transform: uppercase;
+    }
+
+    .modal-history ul {
+      list-style: none;
+      font-size: 13px;
+    }
+
+    .modal-history li {
+      padding: 4px 0;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-history li:last-child {
+      border-bottom: none;
+    }
+
+    .modal-history .history-date {
+      font-size: 12px;
+    }
+
+    .modal-history .history-amount {
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .modal-history .empty {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .modal-header {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .modal-body {
+      padding: var(--spacing-lg);
+    }
+
+    .modal-body p {
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .modal-footer {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--spacing-sm);
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.8);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .loading-overlay.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-text {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ========== Button Styles ========== */
+
+    /* Floating Action Button (default) */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--color-primary);
+      color: white;
+      padding: var(--spacing-md) var(--spacing-lg);
+      border: none;
+      border-radius: 28px;
+      box-shadow: 0 4px 12px rgba(23,45,144,0.4);
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      z-index: 100;
+      display: none;
+      align-items: center;
+      gap: var(--spacing-sm);
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    .fab:hover {
+      transform: scale(1.05);
+    }
+
+    .fab.visible {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+  <?!= include('nav_bar'); ?>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="loadingText">処理中...</div>
+  </div>
+
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="confirmModal" onclick="handleModalOverlayClick(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="confirmModalTitle">確認</h2>
+      </div>
+      <div class="modal-body" id="confirmModalBody">
+        <!-- 動的に設定 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeConfirmModal()">キャンセル</button>
+        <button class="btn" id="confirmModalBtn" onclick="executeConfirmAction()">実行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Payout Detail Modal -->
+  <div class="modal-overlay" id="payoutDetailModal" onclick="handlePayoutModalOverlayClick(event)">
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>未払詳細 - <span id="modalStaffName"></span></h2>
+        <button class="modal-close" onclick="closePayoutModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="payoutModalBody">
+        <div class="loading">読み込み中...</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closePayoutModal()">閉じる</button>
+        <button class="btn btn-primary" id="modalPayBtn" onclick="markAsPaidFromModal()">支払済にする</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <div class="filter-group">
+      <label>スタッフ:</label>
+      <select id="staffFilter">
+        <option value="">全て</option>
+      </select>
+
+      <label>終了日:</label>
+      <input type="date" id="endDateFilter" />
+
+      <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <!-- 未払いサマリー -->
+    <div id="unpaidSection" class="summary-card">
+      <h3>未払い集計</h3>
+      <div id="unpaidSummary" class="loading">
+        スタッフを選択して「集計」をクリックしてください
+      </div>
+    </div>
+
+    <!-- 支払い履歴 -->
+    <div class="section-header">
+      <h2>支払い履歴</h2>
+    </div>
+
+    <div id="historyTable">
+      <div class="loading">読み込み中...</div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let staffList = [];
+    let currentUnpaid = null;
+
+    // SessionStorage for unpaid data persistence
+    const SS_KEY = 'payouts_unpaid_data';
+    const SS_HISTORY_KEY = 'payouts_history_data';
+    const HISTORY_CACHE_TTL = 5 * 60 * 1000; // 5分
+
+    function saveToSession(data) {
+      sessionStorage.setItem(SS_KEY, JSON.stringify(data));
+    }
+
+    function loadFromSession() {
+      const saved = sessionStorage.getItem(SS_KEY);
+      return saved ? JSON.parse(saved) : null;
+    }
+
+    function clearSession() {
+      sessionStorage.removeItem(SS_KEY);
+    }
+
+    // History cache functions
+    function saveHistoryToSession(payouts) {
+      sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        payouts: payouts
+      }));
+    }
+
+    function loadHistoryFromSession() {
+      const saved = sessionStorage.getItem(SS_HISTORY_KEY);
+      if (!saved) return null;
+      const data = JSON.parse(saved);
+      // TTL check
+      if (Date.now() - data.timestamp > HISTORY_CACHE_TTL) {
+        sessionStorage.removeItem(SS_HISTORY_KEY);
+        return null;
+      }
+      return data.payouts;
+    }
+
+    function updateHistoryCache(updater) {
+      const saved = sessionStorage.getItem(SS_HISTORY_KEY);
+      if (!saved) return;
+      const data = JSON.parse(saved);
+      data.payouts = updater(data.payouts);
+      data.timestamp = Date.now(); // refresh TTL
+      sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify(data));
+    }
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', init);
+
+    function init() {
+      // Initialize navigation bar with breadcrumb
+      initNavBar('payouts', '支払管理');
+
+      // Set default date to today
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('endDateFilter').value = today;
+
+      loadStaffList();
+      loadHistory();
+
+      // Restore from SessionStorage after staff list is loaded
+      restoreFromSession();
+    }
+
+    function restoreFromSession() {
+      const saved = loadFromSession();
+      if (!saved) return;
+
+      // Restore filter values
+      if (saved.staffId) {
+        document.getElementById('staffFilter').value = saved.staffId;
+      }
+      if (saved.endDate) {
+        document.getElementById('endDateFilter').value = saved.endDate;
+      }
+
+      // Restore and render data
+      if (saved.mode === 'single' && saved.data) {
+        currentUnpaid = saved.data;
+        renderUnpaidSummary(saved.data);
+      } else if (saved.mode === 'list' && saved.data) {
+        renderUnpaidStaffList(saved.data);
+      }
+    }
+
+    // Load staff list for filter
+    function loadStaffList() {
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            staffList = result.data.staff;
+            const select = document.getElementById('staffFilter');
+            staffList.forEach(s => {
+              const option = document.createElement('option');
+              option.value = s.staff_id;
+              option.textContent = s.name;
+              select.appendChild(option);
+            });
+          }
+        })
+        .withFailureHandler(err => showToast('error', err.message))
+        .getStaffForPayouts();
+    }
+
+    // Load unpaid summary
+    function loadUnpaidList() {
+      const staffId = document.getElementById('staffFilter').value;
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (!endDate) {
+        showToast('error', '対象日を選択してください');
+        return;
+      }
+
+      const summaryDiv = document.getElementById('unpaidSummary');
+      summaryDiv.innerHTML = '<div class="loading">計算中...</div>';
+
+      if (staffId) {
+        // 特定スタッフの未払い
+        showLoading('未払い計算中...');
+        google.script.run
+          .withSuccessHandler(result => {
+            hideLoading();
+            if (result.ok) {
+              renderUnpaidSummary(result.data);
+              // Save to SessionStorage
+              saveToSession({
+                mode: 'single',
+                staffId: staffId,
+                endDate: endDate,
+                data: result.data
+              });
+            } else {
+              summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
+              clearSession();
+            }
+          })
+          .withFailureHandler(err => {
+            hideLoading();
+            summaryDiv.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+            clearSession();
+          })
+          .getUnpaidSummary(staffId, endDate);
+      } else {
+        // 全スタッフの未払い一覧
+        showLoading('全スタッフの未払いを計算中...');
+        google.script.run
+          .withSuccessHandler(result => {
+            hideLoading();
+            if (result.ok) {
+              renderUnpaidStaffList(result.data);
+              // Save to SessionStorage
+              saveToSession({
+                mode: 'list',
+                staffId: null,
+                endDate: endDate,
+                data: result.data
+              });
+            } else {
+              summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
+              clearSession();
+            }
+          })
+          .withFailureHandler(err => {
+            hideLoading();
+            summaryDiv.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+            clearSession();
+          })
+          .getUnpaidStaffList(endDate);
+      }
+    }
+
+    // Render unpaid summary for single staff
+    function renderUnpaidSummary(data) {
+      currentUnpaid = data;
+      const summaryDiv = document.getElementById('unpaidSummary');
+      const today = new Date().toISOString().split('T')[0];
+
+      if (data.assignmentCount === 0) {
+        summaryDiv.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+        return;
+      }
+
+      summaryDiv.innerHTML = `
+        <div class="summary-grid">
+          <div class="summary-item">
+            <div class="label">スタッフ</div>
+            <div class="value">${data.staffName || '-'}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">配置数</div>
+            <div class="value">${data.assignmentCount}件</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">基本給与</div>
+            <div class="value amount">${formatCurrency(data.baseAmount)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">交通費</div>
+            <div class="value amount">${formatCurrency(data.transportAmount)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">合計</div>
+            <div class="value amount" id="singleTotalAmount">${formatCurrency(data.totalAmount)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">期間</div>
+            <div class="value" style="font-size:14px">${data.periodStart || '-'} ~ ${data.periodEnd}</div>
+          </div>
+        </div>
+        <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap;">
+          <div class="filter-group">
+            <label>支払日:</label>
+            <input type="date" id="singlePaidDate" value="${today}" />
+          </div>
+          <div class="filter-group">
+            <label>調整額:</label>
+            <input type="number" id="singleAdjustment" value="0" style="width: 100px;" onchange="updateSingleTotal()" />
+          </div>
+          <div class="filter-group" style="flex: 1;">
+            <label>備考:</label>
+            <input type="text" id="singleNotes" placeholder="任意" style="width: 200px;" />
+          </div>
+          <button class="btn btn-primary" onclick="markAsPaidSingle()">支払済にする</button>
+        </div>
+      `;
+    }
+
+    // Update single staff total when adjustment changes
+    function updateSingleTotal() {
+      if (!currentUnpaid) return;
+      const adjustment = Number(document.getElementById('singleAdjustment').value) || 0;
+      const total = currentUnpaid.totalAmount + adjustment;
+      document.getElementById('singleTotalAmount').textContent = formatCurrency(total);
+    }
+
+    // Render unpaid staff list
+    function renderUnpaidStaffList(data) {
+      const summaryDiv = document.getElementById('unpaidSummary');
+      const today = new Date().toISOString().split('T')[0];
+
+      if (data.staffList.length === 0) {
+        summaryDiv.innerHTML = '<div class="empty-state">未払いのスタッフはいません</div>';
+        return;
+      }
+
+      let html = `
+        <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
+          <div class="summary-item">
+            <div class="label">対象スタッフ</div>
+            <div class="value">${data.totalCount}名</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">合計金額</div>
+            <div class="value amount">${formatCurrency(data.totalAmount)}</div>
+          </div>
+        </div>
+        <div style="margin-bottom: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center;">
+          <div class="filter-group">
+            <label>支払日:</label>
+            <input type="date" id="bulkPaidDate" value="${today}" />
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+              <th>スタッフ</th>
+              <th>配置数</th>
+              <th>期間</th>
+              <th>基本金額</th>
+              <th>調整額</th>
+              <th>備考</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+            <tbody>
+      `;
+
+      data.staffList.forEach(s => {
+        html += `
+          <tr data-staff-id="${s.staffId}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+            <td><input type="checkbox" class="staff-check" value="${s.staffId}"></td>
+            <td>${s.staffName}</td>
+            <td>${s.unpaidCount}件</td>
+            <td style="font-size:12px">${s.periodStart || '-'} ~ ${s.periodEnd}</td>
+            <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
+            <td style="white-space: nowrap;">
+              <button type="button" class="btn-sign positive" data-staff-id="${s.staffId}" onclick="toggleSign('${s.staffId}')">+</button>
+              <input type="number" class="adjustment-input" data-staff-id="${s.staffId}" value="0" min="0" />
+            </td>
+            <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
+            <td>
+              <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}')">詳細</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+      `;
+
+      summaryDiv.innerHTML = html;
+      // Update FAB after rendering
+      updateFab();
+    }
+
+    // Load payment history (paid only) with cache
+    function loadHistory(forceRefresh = false) {
+      const staffId = document.getElementById('staffFilter').value;
+
+      // Try cache first
+      if (!forceRefresh) {
+        const cached = loadHistoryFromSession();
+        if (cached) {
+          // Filter by staffId if specified
+          const filtered = staffId
+            ? cached.filter(p => p.staff_id === staffId)
+            : cached;
+          renderHistory(filtered);
+          return;
+        }
+      }
+
+      const query = { status: 'paid', limit: 50 };
+      // Don't filter by staff on server - get all and cache
+      document.getElementById('historyTable').innerHTML = '<div class="loading">読み込み中...</div>';
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            // Cache all payouts
+            saveHistoryToSession(result.data.payouts);
+            // Filter for display
+            const filtered = staffId
+              ? result.data.payouts.filter(p => p.staff_id === staffId)
+              : result.data.payouts;
+            renderHistory(filtered);
+          } else {
+            document.getElementById('historyTable').innerHTML =
+              `<div class="empty-state">${result.error}</div>`;
+          }
+        })
+        .withFailureHandler(err => {
+          document.getElementById('historyTable').innerHTML =
+            `<div class="empty-state">エラー: ${err.message}</div>`;
+        })
+        .searchPayouts(query);
+    }
+
+    // Render history table with undo button
+    function renderHistory(payouts) {
+      const container = document.getElementById('historyTable');
+
+      if (payouts.length === 0) {
+        container.innerHTML = '<div class="empty-state">支払い履歴がありません</div>';
+        return;
+      }
+
+      let html = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="white-space: nowrap;">スタッフ</th>
+              <th style="white-space: nowrap;">期間</th>
+              <th style="white-space: nowrap;">支払日</th>
+              <th style="white-space: nowrap;">配置数</th>
+              <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">調整額</th>
+              <th style="white-space: nowrap;">合計金額</th>
+              <th style="white-space: nowrap; width: 200px;">備考</th>
+              <th style="white-space: nowrap;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      payouts.forEach(p => {
+        const baseAmount = (p.base_amount || 0) + (p.transport_amount || 0);
+        const adjustmentAmount = p.adjustment_amount || 0;
+        html += `
+          <tr style="white-space: nowrap;">
+            <td>${p.target_name}</td>
+            <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
+            <td>${p.paid_date || '-'}</td>
+            <td>${p.assignment_count}件</td>
+            <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+            <td class="amount">${formatCurrency(p.total_amount)}</td>
+            <td style="white-space: normal; max-width: 200px;">${p.notes || ''}</td>
+            <td>
+              <button class="btn btn-danger" onclick="undoPayoutConfirm('${p.payout_id}', '${p.updated_at}', '${p.target_name}')">取消</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    // ========== Loading Functions ==========
+    function showLoading(text = '処理中...') {
+      document.getElementById('loadingText').textContent = text;
+      document.getElementById('loadingOverlay').classList.add('active');
+    }
+
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.remove('active');
+    }
+
+    // ========== Modal Functions ==========
+    let pendingConfirmAction = null;
+
+    function showConfirmModal(title, body, btnText, btnClass, action) {
+      document.getElementById('confirmModalTitle').textContent = title;
+      document.getElementById('confirmModalBody').innerHTML = body;
+      const btn = document.getElementById('confirmModalBtn');
+      btn.textContent = btnText;
+      btn.className = 'btn ' + btnClass;
+      pendingConfirmAction = action;
+      document.getElementById('confirmModal').classList.add('active');
+    }
+
+    function closeConfirmModal() {
+      document.getElementById('confirmModal').classList.remove('active');
+      pendingConfirmAction = null;
+    }
+
+    function executeConfirmAction() {
+      if (pendingConfirmAction) {
+        pendingConfirmAction();
+      }
+      closeConfirmModal();
+    }
+
+    function handleModalOverlayClick(event) {
+      if (event.target.id === 'confirmModal') {
+        closeConfirmModal();
+      }
+    }
+
+    // ESCキーでモーダルを閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeConfirmModal();
+        closePayoutModal();
+      }
+    });
+
+    // ========== Payout Actions ==========
+
+    // Mark single staff as paid
+    function markAsPaidSingle() {
+      const staffId = document.getElementById('staffFilter').value;
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (!staffId || !currentUnpaid) {
+        showToast('error', 'スタッフを選択してください');
+        return;
+      }
+
+      const paidDate = document.getElementById('singlePaidDate').value;
+      const adjustmentAmount = Number(document.getElementById('singleAdjustment').value) || 0;
+      const notes = document.getElementById('singleNotes').value;
+      const total = currentUnpaid.totalAmount + adjustmentAmount;
+
+      showConfirmModal(
+        '支払済確認',
+        `<p><strong>${currentUnpaid.staffName}</strong> を支払済にします。</p>
+         <p>配置数: ${currentUnpaid.assignmentCount}件</p>
+         <p>支払日: ${paidDate}</p>
+         <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
+        '支払済にする',
+        'btn-primary',
+        () => {
+          showLoading('支払い処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '支払済にしました');
+                // 差分リロード: 未払いサマリーをクリア + 履歴に追加
+                clearSingleUnpaidSummary();
+                if (result.data && result.data.payout) {
+                  prependHistoryRow(result.data.payout);
+                }
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .markAsPaid(staffId, endDate, {
+              paid_date: paidDate,
+              adjustment_amount: adjustmentAmount,
+              notes: notes
+            });
+        }
+      );
+    }
+
+    // Bulk mark as paid
+    function bulkMarkAsPaid() {
+      const checkboxes = document.querySelectorAll('.staff-check:checked');
+      const staffIds = Array.from(checkboxes).map(cb => cb.value);
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (staffIds.length === 0) {
+        showToast('error', 'スタッフを選択してください');
+        return;
+      }
+
+      const paidDate = document.getElementById('bulkPaidDate').value;
+
+      // Collect adjustments and notes for each staff
+      const adjustments = {};
+      staffIds.forEach(staffId => {
+        const adjInput = document.querySelector(`.adjustment-input[data-staff-id="${staffId}"]`);
+        const signBtn = document.querySelector(`.btn-sign[data-staff-id="${staffId}"]`);
+        const notesInput = document.querySelector(`.notes-input[data-staff-id="${staffId}"]`);
+        const amount = Number(adjInput?.value) || 0;
+        const sign = signBtn?.textContent === '-' ? -1 : 1;
+        adjustments[staffId] = {
+          adjustment_amount: amount * sign,
+          notes: notesInput?.value || ''
+        };
+      });
+
+      showConfirmModal(
+        '一括支払済確認',
+        `<p><strong>${staffIds.length}名</strong> のスタッフを支払済にします。</p>
+         <p>支払日: ${paidDate}</p>
+         <p>よろしいですか？</p>`,
+        '支払済にする',
+        'btn-primary',
+        () => {
+          showLoading(`${staffIds.length}名の支払い処理中...`);
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', `${result.data.success}件を支払済にしました`);
+                // 差分リロード: 成功したスタッフの行を削除 + 履歴に追加
+                const data = result.data || {};
+                const payouts = data.payouts || [];
+                const results = data.results || [];
+
+                // 成功したスタッフIDを取得
+                const successStaffIds = results
+                  .filter(r => r.success)
+                  .map(r => r.staffId);
+
+                // 未払いリストから削除
+                successStaffIds.forEach(staffId => {
+                  removeUnpaidStaffRow(staffId);
+                });
+
+                // 履歴に追加（新しい順で先頭に）
+                payouts.reverse().forEach(payout => {
+                  prependHistoryRow(payout);
+                });
+
+                // SessionStorageをクリア（古いデータが復元されないように）
+                clearSession();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .bulkMarkAsPaid(staffIds, endDate, {
+              paid_date: paidDate,
+              adjustments: adjustments
+            });
+        }
+      );
+    }
+
+    // Undo payout (cancel payment)
+    function undoPayoutConfirm(payoutId, updatedAt, staffName) {
+      showConfirmModal(
+        '支払い取消確認',
+        `<p><strong>${staffName}</strong> の支払いを取り消しますか？</p>
+         <p>取り消すと未払い状態に戻ります。</p>`,
+        '取り消す',
+        'btn-danger',
+        () => {
+          showLoading('取消処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '支払いを取り消しました');
+                // 差分リロード: 履歴から行を削除
+                removeHistoryRow(payoutId);
+                // 未払いリストは次回の集計時に自動反映されるため、再読込しない
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .undoPayout(payoutId, updatedAt);
+        }
+      );
+    }
+
+    // Helpers
+
+    // 行クリックでチェックボックスをトグル
+    function toggleRowCheck(row, event) {
+      // ボタン・input要素クリック時は除外
+      if (event.target.closest('button, input')) return;
+
+      const checkbox = row.querySelector('.staff-check');
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        updateFab();
+      }
+    }
+
+    function toggleSelectAll(checkbox) {
+      document.querySelectorAll('.staff-check').forEach(cb => {
+        cb.checked = checkbox.checked;
+      });
+      updateFab();
+    }
+
+    // ========== Payout Detail Modal ==========
+    let modalUnpaidData = null;
+    let modalHistoryData = [];
+
+    function openPayoutModal(staffId, staffName) {
+      const modal = document.getElementById('payoutDetailModal');
+      modal.dataset.staffId = staffId;
+      document.getElementById('modalStaffName').textContent = staffName || '';
+      document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+
+      modal.classList.add('active');
+
+      const endDate = document.getElementById('endDateFilter').value;
+
+      // 未払いサマリーと支払履歴を並行取得
+      let unpaidResult = null;
+      let historyResult = null;
+      let completed = 0;
+
+      function checkAndRender() {
+        completed++;
+        if (completed === 2) {
+          if (unpaidResult && unpaidResult.ok) {
+            modalUnpaidData = unpaidResult.data;
+            modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
+            renderPayoutModal(unpaidResult.data, modalHistoryData);
+          } else {
+            document.getElementById('payoutModalBody').innerHTML =
+              `<div class="empty-state">${unpaidResult?.error || 'エラーが発生しました'}</div>`;
+          }
+        }
+      }
+
+      google.script.run
+        .withSuccessHandler(result => { unpaidResult = result; checkAndRender(); })
+        .withFailureHandler(err => { unpaidResult = { ok: false, error: err.message }; checkAndRender(); })
+        .getUnpaidSummary(staffId, endDate);
+
+      google.script.run
+        .withSuccessHandler(result => { historyResult = result; checkAndRender(); })
+        .withFailureHandler(err => { historyResult = { ok: false, data: { payouts: [] } }; checkAndRender(); })
+        .searchPayouts({ staff_id: staffId, status: 'paid', limit: 10 });
+    }
+
+    function renderPayoutModal(data, history = []) {
+      const today = new Date().toISOString().split('T')[0];
+      const body = document.getElementById('payoutModalBody');
+
+      if (data.assignmentCount === 0) {
+        body.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+        document.getElementById('modalPayBtn').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('modalPayBtn').style.display = '';
+
+      // 支払履歴HTML
+      let historyHtml = '';
+      if (history.length > 0) {
+        historyHtml = history.map(p => `
+          <li>
+            <span class="history-date">${p.paid_date || '-'}</span>
+            <span class="history-amount">${formatCurrency(p.total_amount)}</span>
+          </li>
+        `).join('');
+      } else {
+        historyHtml = '<li class="empty">履歴なし</li>';
+      }
+
+      body.innerHTML = `
+        <div class="modal-two-col">
+          <div class="modal-main">
+            <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
+              <div class="summary-item">
+                <div class="label">配置数</div>
+                <div class="value">${data.assignmentCount}件</div>
+              </div>
+              <div class="summary-item">
+                <div class="label">期間</div>
+                <div class="value" style="font-size:14px">${data.periodStart || '-'} ~ ${data.periodEnd}</div>
+              </div>
+              <div class="summary-item">
+                <div class="label">基本給与</div>
+                <div class="value amount">${formatCurrency(data.baseAmount)}</div>
+              </div>
+              <div class="summary-item">
+                <div class="label">交通費</div>
+                <div class="value amount">${formatCurrency(data.transportAmount)}</div>
+              </div>
+              <div class="summary-item">
+                <div class="label">合計</div>
+                <div class="value amount" id="modalTotalAmount">${formatCurrency(data.totalAmount)}</div>
+              </div>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center;">
+              <div class="filter-group">
+                <label>支払日:</label>
+                <input type="date" id="modalPaidDate" value="${today}" />
+              </div>
+              <div class="filter-group">
+                <label>調整額:</label>
+                <button type="button" class="btn-sign positive" id="modalSignBtn" onclick="toggleModalSign()">+</button>
+                <input type="number" id="modalAdjustment" value="0" min="0" style="width: 80px;" onchange="updateModalTotal()" oninput="updateModalTotal()" />
+              </div>
+              <div class="filter-group" style="flex: 1;">
+                <label style="white-space: nowrap;">備考:</label>
+                <input type="text" id="modalNotes" placeholder="任意" style="flex: 1;" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-history">
+            <h4>支払履歴</h4>
+            <ul>${historyHtml}</ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleModalSign() {
+      const btn = document.getElementById('modalSignBtn');
+      if (btn.textContent === '+') {
+        btn.textContent = '-';
+        btn.classList.remove('positive');
+        btn.classList.add('negative');
+      } else {
+        btn.textContent = '+';
+        btn.classList.remove('negative');
+        btn.classList.add('positive');
+      }
+      updateModalTotal();
+    }
+
+    function updateModalTotal() {
+      if (!modalUnpaidData) return;
+      const signBtn = document.getElementById('modalSignBtn');
+      const sign = signBtn && signBtn.textContent === '-' ? -1 : 1;
+      const adjustment = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
+      const total = modalUnpaidData.totalAmount + adjustment;
+      document.getElementById('modalTotalAmount').textContent = formatCurrency(total);
+    }
+
+    function markAsPaidFromModal() {
+      const modal = document.getElementById('payoutDetailModal');
+      const staffId = modal.dataset.staffId;
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (!staffId || !modalUnpaidData) {
+        showToast('error', 'データがありません');
+        return;
+      }
+
+      const paidDate = document.getElementById('modalPaidDate').value;
+      const signBtn = document.getElementById('modalSignBtn');
+      const sign = signBtn && signBtn.textContent === '-' ? -1 : 1;
+      const adjustmentAmount = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
+      const notes = document.getElementById('modalNotes').value;
+      const total = modalUnpaidData.totalAmount + adjustmentAmount;
+
+      showConfirmModal(
+        '支払済確認',
+        `<p><strong>${modalUnpaidData.staffName}</strong> を支払済にします。</p>
+         <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
+         <p>支払日: ${paidDate}</p>
+         <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
+        '支払済にする',
+        'btn-primary',
+        () => {
+          showLoading('支払い処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '支払済にしました');
+                closePayoutModal();
+                // 未払いリストから該当行を削除
+                removeUnpaidStaffRow(staffId);
+                // 履歴に追加
+                if (result.data && result.data.payout) {
+                  prependHistoryRow(result.data.payout);
+                }
+                clearSession();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .markAsPaid(staffId, endDate, {
+              paid_date: paidDate,
+              adjustment_amount: adjustmentAmount,
+              notes: notes
+            });
+        }
+      );
+    }
+
+    function closePayoutModal() {
+      const modal = document.getElementById('payoutDetailModal');
+      modal.classList.remove('active');
+      modalUnpaidData = null;
+    }
+
+    function handlePayoutModalOverlayClick(event) {
+      if (event.target.id === 'payoutDetailModal') {
+        closePayoutModal();
+      }
+    }
+
+    function toggleSign(staffId) {
+      const btn = document.querySelector(`.btn-sign[data-staff-id="${staffId}"]`);
+      if (btn.textContent === '+') {
+        btn.textContent = '-';
+        btn.classList.remove('positive');
+        btn.classList.add('negative');
+      } else {
+        btn.textContent = '+';
+        btn.classList.remove('negative');
+        btn.classList.add('positive');
+      }
+    }
+
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('ja-JP', {
+        style: 'currency',
+        currency: 'JPY'
+      }).format(amount || 0);
+    }
+
+    function getStatusLabel(status) {
+      const labels = { draft: '下書き', confirmed: '確定', paid: '支払済' };
+      return labels[status] || status;
+    }
+
+    // ========== 差分リロード用ヘルパー関数 ==========
+
+    /**
+     * 未払いリストから特定スタッフの行を削除
+     * @param {string} staffId - スタッフID
+     */
+    function removeUnpaidStaffRow(staffId) {
+      const row = document.querySelector(`tr[data-staff-id="${staffId}"]`);
+      if (row) {
+        row.remove();
+        updateUnpaidListSummary();
+      }
+    }
+
+    /**
+     * 未払いリストのサマリー（対象人数・合計金額）を再計算
+     */
+    function updateUnpaidListSummary() {
+      const rows = document.querySelectorAll('#unpaidSummary tbody tr[data-staff-id]');
+      let totalCount = rows.length;
+      let totalAmount = 0;
+
+      rows.forEach(row => {
+        const amountCell = row.querySelector('td.amount');
+        if (amountCell) {
+          // 半角¥(U+00A5)と全角￥(U+FFE5)の両方を除去
+          const amountText = amountCell.textContent.replace(/[¥￥,]/g, '');
+          totalAmount += Number(amountText) || 0;
+        }
+      });
+
+      // サマリーを更新
+      const summaryItems = document.querySelectorAll('#unpaidSummary .summary-item .value');
+      if (summaryItems.length >= 2) {
+        summaryItems[0].textContent = `${totalCount}名`;
+        summaryItems[1].textContent = formatCurrency(totalAmount);
+      }
+
+      // 全員支払い済みの場合
+      if (totalCount === 0) {
+        const summaryDiv = document.getElementById('unpaidSummary');
+        summaryDiv.innerHTML = '<div class="empty-state">未払いのスタッフはいません</div>';
+        clearSession();
+      }
+    }
+
+    /**
+     * 履歴テーブルの先頭に行を追加
+     * @param {Object} payout - 支払いデータ
+     */
+    function prependHistoryRow(payout) {
+      const container = document.getElementById('historyTable');
+      let tbody = container.querySelector('tbody');
+
+      // テーブルがない場合は作成
+      if (!tbody) {
+        container.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="white-space: nowrap;">スタッフ</th>
+                <th style="white-space: nowrap;">期間</th>
+                <th style="white-space: nowrap;">支払日</th>
+                <th style="white-space: nowrap;">配置数</th>
+                <th style="white-space: nowrap;">基本金額</th>
+                <th style="white-space: nowrap;">調整額</th>
+                <th style="white-space: nowrap;">合計金額</th>
+                <th style="white-space: nowrap; width: 200px;">備考</th>
+                <th style="white-space: nowrap;">操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        `;
+        tbody = container.querySelector('tbody');
+      }
+
+      // 行を作成
+      const baseAmount = (payout.base_amount || 0) + (payout.transport_amount || 0);
+      const adjustmentAmount = payout.adjustment_amount || 0;
+      const tr = document.createElement('tr');
+      tr.style.whiteSpace = 'nowrap';
+      tr.dataset.payoutId = payout.payout_id;
+      tr.innerHTML = `
+        <td>${payout.target_name || ''}</td>
+        <td style="font-size:12px">${payout.period_start || '-'} ~ ${payout.period_end || '-'}</td>
+        <td>${payout.paid_date || '-'}</td>
+        <td>${payout.assignment_count}件</td>
+        <td class="amount">${formatCurrency(baseAmount)}</td>
+        <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+        <td class="amount">${formatCurrency(payout.total_amount)}</td>
+        <td style="white-space: normal; max-width: 200px;">${payout.notes || ''}</td>
+        <td>
+          <button class="btn btn-danger" onclick="undoPayoutConfirm('${payout.payout_id}', '${payout.updated_at}', '${payout.target_name}')">取消</button>
+        </td>
+      `;
+
+      // 先頭に挿入
+      tbody.insertBefore(tr, tbody.firstChild);
+
+      // Update cache
+      updateHistoryCache(payouts => [payout, ...payouts]);
+    }
+
+    /**
+     * 履歴テーブルから特定の行を削除
+     * @param {string} payoutId - 支払ID
+     */
+    function removeHistoryRow(payoutId) {
+      const row = document.querySelector(`tr[data-payout-id="${payoutId}"]`);
+      if (row) {
+        row.remove();
+      }
+
+      // テーブルが空になった場合
+      const tbody = document.querySelector('#historyTable tbody');
+      if (tbody && tbody.children.length === 0) {
+        document.getElementById('historyTable').innerHTML =
+          '<div class="empty-state">支払い履歴がありません</div>';
+      }
+
+      // Update cache
+      updateHistoryCache(payouts => payouts.filter(p => p.payout_id !== payoutId));
+    }
+
+    /**
+     * 単一スタッフの未払いサマリーをクリア
+     */
+    function clearSingleUnpaidSummary() {
+      const summaryDiv = document.getElementById('unpaidSummary');
+      summaryDiv.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+      currentUnpaid = null;
+      clearSession();
+    }
+
+    function showToast(type, message) {
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ========== Floating Action Button ==========
+    function getSelectedCount() {
+      return document.querySelectorAll('.staff-check:checked').length;
+    }
+
+    function updateFab() {
+      const count = getSelectedCount();
+      const fab = document.getElementById('fabButton');
+      if (fab) {
+        fab.classList.toggle('visible', count > 0);
+        const fabCount = document.getElementById('fabCount');
+        if (fabCount) fabCount.textContent = count;
+      }
+    }
+
+    // Checkbox change listener (delegate)
+    document.addEventListener('change', (e) => {
+      if (e.target.classList.contains('staff-check') || e.target.id === 'selectAll') {
+        updateFab();
+      }
+    });
+  </script>
+
+  <!-- Floating Action Button -->
+  <button class="fab" id="fabButton" onclick="bulkMarkAsPaid()">
+    <span id="fabCount">0</span>名を支払済にする
+  </button>
+</body>
+</html>
