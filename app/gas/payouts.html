@@ -2276,11 +2276,14 @@
         return;
       }
 
-      // actionが指定されていれば直接実行
+      // actionが指定されていれば直接実行（モーダルからの呼び出し時はタブを新規作成）
       if (options.action) {
-        doExport(fromDate, toDate, options);
+        doExport(fromDate, toDate, options, null);
         return;
       }
+
+      // ポップアップブロック回避: ユーザーアクション時に先にタブを開く
+      const preOpenedTab = window.open('about:blank', '_blank');
 
       closeExportModal();
 
@@ -2290,26 +2293,27 @@
         .withSuccessHandler(result => {
           hideLoading();
           if (result.ok && result.data.exists) {
-            // 確認モーダル表示
+            // 確認モーダル表示（先に開いたタブは閉じる）
+            if (preOpenedTab) preOpenedTab.close();
             pendingPayoutExport = { fromDate, toDate, existingFile: result.data.existingFile };
             showFileOverwriteModal(result.data.existingFile);
           } else {
-            // 直接エクスポート実行
-            doExport(fromDate, toDate, {});
+            // 直接エクスポート実行（先に開いたタブを使用）
+            doExport(fromDate, toDate, {}, preOpenedTab);
           }
         })
         .withFailureHandler(err => {
           hideLoading();
           // チェックに失敗しても続行（エクスポート実行）
           console.warn('File check failed, proceeding with export:', err);
-          doExport(fromDate, toDate, {});
+          doExport(fromDate, toDate, {}, preOpenedTab);
         })
         .checkPayoutExportFile(fromDate, toDate);
     }
 
-    function doExport(fromDate, toDate, options) {
-      // ユーザーアクション時に先にタブを開く（ポップアップブロック回避）
-      const newTab = window.open('about:blank', '_blank');
+    function doExport(fromDate, toDate, options, preOpenedTab) {
+      // 先に開いたタブがあればそれを使用、なければ新規作成（モーダルからの呼び出し時）
+      const newTab = preOpenedTab || window.open('about:blank', '_blank');
 
       // 新しいタブにローディングメッセージを表示
       if (newTab) {
@@ -2364,9 +2368,9 @@
               newTab.location.href = result.data.url;
               showToast('success', `エクスポート完了（${result.data.recordCount}件）`);
             } else if (result.data.url && !newTab) {
-              // ポップアップブロック時
+              // ポップアップブロック時: リンクを表示してクリックで開けるようにする
               showToast('success', `エクスポート完了（${result.data.recordCount}件）。ポップアップがブロックされた可能性があります。`);
-              window.open(result.data.url, '_blank');
+              showFileLink(result.data.url, '振込集計');
             } else {
               if (newTab) newTab.close();
               showToast('success', 'エクスポート完了');
@@ -2411,14 +2415,49 @@
       if (!pendingPayoutExport) return;
       const { fromDate, toDate } = pendingPayoutExport;
       closeFileOverwriteModal();
-      doExport(fromDate, toDate, { action: 'overwrite' });
+      doExport(fromDate, toDate, { action: 'overwrite' }, null);
     }
 
     function confirmRename() {
       if (!pendingPayoutExport) return;
       const { fromDate, toDate } = pendingPayoutExport;
       closeFileOverwriteModal();
-      doExport(fromDate, toDate, { action: 'rename' });
+      doExport(fromDate, toDate, { action: 'rename' }, null);
+    }
+
+    // ポップアップブロック時のフォールバック: ファイルリンクを表示
+    function showFileLink(url, label) {
+      // 既存のリンクボックスがあれば削除
+      const existingBox = document.getElementById('file-link-box');
+      if (existingBox) existingBox.remove();
+
+      const box = document.createElement('div');
+      box.id = 'file-link-box';
+      box.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        right: 20px;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        max-width: 320px;
+      `;
+      box.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="font-size: 14px;">${label} ファイル</strong>
+          <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #666;">&times;</button>
+        </div>
+        <a href="${url}" target="_blank" style="color: #1a73e8; word-break: break-all; font-size: 13px;">ファイルを開く</a>
+      `;
+      document.body.appendChild(box);
+
+      // 15秒後に自動で消える
+      setTimeout(() => {
+        if (box.parentElement) box.remove();
+      }, 15000);
     }
   </script>
 

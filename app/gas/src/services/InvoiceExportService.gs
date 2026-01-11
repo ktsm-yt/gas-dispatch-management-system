@@ -1302,7 +1302,17 @@ const InvoiceExportService = {
     }
 
     // デフォルトの出力先フォルダ（ScriptPropertiesから取得）
-    const folderId = PropertiesService.getScriptProperties().getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
+    const props = PropertiesService.getScriptProperties();
+    let folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
+
+    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
+    if (!folderId) {
+      folderId = props.getProperty('OUTPUT_FOLDER_ID');
+      if (folderId) {
+        Logger.log('Using legacy OUTPUT_FOLDER_ID for invoice export');
+      }
+    }
+
     if (folderId) {
       try {
         return DriveApp.getFolderById(folderId);

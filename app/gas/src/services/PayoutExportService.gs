@@ -292,8 +292,16 @@ const PayoutExportService = {
    * @returns {Folder} 出力先フォルダ
    */
   _getOutputFolder: function() {
-    var folderId = PropertiesService.getScriptProperties()
-      .getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
+    var props = PropertiesService.getScriptProperties();
+    var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
+
+    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
+    if (!folderId) {
+      folderId = props.getProperty('OUTPUT_FOLDER_ID');
+      if (folderId) {
+        Logger.log('Using legacy OUTPUT_FOLDER_ID for payout export');
+      }
+    }
 
     if (!folderId) {
       throw new Error(
