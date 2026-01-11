@@ -37,10 +37,10 @@ const PayoutRepository = {
       r.staff_id === staffId
     );
 
-    // period_endの降順でソート（新しい順）
+    // paid_date優先でソート（新しい順）- searchと統一
     records.sort((a, b) => {
-      const dateA = new Date(a.period_end);
-      const dateB = new Date(b.period_end);
+      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
+      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
       return dateB - dateA;
     });
 
@@ -66,9 +66,10 @@ const PayoutRepository = {
       r.subcontractor_id === subcontractorId
     );
 
+    // paid_date優先でソート（新しい順）- searchと統一
     records.sort((a, b) => {
-      const dateA = new Date(a.period_end);
-      const dateB = new Date(b.period_end);
+      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
+      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
       return dateB - dateA;
     });
 
@@ -145,14 +146,14 @@ const PayoutRepository = {
 
     // 期間開始日（以降）で絞り込み
     if (query.period_start_from) {
-      const fromDate = new Date(query.period_start_from);
-      records = records.filter(r => new Date(r.period_start) >= fromDate);
+      const fromDate = this._parseLocalDate(query.period_start_from);
+      records = records.filter(r => this._parseLocalDate(r.period_start) >= fromDate);
     }
 
     // 期間終了日（以前）で絞り込み
     if (query.period_end_to) {
-      const toDate = new Date(query.period_end_to);
-      records = records.filter(r => new Date(r.period_end) <= toDate);
+      const toDate = this._parseLocalDate(query.period_end_to);
+      records = records.filter(r => this._parseLocalDate(r.period_end) <= toDate);
     }
 
     // ソート（デフォルト: paid_date降順＝最新が上）
@@ -160,8 +161,8 @@ const PayoutRepository = {
 
     records.sort((a, b) => {
       // paid_dateがあればそれを優先、なければperiod_endを使用
-      const dateA = new Date(a.paid_date || a.period_end);
-      const dateB = new Date(b.paid_date || b.period_end);
+      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
+      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
       // desc: 新しい順（dateB - dateA）、asc: 古い順（dateA - dateB）
       return sortOrder === 'desc' ? (dateB - dateA) : (dateA - dateB);
     });
@@ -355,5 +356,23 @@ const PayoutRepository = {
 
     // 文字列の場合はスラッシュをハイフンに変換
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 日付文字列をローカルタイムゾーンでパース（UTC解釈回避）
+   * @param {string} dateStr - 日付文字列（YYYY-MM-DD形式）
+   * @returns {Date|null} パースされた日付またはnull
+   */
+  _parseLocalDate: function(dateStr) {
+    if (!dateStr) return null;
+
+    const normalized = this._normalizeDate(dateStr);
+    if (!normalized) return null;
+
+    const parts = normalized.split('-');
+    if (parts.length !== 3) return new Date(dateStr); // フォールバック
+
+    const [y, m, d] = parts.map(Number);
+    return new Date(y, m - 1, d); // ローカルタイムゾーンで作成
   }
 };

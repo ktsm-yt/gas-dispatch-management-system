@@ -180,7 +180,8 @@ const AssignmentRepository = {
       'transport_area', 'transport_amount', 'transport_is_manual',
       'site_role', 'assignment_role', 'is_leader',
       'entry_date', 'safety_training_date',
-      'status', 'notes'
+      'status', 'payout_id',  // P2-3: 二重計上防止用
+      'notes'
     ];
 
     const updatedAssignment = { ...currentAssignment };
