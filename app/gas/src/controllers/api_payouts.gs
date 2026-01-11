@@ -690,12 +690,44 @@ function _validatePaidDate(payoutId, paidDate) {
 // ========== Export API ==========
 
 /**
+ * 支払いエクスポート時の同名ファイル存在チェック
+ * @param {string} fromDate - 開始日（YYYY-MM-DD）
+ * @param {string} toDate - 終了日（YYYY-MM-DD）
+ * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+ */
+function checkPayoutExportFile(fromDate, toDate) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（MANAGER以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, '権限がありません', {}, requestId);
+    }
+
+    // 日付検証
+    if (!fromDate || !toDate) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '開始日と終了日を指定してください', {}, requestId);
+    }
+
+    // Service呼び出し
+    const result = PayoutExportService.checkExistingFile(fromDate, toDate);
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('checkPayoutExportFile error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
  * 振込金額集計をExcelエクスポート
  * @param {string} fromDate - 開始日（YYYY-MM-DD）
  * @param {string} toDate - 終了日（YYYY-MM-DD）
+ * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
  * @returns {Object} { ok: true, data: { fileId, url, fileName, recordCount } }
  */
-function exportPayouts(fromDate, toDate) {
+function exportPayouts(fromDate, toDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -723,14 +755,15 @@ function exportPayouts(fromDate, toDate) {
     }
 
     // エクスポート実行
-    const result = PayoutExportService.exportToExcel(fromDate, toDate);
+    const result = PayoutExportService.exportToExcel(fromDate, toDate, options);
 
     // 監査ログ
     console.log('PAYOUT_EXPORT', JSON.stringify({
       from_date: fromDate,
       to_date: toDate,
       file_id: result.fileId,
-      record_count: result.recordCount
+      record_count: result.recordCount,
+      action: options.action || 'default'
     }));
 
     return buildSuccessResponse(result, requestId);

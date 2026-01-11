@@ -338,10 +338,51 @@ function bulkUpdateInvoiceStatus(updates, status) {
 }
 
 /**
+ * 請求書エクスポート時の同名ファイル存在チェック
+ * @param {string} invoiceId - 請求ID
+ * @param {string} mode - 出力モード（pdf/excel）
+ * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+ */
+function checkInvoiceExportFile(invoiceId, mode) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!invoiceId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
+    }
+
+    const validModes = ['pdf', 'excel'];
+    if (!mode || !validModes.includes(mode)) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        `mode must be one of: ${validModes.join(', ')}`,
+        {},
+        requestId
+      );
+    }
+
+    // Service呼び出し
+    const result = InvoiceExportService.checkExistingFile(invoiceId, mode);
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    Logger.log(`checkInvoiceExportFile error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
  * 請求書を出力（PDF/Excel/編集）
  * @param {string} invoiceId - 請求ID
  * @param {string} mode - 出力モード（pdf/excel/edit）
- * @param {Object} options - オプション
+ * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
  * @returns {Object} APIレスポンス { fileId, url }
  */
 function exportInvoice(invoiceId, mode, options = {}) {
