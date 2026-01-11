@@ -32,6 +32,7 @@ const TABLE_DEFINITIONS = {
       'emergency_contact', 'job_title', 'health_insurance_type', 'pension_type',
       'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
       'special_training', 'skill_training', 'licenses', 'hire_date', 'foreigner_type',
+      'payment_frequency',  // P2-3: 支払いサイクル (daily/weekly/biweekly/monthly)
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted'
     ]
@@ -105,8 +106,9 @@ const TABLE_DEFINITIONS = {
   T_Payouts: {
     sheetName: '支払',
     headers: [
-      'payout_id', 'payout_type', 'staff_id', 'subcontractor_id', 'billing_year',
-      'billing_month', 'base_amount', 'transport_amount', 'adjustment_amount',
+      'payout_id', 'payout_type', 'staff_id', 'subcontractor_id',
+      'period_start', 'period_end', 'assignment_count',  // P2-3: 差分支払い方式
+      'base_amount', 'transport_amount', 'adjustment_amount',
       'tax_amount', 'total_amount', 'status', 'paid_date', 'notes', 'created_at',
       'created_by', 'updated_at', 'updated_by', 'is_deleted'
     ]
