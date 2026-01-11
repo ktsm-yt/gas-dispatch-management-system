@@ -58,10 +58,31 @@ const WORK_CATEGORIES = {
  * 作業詳細の有効値
  */
 const WORK_DETAILS = {
+  // 資材系
   SEKKOU: 'sekkou',       // 石膏ボード
   TATEGU: 'tategu',       // 建具
   KITCHEN: 'kitchen',     // キッチン
   UNIT_BATH: 'unit_bath', // ユニットバス
+  FLOORING: 'flooring',   // フローリング
+  HABAKI: 'habaki',       // 幅木
+  CROSS: 'cross',         // クロス
+  PREFAB: 'prefab',       // プレハブ材
+  SCAFFOLD: 'scaffold',   // 足場材
+  MATERIAL: 'material',   // 資材一般
+  SK: 'sk',               // SK（洗面台）
+  TOILET: 'toilet',       // トイレ
+  FURNITURE: 'furniture', // 家具
+  APPLIANCE: 'appliance', // 家電
+  // 上棟系
+  TOBI: 'tobi',           // 鳶
+  TOBI_HOJO: 'tobi_hojo', // 鳶補助
+  NIAGE: 'niage',         // 荷揚げ
+  TOBIAGE: 'tobiage',     // 鳶揚げ
+  // 作業系
+  HANSYUTSU: 'hansyutsu', // 搬出
+  TEMOTO: 'temoto',       // 手元
+  KAITAI: 'kaitai',       // 解体
+  SEISOU: 'seisou',       // 清掃
   OTHER: 'other'          // その他
 };
 
@@ -69,9 +90,9 @@ const WORK_DETAILS = {
  * 大項目別の詳細選択肢
  */
 const WORK_DETAIL_OPTIONS = {
-  jotou: [],  // 上棟は詳細なし
-  keisagyo: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other'],
-  niage: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'other']
+  jotou: ['tobi', 'tobi_hojo', 'niage', 'tobiage'],  // 上棟系
+  keisagyo: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'flooring', 'habaki', 'cross', 'prefab', 'scaffold', 'material', 'sk', 'toilet', 'furniture', 'appliance', 'hansyutsu', 'temoto', 'kaitai', 'seisou', 'other'],
+  niage: ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'flooring', 'habaki', 'cross', 'prefab', 'scaffold', 'material', 'sk', 'toilet', 'furniture', 'appliance', 'other']
 };
 
 /**
