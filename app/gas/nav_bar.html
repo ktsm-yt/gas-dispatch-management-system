@@ -1,6 +1,6 @@
 <!-- Shared Navigation Bar -->
 <header class="header">
-  <div class="header-title">配置管理システム <span style="opacity:0.7">&gt;</span> <span id="page-title"></span></div>
+  <div class="header-title">配置管理システム <span class="breadcrumb-separator">&gt;</span> <span id="page-title" class="page-name"></span></div>
   <nav class="header-nav">
     <a href="#" id="nav-dashboard">ダッシュボード</a>
     <a href="#" id="nav-jobs">案件一覧</a>
@@ -8,6 +8,7 @@
     <a href="#" id="nav-customers">顧客</a>
     <a href="#" id="nav-staff">スタッフ</a>
     <a href="#" id="nav-invoices">請求</a>
+    <a href="#" id="nav-payouts">支払</a>
     <div class="nav-dropdown">
       <a href="#" id="nav-settings">設定</a>
       <div class="nav-dropdown-menu" id="settings-menu">
@@ -32,6 +33,7 @@ function initNavBar(currentPage, pageTitle) {
     'customers': 'nav-customers',
     'staff': 'nav-staff',
     'invoices': 'nav-invoices',
+    'payouts': 'nav-payouts',
     'subcontractors': 'nav-settings',
     'transportFees': 'nav-settings',
     'company': 'nav-settings'
@@ -66,6 +68,10 @@ function initNavBar(currentPage, pageTitle) {
   document.getElementById('nav-invoices').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('invoices');
+  });
+  document.getElementById('nav-payouts').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('payouts');
   });
 
   // Settings dropdown
