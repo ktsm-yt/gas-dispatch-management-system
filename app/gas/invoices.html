@@ -801,10 +801,11 @@
       const filter = loadFilterState();
       if (!filter) return false;
 
-      if (filter.year) document.getElementById('filterYear').value = filter.year;
-      if (filter.month) document.getElementById('filterMonth').value = filter.month;
-      if (filter.customer) document.getElementById('filterCustomer').value = filter.customer;
-      if (filter.status) document.getElementById('filterStatus').value = filter.status;
+      // 空文字（「全て」）も正しく復元するため !== undefined で判定
+      if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
+      if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
+      if (filter.customer !== undefined) document.getElementById('filterCustomer').value = filter.customer;
+      if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
 
       return true;
     }
@@ -1136,6 +1137,8 @@
       // DOMのステータスバッジを更新
       const row = document.querySelector(`tr[data-invoice-id="${invoiceId}"]`);
       if (row) {
+        // ソート用のdata-status属性を更新
+        row.dataset.status = newStatus;
         const badge = row.querySelector('.status-badge');
         if (badge) {
           badge.className = `status-badge status-${newStatus}`;
@@ -1471,11 +1474,14 @@
     }
 
     function exportInvoice(invoiceId, mode, options = {}) {
-      // actionが指定されていれば直接実行
+      // actionが指定されていれば直接実行（モーダルからの呼び出し時はタブを新規作成）
       if (options.action) {
-        executeInvoiceExport(invoiceId, mode, options);
+        executeInvoiceExport(invoiceId, mode, options, null);
         return;
       }
+
+      // ポップアップブロック回避: ユーザーアクション時に先にタブを開く
+      const preOpenedTab = window.open('about:blank', '_blank');
 
       // まず同名ファイルチェック
       showLoading('ファイル確認中...');
@@ -1483,26 +1489,27 @@
         .withSuccessHandler(function(result) {
           hideLoading();
           if (result.ok && result.data.exists) {
-            // 確認モーダル表示
+            // 確認モーダル表示（先に開いたタブは閉じる）
+            if (preOpenedTab) preOpenedTab.close();
             pendingExport = { invoiceId, mode, options, existingFile: result.data.existingFile };
             showFileOverwriteModal(result.data.existingFile);
           } else {
-            // 直接エクスポート実行
-            executeInvoiceExport(invoiceId, mode, options);
+            // 直接エクスポート実行（先に開いたタブを使用）
+            executeInvoiceExport(invoiceId, mode, options, preOpenedTab);
           }
         })
         .withFailureHandler(function(error) {
           hideLoading();
           // チェックに失敗しても続行（エクスポート実行）
           console.warn('File check failed, proceeding with export:', error);
-          executeInvoiceExport(invoiceId, mode, options);
+          executeInvoiceExport(invoiceId, mode, options, preOpenedTab);
         })
         .checkInvoiceExportFile(invoiceId, mode);
     }
 
-    function executeInvoiceExport(invoiceId, mode, options) {
-      // ユーザーアクション時に先にタブを開く（ポップアップブロック回避）
-      const newTab = window.open('about:blank', '_blank');
+    function executeInvoiceExport(invoiceId, mode, options, preOpenedTab) {
+      // 先に開いたタブがあればそれを使用、なければ新規作成（モーダルからの呼び出し時）
+      const newTab = preOpenedTab || window.open('about:blank', '_blank');
 
       // 新しいタブにローディングメッセージを表示
       if (newTab) {

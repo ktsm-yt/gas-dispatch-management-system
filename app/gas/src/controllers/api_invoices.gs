@@ -599,9 +599,8 @@ function exportBillingData(ym, format = 'xlsx') {
 
     blob.setName(fileName);
 
-    // エクスポートフォルダをセットアップ（未設定なら自動作成）
-    const folderInfo = InvoiceExportService.setupExportFolder();
-    const folder = DriveApp.getFolderById(folderInfo.folderId);
+    // エクスポートフォルダを取得
+    const folder = InvoiceExportService._getOutputFolder();
 
     // ファイルを保存
     const file = folder.createFile(blob);
