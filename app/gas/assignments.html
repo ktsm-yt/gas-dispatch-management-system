@@ -278,7 +278,7 @@
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
 
-    /* Page-specific Modal Styles */
+    /* Page-specific Modal Styles - Unified with Dashboard */
     .modal-overlay {
       position: fixed;
       top: 0;
@@ -295,6 +295,8 @@
     .modal {
       background: white;
       border-radius: var(--radius-md);
+      width: 600px;
+      max-height: 90vh;
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -304,10 +306,9 @@
     .modal-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      padding: 8px 12px;
+      align-items: center;
+      padding: var(--spacing-md) var(--spacing-lg);
       border-bottom: 1px solid var(--border-color);
-      background: var(--bg-card);
     }
 
     .modal-header-info {
@@ -315,30 +316,35 @@
     }
 
     .modal-title {
-      font-size: 14px;
+      font-size: 18px;
       font-weight: 600;
-      margin: 0 0 2px 0;
+      margin: 0;
     }
 
     .modal-close {
       background: none;
       border: none;
-      font-size: 20px;
+      font-size: 24px;
       cursor: pointer;
       color: var(--text-muted);
       line-height: 1;
-      padding: 0;
     }
 
     .modal-close:hover {
       color: var(--text-primary);
     }
 
+    .modal-body {
+      padding: var(--spacing-lg);
+      overflow-y: auto;
+      flex: 1;
+    }
+
     .modal-footer {
       display: flex;
       justify-content: flex-end;
-      gap: 4px;
-      padding: 6px 10px;
+      gap: var(--spacing-sm);
+      padding: var(--spacing-md) var(--spacing-lg);
       border-top: 1px solid var(--border-color);
     }
 
