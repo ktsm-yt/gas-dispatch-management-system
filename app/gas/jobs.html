@@ -122,6 +122,51 @@
       color: var(--text-muted);
     }
 
+    /* Date Navigation */
+    .date-nav-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .date-btn {
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .date-btn:hover {
+      background: var(--bg-hover);
+    }
+
+    .current-date {
+      font-size: 14px;
+      font-weight: 600;
+      min-width: 140px;
+      text-align: center;
+    }
+
+    .date-picker-input {
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      cursor: pointer;
+      width: 36px;
+      height: 32px;
+      background: white;
+    }
+
+    .date-picker-input::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      margin: 0;
+      width: 18px;
+      height: 18px;
+    }
+
     .stats-bar .count {
       font-weight: 600;
       color: var(--text-primary);
@@ -371,9 +416,12 @@
   <!-- Toolbar -->
   <div class="toolbar">
     <div class="toolbar-filters">
-      <div class="filter-group">
-        <label>作業日</label>
-        <input type="date" id="date-from">
+      <div class="date-nav-group">
+        <button class="date-btn" id="prev-day">&lt; 前日</button>
+        <span class="current-date" id="current-date">-</span>
+        <input type="date" id="date-picker" class="date-picker-input">
+        <button class="date-btn" id="next-day">翌日 &gt;</button>
+        <button class="date-btn" id="today-btn">今日</button>
       </div>
       <div class="filter-group">
         <label>時間区分</label>
@@ -845,6 +893,7 @@
     let totalCount = 0;
     let totalPages = 1;
     let sortOrder = 'asc'; // 昇順（近い日付が上）がデフォルト
+    let currentDate = new Date(); // 日付ナビ用
 
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
@@ -858,22 +907,62 @@
       // サーバー時間（Asia/Tokyo）を取得して日付フィルターを初期化
       google.script.run
         .withSuccessHandler(function(serverDate) {
-          document.getElementById('date-from').value = serverDate;
+          currentDate = new Date(serverDate + 'T00:00:00');
+          updateDateDisplay();
           loadJobs(1);
         })
         .withFailureHandler(function(error) {
           // フォールバック: クライアント時間を使用
           console.error('getServerDate failed:', error);
-          const today = new Date();
-          document.getElementById('date-from').value = formatDate(today);
+          currentDate = new Date();
+          updateDateDisplay();
           loadJobs(1);
         })
         .getServerDate();
     }
 
+    function updateDateDisplay() {
+      const days = ['日', '月', '火', '水', '木', '金', '土'];
+      const y = currentDate.getFullYear();
+      const m = currentDate.getMonth() + 1;
+      const d = currentDate.getDate();
+      const w = days[currentDate.getDay()];
+      document.getElementById('current-date').textContent = `${y}年${m}月${d}日(${w})`;
+    }
+
+    function changeDate(delta) {
+      currentDate.setDate(currentDate.getDate() + delta);
+      updateDateDisplay();
+      loadJobs(1);
+    }
+
     function setupEventListeners() {
+      // 日付ナビゲーション
+      document.getElementById('prev-day').addEventListener('click', () => changeDate(-1));
+      document.getElementById('next-day').addEventListener('click', () => changeDate(1));
+      document.getElementById('date-picker').addEventListener('change', (e) => {
+        if (e.target.value) {
+          currentDate = new Date(e.target.value + 'T00:00:00');
+          updateDateDisplay();
+          loadJobs(1);
+        }
+      });
+      document.getElementById('today-btn').addEventListener('click', () => {
+        google.script.run
+          .withSuccessHandler(function(serverDate) {
+            currentDate = new Date(serverDate + 'T00:00:00');
+            updateDateDisplay();
+            loadJobs(1);
+          })
+          .withFailureHandler(function(error) {
+            currentDate = new Date();
+            updateDateDisplay();
+            loadJobs(1);
+          })
+          .getServerDate();
+      });
+
       // フィルター変更時に自動検索
-      document.getElementById('date-from').addEventListener('change', () => loadJobs(1));
       document.getElementById('status-filter').addEventListener('change', () => loadJobs(1));
       document.getElementById('time-slot-filter').addEventListener('change', () => loadJobs(1));
 
@@ -953,7 +1042,7 @@
       showTableLoading();
       currentPage = page;
 
-      const dateFrom = document.getElementById('date-from').value;
+      const dateFrom = formatDate(currentDate);
       const query = {
         work_date_from: dateFrom,
         sort_order: sortOrder,
@@ -1094,12 +1183,11 @@
 
     function updateJobInTable(savedJob, isNew) {
       const customerName = document.getElementById('customer-search').value || '';
-      const dateFrom = document.getElementById('date-from').value;
-      const dateTo = document.getElementById('date-to').value;
+      const dateFrom = formatDate(currentDate);
       const savedDate = savedJob.work_date;
 
-      // Check if job is within current filter range
-      const inRange = (!dateFrom || savedDate >= dateFrom) && (!dateTo || savedDate <= dateTo);
+      // Check if job is on or after current date
+      const inRange = savedDate >= dateFrom;
 
       if (isNew) {
         if (inRange) {
