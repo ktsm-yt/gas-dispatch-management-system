@@ -54,28 +54,15 @@
           <div class="assignment-form-title">一括配置設定</div>
           <div class="form-row">
             <div class="form-group">
-              <label>給与区分</label>
-              <select id="form-pay-unit">
-                <option value="fullday">終日</option>
-                <option value="halfday">ハーフ</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>請求区分</label>
+              <label>単価区分</label>
               <select id="form-invoice-unit">
-                <option value="fullday">終日</option>
+                <option value="basic">基本</option>
                 <option value="halfday">ハーフ</option>
+                <option value="fullday">終日</option>
+                <option value="night">夜間</option>
+                <option value="tobi">鳶</option>
+                <option value="tobiage">鳶揚げ</option>
               </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>給与単価（円）</label>
-              <input type="number" id="form-wage-rate" min="0" step="100" placeholder="空欄=自動計算">
-            </div>
-            <div class="form-group">
-              <label>請求単価（円）</label>
-              <input type="number" id="form-invoice-rate" min="0" step="100" placeholder="空欄=自動計算">
             </div>
           </div>
           <div class="form-row">
@@ -96,6 +83,7 @@
               <select id="form-assignment-role">
                 <option value="">選択してください</option>
                 <option value="鳶">鳶</option>
+                <option value="鳶補助">鳶補助</option>
                 <option value="荷揚げ">荷揚げ</option>
                 <option value="鳶揚げ">鳶揚げ</option>
               </select>

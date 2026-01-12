@@ -116,13 +116,19 @@ const AssignmentService = {
       // 追加/更新処理
       if (changes.upserts && changes.upserts.length > 0) {
         for (const assignment of changes.upserts) {
-          // pay_unit / invoice_unit を小文字に正規化（UI互換性のため）
-          if (assignment.pay_unit) {
-            assignment.pay_unit = String(assignment.pay_unit).toLowerCase().trim();
-          }
+          // invoice_unit を小文字に正規化（UI互換性のため）
           if (assignment.invoice_unit) {
             assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
           }
+
+          // pay_unit = invoice_unit で強制同期（搾取防止）
+          // 請求区分と給与区分は常に一致させる
+          assignment.pay_unit = assignment.invoice_unit;
+
+          // 単価オーバーライドは無効化（常にマスタ参照）
+          // 調整が必要な場合は支払画面/請求画面の調整額を使用
+          assignment.wage_rate = null;
+          assignment.invoice_rate = null;
 
           // バリデーション
           const validation = this._validateAssignment(assignment);
@@ -357,9 +363,12 @@ const AssignmentService = {
   /**
    * 配置のバリデーション
    * @private
+   * Note: pay_unit は invoice_unit から自動設定されるため、
+   *       invoice_unit のみ必須チェック
+   * Note: display_time_slot はダッシュボード表示用（ADR-003参照）
    */
   _validateAssignment: function(assignment) {
-    const required = ['staff_id', 'pay_unit', 'invoice_unit'];
+    const required = ['staff_id', 'invoice_unit', 'display_time_slot'];
     const validation = validateRequired(assignment, required);
 
     if (!validation.valid) {

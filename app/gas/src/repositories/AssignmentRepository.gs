@@ -302,6 +302,9 @@ const AssignmentRepository = {
    * 複数配置のpayout_idを一括更新
    * @param {Object[]} updates - { assignment_id, payout_id } の配列
    * @returns {Object} { success: number, failed: number }
+   *
+   * Note: payout_idはメタデータであり、配置の実質的な内容変更ではないため
+   *       updated_at/updated_by は更新しない（請求変更検知の誤検知防止）
    */
   bulkUpdatePayoutId: function(updates) {
     if (!updates || updates.length === 0) {
@@ -313,28 +316,22 @@ const AssignmentRepository = {
     const dataRange = sheet.getDataRange();
     const allRows = dataRange.getValues();
 
-    const user = Session.getActiveUser().getEmail() || 'system';
-    const now = getCurrentTimestamp();
-
     // assignment_idをキーにしたMapを作成
     const updateMap = new Map(updates.map(u => [u.assignment_id, u.payout_id]));
 
     // IDカラムのインデックスを取得
     const idColIdx = headers.indexOf(this.ID_COLUMN);
     const payoutIdColIdx = headers.indexOf('payout_id');
-    const updatedAtColIdx = headers.indexOf('updated_at');
-    const updatedByColIdx = headers.indexOf('updated_by');
 
     let successCount = 0;
     let failedCount = 0;
 
     // ヘッダー行をスキップして処理
+    // payout_idのみ更新（updated_at/updated_byは更新しない）
     for (let i = 1; i < allRows.length; i++) {
       const assignmentId = allRows[i][idColIdx];
       if (updateMap.has(assignmentId)) {
         allRows[i][payoutIdColIdx] = updateMap.get(assignmentId);
-        allRows[i][updatedAtColIdx] = now;
-        allRows[i][updatedByColIdx] = user;
         successCount++;
       }
     }
