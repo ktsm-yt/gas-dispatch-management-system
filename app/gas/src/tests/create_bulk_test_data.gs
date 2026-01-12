@@ -95,64 +95,139 @@ function deleteBulkTestData() {
   const prefix = BULK_TEST_CONFIG.PREFIX;
   let deleted = { customers: 0, staff: 0, jobs: 0, assignments: 0 };
 
+  // 顧客フォルダを削除（テスト顧客のみ）
+  console.log('顧客フォルダ削除中...');
+  const folderResult = deleteBulkCustomerFolders_();
+  deleted.customerFolders = folderResult.deletedFolders;
+  deleted.customerFolderFiles = folderResult.deletedFiles;
+
   // 配置を削除
   console.log('配置データ削除中...');
-  const allAssignments = getAllRecords('T_JobAssignments', { includeDeleted: true });
-  for (const a of allAssignments) {
-    if (a.staff_id && a.staff_id.startsWith('stf_' + prefix)) {
-      try {
-        AssignmentRepository.softDelete(a.assignment_id);
-        deleted.assignments++;
-      } catch (e) { }
-    }
-  }
+  deleted.assignments = hardDeleteByColumnPrefix_({
+    tableName: 'T_JobAssignments',
+    matchColumn: 'staff_id',
+    matchPrefix: 'stf_' + prefix
+  });
   console.log(`配置削除: ${deleted.assignments}件`);
 
   // 案件を削除
   console.log('案件データ削除中...');
-  const allJobs = getAllRecords('T_Jobs', { includeDeleted: true });
-  for (const j of allJobs) {
-    if (j.customer_id && j.customer_id.startsWith('cus_' + prefix)) {
-      try {
-        JobRepository.softDelete(j.job_id, j.updated_at);
-        deleted.jobs++;
-      } catch (e) { }
-    }
-  }
+  deleted.jobs = hardDeleteByColumnPrefix_({
+    tableName: 'T_Jobs',
+    matchColumn: 'customer_id',
+    matchPrefix: 'cus_' + prefix
+  });
   console.log(`案件削除: ${deleted.jobs}件`);
+
+  // 請求データを削除（請求書・明細）
+  console.log('請求データ削除中...');
+  const invoiceDeleted = hardDeleteInvoiceDataByCustomerPrefix_('cus_' + prefix);
+  deleted.invoices = invoiceDeleted.invoices;
+  deleted.invoiceLines = invoiceDeleted.lines;
+  console.log(`請求書削除: ${deleted.invoices}件, 請求明細削除: ${deleted.invoiceLines}件`);
 
   // スタッフを論理削除
   console.log('スタッフマスター削除中...');
-  const allStaff = getAllRecords('M_Staff', { includeDeleted: true });
-  for (const s of allStaff) {
-    if (s.staff_id && s.staff_id.startsWith('stf_' + prefix)) {
-      try {
-        softDeleteRecord('M_Staff', 'staff_id', s.staff_id);
-        deleted.staff++;
-      } catch (e) { }
-    }
-  }
+  deleted.staff = hardDeleteByColumnPrefix_({
+    tableName: 'M_Staff',
+    matchColumn: 'staff_id',
+    matchPrefix: 'stf_' + prefix
+  });
   console.log(`スタッフ削除: ${deleted.staff}件`);
 
   // 顧客を論理削除
   console.log('顧客マスター削除中...');
-  const allCustomers = getAllRecords('M_Customers', { includeDeleted: true });
-  for (const c of allCustomers) {
-    if (c.customer_id && c.customer_id.startsWith('cus_' + prefix)) {
-      try {
-        softDeleteRecord('M_Customers', 'customer_id', c.customer_id);
-        deleted.customers++;
-      } catch (e) { }
-    }
-  }
+  deleted.customers = hardDeleteByColumnPrefix_({
+    tableName: 'M_Customers',
+    matchColumn: 'customer_id',
+    matchPrefix: 'cus_' + prefix
+  });
   console.log(`顧客削除: ${deleted.customers}件`);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
   console.log('\n=== 大量テストデータ削除完了 ===');
-  console.log(`削除数: 顧客${deleted.customers}, スタッフ${deleted.staff}, 案件${deleted.jobs}, 配置${deleted.assignments}`);
+  console.log(`削除数: 顧客${deleted.customers}, スタッフ${deleted.staff}, 案件${deleted.jobs}, 配置${deleted.assignments}, 請求書${deleted.invoices || 0}, 請求明細${deleted.invoiceLines || 0}, フォルダ${deleted.customerFolders || 0}, フォルダ内ファイル${deleted.customerFolderFiles || 0}`);
   console.log(`所要時間: ${elapsed}秒`);
 
   return deleted;
+}
+
+// ============================================================
+// Driveフォルダ削除（テスト顧客のみ）
+// ============================================================
+
+function deleteBulkCustomerFolders_() {
+  const result = { deletedFolders: 0, deletedFiles: 0, skipped: 0, errors: [] };
+  const prefix = BULK_TEST_CONFIG.PREFIX;
+
+  const props = PropertiesService.getScriptProperties();
+  const parentId = props.getProperty('CUSTOMER_FOLDERS_PARENT_ID');
+  if (!parentId) {
+    console.log('顧客フォルダ親IDが未設定のため、フォルダ削除をスキップします。');
+    return result;
+  }
+
+  const customers = getAllRecords('M_Customers', { includeDeleted: true }).filter(c =>
+    c.customer_id && c.customer_id.startsWith('cus_' + prefix) && c.folder_id
+  );
+
+  for (const customer of customers) {
+    try {
+      if (!isChildFolder_(customer.folder_id, parentId)) {
+        result.skipped++;
+        continue;
+      }
+      deleteFolderRecursively_(customer.folder_id, result);
+    } catch (e) {
+      result.errors.push({
+        customerId: customer.customer_id,
+        folderId: customer.folder_id,
+        error: e.message
+      });
+      console.log(`フォルダ削除エラー: ${customer.customer_id} (${customer.folder_id}) - ${e.message}`);
+    }
+  }
+
+  console.log(`顧客フォルダ削除完了: ${result.deletedFolders}フォルダ, ${result.deletedFiles}ファイル, skipped ${result.skipped}, errors ${result.errors.length}`);
+  return result;
+}
+
+function isChildFolder_(folderId, parentId) {
+  const folder = DriveApp.getFolderById(folderId);
+  const parents = folder.getParents();
+  while (parents.hasNext()) {
+    if (parents.next().getId() === parentId) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteFolderRecursively_(folderId, stats) {
+  let pageToken;
+  do {
+    const resp = Drive.Files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'files(id,mimeType),nextPageToken',
+      pageSize: 1000,
+      pageToken: pageToken
+    });
+    const items = resp.files || [];
+
+    for (const item of items) {
+      if (item.mimeType === 'application/vnd.google-apps.folder') {
+        deleteFolderRecursively_(item.id, stats);
+      } else {
+        Drive.Files.delete(item.id);
+        stats.deletedFiles++;
+      }
+    }
+
+    pageToken = resp.nextPageToken;
+  } while (pageToken);
+
+  Drive.Files.delete(folderId);
+  stats.deletedFolders++;
 }
 
 // ============================================================
@@ -167,9 +242,10 @@ function createBulkCustomers() {
   const departments = ['工事部', '建設部', '営業部', '総務部', '経理部', ''];
   const honorifics = ['様', '御中'];
 
-  // 既存IDを一括取得
+  // 既存ID/顧客名を一括取得
   const existingCustomers = getAllRecords('M_Customers', { includeDeleted: true });
   const existingIds = new Set(existingCustomers.map(c => c.customer_id));
+  const existingNames = new Set(existingCustomers.map(c => c.company_name).filter(Boolean));
 
   // 新規レコードを収集
   const toInsert = [];
@@ -182,7 +258,9 @@ function createBulkCustomers() {
     }
 
     const lastName = randomPick(BULK_TEST_CONFIG.LAST_NAMES);
-    const companyName = lastName + randomPick(BULK_TEST_CONFIG.COMPANY_SUFFIXES);
+    const baseCompanyName = lastName + randomPick(BULK_TEST_CONFIG.COMPANY_SUFFIXES);
+    const companyName = ensureUniqueCompanyName_(baseCompanyName, existingNames);
+    existingNames.add(companyName);
     const contactName = randomPick(BULK_TEST_CONFIG.LAST_NAMES) + randomPick(BULK_TEST_CONFIG.FIRST_NAMES);
     const area = randomPick(BULK_TEST_CONFIG.AREAS);
     const invoiceFormat = ['format1', 'format2', 'format3', 'atamagami'][i % 4];
@@ -230,6 +308,16 @@ function createBulkCustomers() {
   }
 
   return toInsert.length;
+}
+
+function ensureUniqueCompanyName_(baseName, existingNames) {
+  let name = baseName;
+  let counter = 1;
+  while (existingNames.has(name)) {
+    name = `${baseName}-${String(counter).padStart(2, '0')}`;
+    counter++;
+  }
+  return name;
 }
 
 // ============================================================
@@ -379,6 +467,14 @@ function createBulkJobs() {
   const branchOffices = ['特需1', '特需2', '世田谷', '立川', '本社', '横浜', ''];
   const constructionDivs = ['第1工事課', '第2工事課', '第3工事課', '特需工事課', ''];
 
+  // 作業カテゴリと詳細
+  const workCategories = ['荷揚げ', '上棟', '作業'];
+  const workDetailsByCategory = {
+    '荷揚げ': ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'flooring', 'habaki', 'cross', 'prefab', 'scaffold', 'material', 'sk', 'toilet', 'furniture', 'appliance'],
+    '上棟': ['tobi', 'tobi_hojo', 'niage', 'tobiage'],
+    '作業': ['hansyutsu', 'temoto', 'kaitai', 'seisou', 'other']
+  };
+
   const today = new Date();
   const toInsert = [];
 
@@ -401,6 +497,10 @@ function createBulkJobs() {
       // 上棟のみ鳶/揚げ/鳶揚げ単価をランダムに設定、それ以外は基本単価
       const payUnit = timeSlot === 'jotou' ? randomPick(jobTypes) : 'basic';
 
+      // 作業カテゴリと詳細を設定（上棟は上棟カテゴリ、それ以外はランダム）
+      const workCategory = timeSlot === 'jotou' ? '上棟' : randomPick(workCategories);
+      const workDetail = randomPick(workDetailsByCategory[workCategory]);
+
       toInsert.push({
         job_id: generateId('job'),
         customer_id: customer.customer_id,
@@ -411,6 +511,8 @@ function createBulkJobs() {
         start_time: startTime,
         required_count: (j % 5) + 1,
         pay_unit: payUnit,
+        work_category: workCategory,
+        work_detail: workDetail,
         supervisor_name: randomPick(supervisors),
         // format2用項目
         order_number: invoiceFormat === 'format2' ? `${String(30000 + jobIndex).padStart(6, '0')}` : '',
@@ -654,6 +756,128 @@ function softDeleteRecord(tableName, idColumn, idValue) {
       sheet.getRange(row, updatedAtCol + 1).setValue(getCurrentTimestamp());
     }
   }
+}
+
+function hardDeleteByColumnPrefix_(options) {
+  const sheet = getSheet(options.tableName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) {
+    return 0;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const data = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  const headers = data[0];
+  const columnMap = getColumnMap(headers);
+  const matchColIndex = columnMap[options.matchColumn];
+
+  if (matchColIndex === undefined) {
+    throw new Error(`カラムが見つかりません: ${options.matchColumn}`);
+  }
+
+  const kept = [headers];
+  let deleted = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const matchValue = row[matchColIndex];
+    if (!matchValue || !String(matchValue).startsWith(options.matchPrefix)) {
+      kept.push(row);
+      continue;
+    }
+
+    deleted++;
+  }
+
+  if (deleted > 0) {
+    sheet.getRange(1, 1, kept.length, lastCol).setValues(kept);
+
+    if (kept.length < lastRow) {
+      sheet.getRange(kept.length + 1, 1, lastRow - kept.length, lastCol).clearContent();
+    }
+  }
+
+  return deleted;
+}
+
+function hardDeleteInvoiceDataByCustomerPrefix_(customerPrefix) {
+  const invoiceSheet = getSheet('T_Invoices');
+  const invoiceLastRow = invoiceSheet.getLastRow();
+  if (invoiceLastRow <= 1) {
+    return { invoices: 0, lines: 0 };
+  }
+
+  const invoiceLastCol = invoiceSheet.getLastColumn();
+  const invoiceData = invoiceSheet.getRange(1, 1, invoiceLastRow, invoiceLastCol).getValues();
+  const invoiceHeaders = invoiceData[0];
+  const invoiceColumnMap = getColumnMap(invoiceHeaders);
+  const customerIdIndex = invoiceColumnMap.customer_id;
+  const invoiceIdIndex = invoiceColumnMap.invoice_id;
+
+  if (customerIdIndex === undefined || invoiceIdIndex === undefined) {
+    throw new Error('T_Invoicesのカラムが見つかりません');
+  }
+
+  const keptInvoices = [invoiceHeaders];
+  const invoiceIdsToDelete = new Set();
+  let deletedInvoices = 0;
+
+  for (let i = 1; i < invoiceData.length; i++) {
+    const row = invoiceData[i];
+    const customerId = row[customerIdIndex];
+    if (customerId && String(customerId).startsWith(customerPrefix)) {
+      deletedInvoices++;
+      invoiceIdsToDelete.add(row[invoiceIdIndex]);
+      continue;
+    }
+    keptInvoices.push(row);
+  }
+
+  if (deletedInvoices > 0) {
+    invoiceSheet.getRange(1, 1, keptInvoices.length, invoiceLastCol).setValues(keptInvoices);
+    if (keptInvoices.length < invoiceLastRow) {
+      invoiceSheet.getRange(keptInvoices.length + 1, 1, invoiceLastRow - keptInvoices.length, invoiceLastCol).clearContent();
+    }
+  }
+
+  // 明細削除
+  const lineSheet = getSheet('T_InvoiceLines');
+  const lineLastRow = lineSheet.getLastRow();
+  if (lineLastRow <= 1 || invoiceIdsToDelete.size === 0) {
+    return { invoices: deletedInvoices, lines: 0 };
+  }
+
+  const lineLastCol = lineSheet.getLastColumn();
+  const lineData = lineSheet.getRange(1, 1, lineLastRow, lineLastCol).getValues();
+  const lineHeaders = lineData[0];
+  const lineColumnMap = getColumnMap(lineHeaders);
+  const lineInvoiceIdIndex = lineColumnMap.invoice_id;
+
+  if (lineInvoiceIdIndex === undefined) {
+    throw new Error('T_InvoiceLinesのカラムが見つかりません');
+  }
+
+  const keptLines = [lineHeaders];
+  let deletedLines = 0;
+
+  for (let i = 1; i < lineData.length; i++) {
+    const row = lineData[i];
+    const invoiceId = row[lineInvoiceIdIndex];
+    if (invoiceId && invoiceIdsToDelete.has(invoiceId)) {
+      deletedLines++;
+      continue;
+    }
+    keptLines.push(row);
+  }
+
+  if (deletedLines > 0) {
+    lineSheet.getRange(1, 1, keptLines.length, lineLastCol).setValues(keptLines);
+    if (keptLines.length < lineLastRow) {
+      lineSheet.getRange(keptLines.length + 1, 1, lineLastRow - keptLines.length, lineLastCol).clearContent();
+    }
+  }
+
+  return { invoices: deletedInvoices, lines: deletedLines };
 }
 
 // ============================================================
