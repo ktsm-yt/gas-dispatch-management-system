@@ -392,10 +392,7 @@ function saveAllChanges() {
 
   if (selectedIds.length === 0 && deleteIds.length === 0) return;
 
-  const payUnit = document.getElementById('form-pay-unit').value;
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
-  const wageRateInput = document.getElementById('form-wage-rate').value;
-  const invoiceRateInput = document.getElementById('form-invoice-rate').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
   const assignmentRole = document.getElementById('form-assignment-role').value;
@@ -408,6 +405,9 @@ function saveAllChanges() {
   });
 
   // Build upserts
+  // Note: pay_unit, wage_rate, invoice_rate はバックエンドで自動設定
+  // pay_unit = invoice_unit（強制同期）
+  // wage_rate, invoice_rate = null（マスタ参照）
   const upserts = selectedIds.map(staffId => {
     const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
     const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
@@ -415,7 +415,6 @@ function saveAllChanges() {
     const data = {
       staff_id: staffId,
       worker_type: workerType,
-      pay_unit: payUnit,
       invoice_unit: invoiceUnit,
       assignment_role: assignmentRole,
       is_leader: isLeader
@@ -423,18 +422,6 @@ function saveAllChanges() {
 
     if (assignmentMap[staffId]) {
       data.assignment_id = assignmentMap[staffId];
-    }
-
-    // 単価上書き（空欄の場合はnullで自動計算）
-    if (wageRateInput !== '') {
-      data.wage_rate = Number(wageRateInput);
-    } else {
-      data.wage_rate = null;
-    }
-    if (invoiceRateInput !== '') {
-      data.invoice_rate = Number(invoiceRateInput);
-    } else {
-      data.invoice_rate = null;
     }
 
     if (transportArea) {
@@ -648,11 +635,12 @@ function generateLineTemplate() {
   // ヘッダー用メンバー名リスト（シンプル）
   const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
 
-  // 単価（配置の pay_unit から判定、混在する場合は「混在」）
-  const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
-  const payUnitLabel = payUnits.length === 1
-    ? (payUnits[0] === 'FULLDAY' ? '終日' : payUnits[0] === 'HALFDAY' ? 'ハーフ' : '-')
-    : payUnits.length > 1 ? '混在' : '-';
+  // 単価区分（配置の invoice_unit から判定、混在する場合は「混在」）
+  // Note: pay_unit = invoice_unit で同期されているため、どちらを使っても同じ
+  const unitTypes = [...new Set(activeAssignments.map(a => a.invoice_unit || a.pay_unit))];
+  const payUnitLabel = unitTypes.length === 1
+    ? (unitTypes[0] === 'fullday' || unitTypes[0] === 'FULLDAY' ? '終日' : unitTypes[0] === 'halfday' || unitTypes[0] === 'HALFDAY' ? 'ハーフ' : '-')
+    : unitTypes.length > 1 ? '混在' : '-';
 
   // 顧客名付き現場名
   const siteWithCustomer = job.customer_name
