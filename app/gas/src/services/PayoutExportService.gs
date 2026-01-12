@@ -7,12 +7,58 @@
 
 const PayoutExportService = {
   /**
+   * 同名ファイルの存在をチェック
+   * @param {string} fromDate - 開始日（YYYY-MM-DD）
+   * @param {string} toDate - 終了日（YYYY-MM-DD）
+   * @returns {Object} { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+   */
+  checkExistingFile: function(fromDate, toDate) {
+    try {
+      const folder = this._getOutputFolder();
+      const fileName = this._generateFileName(fromDate, toDate);
+
+      const files = folder.getFilesByName(fileName);
+      if (files.hasNext()) {
+        const file = files.next();
+        return {
+          exists: true,
+          existingFile: {
+            id: file.getId(),
+            name: file.getName(),
+            url: file.getUrl(),
+            modifiedDate: file.getLastUpdated().toISOString()
+          }
+        };
+      }
+      return { exists: false };
+    } catch (error) {
+      console.error('checkExistingFile error:', error);
+      return { exists: false, error: error.message };
+    }
+  },
+
+  /**
+   * ファイル名を生成
+   * @param {string} fromDate - 開始日（YYYY-MM-DD）
+   * @param {string} toDate - 終了日（YYYY-MM-DD）
+   * @param {Object} options - オプション（addTimestamp: true で日付を追加）
+   * @returns {string} ファイル名
+   */
+  _generateFileName: function(fromDate, toDate, options = {}) {
+    const timestamp = options.addTimestamp
+      ? '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd')
+      : '';
+    return '振込金額集計_' + fromDate + '_' + toDate + timestamp + '.xlsx';
+  },
+
+  /**
    * Excel出力のメインエントリーポイント
    * @param {string} fromDate - 開始日（YYYY-MM-DD）
    * @param {string} toDate - 終了日（YYYY-MM-DD）
+   * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { fileId, url, fileName }
    */
-  exportToExcel: function(fromDate, toDate) {
+  exportToExcel: function(fromDate, toDate, options = {}) {
     // 1. データ取得
     const payouts = PayoutService.getPayoutReport(fromDate, toDate);
 
@@ -36,8 +82,20 @@ const PayoutExportService = {
 
       // 6. Driveに保存
       const folder = this._getOutputFolder();
-      const fileName = '振込金額集計_' + fromDate + '_' + toDate + '.xlsx';
+
+      // ファイル名を生成（renameの場合はタイムスタンプ付き）
+      const addTimestamp = options.action === 'rename';
+      const fileName = this._generateFileName(fromDate, toDate, { addTimestamp });
       xlsxBlob.setName(fileName);
+
+      // 上書きの場合は既存ファイルを削除
+      if (options.action === 'overwrite') {
+        const existingFiles = folder.getFilesByName(this._generateFileName(fromDate, toDate));
+        while (existingFiles.hasNext()) {
+          existingFiles.next().setTrashed(true);
+        }
+      }
+
       const file = folder.createFile(xlsxBlob);
 
       return {
@@ -224,25 +282,86 @@ const PayoutExportService = {
   },
 
   /**
+   * 出力先フォルダIDのScriptProperty名
+   */
+  PAYOUT_EXPORT_FOLDER_KEY: 'PAYOUT_EXPORT_FOLDER_ID',
+
+  /**
    * 出力先フォルダを取得
-   * 優先順位: PropertiesService > デフォルトID > ルートフォルダ
+   * ScriptPropertiesから取得、未設定時はエラー
    * @returns {Folder} 出力先フォルダ
    */
   _getOutputFolder: function() {
-    // 1. PropertiesServiceから取得を試みる
-    var folderId = PropertiesService.getScriptProperties()
-      .getProperty('PAYOUT_EXPORT_FOLDER_ID');
+    var props = PropertiesService.getScriptProperties();
+    var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
 
-    // 2. 未設定の場合はデフォルトIDを使用
+    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
     if (!folderId) {
-      folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+      folderId = props.getProperty('OUTPUT_FOLDER_ID');
+      if (folderId) {
+        Logger.log('Using legacy OUTPUT_FOLDER_ID for payout export');
+      }
+    }
+
+    if (!folderId) {
+      throw new Error(
+        'PAYOUT_EXPORT_FOLDER_ID が未設定です。\n' +
+        'GASエディタで setPayoutExportFolderId() を実行してください。'
+      );
     }
 
     try {
       return DriveApp.getFolderById(folderId);
     } catch (e) {
-      console.warn('Payout export folder not found (ID: ' + folderId + '), using root folder');
-      return DriveApp.getRootFolder();
+      throw new Error(
+        '支払いエクスポートフォルダにアクセスできません（ID: ' + folderId + '）。\n' +
+        'フォルダが削除されたか、アクセス権限がない可能性があります。'
+      );
+    }
+  },
+
+  /**
+   * エクスポートフォルダの設定状況を確認
+   * @returns {Object} { configured: boolean, folderId: string, url: string }
+   */
+  getExportFolderStatus: function() {
+    var props = PropertiesService.getScriptProperties();
+    var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
+
+    if (!folderId) {
+      return {
+        configured: false,
+        setupGuide: 'GASエディタで setPayoutExportFolderId() を実行してください。'
+      };
+    }
+
+    try {
+      var folder = DriveApp.getFolderById(folderId);
+      return {
+        configured: true,
+        folderId: folderId,
+        folderName: folder.getName(),
+        url: 'https://drive.google.com/drive/folders/' + folderId
+      };
+    } catch (e) {
+      return {
+        configured: false,
+        folderId: folderId,
+        error: 'フォルダにアクセスできません',
+        setupGuide: 'setPayoutExportFolderId() を再実行してフォルダIDを更新してください。'
+      };
     }
   }
 };
+
+/**
+ * 支払いエクスポートフォルダを設定（GASエディタから一度だけ実行）
+ * gas-dispatch-system > 出力 > 給与明細
+ * https://drive.google.com/drive/folders/1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI
+ */
+function setPayoutExportFolderId() {
+  var folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+  PropertiesService.getScriptProperties().setProperty('PAYOUT_EXPORT_FOLDER_ID', folderId);
+  Logger.log('Payout export folder set to: ' + folderId);
+  Logger.log('URL: https://drive.google.com/drive/folders/' + folderId);
+}
