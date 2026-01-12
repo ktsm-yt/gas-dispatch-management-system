@@ -477,6 +477,9 @@ function saveAllChanges() {
         updateModalStats();
         filterStaffList();
         updateSaveButton();
+
+        // 請求書存在チェック（案件担当への通知用）
+        checkInvoiceExistsNotification();
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
         updateSaveButton();
@@ -493,6 +496,34 @@ function saveAllChanges() {
 // Legacy function name for compatibility
 function batchAddStaff() {
   saveAllChanges();
+}
+
+/**
+ * 請求書存在チェック - 配置変更後に請求担当への通知を促す
+ */
+function checkInvoiceExistsNotification() {
+  const job = assignmentModalState.job;
+  if (!job || !job.customer_id || !job.work_date) {
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (response.ok && response.data.exists) {
+        const inv = response.data.invoice;
+        const periodLabel = `${inv.billing_year}年${inv.billing_month}月`;
+        showToast(
+          `この案件の請求書は生成済みです（${periodLabel}）。請求一覧をご確認ください。`,
+          'info',
+          5000  // 5秒間表示
+        );
+      }
+    })
+    .withFailureHandler(function(error) {
+      // 失敗しても通知するだけなので無視
+      console.log('checkInvoiceExistsForJob error:', error);
+    })
+    .checkInvoiceExistsForJob(job.customer_id, job.work_date);
 }
 
 function loadTransportAreas() {

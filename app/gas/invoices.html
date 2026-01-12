@@ -222,6 +222,23 @@
       color: #059669;
     }
 
+    /* Assignment Change Warning */
+    .assignment-change-warning {
+      cursor: pointer;
+      font-size: 16px;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+
+    .assignment-change-warning:hover {
+      transform: scale(1.2);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
     /* Bulk Action Bar */
     .bulk-action-bar {
       position: sticky;
@@ -575,6 +592,7 @@
         <thead>
           <tr>
             <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+            <th style="width: 30px;"></th>
             <th>請求番号</th>
             <th>顧客名</th>
             <th>請求年月</th>
@@ -723,6 +741,23 @@
         <button class="btn btn-secondary" onclick="closeFileOverwriteModal()">キャンセル</button>
         <button class="btn btn-danger" onclick="confirmOverwrite()">上書き</button>
         <button class="btn btn-primary" onclick="confirmRename()">別名保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Regenerate Confirm Modal -->
+  <div class="modal-overlay" id="regenerateConfirmModal" onclick="handleModalOverlayClick(event, 'regenerateConfirmModal')">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>請求書の再生成</h2>
+        <button class="modal-close" onclick="closeRegenerateConfirm()">&times;</button>
+      </div>
+      <div class="modal-body" id="regenerateConfirmBody">
+        <!-- 動的に設定 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeRegenerateConfirm()">キャンセル</button>
+        <button class="btn btn-primary" id="regenerateConfirmBtn" onclick="executeRegenerate()">再生成</button>
       </div>
     </div>
   </div>
@@ -1013,6 +1048,11 @@
         <tr onclick="toggleRowCheckbox('${inv.invoice_id}')" data-invoice-id="${inv.invoice_id}" data-status="${inv.status}" style="cursor: pointer;">
           <td onclick="event.stopPropagation()">
             <input type="checkbox" class="invoice-checkbox" data-invoice-id="${inv.invoice_id}" data-updated-at="${inv.updated_at || ''}" onchange="updateBulkActionBar()">
+          </td>
+          <td onclick="event.stopPropagation()">
+            ${inv.has_assignment_changes ? `
+              <span class="assignment-change-warning" onclick="showRegenerateConfirm('${inv.invoice_id}', '${escapeHtml(inv.customer?.company_name || '')}', '${inv.billing_year}/${String(inv.billing_month).padStart(2, '0')}', '${inv.status}')" title="配置が変更されています。クリックして再生成">⚠️</span>
+            ` : ''}
           </td>
           <td>${escapeHtml(inv.invoice_number)}</td>
           <td>${escapeHtml(inv.customer?.company_name || '')}</td>
@@ -1795,6 +1835,102 @@
     function handleError(error) {
       console.error('Error:', error);
       showToast('エラーが発生しました: ' + (error.message || error), 'error');
+    }
+
+    // ========== 請求書再生成機能 ==========
+
+    let pendingRegenerate = null;
+
+    /**
+     * 再生成確認ダイアログを表示
+     */
+    function showRegenerateConfirm(invoiceId, customerName, period, status) {
+      // 送付済みの場合は再生成不可
+      if (status !== 'unsent' && status !== 'draft' && status !== 'issued') {
+        showToast('送付済みの請求書は再生成できません', 'warning');
+        return;
+      }
+
+      pendingRegenerate = { invoiceId, customerName, period };
+
+      document.getElementById('regenerateConfirmBody').innerHTML = `
+        <p style="margin-bottom: 16px;">
+          配置内容が変更されています。<br>
+          請求書を再生成しますか？
+        </p>
+        <div style="background: #FEF3C7; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+          <div style="font-weight: 500; color: #92400E;">${customerName}</div>
+          <div style="font-size: 13px; color: #B45309;">${period}</div>
+        </div>
+        <p style="color: #666; font-size: 13px;">
+          ※ 現在の配置データで請求書を再計算します。<br>
+          ※ 手動で編集した内容は失われます。
+        </p>
+      `;
+      document.getElementById('regenerateConfirmBtn').disabled = false;
+      document.getElementById('regenerateConfirmBtn').textContent = '再生成';
+      document.getElementById('regenerateConfirmModal').classList.add('active');
+    }
+
+    function closeRegenerateConfirm() {
+      document.getElementById('regenerateConfirmModal').classList.remove('active');
+      pendingRegenerate = null;
+    }
+
+    /**
+     * 請求書を再生成
+     */
+    function executeRegenerate() {
+      if (!pendingRegenerate) return;
+
+      const { invoiceId, customerName } = pendingRegenerate;
+      const confirmBtn = document.getElementById('regenerateConfirmBtn');
+
+      // ローディング表示
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = '再生成中...';
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          closeRegenerateConfirm();
+          if (result.ok) {
+            showToast(`${customerName} の請求書を再生成しました`, 'success');
+            // キャッシュをクリアして再読み込み
+            clearInvoiceCache();
+            loadInvoices(true);
+          } else {
+            const errorMsg = result.error?.message || result.error || '再生成に失敗しました';
+            showToast(errorMsg, 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          closeRegenerateConfirm();
+          console.error('regenerateInvoice failure:', error);
+          showToast('再生成に失敗しました: ' + error.message, 'error');
+        })
+        .regenerateInvoice(invoiceId);
+    }
+
+    /**
+     * 請求書キャッシュをクリア
+     */
+    function clearInvoiceCache() {
+      const keysToRemove = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith('invoices_')) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(k => sessionStorage.removeItem(k));
+
+      // 単一キーのキャッシュも削除
+      if (typeof SS_INVOICES_KEY !== 'undefined') {
+        sessionStorage.removeItem(SS_INVOICES_KEY);
+      }
     }
   </script>
 </body>
