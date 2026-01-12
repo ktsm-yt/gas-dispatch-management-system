@@ -6,7 +6,7 @@
  * URLパラメータでページを切り替え
  */
 function doGet(e) {
-  const page = e?.parameter?.page || 'dashboard';
+  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'dashboard';
 
   const pages = {
     // P1-3: ダッシュボード・案件管理
