@@ -307,6 +307,7 @@ function bulkUpdateInvoiceStatus(updates, status) {
     let updated = 0;
     let failed = 0;
     const errors = [];
+    const updatedItems = [];
 
     // 各請求書を更新
     for (const item of updates) {
@@ -314,6 +315,10 @@ function bulkUpdateInvoiceStatus(updates, status) {
         const result = InvoiceService.updateStatus(item.invoiceId, status, item.updatedAt);
         if (result.success) {
           updated++;
+          updatedItems.push({
+            invoiceId: item.invoiceId,
+            updatedAt: result.invoice?.updated_at || result.invoice?.updatedAt || ''
+          });
         } else {
           failed++;
           errors.push({ invoiceId: item.invoiceId, error: result.error });
@@ -328,6 +333,7 @@ function bulkUpdateInvoiceStatus(updates, status) {
       success: true,
       updated: updated,
       failed: failed,
+      updatedItems: updatedItems,
       errors: errors.length > 0 ? errors : undefined
     }, requestId);
 
