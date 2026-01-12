@@ -102,11 +102,12 @@ const INVOICE_STATUSES = {
 
 /**
  * 配置ステータスの有効値
+ * Note: 実装全体で大文字を使用しているため、値も大文字に統一
  */
 const ASSIGNMENT_STATUSES = {
-  ASSIGNED: 'assigned',     // 配置済
-  CONFIRMED: 'confirmed',   // 確定
-  CANCELLED: 'cancelled'    // キャンセル
+  ASSIGNED: 'ASSIGNED',     // 配置済
+  CONFIRMED: 'CONFIRMED',   // 確定
+  CANCELLED: 'CANCELLED'    // キャンセル
 };
 
 /**

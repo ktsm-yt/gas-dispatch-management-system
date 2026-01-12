@@ -20,14 +20,15 @@ const JOB_STATUS_TRANSITIONS = {
 
 /**
  * 配置ステータスの遷移ルール
+ * Note: 大文字に統一（validation.jsと整合性を保つ）
  */
 const ASSIGNMENT_STATUS_TRANSITIONS = {
   // 配置済 → 確定/キャンセル
-  assigned: ['confirmed', 'cancelled'],
+  ASSIGNED: ['CONFIRMED', 'CANCELLED'],
   // 確定 → 配置済（確定取消）/キャンセル
-  confirmed: ['assigned', 'cancelled'],
+  CONFIRMED: ['ASSIGNED', 'CANCELLED'],
   // キャンセル → 配置済（キャンセル取消）
-  cancelled: ['assigned']
+  CANCELLED: ['ASSIGNED']
 };
 
 /**

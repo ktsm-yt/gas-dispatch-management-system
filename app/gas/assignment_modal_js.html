@@ -410,11 +410,12 @@ function saveAllChanges() {
   // wage_rate, invoice_rate = null（マスタ参照）
   const upserts = selectedIds.map(staffId => {
     const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
-    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
+    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'STAFF';
 
     const data = {
       staff_id: staffId,
       worker_type: workerType,
+      display_time_slot: assignmentModalState.job?.time_slot || '',
       invoice_unit: invoiceUnit,
       assignment_role: assignmentRole,
       is_leader: isLeader

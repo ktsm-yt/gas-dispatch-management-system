@@ -580,6 +580,10 @@
             <div class="form-section-title">単価設定（税抜）</div>
             <div class="form-row-4">
               <div class="form-group">
+                <label for="unit-price-basic">基本単価</label>
+                <input type="number" id="unit-price-basic" name="unit_price_basic" min="0" step="100" placeholder="20000">
+              </div>
+              <div class="form-group">
                 <label for="unit-price-tobi">鳶単価</label>
                 <input type="number" id="unit-price-tobi" name="unit_price_tobi" min="0" step="100" placeholder="25000">
               </div>
@@ -591,6 +595,8 @@
                 <label for="unit-price-tobiage">鳶揚げ単価</label>
                 <input type="number" id="unit-price-tobiage" name="unit_price_tobiage" min="0" step="100" placeholder="27000">
               </div>
+            </div>
+            <div class="form-row-4">
               <div class="form-group">
                 <label for="unit-price-half">ハーフ単価</label>
                 <input type="number" id="unit-price-half" name="unit_price_half" min="0" step="100" placeholder="12000">
@@ -598,6 +604,10 @@
               <div class="form-group">
                 <label for="unit-price-fullday">終日単価</label>
                 <input type="number" id="unit-price-fullday" name="unit_price_fullday" min="0" step="100" placeholder="30000">
+              </div>
+              <div class="form-group">
+                <label for="unit-price-night">夜間単価</label>
+                <input type="number" id="unit-price-night" name="unit_price_night" min="0" step="100" placeholder="28000">
               </div>
             </div>
           </div>
@@ -901,18 +911,20 @@
 
     function getPriceByType(customer, priceType) {
       switch (priceType) {
+        case 'basic': return customer.unit_price_basic;
         case 'tobi': return customer.unit_price_tobi;
         case 'age': return customer.unit_price_age;
         case 'tobiage': return customer.unit_price_tobiage;
         case 'half': return customer.unit_price_half;
         case 'fullday': return customer.unit_price_fullday;
-        default: return customer.unit_price_tobi;
+        case 'night': return customer.unit_price_night;
+        default: return customer.unit_price_basic || customer.unit_price_tobi;
       }
     }
 
     function updatePriceHeader() {
       const priceType = document.getElementById('price-type').value;
-      const labels = { tobi: '鳶単価', age: '揚げ単価', tobiage: '鳶揚げ単価', half: 'ハーフ単価', fullday: '終日単価' };
+      const labels = { basic: '基本単価', tobi: '鳶単価', age: '揚げ単価', tobiage: '鳶揚げ単価', half: 'ハーフ単価', fullday: '終日単価', night: '夜間単価' };
       document.getElementById('price-header').textContent = labels[priceType] || '単価';
     }
 
@@ -981,11 +993,13 @@
       document.getElementById('phone').value = customer.phone || '';
       document.getElementById('fax').value = customer.fax || '';
       document.getElementById('email').value = customer.email || '';
+      document.getElementById('unit-price-basic').value = customer.unit_price_basic || '';
       document.getElementById('unit-price-tobi').value = customer.unit_price_tobi || '';
       document.getElementById('unit-price-age').value = customer.unit_price_age || '';
       document.getElementById('unit-price-tobiage').value = customer.unit_price_tobiage || '';
       document.getElementById('unit-price-half').value = customer.unit_price_half || '';
       document.getElementById('unit-price-fullday').value = customer.unit_price_fullday || '';
+      document.getElementById('unit-price-night').value = customer.unit_price_night || '';
       document.getElementById('closing-day').value = customer.closing_day || '';
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
       document.getElementById('payment-day').value = customer.payment_day || '';
@@ -1097,7 +1111,7 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['unit_price_tobi', 'unit_price_age', 'unit_price_tobiage', 'unit_price_half', 'unit_price_fullday',
+          if (['unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage', 'unit_price_half', 'unit_price_fullday', 'unit_price_night',
                'closing_day', 'payment_day', 'payment_month_offset', 'tax_rate', 'expense_rate'].includes(key)) {
             customer[key] = value ? Number(value) : null;
           } else if (key === 'is_active') {
