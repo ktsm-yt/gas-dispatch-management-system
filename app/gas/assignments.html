@@ -18,13 +18,13 @@
       --text-primary: #1F2937;
       --text-muted: #6B7280;
       --border-color: #E5E7EB;
-      --spacing-xs: 2px;
-      --spacing-sm: 4px;
-      --spacing-md: 8px;
-      --spacing-lg: 12px;
-      --radius-sm: 3px;
-      --radius-md: 6px;
-      --shadow-card: 0 1px 4px rgba(0, 0, 0, 0.08);
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -65,6 +65,24 @@
       font-weight: 600;
       min-width: 160px;
       text-align: center;
+    }
+
+    .date-picker-input {
+      border: 1px solid var(--border-color);
+      padding: 4px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      cursor: pointer;
+      width: 36px;
+      height: 32px;
+      background: white;
+    }
+
+    .date-picker-input::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      margin: 0;
+      width: 18px;
+      height: 18px;
     }
 
     .main-content {
@@ -426,6 +444,7 @@
   <div class="date-nav">
     <button class="date-btn" id="prev-day">&lt; 前日</button>
     <span class="current-date" id="current-date">-</span>
+    <input type="date" id="date-picker" class="date-picker-input">
     <button class="date-btn" id="next-day">翌日 &gt;</button>
     <button class="date-btn" id="today-btn">今日</button>
   </div>
@@ -572,6 +591,13 @@
     function setupEventListeners() {
       document.getElementById('prev-day').addEventListener('click', () => changeDate(-1));
       document.getElementById('next-day').addEventListener('click', () => changeDate(1));
+      document.getElementById('date-picker').addEventListener('change', (e) => {
+        if (e.target.value) {
+          currentDate = new Date(e.target.value + 'T00:00:00');
+          updateUrlDate();
+          loadAssignments();
+        }
+      });
       document.getElementById('today-btn').addEventListener('click', () => {
         google.script.run
           .withSuccessHandler(function(serverDate) {
