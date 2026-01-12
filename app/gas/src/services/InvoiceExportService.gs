@@ -18,7 +18,7 @@ const InvoiceExportService = {
   /**
    * 出力先フォルダIDのScriptProperty名
    */
-  OUTPUT_FOLDER_KEY: 'OUTPUT_FOLDER_ID',
+  INVOICE_EXPORT_FOLDER_KEY: 'INVOICE_EXPORT_FOLDER_ID',
 
   /**
    * テンプレートスプレッドシートを取得（エラーハンドリング付き）
@@ -128,10 +128,48 @@ const InvoiceExportService = {
   },
 
   /**
+   * 同名ファイルの存在をチェック
+   * @param {string} invoiceId - 請求ID
+   * @param {string} mode - 出力モード（pdf/excel）
+   * @returns {Object} { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+   */
+  checkExistingFile: function(invoiceId, mode) {
+    try {
+      const invoiceData = InvoiceService.get(invoiceId);
+      if (!invoiceData) {
+        return { exists: false, error: 'INVOICE_NOT_FOUND' };
+      }
+
+      const { invoice, customer } = this._extractInvoiceData(invoiceData);
+      const folder = this._getOutputFolder(customer);
+      const fileType = mode === 'excel' ? 'xlsx' : 'pdf';
+      const fileName = this._generateFileName(invoice, customer, fileType);
+
+      const files = folder.getFilesByName(fileName);
+      if (files.hasNext()) {
+        const file = files.next();
+        return {
+          exists: true,
+          existingFile: {
+            id: file.getId(),
+            name: file.getName(),
+            url: file.getUrl(),
+            modifiedDate: file.getLastUpdated().toISOString()
+          }
+        };
+      }
+      return { exists: false };
+    } catch (error) {
+      console.error('checkExistingFile error:', error);
+      return { exists: false, error: error.message };
+    }
+  },
+
+  /**
    * 請求書を出力
    * @param {string} invoiceId - 請求ID
    * @param {string} mode - 出力モード（pdf/excel/edit）
-   * @param {Object} options - オプション
+   * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url, error }
    */
   export: function(invoiceId, mode, options = {}) {
@@ -186,7 +224,7 @@ const InvoiceExportService = {
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
-   * @param {Object} options - オプション
+   * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url }
    */
   exportToPdf: function(invoice, lines, customer, company, options = {}) {
@@ -208,12 +246,23 @@ const InvoiceExportService = {
         pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId());
       }
 
-      // ファイル名を生成
-      const fileName = this._generateFileName(invoice, customer, 'pdf');
+      // 出力先フォルダを取得
+      const folder = this._getOutputFolder(customer);
+
+      // ファイル名を生成（renameの場合はタイムスタンプ付き）
+      const addTimestamp = options.action === 'rename';
+      const fileName = this._generateFileName(invoice, customer, 'pdf', { addTimestamp });
       pdfBlob.setName(fileName);
 
+      // 上書きの場合は既存ファイルを削除
+      if (options.action === 'overwrite') {
+        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'pdf'));
+        while (existingFiles.hasNext()) {
+          existingFiles.next().setTrashed(true);
+        }
+      }
+
       // 出力先フォルダに保存
-      const folder = this._getOutputFolder(customer);
       const file = folder.createFile(pdfBlob);
 
       // 一時スプレッドシートを削除
@@ -249,7 +298,7 @@ const InvoiceExportService = {
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
-   * @param {Object} options - オプション
+   * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url }
    */
   exportToExcel: function(invoice, lines, customer, company, options = {}) {
@@ -266,12 +315,23 @@ const InvoiceExportService = {
       // Excelに変換
       const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet.getId());
 
-      // ファイル名を生成
-      const fileName = this._generateFileName(invoice, customer, 'xlsx');
+      // 出力先フォルダを取得
+      const folder = this._getOutputFolder(customer);
+
+      // ファイル名を生成（renameの場合はタイムスタンプ付き）
+      const addTimestamp = options.action === 'rename';
+      const fileName = this._generateFileName(invoice, customer, 'xlsx', { addTimestamp });
       xlsxBlob.setName(fileName);
 
+      // 上書きの場合は既存ファイルを削除
+      if (options.action === 'overwrite') {
+        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'xlsx'));
+        while (existingFiles.hasNext()) {
+          existingFiles.next().setTrashed(true);
+        }
+      }
+
       // 出力先フォルダに保存
-      const folder = this._getOutputFolder(customer);
       const file = folder.createFile(xlsxBlob);
 
       // 一時スプレッドシートを削除
@@ -712,12 +772,12 @@ const InvoiceExportService = {
 
     // 明細行（A3から開始、9列構成：№, 担当工事課, 担当監督名, 物件コード, 現場名, 施工日, 内容, 金額（税抜）, 金額（税込）
     const startRow = 3;
-    const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
+    const taxRate = normalizeTaxRate_(customer.tax_rate);
 
     for (let i = 0; i < lines.length; i++) {
       const row = startRow + i;
       const line = lines[i];
-      const taxIncluded = Math.floor((line.amount || 0) * (1 + taxRate));
+      const taxIncluded = calculateTaxIncluded_(line.amount || 0, taxRate);
 
       sheet.getRange(row, 1).setValue(i + 1);                        // A: № (連番)
       sheet.getRange(row, 2).setValue(line.construction_div || '');  // B: 担当工事課
@@ -1241,42 +1301,66 @@ const InvoiceExportService = {
       }
     }
 
-    // デフォルトの出力先フォルダ（フォールバック）
-    const folderId = PropertiesService.getScriptProperties().getProperty(this.OUTPUT_FOLDER_KEY);
+    // デフォルトの出力先フォルダ（ScriptPropertiesから取得）
+    const props = PropertiesService.getScriptProperties();
+    let folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
+
+    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
+    if (!folderId) {
+      folderId = props.getProperty('OUTPUT_FOLDER_ID');
+      if (folderId) {
+        Logger.log('Using legacy OUTPUT_FOLDER_ID for invoice export');
+      }
+    }
+
     if (folderId) {
       try {
         return DriveApp.getFolderById(folderId);
       } catch (e) {
-        // フォルダが見つからない場合はルートを使用
+        throw new Error(
+          `請求書エクスポートフォルダにアクセスできません（ID: ${folderId}）。\n` +
+          `フォルダが削除されたか、アクセス権限がない可能性があります。`
+        );
       }
     }
 
-    return DriveApp.getRootFolder();
+    throw new Error(
+      `INVOICE_EXPORT_FOLDER_ID が未設定です。\n` +
+      `GASエディタで setInvoiceExportFolderId() を実行してください。`
+    );
   },
 
   /**
-   * エクスポート用フォルダをセットアップ
-   * フォルダが未設定の場合は自動作成し、ScriptPropertyに保存
-   * @returns {Object} { folderId: string, url: string, created: boolean }
+   * エクスポートフォルダの設定状況を確認
+   * @returns {Object} { configured: boolean, folderId: string, url: string }
    */
-  setupExportFolder: function() {
+  getExportFolderStatus: function() {
     const props = PropertiesService.getScriptProperties();
-    let folderId = props.getProperty(this.OUTPUT_FOLDER_KEY);
-    let created = false;
+    const folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
 
     if (!folderId) {
-      // デフォルトフォルダを作成
-      const folder = DriveApp.createFolder('請求書エクスポート');
-      folderId = folder.getId();
-      props.setProperty(this.OUTPUT_FOLDER_KEY, folderId);
-      created = true;
+      return {
+        configured: false,
+        setupGuide: 'GASエディタで setInvoiceExportFolderId() を実行してください。'
+      };
     }
 
-    return {
-      folderId: folderId,
-      url: `https://drive.google.com/drive/folders/${folderId}`,
-      created: created
-    };
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      return {
+        configured: true,
+        folderId: folderId,
+        folderName: folder.getName(),
+        url: `https://drive.google.com/drive/folders/${folderId}`
+      };
+    } catch (e) {
+      return {
+        configured: false,
+        folderId: folderId,
+        error: 'フォルダにアクセスできません',
+        setupGuide: 'setInvoiceExportFolderId() を再実行してフォルダIDを更新してください。'
+      };
+    }
   },
 
   /**
@@ -1284,16 +1368,22 @@ const InvoiceExportService = {
    * @param {Object} invoice - 請求書データ
    * @param {Object} customer - 顧客データ
    * @param {string} type - ファイルタイプ（pdf/xlsx/sheet）
+   * @param {Object} options - オプション（addTimestamp: true で日付を追加）
    * @returns {string} ファイル名
    */
-  _generateFileName: function(invoice, customer, type) {
+  _generateFileName: function(invoice, customer, type, options = {}) {
     const customerName = (customer.company_name || '不明').replace(/[\/\\?%*:|"<>]/g, '_');
     const period = `${invoice.billing_year}年${String(invoice.billing_month).padStart(2, '0')}月`;
 
     const extension = type === 'sheet' ? '' : `.${type}`;
     const prefix = type === 'sheet' ? '【編集用】' : '【請求書】';
 
-    return `${prefix}${customerName}_${period}_${invoice.invoice_number}${extension}`;
+    // タイムスタンプを追加（別名保存時）
+    const timestamp = options.addTimestamp
+      ? '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd')
+      : '';
+
+    return `${prefix}${customerName}_${period}_${invoice.invoice_number}${timestamp}${extension}`;
   },
 
   /**
@@ -1322,12 +1412,13 @@ const InvoiceExportService = {
 };
 
 /**
- * 出力先フォルダを設定（GASエディタから一度だけ実行）
- * gas-dispatch-system > 出力 > 請求
+ * 請求書エクスポートフォルダを設定（GASエディタから一度だけ実行）
+ * gas-dispatch-system > 出力 > 請求書
+ * https://drive.google.com/drive/folders/1yfVVTmRpeizoM9AR1_zgbcLriCZxGCj5
  */
-function setOutputFolderId() {
+function setInvoiceExportFolderId() {
   const folderId = '1yfVVTmRpeizoM9AR1_zgbcLriCZxGCj5';
-  PropertiesService.getScriptProperties().setProperty('OUTPUT_FOLDER_ID', folderId);
-  Logger.log('Output folder set to: ' + folderId);
+  PropertiesService.getScriptProperties().setProperty('INVOICE_EXPORT_FOLDER_ID', folderId);
+  Logger.log('Invoice export folder set to: ' + folderId);
   Logger.log('URL: https://drive.google.com/drive/folders/' + folderId);
 }
