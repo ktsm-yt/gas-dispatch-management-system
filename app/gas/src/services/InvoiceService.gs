@@ -113,20 +113,42 @@ const InvoiceService = {
   /**
    * 請求書一覧を検索
    * @param {Object} query - 検索条件
+   * @param {boolean} query.includeChangeDetection - 配置変更検知フラグを含めるか
    * @returns {Object[]} 請求書配列
    */
   search: function(query = {}) {
     const invoices = InvoiceRepository.search(query);
+    const includeChangeDetection = query.includeChangeDetection !== false; // デフォルトtrue
 
     // 顧客情報を付加
     const customerCache = {};
+
+    // 配置変更検知のためのデータを一括取得
+    let assignmentUpdates = {};
+    if (includeChangeDetection && invoices.length > 0) {
+      assignmentUpdates = this._getAssignmentUpdatesForInvoices(invoices);
+    }
+
     return invoices.map(inv => {
       if (!customerCache[inv.customer_id]) {
         customerCache[inv.customer_id] = this._getCustomer(inv.customer_id);
       }
+
+      // 配置変更があるかチェック
+      let hasAssignmentChanges = false;
+      if (includeChangeDetection) {
+        const latestUpdate = assignmentUpdates[inv.invoice_id];
+        if (latestUpdate && inv.created_at) {
+          const invoiceCreatedAt = new Date(inv.created_at).getTime();
+          const assignmentUpdatedAt = new Date(latestUpdate).getTime();
+          hasAssignmentChanges = assignmentUpdatedAt > invoiceCreatedAt;
+        }
+      }
+
       return {
         ...inv,
-        customer: customerCache[inv.customer_id]
+        customer: customerCache[inv.customer_id],
+        has_assignment_changes: hasAssignmentChanges
       };
     });
   },
@@ -645,6 +667,72 @@ const InvoiceService = {
    */
   _getCustomer: function(customerId) {
     return getRecordById('M_Customers', 'customer_id', customerId);
+  },
+
+  /**
+   * 請求書に関連する配置の最新更新日時を取得
+   * @param {Object[]} invoices - 請求書配列
+   * @returns {Object} { invoice_id: latest_updated_at }
+   */
+  _getAssignmentUpdatesForInvoices: function(invoices) {
+    if (!invoices || invoices.length === 0) {
+      return {};
+    }
+
+    // 請求書IDのセットを作成
+    const invoiceIds = invoices.map(inv => inv.invoice_id);
+
+    // 全明細を一括取得
+    const allLines = getAllRecords('T_InvoiceLines');
+    const relevantLines = allLines.filter(line =>
+      !line.is_deleted && invoiceIds.includes(line.invoice_id)
+    );
+
+    // 明細からassignment_idを抽出
+    const assignmentIds = new Set();
+    const linesByInvoice = {};
+    for (const line of relevantLines) {
+      if (line.assignment_id) {
+        assignmentIds.add(line.assignment_id);
+        if (!linesByInvoice[line.invoice_id]) {
+          linesByInvoice[line.invoice_id] = [];
+        }
+        linesByInvoice[line.invoice_id].push(line.assignment_id);
+      }
+    }
+
+    if (assignmentIds.size === 0) {
+      return {};
+    }
+
+    // 配置を一括取得
+    const allAssignments = getAllRecords('T_JobAssignments');
+    const assignmentMap = {};
+    for (const asg of allAssignments) {
+      if (!asg.is_deleted && assignmentIds.has(asg.assignment_id)) {
+        assignmentMap[asg.assignment_id] = asg.updated_at;
+      }
+    }
+
+    // 請求書ごとに最新のupdated_atを計算
+    const result = {};
+    for (const invoiceId of Object.keys(linesByInvoice)) {
+      const asgIds = linesByInvoice[invoiceId];
+      let latestUpdate = null;
+      for (const asgId of asgIds) {
+        const updatedAt = assignmentMap[asgId];
+        if (updatedAt) {
+          if (!latestUpdate || updatedAt > latestUpdate) {
+            latestUpdate = updatedAt;
+          }
+        }
+      }
+      if (latestUpdate) {
+        result[invoiceId] = latestUpdate;
+      }
+    }
+
+    return result;
   },
 
   /**
