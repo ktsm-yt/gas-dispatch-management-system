@@ -282,7 +282,7 @@ function renderStaffList() {
           <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}</span>
           <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
           ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
-          ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+          ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
         </div>
         <div class="staff-list-actions">
           ${deleteBtn}${undoBtn}
@@ -392,10 +392,7 @@ function saveAllChanges() {
 
   if (selectedIds.length === 0 && deleteIds.length === 0) return;
 
-  const payUnit = document.getElementById('form-pay-unit').value;
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
-  const wageRateInput = document.getElementById('form-wage-rate').value;
-  const invoiceRateInput = document.getElementById('form-invoice-rate').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
   const assignmentRole = document.getElementById('form-assignment-role').value;
@@ -408,14 +405,17 @@ function saveAllChanges() {
   });
 
   // Build upserts
+  // Note: pay_unit, wage_rate, invoice_rate はバックエンドで自動設定
+  // pay_unit = invoice_unit（強制同期）
+  // wage_rate, invoice_rate = null（マスタ参照）
   const upserts = selectedIds.map(staffId => {
     const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
-    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'EMPLOYEE';
+    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'STAFF';
 
     const data = {
       staff_id: staffId,
       worker_type: workerType,
-      pay_unit: payUnit,
+      display_time_slot: assignmentModalState.job?.time_slot || '',
       invoice_unit: invoiceUnit,
       assignment_role: assignmentRole,
       is_leader: isLeader
@@ -423,18 +423,6 @@ function saveAllChanges() {
 
     if (assignmentMap[staffId]) {
       data.assignment_id = assignmentMap[staffId];
-    }
-
-    // 単価上書き（空欄の場合はnullで自動計算）
-    if (wageRateInput !== '') {
-      data.wage_rate = Number(wageRateInput);
-    } else {
-      data.wage_rate = null;
-    }
-    if (invoiceRateInput !== '') {
-      data.invoice_rate = Number(invoiceRateInput);
-    } else {
-      data.invoice_rate = null;
     }
 
     if (transportArea) {
@@ -477,6 +465,9 @@ function saveAllChanges() {
         updateModalStats();
         filterStaffList();
         updateSaveButton();
+
+        // 請求書存在チェック（案件担当への通知用）
+        checkInvoiceExistsNotification();
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
         updateSaveButton();
@@ -493,6 +484,34 @@ function saveAllChanges() {
 // Legacy function name for compatibility
 function batchAddStaff() {
   saveAllChanges();
+}
+
+/**
+ * 請求書存在チェック - 配置変更後に請求担当への通知を促す
+ */
+function checkInvoiceExistsNotification() {
+  const job = assignmentModalState.job;
+  if (!job || !job.customer_id || !job.work_date) {
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (response.ok && response.data.exists) {
+        const inv = response.data.invoice;
+        const periodLabel = `${inv.billing_year}年${inv.billing_month}月`;
+        showToast(
+          `この案件の請求書は生成済みです（${periodLabel}）。請求一覧をご確認ください。`,
+          'info',
+          5000  // 5秒間表示
+        );
+      }
+    })
+    .withFailureHandler(function(error) {
+      // 失敗しても通知するだけなので無視
+      console.log('checkInvoiceExistsForJob error:', error);
+    })
+    .checkInvoiceExistsForJob(job.customer_id, job.work_date);
 }
 
 function loadTransportAreas() {
@@ -617,11 +636,21 @@ function generateLineTemplate() {
   // ヘッダー用メンバー名リスト（シンプル）
   const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
 
-  // 単価（配置の pay_unit から判定、混在する場合は「混在」）
-  const payUnits = [...new Set(activeAssignments.map(a => a.pay_unit))];
-  const payUnitLabel = payUnits.length === 1
-    ? (payUnits[0] === 'FULLDAY' ? '終日' : payUnits[0] === 'HALFDAY' ? 'ハーフ' : '-')
-    : payUnits.length > 1 ? '混在' : '-';
+  // 単価区分（配置の invoice_unit から判定、混在する場合は「混在」）
+  // Note: pay_unit = invoice_unit で同期されているため、どちらを使っても同じ
+  const unitTypes = [...new Set(activeAssignments.map(a => a.invoice_unit || a.pay_unit))];
+  const unitLabels = {
+    'basic': '基本', 'BASIC': '基本',
+    'half': 'ハーフ', 'HALF': 'ハーフ',
+    'halfday': 'ハーフ', 'HALFDAY': 'ハーフ',
+    'fullday': '終日', 'FULLDAY': '終日',
+    'night': '夜間', 'NIGHT': '夜間',
+    'tobi': '鳶', 'TOBI': '鳶',
+    'tobiage': '鳶揚げ', 'TOBIAGE': '鳶揚げ'
+  };
+  const payUnitLabel = unitTypes.length === 1
+    ? (unitLabels[unitTypes[0]] || '-')
+    : unitTypes.length > 1 ? '混在' : '-';
 
   // 作業内容（種別＋小項目）
   const workDetailLabels = {

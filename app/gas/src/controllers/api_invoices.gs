@@ -641,3 +641,93 @@ function _convertToCSV(data) {
 
   return [headers.join(','), ...rows].join('\n');
 }
+
+/**
+ * 請求書存在チェック（配置保存時の通知用）
+ * 作業日から請求期間を算出し、該当期間の請求書が存在するかチェック
+ * @param {string} customerId - 顧客ID
+ * @param {string} workDate - 作業日（YYYY-MM-DD形式）
+ * @returns {Object} APIレスポンス { exists, invoice? }
+ */
+function checkInvoiceExistsForJob(customerId, workDate) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（staff以上）
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!customerId || !workDate) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'customerId and workDate are required', {}, requestId);
+    }
+
+    // 顧客情報を取得（締め日を確認）
+    const customer = getRecordById('M_Customers', 'customer_id', customerId);
+    if (!customer) {
+      return buildSuccessResponse({ exists: false }, requestId);
+    }
+
+    // 作業日から請求期間を算出
+    const closingDay = customer.closing_day || 31;
+    const workDateObj = new Date(workDate);
+    const { billingYear, billingMonth } = calculateBillingPeriodFromWorkDate_(workDateObj, closingDay);
+
+    // 該当期間の請求書を検索
+    const invoices = InvoiceRepository.findByPeriod(billingYear, billingMonth, {
+      customer_id: customerId
+    });
+
+    if (invoices.length === 0) {
+      return buildSuccessResponse({ exists: false }, requestId);
+    }
+
+    // 最初の請求書の情報を返す
+    const invoice = invoices[0];
+    return buildSuccessResponse({
+      exists: true,
+      invoice: {
+        invoice_id: invoice.invoice_id,
+        invoice_number: invoice.invoice_number,
+        status: invoice.status,
+        billing_year: invoice.billing_year,
+        billing_month: invoice.billing_month
+      }
+    }, requestId);
+
+  } catch (error) {
+    Logger.log(`checkInvoiceExistsForJob error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 作業日から請求期間を算出
+ * @param {Date} workDate - 作業日
+ * @param {number} closingDay - 締め日（1-31、31=月末）
+ * @returns {Object} { billingYear, billingMonth }
+ */
+function calculateBillingPeriodFromWorkDate_(workDate, closingDay) {
+  const year = workDate.getFullYear();
+  const month = workDate.getMonth() + 1; // 1-12
+  const day = workDate.getDate();
+
+  // 月末締め（31）の場合
+  if (closingDay >= 31) {
+    return { billingYear: year, billingMonth: month };
+  }
+
+  // 締め日が作業日より前の場合、翌月の請求期間
+  // 例: 締め日20日、作業日25日 → 翌月請求
+  if (day > closingDay) {
+    if (month === 12) {
+      return { billingYear: year + 1, billingMonth: 1 };
+    }
+    return { billingYear: year, billingMonth: month + 1 };
+  }
+
+  // 締め日以前の作業日 → 当月請求
+  return { billingYear: year, billingMonth: month };
+}

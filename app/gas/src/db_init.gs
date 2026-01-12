@@ -15,8 +15,9 @@ const TABLE_DEFINITIONS = {
     headers: [
       'customer_id', 'company_name', 'branch_name', 'department_name',
       'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax',
-      'email', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
-      'unit_price_half', 'closing_day', 'payment_day', 'payment_month_offset',
+      'email', 'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
+      'unit_price_half', 'unit_price_fullday', 'unit_price_night',
+      'closing_day', 'payment_day', 'payment_month_offset',
       'invoice_format', 'include_cover_page', 'tax_rate', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted'

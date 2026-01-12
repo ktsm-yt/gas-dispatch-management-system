@@ -40,9 +40,13 @@ const JOB_TYPES = {
  * @see docs/04_adr/ADR-003_pay_unit_invoice_unit.md
  */
 const PAY_UNITS = {
-  FULLDAY: 'fullday',   // 全日
-  HALFDAY: 'halfday',   // 半日
-  HOURLY: 'hourly'      // 時給
+  BASIC: 'basic',       // 基本
+  HALF: 'half',         // ハーフ（旧）
+  HALFDAY: 'halfday',   // ハーフ
+  FULLDAY: 'fullday',   // 終日
+  NIGHT: 'night',       // 夜間
+  TOBI: 'tobi',         // 鳶
+  TOBIAGE: 'tobiage'    // 鳶揚げ
 };
 
 /**
@@ -119,11 +123,12 @@ const INVOICE_STATUSES = {
 
 /**
  * 配置ステータスの有効値
+ * Note: 実装全体で大文字を使用しているため、値も大文字に統一
  */
 const ASSIGNMENT_STATUSES = {
-  ASSIGNED: 'assigned',     // 配置済
-  CONFIRMED: 'confirmed',   // 確定
-  CANCELLED: 'cancelled'    // キャンセル
+  ASSIGNED: 'ASSIGNED',     // 配置済
+  CONFIRMED: 'CONFIRMED',   // 確定
+  CANCELLED: 'CANCELLED'    // キャンセル
 };
 
 /**

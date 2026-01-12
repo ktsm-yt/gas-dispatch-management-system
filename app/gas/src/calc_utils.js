@@ -135,51 +135,73 @@ function calculateExpense_(baseAmount, expenseRate, roundingMode = RoundingMode.
 /**
  * 作業種別から単価を取得
  * @param {Object} customer - 顧客マスター
- * @param {string} jobType - 作業種別（tobi/age/tobiage）
+ * @param {string} jobType - 作業種別（basic/tobi/age/tobiage/half/halfday/fullday/night）
  * @returns {number} 単価（税抜）
  */
 function getUnitPriceByJobType_(customer, jobType) {
   if (!customer) return 0;
 
-  switch (jobType) {
+  // 小文字に正規化
+  const normalizedType = String(jobType || '').toLowerCase().trim();
+
+  switch (normalizedType) {
+    // 作業種別系
     case 'tobi':
       return customer.unit_price_tobi || 0;
     case 'age':
       return customer.unit_price_age || 0;
     case 'tobiage':
       return customer.unit_price_tobiage || 0;
+
+    // 時間区分系
+    case 'basic':
+      return customer.unit_price_basic || customer.unit_price_tobi || 0;
     case 'half':
+    case 'halfday':  // halfday → half マッピング
       return customer.unit_price_half || 0;
+    case 'fullday':
+      return customer.unit_price_fullday || customer.unit_price_tobi || 0;
+    case 'night':
+      return customer.unit_price_night || customer.unit_price_tobi || 0;
+
     default:
-      return 0;
+      // フォールバック: 基本単価 → 鳶単価
+      return customer.unit_price_basic || customer.unit_price_tobi || 0;
   }
 }
 
 /**
  * スタッフの日給を取得
  * @param {Object} staff - スタッフマスター
- * @param {string} jobType - 作業種別（tobi/age/tobiage）
+ * @param {string} jobType - 作業種別（basic/tobi/age/tobiage/half/halfday/fullday/night）
  * @returns {number} 日給
  */
 function getDailyRateByJobType_(staff, jobType) {
   if (!staff) return 0;
 
-  switch (jobType) {
+  // 小文字に正規化
+  const normalizedType = String(jobType || '').toLowerCase().trim();
+
+  switch (normalizedType) {
     case 'half':
+    case 'halfday':  // halfday → half マッピング
       return staff.daily_rate_half || 0;
     case 'basic':
-      return staff.daily_rate_basic || 0;
+      return staff.daily_rate_basic || staff.daily_rate_tobi || 0;
     case 'fullday':
-      return staff.daily_rate_fullday || 0;
+      return staff.daily_rate_fullday || staff.daily_rate_tobi || 0;
     case 'night':
-      return staff.daily_rate_night || 0;
+      return staff.daily_rate_night || staff.daily_rate_tobi || 0;
     case 'tobi':
       return staff.daily_rate_tobi || 0;
+    case 'age':
+      return staff.daily_rate_age || 0;
     case 'tobiage':
       // 鳶揚げは鳶の係数倍（TOBIAGE_MULTIPLIER参照）
       return Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     default:
-      return 0;
+      // フォールバック: 基本日給 → 鳶日給
+      return staff.daily_rate_basic || staff.daily_rate_tobi || 0;
   }
 }
 
