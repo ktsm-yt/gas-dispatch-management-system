@@ -212,6 +212,9 @@ const CustomerFolderService = {
   _generateFolderName: function(customer) {
     // 不正なファイル名文字を除去
     const safeName = customer.company_name.replace(/[\/\\?%*:|"<>]/g, '_');
+    if (customer.customer_id) {
+      return `${safeName}_${customer.customer_id}`;
+    }
     return safeName;
   },
 
@@ -251,8 +254,8 @@ function createCustomerFolder(customerId) {
     const customer = customerResult.data;
     const result = CustomerFolderService.createCustomerFolder(customer);
 
-    // folder_idをDBに更新（新規作成時のみ）
-    if (result.created) {
+    // folder_idをDBに更新（未設定/不一致の場合）
+    if (result.folderId && (!customer.folder_id || customer.folder_id !== result.folderId)) {
       const newUpdatedAt = CustomerFolderService._updateCustomerFolderId(customerId, result.folderId);
       result.updated_at = newUpdatedAt;
     }
