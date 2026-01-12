@@ -40,9 +40,13 @@ const JOB_TYPES = {
  * @see docs/04_adr/ADR-003_pay_unit_invoice_unit.md
  */
 const PAY_UNITS = {
-  FULLDAY: 'fullday',   // 全日
-  HALFDAY: 'halfday',   // 半日
-  HOURLY: 'hourly'      // 時給
+  BASIC: 'basic',       // 基本
+  HALF: 'half',         // ハーフ（旧）
+  HALFDAY: 'halfday',   // ハーフ
+  FULLDAY: 'fullday',   // 終日
+  NIGHT: 'night',       // 夜間
+  TOBI: 'tobi',         // 鳶
+  TOBIAGE: 'tobiage'    // 鳶揚げ
 };
 
 /**

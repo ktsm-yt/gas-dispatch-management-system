@@ -282,7 +282,7 @@ function renderStaffList() {
           <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}</span>
           <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
           ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
-          ${skills.map(sk => `<span class="skill-badge ${sk === jobType ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+          ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
         </div>
         <div class="staff-list-actions">
           ${deleteBtn}${undoBtn}
@@ -638,8 +638,17 @@ function generateLineTemplate() {
   // 単価区分（配置の invoice_unit から判定、混在する場合は「混在」）
   // Note: pay_unit = invoice_unit で同期されているため、どちらを使っても同じ
   const unitTypes = [...new Set(activeAssignments.map(a => a.invoice_unit || a.pay_unit))];
+  const unitLabels = {
+    'basic': '基本', 'BASIC': '基本',
+    'half': 'ハーフ', 'HALF': 'ハーフ',
+    'halfday': 'ハーフ', 'HALFDAY': 'ハーフ',
+    'fullday': '終日', 'FULLDAY': '終日',
+    'night': '夜間', 'NIGHT': '夜間',
+    'tobi': '鳶', 'TOBI': '鳶',
+    'tobiage': '鳶揚げ', 'TOBIAGE': '鳶揚げ'
+  };
   const payUnitLabel = unitTypes.length === 1
-    ? (unitTypes[0] === 'fullday' || unitTypes[0] === 'FULLDAY' ? '終日' : unitTypes[0] === 'halfday' || unitTypes[0] === 'HALFDAY' ? 'ハーフ' : '-')
+    ? (unitLabels[unitTypes[0]] || '-')
     : unitTypes.length > 1 ? '混在' : '-';
 
   // 顧客名付き現場名
