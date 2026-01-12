@@ -52,10 +52,13 @@
 | phone | STRING | - | 電話番号 |
 | fax | STRING | - | FAX番号 |
 | email | STRING | - | メールアドレス |
+| unit_price_basic | NUMBER | - | 基本単価（税抜） |
 | unit_price_tobi | NUMBER | - | 鳶単価（税抜） |
 | unit_price_age | NUMBER | - | 揚げ単価（税抜） |
 | unit_price_tobiage | NUMBER | - | 鳶揚げ単価（税抜） |
 | unit_price_half | NUMBER | - | ハーフ単価（税抜） |
+| unit_price_fullday | NUMBER | - | 終日単価（税抜） |
+| unit_price_night | NUMBER | - | 夜間単価（税抜） |
 | closing_day | NUMBER | - | 締め日（1-31、末日=31） |
 | payment_day | NUMBER | - | 支払日（締め後何日） |
 | payment_month_offset | NUMBER | - | 支払月（0=当月、1=翌月、2=翌々月） |

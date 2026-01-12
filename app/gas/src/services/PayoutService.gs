@@ -784,17 +784,25 @@ const PayoutService = {
    * 対象AssignmentsにPayoutIDを紐付け（二重計上防止）
    * @param {Object[]} assignments - 配置リスト
    * @param {string} payoutId - 支払ID
+   *
+   * Note: bulkUpdatePayoutIdを使用してupdated_atを更新しない
+   *       （請求変更検知の誤検知防止）
    */
   _linkAssignmentsToPayout: function(assignments, payoutId) {
-    for (const assignment of assignments) {
-      try {
-        AssignmentRepository.update({
-          assignment_id: assignment.assignment_id,
-          payout_id: payoutId
-        });
-      } catch (e) {
-        Logger.log(`[_linkAssignmentsToPayout] Error updating assignment ${assignment.assignment_id}: ${e.message}`);
-      }
+    if (!assignments || assignments.length === 0) {
+      return;
+    }
+
+    const updates = assignments.map(a => ({
+      assignment_id: a.assignment_id,
+      payout_id: payoutId
+    }));
+
+    try {
+      const result = AssignmentRepository.bulkUpdatePayoutId(updates);
+      Logger.log(`[_linkAssignmentsToPayout] Updated ${result.success} assignments with payout_id: ${payoutId}`);
+    } catch (e) {
+      Logger.log(`[_linkAssignmentsToPayout] Error: ${e.message}`);
     }
   },
 

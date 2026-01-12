@@ -365,9 +365,10 @@ const AssignmentService = {
    * @private
    * Note: pay_unit は invoice_unit から自動設定されるため、
    *       invoice_unit のみ必須チェック
+   * Note: display_time_slot はダッシュボード表示用（ADR-003参照）
    */
   _validateAssignment: function(assignment) {
-    const required = ['staff_id', 'invoice_unit'];
+    const required = ['staff_id', 'invoice_unit', 'display_time_slot'];
     const validation = validateRequired(assignment, required);
 
     if (!validation.valid) {
