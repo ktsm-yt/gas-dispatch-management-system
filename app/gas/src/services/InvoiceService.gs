@@ -245,9 +245,12 @@ const InvoiceService = {
    * @returns {Object} 更新結果
    */
   updateStatus: function(invoiceId, status, expectedUpdatedAt) {
+    const normalizeStatus = s => String(s || '').trim().toLowerCase();
+    const normalizedStatus = normalizeStatus(status);
+
     // ステータス遷移の検証
     const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
-    if (!validStatuses.includes(status)) {
+    if (!validStatuses.includes(normalizedStatus)) {
       return { success: false, error: 'INVALID_STATUS' };
     }
 
@@ -258,19 +261,21 @@ const InvoiceService = {
 
     // ステータス遷移ルール（status_rules.js の INVOICE_STATUS_TRANSITIONS に準拠）
     // 旧ステータスも新ステータスにマッピング
-    const currentStatusNormalized = (current.status === 'draft' || current.status === 'issued') ? 'unsent' : current.status;
+    const currentStatusNormalized = normalizeStatus(
+      (current.status === 'draft' || current.status === 'issued') ? 'unsent' : current.status
+    );
     const allowedTransitions = {
       unsent: ['sent'],
       sent: ['paid', 'unpaid', 'unsent'],
       unpaid: ['paid', 'sent'],
       paid: ['sent']
     };
-    if (currentStatusNormalized !== status && !allowedTransitions[currentStatusNormalized]?.includes(status)) {
+    if (currentStatusNormalized !== normalizedStatus && !allowedTransitions[currentStatusNormalized]?.includes(normalizedStatus)) {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
     }
 
     return InvoiceRepository.update(
-      { invoice_id: invoiceId, status: status },
+      { invoice_id: invoiceId, status: normalizedStatus },
       expectedUpdatedAt
     );
   },

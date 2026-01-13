@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,7 +41,8 @@
       line-height: 1.5;
     }
 
-    <?!= include('nav_styles'); ?>
+    <?!= include('nav_styles');
+    ?>
 
     /* Toolbar */
     .toolbar {
@@ -202,7 +204,9 @@
       text-transform: uppercase;
     }
 
-    .status-unsent, .status-draft, .status-issued {
+    .status-unsent,
+    .status-draft,
+    .status-issued {
       background: #E5E7EB;
       color: #4B5563;
     }
@@ -235,8 +239,15 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.6;
+      }
     }
 
     /* Bulk Action Bar */
@@ -266,6 +277,16 @@
       gap: var(--spacing-xs);
     }
 
+    .folder-cell {
+      text-align: left;
+    }
+
+    .folder-col,
+    .folder-cell {
+      white-space: nowrap;
+      width: 1%;
+    }
+
     .action-btn {
       padding: var(--spacing-xs) var(--spacing-sm);
       background: transparent;
@@ -280,9 +301,25 @@
       background: var(--bg-hover);
     }
 
-    .action-btn.pdf { color: #DC3545; border-color: #DC3545; }
-    .action-btn.excel { color: #28A745; border-color: #28A745; }
-    .action-btn.excel-cover { color: #6F42C1; border-color: #6F42C1; }
+    .action-btn.pdf {
+      color: #DC3545;
+      border-color: #DC3545;
+    }
+
+    .action-btn.excel {
+      color: #28A745;
+      border-color: #28A745;
+    }
+
+    .action-btn.excel-cover {
+      color: #6F42C1;
+      border-color: #6F42C1;
+    }
+
+    .action-btn.folder {
+      color: #0D6EFD;
+      border-color: #0D6EFD;
+    }
 
     /* Modal */
     .modal-overlay {
@@ -437,8 +474,17 @@
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 0.6; width: 20%; }
-      50% { opacity: 1; width: 40%; }
+
+      0%,
+      100% {
+        opacity: 0.6;
+        width: 20%;
+      }
+
+      50% {
+        opacity: 1;
+        width: 40%;
+      }
     }
 
     /* Result Box */
@@ -510,7 +556,9 @@
     }
 
     @keyframes spin {
-      to { transform: rotate(360deg); }
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     /* Empty State */
@@ -521,6 +569,7 @@
     }
   </style>
 </head>
+
 <body>
   <?!= include('nav_bar'); ?>
 
@@ -598,8 +647,10 @@
             <th>請求年月</th>
             <th>発行日</th>
             <th class="amount">合計金額</th>
-            <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス <span id="statusSortIcon">⇅</span></th>
+            <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス <span
+                id="statusSortIcon">⇅</span></th>
             <th>帳票出力</th>
+            <th class="folder-col">顧客フォルダ</th>
           </tr>
         </thead>
         <tbody id="invoiceTableBody">
@@ -694,7 +745,8 @@
         <button class="btn btn-secondary" onclick="closeBulkGenerateModal()">キャンセル</button>
         <button class="btn btn-danger" id="bulkStopBtn" onclick="stopBulkGenerate()" style="display: none;">停止</button>
         <button class="btn btn-primary" id="bulkGenerateBtn" onclick="bulkGenerateInvoices()">開始</button>
-        <button class="btn btn-success" id="bulkContinueBtn" onclick="bulkGenerateContinue()" style="display: none;">次の10社</button>
+        <button class="btn btn-success" id="bulkContinueBtn" onclick="bulkGenerateContinue()"
+          style="display: none;">次の10社</button>
       </div>
     </div>
   </div>
@@ -746,7 +798,8 @@
   </div>
 
   <!-- Regenerate Confirm Modal -->
-  <div class="modal-overlay" id="regenerateConfirmModal" onclick="handleModalOverlayClick(event, 'regenerateConfirmModal')">
+  <div class="modal-overlay" id="regenerateConfirmModal"
+    onclick="handleModalOverlayClick(event, 'regenerateConfirmModal')">
     <div class="modal" style="max-width: 400px;">
       <div class="modal-header">
         <h2>請求書の再生成</h2>
@@ -774,12 +827,14 @@
     // State
     let invoices = [];
     let customers = [];
+    let customersLoaded = false;
+    let customersLoading = false;
 
     // SessionStorage keys and TTL
     const SS_INVOICES_KEY = 'invoices_data';
     const SS_CUSTOMERS_KEY = 'invoices_customers';
     const SS_FILTER_KEY = 'invoices_filter';
-    const INVOICES_CACHE_TTL = 30 * 60 * 1000;  // 30分
+    const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分
 
     // Cache functions - Invoices (with TTL)
     function saveInvoicesToCache(data, query) {
@@ -832,30 +887,56 @@
     }
 
     // Restore filter state (called after customers are loaded)
-    function restoreFilterState() {
+    function restoreFilterState(options = {}) {
       const filter = loadFilterState();
       if (!filter) return false;
 
       // 空文字（「全て」）も正しく復元するため !== undefined で判定
       if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
       if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
-      if (filter.customer !== undefined) document.getElementById('filterCustomer').value = filter.customer;
+      if (!options.skipCustomer && filter.customer !== undefined) {
+        document.getElementById('filterCustomer').value = filter.customer;
+      }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
 
       return true;
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       initNavBar('invoices', '請求管理');
       initFilters();
-      loadCustomers();
+      restoreFilterState({ skipCustomer: true });
+      initCustomerLazyLoad();
+      initCustomersFromCache();
       initModalHandlers();
     });
 
     // Modal ESC key and click-outside handlers
+    function initCustomersFromCache() {
+      const cached = loadCustomersFromCache();
+      if (!cached) return;
+      customers = cached;
+      customersLoaded = true;
+      populateCustomerSelects();
+      restoreFilterState();
+    }
+
+    function initCustomerLazyLoad() {
+      const trigger = function () {
+        if (customersLoaded || customersLoading) return;
+        loadCustomers();
+      };
+      ['filterCustomer', 'generateCustomer'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('focus', trigger);
+        el.addEventListener('click', trigger);
+      });
+    }
+
     function initModalHandlers() {
-      document.addEventListener('keydown', function(e) {
+      document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
           const generateModal = document.getElementById('generateModal');
           const bulkModal = document.getElementById('bulkGenerateModal');
@@ -929,28 +1010,35 @@
     }
 
     function loadCustomers() {
+      if (customersLoaded || customersLoading) return;
+      customersLoading = true;
       // Check cache first
       const cached = loadCustomersFromCache();
       if (cached) {
         customers = cached;
+        customersLoaded = true;
+        customersLoading = false;
         populateCustomerSelects();
         restoreFilterState();
-        loadInvoices();
         return;
       }
 
       // Fetch from API
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
+          customersLoading = false;
           if (result.ok) {
             customers = result.data.customers || [];
             saveCustomersToCache(customers);
+            customersLoaded = true;
             populateCustomerSelects();
             restoreFilterState();
-            loadInvoices();
           }
         })
-        .withFailureHandler(handleError)
+        .withFailureHandler(function (error) {
+          customersLoading = false;
+          handleError(error);
+        })
         .getCustomers();
     }
 
@@ -1015,7 +1103,7 @@
       showLoading();
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
             invoices = result.data.invoices || [];
@@ -1025,7 +1113,7 @@
             showToast(result.error?.message || 'エラーが発生しました', 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           handleError(error);
         })
@@ -1044,32 +1132,48 @@
 
       emptyState.style.display = 'none';
 
-      tbody.innerHTML = invoices.map(inv => `
-        <tr onclick="toggleRowCheckbox('${inv.invoice_id}')" data-invoice-id="${inv.invoice_id}" data-status="${inv.status}" style="cursor: pointer;">
-          <td onclick="event.stopPropagation()">
-            <input type="checkbox" class="invoice-checkbox" data-invoice-id="${inv.invoice_id}" data-updated-at="${inv.updated_at || ''}" onchange="updateBulkActionBar()">
-          </td>
-          <td onclick="event.stopPropagation()">
-            ${inv.has_assignment_changes ? `
-              <span class="assignment-change-warning" onclick="showRegenerateConfirm('${inv.invoice_id}', '${escapeHtml(inv.customer?.company_name || '')}', '${inv.billing_year}/${String(inv.billing_month).padStart(2, '0')}', '${inv.status}')" title="配置が変更されています。クリックして再生成">⚠️</span>
-            ` : ''}
-          </td>
-          <td>${escapeHtml(inv.invoice_number)}</td>
-          <td>${escapeHtml(inv.customer?.company_name || '')}</td>
-          <td>${inv.billing_year}/${String(inv.billing_month).padStart(2, '0')}</td>
-          <td>${inv.issue_date || '-'}</td>
-          <td class="amount">${formatCurrency(inv.total_amount)}</td>
-          <td><span class="status-badge status-${inv.status}">${getStatusLabel(inv.status)}</span></td>
-          <td class="actions" onclick="event.stopPropagation()">
-            <button class="action-btn pdf" onclick="exportPdf('${inv.invoice_id}')" title="PDF出力">PDF</button>
-            <button class="action-btn excel" onclick="exportExcel('${inv.invoice_id}')" title="Excel出力（詳細のみ）">Excel</button>
-            <button class="action-btn excel-cover" onclick="exportExcelWithCover('${inv.invoice_id}')" title="Excel出力（頭紙付き）">頭紙</button>
-          </td>
-        </tr>
-      `).join('');
+      const customerById = new Map(customers.map(c => [c.customer_id, c]));
+      tbody.innerHTML = invoices.map(inv => {
+        const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
+        const masterCustomer = customerById.get(customerId);
+        const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
+
+        // フォルダセルは空にして、後でJavaScriptで生成する
+        let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
+          '" data-status="' + inv.status + '" style="cursor: pointer;">';
+        rowHtml += '<td onclick="event.stopPropagation()">' +
+          '<input type="checkbox" class="invoice-checkbox" data-invoice-id="' + inv.invoice_id +
+          '" data-updated-at="' + (inv.updated_at || '') + '" onchange="updateBulkActionBar()">' +
+          '</td>';
+        rowHtml += '<td onclick="event.stopPropagation()">';
+        if (inv.has_assignment_changes) {
+          rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
+            inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+            '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
+            '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
+        }
+        rowHtml += '</td>';
+        rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
+        rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
+        rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
+        rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
+        rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
+        rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
+        rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
+          '<button class="action-btn pdf" onclick="exportPdf(\'' + inv.invoice_id + '\')" title="PDF出力">PDF</button>' +
+          '<button class="action-btn excel" onclick="exportExcel(\'' + inv.invoice_id + '\')" title="Excel出力（詳細のみ）">Excel</button>' +
+          '<button class="action-btn excel-cover" onclick="exportExcelWithCover(\'' + inv.invoice_id + '\')" title="Excel出力（頭紙付き）">頭紙</button>' +
+          '</td>';
+        rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
+          '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()"></td>';
+        rowHtml += '</tr>';
+        return rowHtml;
+      }).join('');
       // チェックボックス状態をリセット
       document.getElementById('selectAll').checked = false;
       updateBulkActionBar();
+      // フォルダリンクのhrefを設定
+      setFolderLinksHref();
     }
 
     function getStatusLabel(status) {
@@ -1087,6 +1191,108 @@
 
     function viewInvoice(invoiceId) {
       // TODO: Implement invoice detail view (保留)
+    }
+
+    // ========== 顧客フォルダ機能 ==========
+
+    function setFolderLinksHref() {
+      // 全てのフォルダセルに対して、完全にJavaScriptで要素を作成（innerHTML回避）
+      document.querySelectorAll('td.folder-cell').forEach(cell => {
+        const folderId = cell.getAttribute('data-folder-id')?.trim();
+        const customerId = cell.getAttribute('data-customer-id');
+
+        // 既存の内容をクリア
+        cell.innerHTML = '';
+
+        if (folderId) {
+          // createElement()で要素を作成
+          const link = document.createElement('a');
+          link.className = 'btn btn-secondary';
+          link.innerHTML = '<i class="fas fa-folder"></i> フォルダ';
+          link.style.display = 'inline-flex';
+          link.style.alignItems = 'center';
+          link.style.gap = '4px';
+          link.style.textDecoration = 'none';
+          link.style.fontSize = '12px';
+          link.style.padding = '4px 8px';
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          // href を直接設定（顧客モーダルと同じ方法）
+          link.href = 'https://drive.google.com/drive/folders/' + folderId;
+          link.onclick = (e) => e.stopPropagation();
+          cell.appendChild(link);
+        } else if (customerId) {
+          const btn = document.createElement('button');
+          btn.className = 'action-btn folder';
+          btn.type = 'button';
+          btn.textContent = '作成';
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            createCustomerFolderFromInvoice(customerId, btn);
+          };
+          cell.appendChild(btn);
+        } else {
+          const span = document.createElement('span');
+          span.style.color = '#9CA3AF';
+          span.style.fontSize = '12px';
+          span.textContent = '-';
+          cell.appendChild(span);
+        }
+      });
+    }
+
+    function updateCustomerFolderLink(customerId, folderId) {
+      if (!customerId || !folderId) return;
+      invoices.forEach(inv => {
+        if ((inv.customer && inv.customer.customer_id) === customerId || inv.customer_id === customerId) {
+          if (!inv.customer) inv.customer = {};
+          inv.customer.folder_id = folderId;
+        }
+      });
+      const customer = customers.find(c => c.customer_id === customerId);
+      if (customer) {
+        customer.folder_id = folderId;
+        saveCustomersToCache(customers);
+      }
+      sessionStorage.removeItem(SS_INVOICES_KEY);
+      // data-folder-id属性を更新
+      document.querySelectorAll('#invoiceTableBody tr').forEach(row => {
+        const cell = row.querySelector('td.folder-cell');
+        if (cell && cell.dataset.customerId === customerId) {
+          cell.dataset.folderId = folderId;
+        }
+      });
+      // 全てのフォルダセルを再生成
+      setFolderLinksHref();
+    }
+
+    function createCustomerFolderFromInvoice(customerId, buttonEl) {
+      if (!customerId) return;
+      if (buttonEl) {
+        buttonEl.disabled = true;
+        buttonEl.textContent = '作成中...';
+      }
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (buttonEl) {
+            buttonEl.disabled = false;
+            buttonEl.textContent = 'フォルダ作成';
+          }
+          if (result.ok && result.data && result.data.folderId) {
+            updateCustomerFolderLink(customerId, result.data.folderId);
+            showToast('顧客フォルダを作成しました', 'success');
+          } else {
+            showToast(result.error?.message || '顧客フォルダ作成に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function (error) {
+          if (buttonEl) {
+            buttonEl.disabled = false;
+            buttonEl.textContent = 'フォルダ作成';
+          }
+          showToast('顧客フォルダ作成に失敗しました: ' + error.message, 'error');
+        })
+        .createCustomerFolder(customerId);
     }
 
     // ========== 一括選択・更新機能 ==========
@@ -1111,7 +1317,7 @@
       const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
       const countSpan = document.getElementById('selectedCount');
 
-      countSpan.textContent = checkboxes.length > 0 ? `${checkboxes.length}件選択中` : '選択なし';
+      countSpan.textContent = checkboxes.length > 0 ? (checkboxes.length + '件選択中') : '選択なし';
 
       // 全選択チェックボックスの状態を更新
       const allCheckboxes = document.querySelectorAll('.invoice-checkbox');
@@ -1155,7 +1361,7 @@
     }
 
     function toggleRowCheckbox(invoiceId) {
-      const checkbox = document.querySelector(`.invoice-checkbox[data-invoice-id="${invoiceId}"]`);
+      const checkbox = document.querySelector('.invoice-checkbox[data-invoice-id="' + invoiceId + '"]');
       if (checkbox) {
         checkbox.checked = !checkbox.checked;
         updateBulkActionBar();
@@ -1168,21 +1374,30 @@
       updateBulkActionBar();
     }
 
-    function updateInvoiceStatusInDOM(invoiceId, newStatus) {
+    function updateInvoiceStatusInDOM(invoiceId, newStatus, updatedAt) {
       // メモリ上のinvoices配列を更新
       const inv = invoices.find(i => i.invoice_id === invoiceId);
       if (inv) {
         inv.status = newStatus;
+        if (updatedAt) {
+          inv.updated_at = updatedAt;
+        }
       }
       // DOMのステータスバッジを更新
-      const row = document.querySelector(`tr[data-invoice-id="${invoiceId}"]`);
+      const row = document.querySelector('tr[data-invoice-id="' + invoiceId + '"]');
       if (row) {
         // ソート用のdata-status属性を更新
         row.dataset.status = newStatus;
         const badge = row.querySelector('.status-badge');
         if (badge) {
-          badge.className = `status-badge status-${newStatus}`;
+          badge.className = 'status-badge status-' + newStatus;
           badge.textContent = getStatusLabel(newStatus);
+        }
+        if (updatedAt) {
+          const checkbox = row.querySelector('.invoice-checkbox');
+          if (checkbox) {
+            checkbox.dataset.updatedAt = updatedAt;
+          }
         }
       }
     }
@@ -1203,10 +1418,14 @@
         return;
       }
 
-      const updates = Array.from(checkboxes).map(cb => ({
-        invoiceId: cb.dataset.invoiceId,
-        updatedAt: cb.dataset.updatedAt
-      }));
+      const updates = Array.from(checkboxes).map(cb => {
+        const invoiceId = cb.dataset.invoiceId;
+        const inv = invoices.find(i => i.invoice_id === invoiceId);
+        return {
+          invoiceId: invoiceId,
+          updatedAt: inv?.updated_at || cb.dataset.updatedAt
+        };
+      });
 
       const statusLabel = {
         unsent: '未送付',
@@ -1218,7 +1437,7 @@
       // 確認モーダルを表示
       pendingStatusUpdate = { updates, status, statusLabel };
       document.getElementById('statusConfirmBody').innerHTML =
-        `<p>${updates.length}件の請求書のステータスを<br><strong>「${statusLabel}」</strong>に変更します。</p>`;
+        '<p>' + updates.length + '件の請求書のステータスを<br><strong>「' + statusLabel + '」</strong>に変更します。</p>';
       document.getElementById('statusConfirmBtn').disabled = false;
       document.getElementById('statusConfirmBtn').textContent = '変更する';
       document.getElementById('statusConfirmModal').classList.add('active');
@@ -1240,23 +1459,24 @@
       confirmBtn.textContent = '更新中...';
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           console.log('bulkUpdateStatus result:', result);
           closeStatusConfirm();
           if (result.ok) {
             const data = result.data || {};
             const msg = data.failed > 0
-              ? `${data.updated}件更新、${data.failed}件失敗`
-              : `${data.updated}件のステータスを更新しました`;
+              ? (data.updated + '件更新、' + data.failed + '件失敗')
+              : (data.updated + '件のステータスを更新しました');
             showToast(msg, data.failed > 0 ? 'warning' : 'success');
             if (data.errors) {
               console.warn('Update errors:', data.errors);
             }
             // 差分更新: 成功した行のステータスバッジのみ更新
             const failedIds = new Set((data.errors || []).map(e => e.invoiceId));
+            const updatedAtMap = new Map((data.updatedItems || []).map(item => [item.invoiceId, item.updatedAt]));
             updates.forEach(u => {
               if (!failedIds.has(u.invoiceId)) {
-                updateInvoiceStatusInDOM(u.invoiceId, status);
+                updateInvoiceStatusInDOM(u.invoiceId, status, updatedAtMap.get(u.invoiceId));
               }
             });
             // Clear cache since data changed
@@ -1269,7 +1489,7 @@
             showToast(errorMsg, 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           closeStatusConfirm();
           console.error('bulkUpdateStatus failure:', error);
           showToast('更新に失敗しました: ' + error.message, 'error');
@@ -1280,6 +1500,7 @@
     // ========== モーダル機能 ==========
 
     function openGenerateModal() {
+      loadCustomers();
       document.getElementById('generateModal').classList.add('active');
     }
 
@@ -1291,7 +1512,7 @@
       const customerId = document.getElementById('generateCustomer').value;
       const year = document.getElementById('generateYear').value;
       const month = document.getElementById('generateMonth').value;
-      const ym = year && month ? `${year}-${month}` : '';
+      const ym = year && month ? (year + '-' + month) : '';
 
       if (!customerId) {
         showToast('顧客を選択してください', 'error');
@@ -1306,7 +1527,7 @@
       closeGenerateModal();
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
             showToast('請求書を生成しました', 'success');
@@ -1315,7 +1536,7 @@
             showToast(result.error?.message || '生成に失敗しました', 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           handleError(error);
         })
@@ -1379,7 +1600,7 @@
     function runBulkGenerate(offset) {
       const year = document.getElementById('bulkGenerateYear').value;
       const month = document.getElementById('bulkGenerateMonth').value;
-      const ym = year && month ? `${year}-${month}` : '';
+      const ym = year && month ? (year + '-' + month) : '';
       const overwriteRadio = document.querySelector('input[name="bulkOverwrite"]:checked');
       const overwrite = overwriteRadio && overwriteRadio.value === 'true';
 
@@ -1403,7 +1624,7 @@
       // ローディングオーバーレイは使わない（停止ボタンを押せるようにするため）
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           if (result.ok) {
             showBulkGenerateResult(result.data);
           } else {
@@ -1414,7 +1635,7 @@
             bulkState.isRunning = false;
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           handleError(error);
           document.getElementById('bulkGenerateBtn').style.display = '';
           document.getElementById('bulkStopBtn').style.display = 'none';
@@ -1439,17 +1660,17 @@
 
       // Update progress bar
       const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
-      document.getElementById('bulkProgressText').textContent = `進捗: ${processed}/${total}社`;
-      document.getElementById('bulkProgressPercent').textContent = `${percent}%`;
+      document.getElementById('bulkProgressText').textContent = '進捗: ' + processed + '/' + total + '社';
+      document.getElementById('bulkProgressPercent').textContent = percent + '%';
       document.getElementById('bulkProgressBar').className = 'progress-bar';
-      document.getElementById('bulkProgressBar').style.width = `${percent}%`;
+      document.getElementById('bulkProgressBar').style.width = percent + '%';
 
       // Update result display
       const resultDiv = document.getElementById('bulkGenerateResult');
-      let html = `<span style="color:var(--color-success);">生成:${bulkState.totalSuccess}</span>`;
-      html += ` / <span style="color:var(--text-muted);">スキップ:${bulkState.totalSkipped}</span>`;
+      let html = '<span style="color:var(--color-success);">生成:' + bulkState.totalSuccess + '</span>';
+      html += ' / <span style="color:var(--text-muted);">スキップ:' + bulkState.totalSkipped + '</span>';
       if (bulkState.totalFailed > 0) {
-        html += ` / <span style="color:var(--color-danger);">エラー:${bulkState.totalFailed}</span>`;
+        html += ' / <span style="color:var(--color-danger);">エラー:' + bulkState.totalFailed + '</span>';
       }
       resultDiv.innerHTML = html;
       resultDiv.style.display = 'block';
@@ -1464,7 +1685,7 @@
           document.getElementById('bulkContinueBtn').style.display = '';
           document.getElementById('bulkContinueBtn').textContent = '続きを実行';
         }
-        showToast(`停止: ${bulkState.totalSuccess}件生成済み`, 'info');
+        showToast('停止: ' + bulkState.totalSuccess + '件生成済み', 'info');
         return;
       }
 
@@ -1473,7 +1694,7 @@
         if (autoGenerate) {
           // 自動連続実行：次のバッチを500ms後に実行
           document.getElementById('bulkProgressDetail').textContent = '次のバッチを実行中...';
-          setTimeout(function() {
+          setTimeout(function () {
             if (!bulkState.stopRequested) {
               runBulkGenerate(processed);
             }
@@ -1494,7 +1715,7 @@
         document.getElementById('bulkStopBtn').style.display = 'none';
         document.getElementById('bulkAutoGenerateGroup').style.display = '';
         document.getElementById('bulkContinueBtn').style.display = 'none';
-        showToast(`完了: ${bulkState.totalSuccess}件生成`, 'success');
+        showToast('完了: ' + bulkState.totalSuccess + '件生成', 'success');
       }
     }
 
@@ -1526,7 +1747,7 @@
       // まず同名ファイルチェック
       showLoading('ファイル確認中...');
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok && result.data.exists) {
             // 確認モーダル表示（先に開いたタブは閉じる）
@@ -1538,7 +1759,7 @@
             executeInvoiceExport(invoiceId, mode, options, preOpenedTab);
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           // チェックに失敗しても続行（エクスポート実行）
           console.warn('File check failed, proceeding with export:', error);
@@ -1554,50 +1775,49 @@
       // 新しいタブにローディングメッセージを表示
       if (newTab) {
         const label = options.includeCoverPage ? 'Excel（頭紙付き）' : mode.toUpperCase();
-        newTab.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>ファイル生成中...</title>
-            <style>
-              body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                height: 100vh;
-                margin: 0;
-                background: #f5f5f5;
-                color: #333;
-              }
-              .spinner {
-                width: 40px;
-                height: 40px;
-                border: 4px solid #e0e0e0;
-                border-top-color: #1a73e8;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-                margin-bottom: 20px;
-              }
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
-              .message { font-size: 16px; color: #666; }
-            </style>
-          </head>
-          <body>
-            <div class="spinner"></div>
-            <div class="message">${label} ファイルを生成しています...</div>
-          </body>
-          </html>
-        `);
+        const loadingHtml = '<!DOCTYPE html>' +
+          '<html>' +
+          '<head>' +
+          '<title>ファイル生成中...</title>' +
+          '<style>' +
+          'body {' +
+          'font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;' +
+          'display: flex;' +
+          'flex-direction: column;' +
+          'align-items: center;' +
+          'justify-content: center;' +
+          'height: 100vh;' +
+          'margin: 0;' +
+          'background: #f5f5f5;' +
+          'color: #333;' +
+          '}' +
+          '.spinner {' +
+          'width: 40px;' +
+          'height: 40px;' +
+          'border: 4px solid #e0e0e0;' +
+          'border-top-color: #1a73e8;' +
+          'border-radius: 50%;' +
+          'animation: spin 1s linear infinite;' +
+          'margin-bottom: 20px;' +
+          '}' +
+          '@keyframes spin {' +
+          'to { transform: rotate(360deg); }' +
+          '}' +
+          '.message { font-size: 16px; color: #666; }' +
+          '</style>' +
+          '</head>' +
+          '<body>' +
+          '<div class="spinner"></div>' +
+          '<div class="message">' + label + ' ファイルを生成しています...</div>' +
+          '</body>' +
+          '</html>';
+        newTab.document.write(loadingHtml);
         newTab.document.close();
       }
       showLoading();
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
@@ -1606,10 +1826,10 @@
             if (url && newTab) {
               // 正常ケース: 新しいタブでURLを開く
               newTab.location.href = url;
-              showToast(`${label}を出力しました`, 'success');
+              showToast(label + 'を出力しました', 'success');
             } else if (url && !newTab) {
               // ポップアップブロック時: リンクを表示してクリックで開けるようにする
-              showToast(`${label}を出力しました。ポップアップがブロックされた可能性があります。`, 'success');
+              showToast(label + 'を出力しました。ポップアップがブロックされた可能性があります。', 'success');
               showFileLink(url, label);
             } else {
               if (newTab) newTab.close();
@@ -1630,7 +1850,7 @@
             showToast(result.error?.message || '出力に失敗しました', 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           if (newTab) newTab.close();
           handleError(error);
@@ -1642,17 +1862,16 @@
     function showFileOverwriteModal(existingFile) {
       const body = document.getElementById('fileOverwriteBody');
       const modifiedDate = new Date(existingFile.modifiedDate).toLocaleString('ja-JP');
-      body.innerHTML = `
-        <p style="margin-bottom: 12px;">以下の同名ファイルが既に存在します：</p>
-        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-          <div style="font-weight: 500; margin-bottom: 4px;">${existingFile.name}</div>
-          <div style="font-size: 13px; color: #666;">更新日時: ${modifiedDate}</div>
-        </div>
-        <p style="color: #666; font-size: 13px;">
-          <strong>上書き</strong>: 既存ファイルを削除して新規作成<br>
-          <strong>別名保存</strong>: 日付を追加して別ファイルとして保存
-        </p>
-      `;
+      body.innerHTML =
+        '<p style="margin-bottom: 12px;">以下の同名ファイルが既に存在します：</p>' +
+        '<div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 16px;">' +
+        '<div style="font-weight: 500; margin-bottom: 4px;">' + existingFile.name + '</div>' +
+        '<div style="font-size: 13px; color: #666;">更新日時: ' + modifiedDate + '</div>' +
+        '</div>' +
+        '<p style="color: #666; font-size: 13px;">' +
+        '<strong>上書き</strong>: 既存ファイルを削除して新規作成<br>' +
+        '<strong>別名保存</strong>: 日付を追加して別ファイルとして保存' +
+        '</p>';
       document.getElementById('fileOverwriteModal').classList.add('active');
     }
 
@@ -1696,7 +1915,7 @@
     function executeBillingExport() {
       const year = document.getElementById('billingExportYear').value;
       const month = document.getElementById('billingExportMonth').value;
-      const ym = year && month ? `${year}-${month}` : '';
+      const ym = year && month ? (year + '-' + month) : '';
       if (!ym) {
         showToast('年月を選択してください', 'error');
         return;
@@ -1709,43 +1928,42 @@
       // 新しいタブを先に開く（ポップアップブロック対策）
       const newTab = window.open('about:blank', '_blank');
       if (newTab) {
-        newTab.document.write(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>${label}を生成中...</title>
-            <style>
-              body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-              .loader { text-align: center; }
-              .spinner { width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
-              @keyframes spin { to { transform: rotate(360deg); } }
-            </style>
-          </head>
-          <body>
-            <div class="loader">
-              <div class="spinner"></div>
-              <p>${label}を生成中...</p>
-            </div>
-          </body>
-          </html>
-        `);
+        const loadingHtml = '<!DOCTYPE html>' +
+          '<html>' +
+          '<head>' +
+          '<title>' + label + 'を生成中...</title>' +
+          '<style>' +
+          'body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }' +
+          '.loader { text-align: center; }' +
+          '.spinner { width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }' +
+          '@keyframes spin { to { transform: rotate(360deg); } }' +
+          '</style>' +
+          '</head>' +
+          '<body>' +
+          '<div class="loader">' +
+          '<div class="spinner"></div>' +
+          '<p>' + label + 'を生成中...</p>' +
+          '</div>' +
+          '</body>' +
+          '</html>';
+        newTab.document.write(loadingHtml);
         newTab.document.close();
       }
 
       showLoading();
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
             if (url && newTab) {
               // 正常ケース: 新しいタブでURLを開く
               newTab.location.href = url;
-              showToast(`${label}をエクスポートしました`, 'success');
+              showToast(label + 'をエクスポートしました', 'success');
             } else if (url && !newTab) {
               // ポップアップブロック時: リンクを表示
-              showToast(`${label}をエクスポートしました。ポップアップがブロックされた可能性があります。`, 'success');
+              showToast(label + 'をエクスポートしました。ポップアップがブロックされた可能性があります。', 'success');
               showFileLink(url, label);
             } else {
               if (newTab) newTab.close();
@@ -1756,7 +1974,7 @@
             showToast(result.error?.message || 'エクスポートに失敗しました', 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           if (newTab) newTab.close();
           handleError(error);
@@ -1805,25 +2023,23 @@
 
       const box = document.createElement('div');
       box.id = 'file-link-box';
-      box.style.cssText = `
-        position: fixed;
-        bottom: 80px;
-        right: 20px;
-        background: #fff;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        padding: 16px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 1000;
-        max-width: 320px;
-      `;
-      box.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <strong style="font-size: 14px;">${label} ファイル</strong>
-          <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #666;">&times;</button>
-        </div>
-        <a href="${url}" target="_blank" style="color: #1a73e8; word-break: break-all; font-size: 13px;">ファイルを開く</a>
-      `;
+      box.style.cssText =
+        'position: fixed;' +
+        'bottom: 80px;' +
+        'right: 20px;' +
+        'background: #fff;' +
+        'border: 1px solid #ddd;' +
+        'border-radius: 8px;' +
+        'padding: 16px;' +
+        'box-shadow: 0 4px 12px rgba(0,0,0,0.15);' +
+        'z-index: 1000;' +
+        'max-width: 320px;';
+      box.innerHTML =
+        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
+        '<strong style="font-size: 14px;">' + label + ' ファイル</strong>' +
+        '<button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px; color: #666;">&times;</button>' +
+        '</div>' +
+        '<a href="' + url + '" target="_blank" style="color: #1a73e8; word-break: break-all; font-size: 13px;">ファイルを開く</a>';
       document.body.appendChild(box);
 
       // 15秒後に自動で消える
@@ -1853,20 +2069,19 @@
 
       pendingRegenerate = { invoiceId, customerName, period };
 
-      document.getElementById('regenerateConfirmBody').innerHTML = `
-        <p style="margin-bottom: 16px;">
-          配置内容が変更されています。<br>
-          請求書を再生成しますか？
-        </p>
-        <div style="background: #FEF3C7; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-          <div style="font-weight: 500; color: #92400E;">${customerName}</div>
-          <div style="font-size: 13px; color: #B45309;">${period}</div>
-        </div>
-        <p style="color: #666; font-size: 13px;">
-          ※ 現在の配置データで請求書を再計算します。<br>
-          ※ 手動で編集した内容は失われます。
-        </p>
-      `;
+      document.getElementById('regenerateConfirmBody').innerHTML =
+        '<p style="margin-bottom: 16px;">' +
+        '配置内容が変更されています。<br>' +
+        '請求書を再生成しますか？' +
+        '</p>' +
+        '<div style="background: #FEF3C7; padding: 12px; border-radius: 6px; margin-bottom: 16px;">' +
+        '<div style="font-weight: 500; color: #92400E;">' + customerName + '</div>' +
+        '<div style="font-size: 13px; color: #B45309;">' + period + '</div>' +
+        '</div>' +
+        '<p style="color: #666; font-size: 13px;">' +
+        '※ 現在の配置データで請求書を再計算します。<br>' +
+        '※ 手動で編集した内容は失われます。' +
+        '</p>';
       document.getElementById('regenerateConfirmBtn').disabled = false;
       document.getElementById('regenerateConfirmBtn').textContent = '再生成';
       document.getElementById('regenerateConfirmModal').classList.add('active');
@@ -1892,11 +2107,11 @@
       showLoading();
 
       google.script.run
-        .withSuccessHandler(function(result) {
+        .withSuccessHandler(function (result) {
           hideLoading();
           closeRegenerateConfirm();
           if (result.ok) {
-            showToast(`${customerName} の請求書を再生成しました`, 'success');
+            showToast(customerName + ' の請求書を再生成しました', 'success');
             // キャッシュをクリアして再読み込み
             clearInvoiceCache();
             loadInvoices(true);
@@ -1905,7 +2120,7 @@
             showToast(errorMsg, 'error');
           }
         })
-        .withFailureHandler(function(error) {
+        .withFailureHandler(function (error) {
           hideLoading();
           closeRegenerateConfirm();
           console.error('regenerateInvoice failure:', error);
@@ -1934,4 +2149,5 @@
     }
   </script>
 </body>
+
 </html>
