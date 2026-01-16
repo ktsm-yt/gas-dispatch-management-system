@@ -3,7 +3,7 @@
 
 <!-- Assignment Modal -->
 <div class="modal-overlay" id="assignment-modal" style="display: none;">
-  <div class="modal assignment-modal-content">
+  <div class="modal modal-xl assignment-modal-layout">
     <div class="modal-header">
       <div class="modal-header-info">
         <h2 class="modal-title" id="modal-job-name">-</h2>
@@ -14,7 +14,8 @@
           <div class="modal-stats">
             <span class="stat-badge required">必要: <span id="modal-required">0</span></span>
             <span class="stat-badge assigned">配置: <span id="modal-assigned">0</span></span>
-            <span class="stat-badge shortage" id="modal-shortage-badge" style="display: none;">不足: <span id="modal-shortage">0</span></span>
+            <span class="stat-badge shortage" id="modal-shortage-badge" style="display: none;">不足: <span
+                id="modal-shortage">0</span></span>
           </div>
         </div>
       </div>
@@ -119,7 +120,8 @@
       <button class="modal-close" onclick="closeLineTemplateModal()">&times;</button>
     </div>
     <div class="modal-body">
-      <textarea id="line-template-textarea" style="width: 100%; height: 450px; font-size: 14px; font-family: inherit; padding: var(--spacing-md); border: 1px solid var(--border-color); border-radius: var(--radius-sm); resize: vertical; line-height: 1.6;"></textarea>
+      <textarea id="line-template-textarea"
+        style="width: 100%; height: 450px; font-size: 14px; font-family: inherit; padding: var(--spacing-md); border: 1px solid var(--border-color); border-radius: var(--radius-sm); resize: vertical; line-height: 1.6;"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn btn-line" onclick="copyLineTemplateFromModal()">コピー</button>

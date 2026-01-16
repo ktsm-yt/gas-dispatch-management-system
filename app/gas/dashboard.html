@@ -44,7 +44,9 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('modal_styles'); ?>
     <?!= include('assignment_modal_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Date Navigation - Compact */
     .date-nav {
@@ -478,6 +480,7 @@
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <!-- Date Navigation -->
   <div class="date-nav">
@@ -513,7 +516,7 @@
 
   <!-- Job Edit Modal -->
   <div class="modal-overlay" id="job-modal" style="display: none;">
-    <div class="modal">
+    <div class="modal modal-md">
       <div class="modal-header">
         <h2 class="modal-title" id="modal-title">案件編集</h2>
         <button class="modal-close" onclick="closeJobModal()">&times;</button>
@@ -572,7 +575,7 @@
               <input type="number" id="required-count" name="required_count" min="1" value="1" required>
             </div>
             <div class="form-group">
-              <label for="pay-unit">給与区分 *</label>
+              <label for="pay-unit">単価区分 *</label>
               <select id="pay-unit" name="pay_unit" required>
                 <option value="">選択してください</option>
                 <option value="basic">基本</option>
@@ -677,111 +680,20 @@
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
-        <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
-        <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
+        <div class="modal-footer-left">
+          <button type="button" class="btn btn-danger" id="delete-btn" onclick="deleteJob()" style="display: none;">削除</button>
+        </div>
+        <div class="modal-footer-right">
+          <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
+          <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
+        </div>
       </div>
     </div>
   </div>
 
   <style>
-    /* Modal Styles */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-    }
-
-    .modal {
-      background: white;
-      border-radius: var(--radius-md);
-      width: 600px;
-      max-height: 90vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .modal-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--text-muted);
-      line-height: 1;
-    }
-
-    .modal-close:hover {
-      color: var(--text-primary);
-    }
-
-    .modal-body {
-      padding: var(--spacing-lg);
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-top: 1px solid var(--border-color);
-    }
-
-    /* Form Styles */
-    .form-group {
-      margin-bottom: var(--spacing-md);
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: var(--spacing-xs);
-      color: var(--text-primary);
-    }
-
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      padding: var(--spacing-sm);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-      outline: none;
-      border-color: var(--color-secondary);
-      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
-    }
-
+    /* Job Modal Specific Styles */
     /* Autocomplete */
     .autocomplete-wrapper {
       position: relative;
@@ -799,7 +711,7 @@
       border-radius: 0 0 var(--radius-sm) var(--radius-sm);
       max-height: 200px;
       overflow-y: auto;
-      z-index: 1000;
+      z-index: 1001;
       box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
 
@@ -834,12 +746,6 @@
       font-size: 13px;
     }
 
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--spacing-md);
-    }
-
     .invoice-fields {
       margin: var(--spacing-md) 0;
       padding: var(--spacing-md);
@@ -852,54 +758,13 @@
       font-weight: 500;
       margin-bottom: var(--spacing-sm);
     }
-
-    /* Buttons */
-    .btn {
-      padding: var(--spacing-sm) var(--spacing-md);
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-    }
-
-    .btn-primary {
-      background: var(--color-primary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: var(--color-accent);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-    }
-
-    .btn-secondary:hover {
-      background: var(--bg-hover);
-    }
-
-    .btn-outline {
-      background: white;
-      color: var(--color-primary);
-      border: 1px solid var(--color-primary);
-    }
-
-    .btn-outline:hover {
-      background: var(--color-primary);
-      color: white;
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
   </style>
 
   <?!= include('assignment_modal_js'); ?>
+
+  <script>
+    <?!= include('confirmation_modal_js'); ?>
+  </script>
 
   <script>
     // Callback: 配置モーダルが閉じられたときに呼ばれる
@@ -1373,13 +1238,15 @@
       // Load customers for autocomplete
       loadCustomersForSelect();
 
-      // Show/hide "保存して次へ" button based on mode
+      // Show/hide buttons based on mode
       const saveNextBtn = document.getElementById('save-next-btn');
+      const deleteBtn = document.getElementById('delete-btn');
 
       if (jobId) {
         // Edit mode
         document.getElementById('modal-title').textContent = '案件編集';
         saveNextBtn.style.display = 'none';
+        deleteBtn.style.display = 'inline-block';
 
         // キャッシュからデータを即座に反映
         const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
@@ -1407,6 +1274,7 @@
         document.getElementById('modal-title').textContent = '新規案件';
         document.getElementById('work-date').value = formatDate(currentDate);
         saveNextBtn.style.display = 'inline-block';
+        deleteBtn.style.display = 'none';
       }
 
       modal.style.display = 'flex';
@@ -1721,6 +1589,55 @@
       document.getElementById('customer-id').value = customerId || '';
       // Focus on site name for quick entry
       document.getElementById('site-name').focus();
+    }
+
+    function deleteJob() {
+      const jobId = document.getElementById('job-id').value;
+      if (!jobId) return;
+
+      const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
+      const jobName = cachedJob ? `${cachedJob.site_name}（${cachedJob.customer_name}）` : '案件';
+
+      ConfirmationModal.show({
+        type: 'danger',
+        title: '削除の確認',
+        message: `「${jobName}」を削除しますか？\n\n※この操作は取り消せません。\n※関連する配置データも確認してください。`,
+        confirmText: '削除',
+        onConfirm: () => {
+          const updatedAt = document.getElementById('job-updated-at').value;
+
+          // 楽観的更新: UIを即座に更新
+          if (dashboardData) {
+            const oldSlot = cachedJob?.time_slot;
+            dashboardData.jobs = dashboardData.jobs.filter(j => j.job_id !== jobId);
+            recalculateStats();
+            renderDashboard();
+            saveToCachedDate(dashboardData.date, dashboardData);
+          }
+          closeJobModal();
+          showToast(`${jobName}を削除しました`);
+
+          // バックグラウンドでAPI呼び出し
+          google.script.run
+            .withSuccessHandler((response) => {
+              if (!response.ok) {
+                if (response.error?.code === 'CONFLICT_ERROR') {
+                  showToast('他のユーザーによって更新されています。再読み込みします。', true);
+                } else if (response.error?.code === 'HAS_ASSIGNMENTS') {
+                  showToast('この案件には配置データが存在するため削除できません。', true);
+                } else {
+                  showToast(response.error?.message || '削除に失敗しました。再読み込みします。', true);
+                }
+                loadDashboard();
+              }
+            })
+            .withFailureHandler((error) => {
+              showToast('削除に失敗しました。再読み込みします。', true);
+              loadDashboard();
+            })
+            .deleteJob(jobId, updatedAt || null);
+        }
+      });
     }
 
     // Close modal on overlay click

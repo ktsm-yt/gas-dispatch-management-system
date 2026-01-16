@@ -41,8 +41,8 @@
       line-height: 1.5;
     }
 
-    <?!= include('nav_styles');
-    ?>
+    <?!= include('nav_styles'); ?>
+    <?!= include('modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -321,88 +321,11 @@
       border-color: #0D6EFD;
     }
 
-    /* Modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    .modal {
-      background: white;
-      border-radius: var(--radius-md);
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-      max-width: 500px;
-      width: 90%;
-      max-height: 90vh;
-      overflow-y: auto;
-    }
-
-    .modal-header {
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .modal-header h2 {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      color: var(--text-muted);
-      cursor: pointer;
-    }
-
-    .modal-body {
-      padding: var(--spacing-lg);
-    }
-
-    .modal-footer {
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
-    }
-
-    /* Form */
-    .form-group {
-      margin-bottom: var(--spacing-md);
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: var(--spacing-xs);
-    }
-
-    .form-group select,
-    .form-group input[type="text"],
-    .form-group input[type="number"] {
-      width: 100%;
-      padding: var(--spacing-sm);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-    }
+    /* Page-specific modal overrides */
+    .modal-overlay { display: none; }
+    .modal-overlay.active { display: flex; }
+    .modal { max-width: 500px; width: 90%; }
+    .modal-header h2 { font-size: 16px; font-weight: 600; }
 
     /* Year-Month Row */
     .year-month-row {
@@ -598,6 +521,7 @@
       <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
       <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
       <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
     </div>
   </div>
 
@@ -910,7 +834,21 @@
       initCustomerLazyLoad();
       initCustomersFromCache();
       initModalHandlers();
+      loadBillingFolderLink();
     });
+
+    // エクスポートフォルダリンクを読み込み
+    function loadBillingFolderLink() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok && response.data.configured && response.data.url) {
+            const link = document.getElementById('billing-folder-link');
+            link.href = response.data.url;
+            link.style.display = 'inline-flex';
+          }
+        })
+        .getBillingExportFolderUrl();
+    }
 
     // Modal ESC key and click-outside handlers
     function initCustomersFromCache() {
