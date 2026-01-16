@@ -81,6 +81,7 @@
       font-family: 'SF Mono', Monaco, monospace;
     }
     <?!= include('skeleton_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
     .empty-state { text-align: center; color: var(--text-muted); padding: 48px; }
     .add-btn {
       position: fixed;
@@ -200,6 +201,7 @@
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <div class="toolbar">
     <div class="search-box">
@@ -264,6 +266,10 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+
+  <script>
+    <?!= include('confirmation_modal_js'); ?>
+  </script>
 
   <script>
     const TRANSPORT_FEE_SKELETON_ROWS = [
@@ -421,33 +427,40 @@
 
     function deleteRecord() {
       if (!currentRecord) return;
-      if (!confirm(`「${currentRecord.area_name}」を削除しますか？`)) return;
 
-      const deleteBtn = document.getElementById('delete-btn');
-      deleteBtn.disabled = true;
-      deleteBtn.textContent = '削除中...';
-      const deleteCode = currentRecord.area_code;
+      ConfirmationModal.show({
+        type: 'danger',
+        title: '削除の確認',
+        message: `「${currentRecord.area_name}」を削除しますか？`,
+        confirmText: '削除',
+        onConfirm: () => {
+          const deleteBtn = document.getElementById('delete-btn');
+          deleteBtn.disabled = true;
+          deleteBtn.textContent = '削除中...';
+          const deleteCode = currentRecord.area_code;
 
-      google.script.run
-        .withSuccessHandler((response) => {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = '削除';
-          if (response.ok) {
-            dataList = dataList.filter(d => d.area_code !== deleteCode);
-            updateStats();
-            filterData();
-            showToast('削除しました', 'success');
-            closeModal();
-          } else {
-            showToast(response.error?.message || '削除失敗', 'error');
-          }
-        })
-        .withFailureHandler((e) => {
-          deleteBtn.disabled = false;
-          deleteBtn.textContent = '削除';
-          showToast(e.message, 'error');
-        })
-        .deleteTransportFee(deleteCode);
+          google.script.run
+            .withSuccessHandler((response) => {
+              deleteBtn.disabled = false;
+              deleteBtn.textContent = '削除';
+              if (response.ok) {
+                dataList = dataList.filter(d => d.area_code !== deleteCode);
+                updateStats();
+                filterData();
+                showToast('削除しました', 'success');
+                closeModal();
+              } else {
+                showToast(response.error?.message || '削除失敗', 'error');
+              }
+            })
+            .withFailureHandler((e) => {
+              deleteBtn.disabled = false;
+              deleteBtn.textContent = '削除';
+              showToast(e.message, 'error');
+            })
+            .deleteTransportFee(deleteCode);
+        }
+      });
     }
 
     function showToast(message, type = '') {

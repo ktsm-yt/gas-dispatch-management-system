@@ -105,25 +105,61 @@ function createFolderStructure(parentFolder, folderPath) {
  * 名前からフォルダを検索
  * @param {string} folderName - フォルダ名
  * @param {GoogleAppsScript.Drive.Folder} parentFolder - 親フォルダ（null の場合は My Drive）
+ * @param {boolean} [throwOnDuplicate=false] - 重複時にエラーを投げるか（デフォルト: false、初期化時は警告のみ）
  * @returns {GoogleAppsScript.Drive.Folder|null} 見つかったフォルダ、見つからない場合は null
+ * @throws {Error} throwOnDuplicate=true かつ同名フォルダが複数存在する場合
  */
-function findFolderByName(folderName, parentFolder) {
+function findFolderByName(folderName, parentFolder, throwOnDuplicate) {
   if (parentFolder) {
     // 親フォルダ内を検索
     const folders = parentFolder.getFoldersByName(folderName);
-    return folders.hasNext() ? folders.next() : null;
+    if (!folders.hasNext()) {
+      return null;
+    }
+
+    const firstFolder = folders.next();
+
+    // 重複チェック
+    if (folders.hasNext()) {
+      const parentName = parentFolder.getName();
+      const message = `フォルダ重複警告: "${parentName}" 内に "${folderName}" フォルダが複数存在します。`;
+      Logger.log(message);
+
+      if (throwOnDuplicate) {
+        throw new Error(message + ' 手動で重複を解消してください。');
+      }
+    }
+
+    return firstFolder;
   } else {
     // My Drive のルートを検索
     const folders = DriveApp.getFoldersByName(folderName);
+    const rootFolders = [];
+
     while (folders.hasNext()) {
       const folder = folders.next();
       // ルートレベルのフォルダのみ（親がない）
       const parents = folder.getParents();
       if (!parents.hasNext() || parents.next().getId() === DriveApp.getRootFolder().getId()) {
-        return folder;
+        rootFolders.push(folder);
       }
     }
-    return null;
+
+    if (rootFolders.length === 0) {
+      return null;
+    }
+
+    // 重複チェック
+    if (rootFolders.length > 1) {
+      const message = `フォルダ重複警告: ルートに "${folderName}" フォルダが${rootFolders.length}個存在します。`;
+      Logger.log(message);
+
+      if (throwOnDuplicate) {
+        throw new Error(message + ' 手動で重複を解消してください。');
+      }
+    }
+
+    return rootFolders[0];
   }
 }
 
