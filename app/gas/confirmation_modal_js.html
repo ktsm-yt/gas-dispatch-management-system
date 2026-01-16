@@ -1,0 +1,153 @@
+<!-- Confirmation Modal JavaScript - Shared Component -->
+<!-- Usage: <?!= include('confirmation_modal_js'); ?> in <script> block -->
+
+/**
+ * 確認モーダル API
+ *
+ * 使用例:
+ * ConfirmationModal.show({
+ *   type: 'danger',           // 'danger' | 'warning' | 'info'
+ *   title: '削除の確認',
+ *   message: '「山田太郎」を削除しますか？\n\n※この操作は取り消せません。',
+ *   confirmText: '削除',
+ *   cancelText: 'キャンセル',
+ *   onConfirm: () => { doDelete(); },
+ *   onCancel: () => { console.log('Cancelled'); }
+ * });
+ */
+const ConfirmationModal = {
+  _overlay: null,
+  _icon: null,
+  _title: null,
+  _message: null,
+  _confirmBtn: null,
+  _cancelBtn: null,
+  _onConfirm: null,
+  _onCancel: null,
+
+  /**
+   * 初期化（DOMContentLoaded後に自動実行）
+   */
+  init: function() {
+    this._overlay = document.getElementById('confirmation-modal-overlay');
+    this._icon = document.getElementById('confirmation-modal-icon');
+    this._title = document.getElementById('confirmation-modal-title');
+    this._message = document.getElementById('confirmation-modal-message');
+    this._confirmBtn = document.getElementById('confirmation-modal-confirm');
+    this._cancelBtn = document.getElementById('confirmation-modal-cancel');
+
+    if (!this._overlay) return;
+
+    // イベントリスナー設定
+    this._confirmBtn.addEventListener('click', () => this._handleConfirm());
+    this._cancelBtn.addEventListener('click', () => this._handleCancel());
+    this._overlay.addEventListener('click', (e) => {
+      if (e.target === this._overlay) this._handleCancel();
+    });
+
+    // ESCキーで閉じる
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this._overlay.style.display !== 'none') {
+        this._handleCancel();
+      }
+    });
+  },
+
+  /**
+   * 確認モーダルを表示
+   * @param {Object} options - 設定オプション
+   * @param {string} options.type - タイプ ('danger' | 'warning' | 'info')
+   * @param {string} options.title - タイトル
+   * @param {string} options.message - メッセージ
+   * @param {string} [options.confirmText='確認'] - 確認ボタンテキスト
+   * @param {string} [options.cancelText='キャンセル'] - キャンセルボタンテキスト
+   * @param {Function} [options.onConfirm] - 確認時コールバック
+   * @param {Function} [options.onCancel] - キャンセル時コールバック
+   */
+  show: function(options) {
+    if (!this._overlay) this.init();
+
+    const {
+      type = 'info',
+      title = '確認',
+      message = '',
+      confirmText = '確認',
+      cancelText = 'キャンセル',
+      onConfirm = null,
+      onCancel = null
+    } = options;
+
+    // アイコン設定
+    const icons = {
+      danger: '⚠️',
+      warning: '⚡',
+      info: 'ℹ️'
+    };
+    this._icon.textContent = icons[type] || icons.info;
+    this._icon.className = 'confirmation-modal-icon ' + type;
+
+    // テキスト設定
+    this._title.textContent = title;
+    this._message.textContent = message;
+    this._confirmBtn.textContent = confirmText;
+    this._cancelBtn.textContent = cancelText;
+
+    // ボタンスタイル設定
+    this._confirmBtn.className = 'btn';
+    if (type === 'danger') {
+      this._confirmBtn.classList.add('btn-danger');
+    } else if (type === 'warning') {
+      this._confirmBtn.classList.add('btn-warning');
+    } else {
+      this._confirmBtn.classList.add('btn-primary');
+    }
+
+    // コールバック保存
+    this._onConfirm = onConfirm;
+    this._onCancel = onCancel;
+
+    // 表示
+    this._overlay.style.display = 'flex';
+    this._confirmBtn.focus();
+  },
+
+  /**
+   * モーダルを閉じる
+   */
+  hide: function() {
+    if (this._overlay) {
+      this._overlay.style.display = 'none';
+    }
+    this._onConfirm = null;
+    this._onCancel = null;
+  },
+
+  /**
+   * 確認ボタン押下時
+   */
+  _handleConfirm: function() {
+    const callback = this._onConfirm;
+    this.hide();
+    if (typeof callback === 'function') {
+      callback();
+    }
+  },
+
+  /**
+   * キャンセルボタン押下時
+   */
+  _handleCancel: function() {
+    const callback = this._onCancel;
+    this.hide();
+    if (typeof callback === 'function') {
+      callback();
+    }
+  }
+};
+
+// DOM準備後に初期化
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => ConfirmationModal.init());
+} else {
+  ConfirmationModal.init();
+}
