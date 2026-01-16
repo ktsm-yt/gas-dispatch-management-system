@@ -566,8 +566,108 @@ function onTransportAreaChange() {
 }
 
 // ========== LINE Template Functions ==========
+
+// --- LocalStorage Cache for LINE Template ---
+const LINE_TEMPLATE_CACHE_PREFIX = 'line_template_draft_';
+
+function getTemplateCacheKey(jobId) {
+  return LINE_TEMPLATE_CACHE_PREFIX + jobId;
+}
+
+function saveTemplateDraft(jobId, content) {
+  if (!jobId) return;
+  const workDate = assignmentModalState.job?.work_date || '';
+  const data = {
+    content: content,
+    workDate: workDate,
+    savedAt: new Date().toISOString()
+  };
+  try {
+    localStorage.setItem(getTemplateCacheKey(jobId), JSON.stringify(data));
+  } catch (e) {
+    console.warn('Failed to save template draft:', e);
+  }
+}
+
+function loadTemplateDraft(jobId) {
+  if (!jobId) return null;
+  try {
+    const data = localStorage.getItem(getTemplateCacheKey(jobId));
+    if (!data) return null;
+    return JSON.parse(data);
+  } catch (e) {
+    console.warn('Failed to load template draft:', e);
+    return null;
+  }
+}
+
+function cleanupExpiredTemplateCache() {
+  // 案件当日を過ぎたキャッシュを削除
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(LINE_TEMPLATE_CACHE_PREFIX)) {
+      try {
+        const data = JSON.parse(localStorage.getItem(key));
+        if (data.workDate) {
+          const workDate = new Date(data.workDate + 'T00:00:00');
+          if (workDate < today) {
+            keysToRemove.push(key);
+          }
+        }
+      } catch (e) {
+        // パースエラーの場合も削除対象
+        keysToRemove.push(key);
+      }
+    }
+  }
+
+  keysToRemove.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      // 無視
+    }
+  });
+
+  if (keysToRemove.length > 0) {
+    console.log(`Cleaned up ${keysToRemove.length} expired template cache(s)`);
+  }
+}
+
+// Debounce utility
+let templateSaveTimeout = null;
+function debouncedSaveTemplate() {
+  if (templateSaveTimeout) {
+    clearTimeout(templateSaveTimeout);
+  }
+  templateSaveTimeout = setTimeout(() => {
+    const jobId = assignmentModalState.jobId;
+    const textarea = document.getElementById('line-template-textarea');
+    if (jobId && textarea) {
+      saveTemplateDraft(jobId, textarea.value);
+    }
+  }, 500);
+}
+
 function openLineTemplateModal() {
-  const template = generateLineTemplate();
+  const jobId = assignmentModalState.jobId;
+
+  // 古いキャッシュをクリーンアップ
+  cleanupExpiredTemplateCache();
+
+  // キャッシュがあれば復元、なければ新規生成
+  const cached = loadTemplateDraft(jobId);
+  let template;
+  if (cached && cached.content) {
+    template = cached.content;
+  } else {
+    template = generateLineTemplate();
+  }
+
   document.getElementById('line-template-textarea').value = template;
   document.getElementById('line-template-modal').style.display = 'flex';
 }
@@ -777,6 +877,12 @@ function setupAssignmentModalEventListeners() {
       closeLineTemplateModal();
     }
   });
+
+  // Auto-save LINE template on input (debounced)
+  const templateTextarea = document.getElementById('line-template-textarea');
+  if (templateTextarea) {
+    templateTextarea.addEventListener('input', debouncedSaveTemplate);
+  }
 
   // Close modals on Escape key
   document.addEventListener('keydown', (e) => {
