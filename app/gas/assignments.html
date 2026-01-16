@@ -37,6 +37,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('modal_styles'); ?>
     <?!= include('assignment_modal_styles'); ?>
 
     .date-nav {
@@ -208,7 +209,7 @@
       font-size: 11px;
     }
 
-    .stat-badge {
+    .jobs-table .stat-badge {
       display: inline-block;
       padding: 2px 6px;
       border-radius: var(--radius-sm);
@@ -216,8 +217,8 @@
       font-weight: 500;
     }
 
-    .stat-badge.ok { background: #D1FAE5; color: #065F46; }
-    .stat-badge.shortage { background: #FEE2E2; color: #991B1B; }
+    .jobs-table .stat-badge.ok { background: #D1FAE5; color: #065F46; }
+    .jobs-table .stat-badge.shortage { background: #FEE2E2; color: #991B1B; }
 
     .btn-action {
       background: var(--color-primary);
@@ -277,137 +278,6 @@
 
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
-
-    /* Page-specific Modal Styles - Unified with Dashboard */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-    }
-
-    .modal {
-      background: white;
-      border-radius: var(--radius-md);
-      width: 600px;
-      max-height: 90vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .modal-header-info {
-      flex: 1;
-    }
-
-    .modal-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--text-muted);
-      line-height: 1;
-    }
-
-    .modal-close:hover {
-      color: var(--text-primary);
-    }
-
-    .modal-body {
-      padding: var(--spacing-lg);
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-top: 1px solid var(--border-color);
-    }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 4px;
-      margin-bottom: 4px;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .form-group label {
-      font-size: 10px;
-      font-weight: 500;
-      margin-bottom: 1px;
-      color: var(--text-muted);
-    }
-
-    .form-group select,
-    .form-group input {
-      padding: 3px 6px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 11px;
-    }
-
-    .form-group select:focus,
-    .form-group input:focus {
-      outline: none;
-      border-color: var(--color-secondary);
-    }
-
-    .btn {
-      padding: 3px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 11px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-    }
-
-    .btn-primary {
-      background: var(--color-primary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: var(--color-accent);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-    }
-
-    .btn-secondary:hover {
-      background: var(--bg-hover);
-    }
 
     .filter-bar {
       display: flex;

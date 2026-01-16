@@ -37,6 +37,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -314,35 +315,13 @@
       to { transform: translateX(0); opacity: 1; }
     }
 
-    /* Modal */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal-overlay.active {
-      display: flex;
-    }
-
-    .modal {
-      background: white;
-      border-radius: var(--radius-md);
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
-      max-width: 400px;
-      width: 90%;
-    }
-
-    .modal.modal-lg {
-      max-width: 700px;
-    }
+    /* Page-specific modal overrides */
+    .modal-overlay { display: none; }
+    .modal-overlay.active { display: flex; }
+    .modal { max-width: 400px; width: 90%; }
+    .modal.modal-lg { max-width: 700px; }
+    .modal-header h2 { font-size: 16px; font-weight: 600; }
+    .modal-body p { margin-bottom: var(--spacing-sm); }
 
     .modal-two-col {
       display: grid;
@@ -392,43 +371,6 @@
     .modal-history .empty {
       color: var(--text-muted);
       font-size: 12px;
-    }
-
-    .modal-header {
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .modal-header h2 {
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      color: var(--text-muted);
-      cursor: pointer;
-    }
-
-    .modal-body {
-      padding: var(--spacing-lg);
-    }
-
-    .modal-body p {
-      margin-bottom: var(--spacing-sm);
-    }
-
-    .modal-footer {
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-top: 1px solid var(--border-color);
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
     }
 
     /* Loading Overlay */
@@ -602,6 +544,7 @@
     </div>
     <div class="toolbar-actions">
       <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
+      <a id="payout-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
     </div>
   </div>
 
@@ -720,9 +663,23 @@
 
       loadStaffList();
       loadHistory();
+      loadPayoutFolderLink();
 
       // Restore from SessionStorage after staff list is loaded
       restoreFromSession();
+    }
+
+    // エクスポートフォルダリンクを読み込み
+    function loadPayoutFolderLink() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok && response.data.configured && response.data.url) {
+            const link = document.getElementById('payout-folder-link');
+            link.href = response.data.url;
+            link.style.display = 'inline-flex';
+          }
+        })
+        .getPayoutExportFolderUrl();
     }
 
     function restoreFromSession() {
