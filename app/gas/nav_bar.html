@@ -5,13 +5,13 @@
     <a href="#" id="nav-dashboard">ダッシュボード</a>
     <a href="#" id="nav-jobs">案件一覧</a>
     <a href="#" id="nav-assignments">配置管理</a>
-    <a href="#" id="nav-customers">顧客</a>
-    <a href="#" id="nav-staff">スタッフ</a>
     <a href="#" id="nav-invoices">請求</a>
     <a href="#" id="nav-payouts">支払</a>
     <div class="nav-dropdown">
       <a href="#" id="nav-settings">設定</a>
       <div class="nav-dropdown-menu" id="settings-menu">
+        <a href="#" id="nav-customers">顧客</a>
+        <a href="#" id="nav-staff">スタッフ</a>
         <a href="#" id="nav-subcontractors">外注先</a>
         <a href="#" id="nav-transport">交通費</a>
         <a href="#" id="nav-company">自社情報</a>
@@ -30,10 +30,10 @@ function initNavBar(currentPage, pageTitle) {
     'dashboard': 'nav-dashboard',
     'jobs': 'nav-jobs',
     'assignments': 'nav-assignments',
-    'customers': 'nav-customers',
-    'staff': 'nav-staff',
     'invoices': 'nav-invoices',
     'payouts': 'nav-payouts',
+    'customers': 'nav-settings',
+    'staff': 'nav-settings',
     'subcontractors': 'nav-settings',
     'transportFees': 'nav-settings',
     'company': 'nav-settings'
@@ -57,14 +57,6 @@ function initNavBar(currentPage, pageTitle) {
     e.preventDefault();
     navigateTo('assignments');
   });
-  document.getElementById('nav-customers').addEventListener('click', (e) => {
-    e.preventDefault();
-    navigateTo('customers');
-  });
-  document.getElementById('nav-staff').addEventListener('click', (e) => {
-    e.preventDefault();
-    navigateTo('staff');
-  });
   document.getElementById('nav-invoices').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('invoices');
@@ -83,6 +75,14 @@ function initNavBar(currentPage, pageTitle) {
   });
   document.addEventListener('click', () => dropdown.classList.remove('open'));
 
+  document.getElementById('nav-customers').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('customers');
+  });
+  document.getElementById('nav-staff').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('staff');
+  });
   document.getElementById('nav-subcontractors').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('subcontractors');
