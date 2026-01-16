@@ -626,6 +626,28 @@ function exportBillingData(ym, format = 'xlsx') {
 }
 
 /**
+ * 請求書エクスポートフォルダのURLを取得
+ * @returns {Object} APIレスポンス
+ */
+function getBillingExportFolderUrl() {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    const status = InvoiceExportService.getExportFolderStatus();
+    return buildSuccessResponse(status, requestId);
+
+  } catch (error) {
+    Logger.log(`getBillingExportFolderUrl error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
  * 配列をCSV形式に変換
  * @param {Object[]} data - データ配列
  * @returns {string} CSV文字列

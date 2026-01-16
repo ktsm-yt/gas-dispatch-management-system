@@ -598,6 +598,7 @@
       <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
       <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
       <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
     </div>
   </div>
 
@@ -910,7 +911,21 @@
       initCustomerLazyLoad();
       initCustomersFromCache();
       initModalHandlers();
+      loadBillingFolderLink();
     });
+
+    // エクスポートフォルダリンクを読み込み
+    function loadBillingFolderLink() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok && response.data.configured && response.data.url) {
+            const link = document.getElementById('billing-folder-link');
+            link.href = response.data.url;
+            link.style.display = 'inline-flex';
+          }
+        })
+        .getBillingExportFolderUrl();
+    }
 
     // Modal ESC key and click-outside handlers
     function initCustomersFromCache() {

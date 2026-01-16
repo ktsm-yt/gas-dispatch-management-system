@@ -1,0 +1,322 @@
+<!-- Modal Styles - Shared Component -->
+<!-- Usage: <?!= include('modal_styles'); ?> in <style> block -->
+<!-- Based on assignment_modal design, optimized for consistency -->
+
+/* =================================================================
+   Modal Base Styles - Common across all modals
+   ================================================================= */
+
+/* Overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+/* Modal Container */
+.modal {
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Modal Sizes */
+.modal-sm { width: 400px; max-width: 90vw; }
+.modal-md { width: 600px; max-width: 90vw; }
+.modal-lg { width: 750px; max-width: 90vw; }
+.modal-xl { width: 1000px; max-width: 95vw; }
+
+/* Default size (backward compatibility) */
+.modal:not([class*="modal-"]):not(.assignment-modal-content) {
+  width: 600px;
+  max-width: 90vw;
+}
+
+/* =================================================================
+   Modal Header
+   ================================================================= */
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0;
+}
+
+.modal-header-info {
+  flex: 1;
+}
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary, #1f2937);
+}
+
+.modal-subtitle {
+  font-size: 12px;
+  color: var(--text-muted, #6b7280);
+  margin-top: var(--spacing-xs, 4px);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-muted, #6b7280);
+  line-height: 1;
+  padding: 0;
+  margin-left: var(--spacing-sm, 8px);
+}
+
+.modal-close:hover {
+  color: var(--text-primary, #1f2937);
+}
+
+/* =================================================================
+   Modal Body
+   ================================================================= */
+.modal-body {
+  padding: var(--spacing-lg, 24px);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* =================================================================
+   Modal Footer
+   ================================================================= */
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-secondary, #f9fafb);
+  border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+}
+
+.modal-footer-left {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: var(--spacing-sm, 8px);
+  margin-left: auto;
+}
+
+/* Single-side footer (backward compatibility) */
+.modal-footer:not(:has(.modal-footer-left)):not(:has(.modal-footer-right)) {
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 8px);
+}
+
+/* =================================================================
+   Form Elements in Modal
+   ================================================================= */
+.form-section {
+  margin-bottom: var(--spacing-lg, 24px);
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.form-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #1f2937);
+  margin-bottom: var(--spacing-md, 16px);
+  padding-bottom: var(--spacing-xs, 4px);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md, 16px);
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.form-row.cols-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.form-row.cols-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs, 4px);
+  color: var(--text-secondary, #4b5563);
+}
+
+.form-group label .required {
+  color: var(--danger, #dc3545);
+  margin-left: 2px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: var(--spacing-sm, 8px) var(--spacing-sm, 8px);
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: var(--radius-sm, 4px);
+  font-size: 13px;
+  background: var(--bg-card, #fff);
+  transition: border-color 0.15s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group input:disabled,
+.form-group select:disabled,
+.form-group textarea:disabled {
+  background: var(--bg-secondary, #f9fafb);
+  cursor: not-allowed;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Checkbox/Radio in form */
+.form-group .checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.form-group .checkbox-label input[type="checkbox"],
+.form-group .checkbox-label input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+/* =================================================================
+   Buttons in Modal
+   ================================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs, 4px);
+  padding: var(--spacing-sm, 8px) var(--spacing-md, 16px);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-primary, #3b82f6);
+  color: white;
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-secondary {
+  background: var(--bg-secondary, #f3f4f6);
+  color: var(--text-primary, #1f2937);
+  border-color: var(--border-color, #e5e7eb);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover, #e5e7eb);
+}
+
+.btn-danger {
+  background: var(--danger, #dc3545);
+  color: white;
+  border-color: var(--danger, #dc3545);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #c82333;
+  border-color: #bd2130;
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--color-primary, #3b82f6);
+  border-color: var(--color-primary, #3b82f6);
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* LINE Button */
+.btn-line {
+  background: #06C755;
+  color: white;
+  border-color: #06C755;
+}
+
+.btn-line:hover:not(:disabled) {
+  background: #05B04C;
+  border-color: #05B04C;
+}
