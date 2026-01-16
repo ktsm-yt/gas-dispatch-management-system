@@ -193,6 +193,7 @@
     }
 
     <?!= include('skeleton_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Empty State */
     .empty-state {
@@ -449,6 +450,7 @@
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <!-- Toolbar -->
   <div class="toolbar">
@@ -737,6 +739,10 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+
+  <script>
+    <?!= include('confirmation_modal_js'); ?>
+  </script>
 
   <script>
     const CUSTOMER_SKELETON_ROWS = [
@@ -1175,39 +1181,43 @@
     function deleteCustomer() {
       if (!currentCustomer) return;
 
-      if (!confirm(`「${currentCustomer.company_name}」を削除しますか？\n\n※この操作は取り消せません。`)) {
-        return;
-      }
+      ConfirmationModal.show({
+        type: 'danger',
+        title: '削除の確認',
+        message: `「${currentCustomer.company_name}」を削除しますか？\n\n※この操作は取り消せません。`,
+        confirmText: '削除',
+        onConfirm: () => {
+          const updatedAt = document.getElementById('customer-updated-at').value;
+          const deleteId = currentCustomer.customer_id;
+          const deleteName = currentCustomer.company_name;
 
-      const updatedAt = document.getElementById('customer-updated-at').value;
-      const deleteId = currentCustomer.customer_id;
-      const deleteName = currentCustomer.company_name;
+          // 楽観的更新: UIを即座に更新
+          customers = customers.filter(c => c.customer_id !== deleteId);
+          updateStats();
+          filterCustomers();
+          closeModal();
+          showToast(`${deleteName}を削除しました`, 'success');
 
-      // 楽観的更新: UIを即座に更新
-      customers = customers.filter(c => c.customer_id !== deleteId);
-      updateStats();
-      filterCustomers();
-      closeModal();
-      showToast(`${deleteName}を削除しました`, 'success');
-
-      // バックグラウンドでAPI呼び出し
-      google.script.run
-        .withSuccessHandler((response) => {
-          if (!response.ok) {
-            // 失敗時はデータ再読み込み
-            if (response.error?.code === 'CONFLICT_ERROR') {
-              showToast('他のユーザーによって更新されています。再読み込みします。', 'error');
-            } else {
-              showToast(response.error?.message || '削除に失敗しました。再読み込みします。', 'error');
-            }
-            loadCustomers();
-          }
-        })
-        .withFailureHandler((error) => {
-          showToast('削除に失敗しました。再読み込みします。', 'error');
-          loadCustomers();
-        })
-        .deleteCustomer(deleteId, updatedAt || null);
+          // バックグラウンドでAPI呼び出し
+          google.script.run
+            .withSuccessHandler((response) => {
+              if (!response.ok) {
+                // 失敗時はデータ再読み込み
+                if (response.error?.code === 'CONFLICT_ERROR') {
+                  showToast('他のユーザーによって更新されています。再読み込みします。', 'error');
+                } else {
+                  showToast(response.error?.message || '削除に失敗しました。再読み込みします。', 'error');
+                }
+                loadCustomers();
+              }
+            })
+            .withFailureHandler((error) => {
+              showToast('削除に失敗しました。再読み込みします。', 'error');
+              loadCustomers();
+            })
+            .deleteCustomer(deleteId, updatedAt || null);
+        }
+      });
     }
 
     function handleError(error) {
