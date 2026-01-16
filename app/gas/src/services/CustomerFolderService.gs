@@ -50,10 +50,21 @@ const CustomerFolderService = {
         const existing = rootFolder.getFoldersByName('顧客');
         if (existing.hasNext()) {
           parentFolder = existing.next();
+          // 重複チェック
+          if (existing.hasNext()) {
+            throw new Error(
+              'フォルダ重複エラー: ルートフォルダ内に「顧客」フォルダが複数存在します。' +
+              '手動で重複を解消してください。'
+            );
+          }
         } else {
           parentFolder = rootFolder.createFolder('顧客');
         }
       } catch (e) {
+        // 重複エラーはそのまま投げる
+        if (e.message && e.message.includes('フォルダ重複エラー')) {
+          throw e;
+        }
         Logger.log(`ルートフォルダが見つかりません。ルート直下に作成します。`);
         parentFolder = DriveApp.createFolder('顧客');
       }
@@ -223,13 +234,26 @@ const CustomerFolderService = {
    * @param {GoogleAppsScript.Drive.Folder} parentFolder - 親フォルダ
    * @param {string} name - サブフォルダ名
    * @returns {GoogleAppsScript.Drive.Folder}
+   * @throws {Error} 同名フォルダが複数存在する場合
    */
   _getOrCreateSubfolder: function(parentFolder, name) {
     const folders = parentFolder.getFoldersByName(name);
-    if (folders.hasNext()) {
-      return folders.next();
+    if (!folders.hasNext()) {
+      return parentFolder.createFolder(name);
     }
-    return parentFolder.createFolder(name);
+
+    const firstFolder = folders.next();
+
+    // 重複チェック: 2つ目が存在する場合はエラー
+    if (folders.hasNext()) {
+      const parentName = parentFolder.getName();
+      throw new Error(
+        `フォルダ重複エラー: "${parentName}" 内に "${name}" フォルダが複数存在します。` +
+        `手動で重複を解消してください。`
+      );
+    }
+
+    return firstFolder;
   }
 };
 
