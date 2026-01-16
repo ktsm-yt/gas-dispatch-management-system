@@ -270,6 +270,123 @@ function saveJob(job, expectedUpdatedAt) {
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
+/**
+ * 案件を削除（論理削除）
+ * @param {string} jobId - 案件ID
+ * @param {string} expectedUpdatedAt - 期待するupdated_at
+ * @returns {Object} APIレスポンス
+ */
+function deleteJob(jobId, expectedUpdatedAt) {
+  const requestId = generateRequestId();
+  let lock = null;
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message,
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!jobId) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'jobId is required',
+        {},
+        requestId
+      );
+    }
+
+    // ロック取得
+    lock = acquireLock(3000);
+    if (!lock) {
+      return buildErrorResponse(
+        ERROR_CODES.BUSY_ERROR,
+        '他のユーザーが編集中です。しばらく待ってから再度お試しください。',
+        {},
+        requestId
+      );
+    }
+
+    // 案件を取得
+    const sheet = getSheetDirect('案件');
+    const existing = findById(sheet, 'job_id', jobId);
+
+    if (!existing) {
+      return buildErrorResponse(
+        ERROR_CODES.NOT_FOUND,
+        '案件が見つかりません',
+        { jobId: jobId },
+        requestId
+      );
+    }
+
+    if (existing.is_deleted) {
+      return buildErrorResponse(
+        ERROR_CODES.NOT_FOUND,
+        '案件は既に削除されています',
+        { jobId: jobId },
+        requestId
+      );
+    }
+
+    // 楽観ロックチェック
+    if (!checkOptimisticLock(existing, expectedUpdatedAt)) {
+      return buildErrorResponse(
+        ERROR_CODES.CONFLICT_ERROR,
+        '他のユーザーによって更新されています。画面を再読み込みしてください。',
+        {
+          currentUpdatedAt: existing.updated_at,
+          expectedUpdatedAt: expectedUpdatedAt
+        },
+        requestId
+      );
+    }
+
+    // 関連する配置データの存在チェック
+    const assignmentSheet = getSheetDirect('配置');
+    const allAssignments = getAllRecords('T_JobAssignments');
+    const relatedAssignments = allAssignments.filter(a =>
+      a.job_id === jobId && !a.is_deleted
+    );
+
+    if (relatedAssignments.length > 0) {
+      return buildErrorResponse(
+        'HAS_ASSIGNMENTS',
+        `この案件には${relatedAssignments.length}件の配置データが存在するため削除できません。先に配置を削除してください。`,
+        { assignmentCount: relatedAssignments.length },
+        requestId
+      );
+    }
+
+    // 論理削除実行
+    const user = getCurrentUserEmail();
+    softDeleteRow(sheet, existing._rowIndex, user);
+
+    // 監査ログ
+    logDelete('T_Jobs', jobId, existing);
+
+    return buildSuccessResponse({ deleted: true, jobId: jobId }, requestId);
+
+  } catch (error) {
+    Logger.log(`deleteJob error: ${error.message}`);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      error.message,
+      {},
+      requestId
+    );
+
+  } finally {
+    releaseLock(lock);
+  }
+}
+
 function updateJobStatus(jobId, status, expectedUpdatedAt) {
   const requestId = generateRequestId();
   let lock = null;
