@@ -41,6 +41,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -244,87 +245,10 @@
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
 
-    /* Modal */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 1000;
-    }
+    /* Page-specific: 700px modal width */
+    .modal { width: 700px; }
 
-    .modal {
-      background: white;
-      border-radius: var(--radius-md);
-      width: 700px;
-      max-height: 90vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-bottom: 1px solid var(--border-color);
-    }
-
-    .modal-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-    }
-
-    .modal-close {
-      background: none;
-      border: none;
-      font-size: 24px;
-      cursor: pointer;
-      color: var(--text-muted);
-      line-height: 1;
-    }
-
-    .modal-close:hover {
-      color: var(--text-primary);
-    }
-
-    .modal-body {
-      padding: var(--spacing-lg);
-      overflow-y: auto;
-      flex: 1;
-    }
-
-    .modal-footer {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--spacing-md) var(--spacing-lg);
-      border-top: 1px solid var(--border-color);
-    }
-
-    .modal-footer-left {
-      display: flex;
-      gap: var(--spacing-sm);
-    }
-
-    .modal-footer-right {
-      display: flex;
-      gap: var(--spacing-sm);
-    }
-
-    /* Form */
-    .form-section {
-      margin-bottom: var(--spacing-lg);
-    }
-
+    /* Page-specific form section title */
     .form-section-title {
       font-size: 14px;
       font-weight: 600;
@@ -334,47 +258,7 @@
       border-bottom: 2px solid var(--color-secondary);
     }
 
-    .form-group {
-      margin-bottom: var(--spacing-md);
-    }
-
-    .form-group label {
-      display: block;
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: var(--spacing-xs);
-      color: var(--text-primary);
-    }
-
-    .form-group label .required {
-      color: var(--color-danger);
-      margin-left: 2px;
-    }
-
-    .form-group input,
-    .form-group select,
-    .form-group textarea {
-      width: 100%;
-      padding: var(--spacing-sm);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-    }
-
-    .form-group input:focus,
-    .form-group select:focus,
-    .form-group textarea:focus {
-      outline: none;
-      border-color: var(--color-secondary);
-      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
-    }
-
-    .form-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--spacing-md);
-    }
-
+    /* Page-specific grid layouts */
     .form-row-3 {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
@@ -385,53 +269,6 @@
       display: grid;
       grid-template-columns: 1fr 1fr 1fr 1fr;
       gap: var(--spacing-md);
-    }
-
-    /* Buttons */
-    .btn {
-      padding: var(--spacing-sm) var(--spacing-md);
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      border: none;
-      display: inline-flex;
-      align-items: center;
-      gap: var(--spacing-xs);
-    }
-
-    .btn-primary {
-      background: var(--color-primary);
-      color: white;
-    }
-
-    .btn-primary:hover {
-      background: var(--color-accent);
-    }
-
-    .btn-secondary {
-      background: white;
-      color: var(--text-primary);
-      border: 1px solid var(--border-color);
-    }
-
-    .btn-secondary:hover {
-      background: var(--bg-hover);
-    }
-
-    .btn-danger {
-      background: white;
-      color: var(--color-danger);
-      border: 1px solid var(--color-danger);
-    }
-
-    .btn-danger:hover {
-      background: #FEF2F2;
-    }
-
-    .btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
     }
 
     /* Stats bar */
