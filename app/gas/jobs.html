@@ -260,6 +260,7 @@
     .status-cancelled { background: #E5E7EB; color: var(--text-muted); }
 
     <?!= include('skeleton_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Empty State */
     .empty-state {
@@ -412,6 +413,7 @@
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <!-- Toolbar -->
   <div class="toolbar">
@@ -665,9 +667,14 @@
         </form>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
-        <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
-        <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
+        <div class="modal-footer-left">
+          <button type="button" class="btn btn-danger" id="delete-btn" onclick="deleteJob()" style="display: none;">削除</button>
+        </div>
+        <div class="modal-footer-right">
+          <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
+          <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
+          <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
+        </div>
       </div>
     </div>
   </div>
@@ -733,10 +740,20 @@
 
     .modal-footer {
       display: flex;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
+      justify-content: space-between;
+      align-items: center;
       padding: var(--spacing-md) var(--spacing-lg);
       border-top: 1px solid var(--border-color);
+    }
+
+    .modal-footer-left {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .modal-footer-right {
+      display: flex;
+      gap: var(--spacing-sm);
     }
 
     /* Form Styles */
@@ -848,6 +865,10 @@
   </style>
 
   <?!= include('skeleton_helpers'); ?>
+
+  <script>
+    <?!= include('confirmation_modal_js'); ?>
+  </script>
 
   <script>
     const JOBS_SKELETON_ROWS = [
@@ -1276,13 +1297,15 @@
       // Load customers for autocomplete
       loadCustomersForSelect();
 
-      // Show/hide "保存して次へ" button based on mode
+      // Show/hide buttons based on mode
       const saveNextBtn = document.getElementById('save-next-btn');
+      const deleteBtn = document.getElementById('delete-btn');
 
       if (jobId) {
         // Edit mode - load from cache first
         document.getElementById('modal-title').textContent = '案件編集';
         saveNextBtn.style.display = 'none';
+        deleteBtn.style.display = 'inline-block';
         const cachedJob = jobs.find(j => j.job_id === jobId);
         if (cachedJob) {
           document.getElementById('job-id').value = cachedJob.job_id;
@@ -1307,6 +1330,7 @@
         document.getElementById('modal-title').textContent = '新規案件';
         document.getElementById('work-date').value = formatDate(new Date());
         saveNextBtn.style.display = 'inline-block';
+        deleteBtn.style.display = 'none';
       }
 
       modal.style.display = 'flex';
@@ -1436,6 +1460,50 @@
           showToast(error.message, 'error');
         })
         .saveJob(job, updatedAt || null);
+    }
+
+    function deleteJob() {
+      const jobId = document.getElementById('job-id').value;
+      if (!jobId) return;
+
+      const cachedJob = jobs.find(j => j.job_id === jobId);
+      const jobName = cachedJob ? `${cachedJob.site_name}（${cachedJob.customer_name}）` : '案件';
+
+      ConfirmationModal.show({
+        type: 'danger',
+        title: '削除の確認',
+        message: `「${jobName}」を削除しますか？\n\n※この操作は取り消せません。\n※関連する配置データも確認してください。`,
+        confirmText: '削除',
+        onConfirm: () => {
+          const updatedAt = document.getElementById('job-updated-at').value;
+
+          // 楽観的更新: UIを即座に更新
+          jobs = jobs.filter(j => j.job_id !== jobId);
+          filterJobs();
+          closeJobModal();
+          showToast(`${jobName}を削除しました`, 'success');
+
+          // バックグラウンドでAPI呼び出し
+          google.script.run
+            .withSuccessHandler((response) => {
+              if (!response.ok) {
+                if (response.error?.code === 'CONFLICT_ERROR') {
+                  showToast('他のユーザーによって更新されています。再読み込みします。', 'error');
+                } else if (response.error?.code === 'HAS_ASSIGNMENTS') {
+                  showToast('この案件には配置データが存在するため削除できません。', 'error');
+                } else {
+                  showToast(response.error?.message || '削除に失敗しました。再読み込みします。', 'error');
+                }
+                loadJobs();
+              }
+            })
+            .withFailureHandler((error) => {
+              showToast('削除に失敗しました。再読み込みします。', 'error');
+              loadJobs();
+            })
+            .deleteJob(jobId, updatedAt || null);
+        }
+      });
     }
 
     function resetJobFormForNext(date, customerId, customerName) {

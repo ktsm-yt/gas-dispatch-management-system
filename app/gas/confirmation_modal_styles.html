@@ -1,0 +1,101 @@
+<!-- Confirmation Modal Styles - Shared Component -->
+<!-- Usage: <?!= include('confirmation_modal_styles'); ?> in <style> block -->
+
+/* Confirmation Modal Styles */
+.confirmation-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
+}
+
+.confirmation-modal {
+  background: var(--bg-card, #fff);
+  border-radius: var(--radius-md, 8px);
+  width: 400px;
+  max-width: 90vw;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+  animation: confirmationModalSlideIn 0.2s ease-out;
+}
+
+@keyframes confirmationModalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.confirmation-modal-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+}
+
+.confirmation-modal-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.confirmation-modal-icon.danger {
+  color: var(--danger, #dc3545);
+}
+
+.confirmation-modal-icon.warning {
+  color: var(--warning, #ffc107);
+}
+
+.confirmation-modal-icon.info {
+  color: var(--info, #17a2b8);
+}
+
+.confirmation-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary, #1f2937);
+}
+
+.confirmation-modal-body {
+  padding: var(--spacing-lg, 24px);
+}
+
+.confirmation-modal-message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.confirmation-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  background: var(--bg-secondary, #f9fafb);
+  border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+}
+
+.confirmation-modal-footer .btn-danger {
+  background: var(--danger, #dc3545);
+  border-color: var(--danger, #dc3545);
+  color: #fff;
+}
+
+.confirmation-modal-footer .btn-danger:hover {
+  background: #c82333;
+  border-color: #bd2130;
+}

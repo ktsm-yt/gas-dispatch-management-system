@@ -87,6 +87,7 @@
     .status-active { background: #D1FAE5; color: #065F46; }
     .status-inactive { background: #FEE2E2; color: #991B1B; }
     <?!= include('skeleton_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
     .empty-state { text-align: center; color: var(--text-muted); padding: 48px; }
     .add-btn {
       position: fixed;
@@ -201,6 +202,7 @@
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <div class="toolbar">
     <div class="search-box">
@@ -278,6 +280,10 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+
+  <script>
+    <?!= include('confirmation_modal_js'); ?>
+  </script>
 
   <script>
     const SUBCONTRACTOR_SKELETON_ROWS = [
@@ -440,32 +446,39 @@
 
     function deleteRecord() {
       if (!currentRecord) return;
-      if (!confirm(`「${currentRecord.company_name}」を削除しますか？`)) return;
 
-      const deleteId = currentRecord.subcontractor_id;
-      const deleteName = currentRecord.company_name;
-      const updatedAt = document.getElementById('updated-at').value;
+      ConfirmationModal.show({
+        type: 'danger',
+        title: '削除の確認',
+        message: `「${currentRecord.company_name}」を削除しますか？`,
+        confirmText: '削除',
+        onConfirm: () => {
+          const deleteId = currentRecord.subcontractor_id;
+          const deleteName = currentRecord.company_name;
+          const updatedAt = document.getElementById('updated-at').value;
 
-      // 楽観的更新: UIを即座に更新
-      dataList = dataList.filter(d => d.subcontractor_id !== deleteId);
-      updateStats();
-      filterData();
-      closeModal();
-      showToast(`${deleteName}を削除しました`, 'success');
+          // 楽観的更新: UIを即座に更新
+          dataList = dataList.filter(d => d.subcontractor_id !== deleteId);
+          updateStats();
+          filterData();
+          closeModal();
+          showToast(`${deleteName}を削除しました`, 'success');
 
-      // バックグラウンドでAPI呼び出し
-      google.script.run
-        .withSuccessHandler((response) => {
-          if (!response.ok) {
-            showToast(response.error?.message || '削除失敗。再読み込みします。', 'error');
-            loadData();
-          }
-        })
-        .withFailureHandler((e) => {
-          showToast('削除失敗。再読み込みします。', 'error');
-          loadData();
-        })
-        .deleteSubcontractor(deleteId, updatedAt || null);
+          // バックグラウンドでAPI呼び出し
+          google.script.run
+            .withSuccessHandler((response) => {
+              if (!response.ok) {
+                showToast(response.error?.message || '削除失敗。再読み込みします。', 'error');
+                loadData();
+              }
+            })
+            .withFailureHandler((e) => {
+              showToast('削除失敗。再読み込みします。', 'error');
+              loadData();
+            })
+            .deleteSubcontractor(deleteId, updatedAt || null);
+        }
+      });
     }
 
     function showToast(message, type = '') {
