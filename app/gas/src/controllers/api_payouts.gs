@@ -773,3 +773,25 @@ function exportPayouts(fromDate, toDate, options = {}) {
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
+
+/**
+ * 支払エクスポートフォルダのURLを取得
+ * @returns {Object} APIレスポンス
+ */
+function getPayoutExportFolderUrl() {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    const status = PayoutExportService.getExportFolderStatus();
+    return buildSuccessResponse(status, requestId);
+
+  } catch (error) {
+    console.error('getPayoutExportFolderUrl error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
