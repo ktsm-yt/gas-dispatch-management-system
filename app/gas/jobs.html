@@ -305,7 +305,7 @@
       border-radius: var(--radius-md);
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       display: none;
-      z-index: 1000;
+      z-index: 9999;
     }
 
     .toast.show { display: block; }
@@ -568,22 +568,66 @@
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label for="required-count">必要人数 *</label>
-              <input type="number" id="required-count" name="required_count" min="1" value="1" required>
+          <!-- 人員枠設定セクション -->
+          <div class="slots-section">
+            <div class="slots-header">
+              <label>人員枠設定</label>
+              <div class="slots-mode-toggle">
+                <label class="radio-label">
+                  <input type="radio" name="slots_mode" value="simple" checked onchange="toggleSlotsMode()">
+                  シンプル
+                </label>
+                <label class="radio-label">
+                  <input type="radio" name="slots_mode" value="detailed" onchange="toggleSlotsMode()">
+                  詳細
+                </label>
+              </div>
             </div>
-            <div class="form-group">
-              <label for="pay-unit">単価区分 *</label>
-              <select id="pay-unit" name="pay_unit" required>
-                <option value="">選択してください</option>
-                <option value="basic">基本</option>
-                <option value="half">ハーフ</option>
-                <option value="fullday">終日</option>
-                <option value="night">夜勤</option>
-                <option value="tobi">鳶</option>
-                <option value="tobiage">鳶揚げ</option>
-              </select>
+
+            <!-- シンプルモード（従来通り） -->
+            <div id="simple-slots-mode">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="required-count">必要人数 *</label>
+                  <input type="number" id="required-count" name="required_count" min="1" value="1" required>
+                </div>
+                <div class="form-group">
+                  <label for="pay-unit">単価区分 *</label>
+                  <select id="pay-unit" name="pay_unit" required>
+                    <option value="">選択してください</option>
+                    <option value="basic">基本</option>
+                    <option value="halfday">ハーフ</option>
+                    <option value="fullday">終日</option>
+                    <option value="night">夜勤</option>
+                    <option value="tobi">鳶</option>
+                    <option value="tobiage">鳶揚げ</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- 詳細モード（枠設定） -->
+            <div id="detailed-slots-mode" style="display: none;">
+              <div class="slots-table-container">
+                <table class="slots-table">
+                  <thead>
+                    <tr>
+                      <th>時間区分</th>
+                      <th>単価区分</th>
+                      <th>人数</th>
+                      <th>備考</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="slots-table-body">
+                    <!-- 動的に追加される -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="slots-footer">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="addSlotRow()">+ 枠を追加</button>
+                <span class="slots-total">合計: <strong id="slots-total-count">0</strong> 名</span>
+              </div>
             </div>
           </div>
 
@@ -764,6 +808,122 @@
     .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
+    }
+
+    .btn-sm {
+      padding: 4px 8px;
+      font-size: 12px;
+    }
+
+    /* Slots Section */
+    .slots-section {
+      margin: var(--spacing-md) 0;
+      padding: var(--spacing-md);
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+    }
+
+    .slots-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .slots-header > label {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .slots-mode-toggle {
+      display: flex;
+      gap: var(--spacing-md);
+    }
+
+    .radio-label {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .radio-label input[type="radio"] {
+      margin: 0;
+    }
+
+    .slots-table-container {
+      overflow-x: auto;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .slots-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .slots-table th,
+    .slots-table td {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .slots-table th {
+      font-weight: 500;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      background: white;
+    }
+
+    .slots-table select,
+    .slots-table input {
+      padding: 4px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      width: 100%;
+    }
+
+    .slots-table input[type="number"] {
+      width: 60px;
+    }
+
+    .slots-table input[type="text"] {
+      width: 100px;
+    }
+
+    .slots-table .btn-remove {
+      background: none;
+      border: none;
+      color: var(--color-danger);
+      cursor: pointer;
+      padding: 4px;
+      font-size: 16px;
+    }
+
+    .slots-table .btn-remove:hover {
+      color: #c82333;
+    }
+
+    .slots-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: var(--spacing-sm);
+    }
+
+    .slots-total {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .slots-total strong {
+      color: var(--text-primary);
+      font-size: 14px;
     }
   </style>
 
@@ -1197,6 +1357,9 @@
       document.getElementById('customer-search').value = '';
       document.getElementById('customer-id').value = '';
 
+      // Reset slots UI
+      resetSlotsUI();
+
       // Load customers for autocomplete
       loadCustomersForSelect();
 
@@ -1219,7 +1382,9 @@
           document.getElementById('time-slot').value = cachedJob.time_slot || 'am';
           document.getElementById('start-time').value = formatStartTime(cachedJob.start_time) || '';
           document.getElementById('required-count').value = cachedJob.required_count || 1;
-          document.getElementById('pay-unit').value = cachedJob.pay_unit || '';
+          // pay_unit正規化: 'half'(旧) → 'halfday'(新)
+          const cachedPayUnit = cachedJob.pay_unit === 'half' ? 'halfday' : (cachedJob.pay_unit || '');
+          document.getElementById('pay-unit').value = cachedPayUnit;
           document.getElementById('work-category').value = cachedJob.work_category || '';
           document.getElementById('work-detail').value = cachedJob.work_detail || '';
           document.getElementById('status').value = cachedJob.status || 'pending';
@@ -1263,7 +1428,9 @@
             document.getElementById('time-slot').value = job.time_slot || 'am';
             document.getElementById('start-time').value = job.start_time || '';
             document.getElementById('required-count').value = job.required_count || 1;
-            document.getElementById('pay-unit').value = job.pay_unit || '';
+            // pay_unit正規化: 'half'(旧) → 'halfday'(新)
+            const normalizedPayUnit = job.pay_unit === 'half' ? 'halfday' : (job.pay_unit || '');
+            document.getElementById('pay-unit').value = normalizedPayUnit;
             document.getElementById('work-category').value = job.work_category || '';
             document.getElementById('work-detail').value = job.work_detail || '';
             document.getElementById('status').value = job.status || 'pending';
@@ -1273,6 +1440,14 @@
             document.getElementById('property-code').value = job.property_code || '';
             document.getElementById('construction-div').value = job.construction_div || '';
             document.getElementById('notes').value = job.notes || '';
+
+            // 枠データをロード（response.data.slotsに枠配列が含まれる）
+            if (response.data.slots && response.data.slots.length > 0) {
+              loadSlotsToUI(response.data.slots);
+            } else {
+              // 枠データがない場合はシンプルモードに
+              resetSlotsUI();
+            }
           }
         })
         .withFailureHandler((error) => {
@@ -1315,6 +1490,16 @@
         job.job_id = jobId;
       } else {
         delete job.job_id;
+      }
+
+      // 枠データを取得（詳細モードの場合のみ）
+      const slotsData = getSlotsData();
+
+      // 詳細モードの場合、シンプルモードのフィールドを除外
+      // （required_countは枠の合計で自動計算される）
+      if (slotsData !== null) {
+        delete job.required_count;
+        delete job.pay_unit;
       }
 
       // Preserve values for "Save and Next" mode
@@ -1362,7 +1547,7 @@
           saveNextBtn.textContent = '保存して次へ';
           showToast(error.message, 'error');
         })
-        .saveJob(job, updatedAt || null);
+        .saveJob(job, updatedAt || null, slotsData);
     }
 
     function deleteJob() {
@@ -1418,6 +1603,8 @@
       document.getElementById('work-date').value = date || '';
       document.getElementById('customer-search').value = customerName || '';
       document.getElementById('customer-id').value = customerId || '';
+      // Reset slots UI to simple mode
+      resetSlotsUI();
       // Focus on site name for quick entry
       document.getElementById('site-name').focus();
     }
@@ -1573,6 +1760,188 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // ===== スロット（枠）管理関数 =====
+    let currentSlots = []; // 現在編集中の枠データ
+
+    /**
+     * シンプル/詳細モードを切り替え
+     */
+    function toggleSlotsMode() {
+      const mode = document.querySelector('input[name="slots_mode"]:checked').value;
+      const simpleMode = document.getElementById('simple-slots-mode');
+      const detailedMode = document.getElementById('detailed-slots-mode');
+
+      if (mode === 'simple') {
+        simpleMode.style.display = 'block';
+        detailedMode.style.display = 'none';
+        // シンプルモードに戻るとき、必要人数と単価区分を必須に
+        document.getElementById('required-count').required = true;
+        document.getElementById('pay-unit').required = true;
+      } else {
+        simpleMode.style.display = 'none';
+        detailedMode.style.display = 'block';
+        // 詳細モードではシンプルモードの入力は必須でなくする
+        document.getElementById('required-count').required = false;
+        document.getElementById('pay-unit').required = false;
+        // 枠行がなければ1行追加（DOM の実際の行数をチェック）
+        const tbody = document.getElementById('slots-table-body');
+        if (tbody.children.length === 0) {
+          addSlotRow();
+        }
+      }
+    }
+
+    /**
+     * 枠行を追加
+     */
+    function addSlotRow(slotData = null) {
+      const tbody = document.getElementById('slots-table-body');
+      const rowIndex = tbody.children.length;
+
+      // デフォルト値
+      const slot = slotData || {
+        slot_id: '',
+        slot_time_slot: document.getElementById('time-slot').value || 'am',
+        slot_pay_unit: 'basic',
+        slot_count: 1,
+        notes: ''
+      };
+
+      const row = document.createElement('tr');
+      row.dataset.slotId = slot.slot_id || '';
+      row.innerHTML = `
+        <td>
+          <select class="slot-time-slot" onchange="updateSlotsTotal()">
+            <option value="jotou" ${slot.slot_time_slot === 'jotou' ? 'selected' : ''}>上棟</option>
+            <option value="shuujitsu" ${slot.slot_time_slot === 'shuujitsu' ? 'selected' : ''}>終日</option>
+            <option value="am" ${slot.slot_time_slot === 'am' ? 'selected' : ''}>AM</option>
+            <option value="pm" ${slot.slot_time_slot === 'pm' ? 'selected' : ''}>PM</option>
+            <option value="yakin" ${slot.slot_time_slot === 'yakin' ? 'selected' : ''}>夜勤</option>
+            <option value="mitei" ${slot.slot_time_slot === 'mitei' ? 'selected' : ''}>未定</option>
+          </select>
+        </td>
+        <td>
+          <select class="slot-pay-unit">
+            <option value="basic" ${slot.slot_pay_unit === 'basic' ? 'selected' : ''}>基本</option>
+            <option value="halfday" ${slot.slot_pay_unit === 'halfday' ? 'selected' : ''}>ハーフ</option>
+            <option value="fullday" ${slot.slot_pay_unit === 'fullday' ? 'selected' : ''}>終日</option>
+            <option value="night" ${slot.slot_pay_unit === 'night' ? 'selected' : ''}>夜勤</option>
+            <option value="tobi" ${slot.slot_pay_unit === 'tobi' ? 'selected' : ''}>鳶</option>
+            <option value="tobiage" ${slot.slot_pay_unit === 'tobiage' ? 'selected' : ''}>鳶揚げ</option>
+          </select>
+        </td>
+        <td>
+          <input type="number" class="slot-count" min="1" value="${slot.slot_count || 1}" onchange="updateSlotsTotal()">
+        </td>
+        <td>
+          <input type="text" class="slot-notes" value="${escapeHtml(slot.notes || '')}" placeholder="備考">
+        </td>
+        <td>
+          <button type="button" class="btn btn-danger btn-sm" onclick="removeSlotRow(this)">×</button>
+        </td>
+      `;
+
+      tbody.appendChild(row);
+      updateSlotsTotal();
+    }
+
+    /**
+     * 枠行を削除
+     */
+    function removeSlotRow(btn) {
+      const row = btn.closest('tr');
+      const slotId = row.dataset.slotId;
+
+      // 既存の枠の場合、配置があるか確認するため警告
+      if (slotId) {
+        if (!confirm('この枠を削除しますか？\n※この枠に紐づく配置がある場合は削除できません。')) {
+          return;
+        }
+      }
+
+      row.remove();
+      updateSlotsTotal();
+    }
+
+    /**
+     * 枠の合計人数を更新
+     */
+    function updateSlotsTotal() {
+      const tbody = document.getElementById('slots-table-body');
+      const rows = tbody.querySelectorAll('tr');
+      let total = 0;
+
+      rows.forEach(row => {
+        const countInput = row.querySelector('.slot-count');
+        total += parseInt(countInput.value, 10) || 0;
+      });
+
+      document.getElementById('slots-total-count').textContent = total;
+    }
+
+    /**
+     * 枠データを収集
+     */
+    function getSlotsData() {
+      const mode = document.querySelector('input[name="slots_mode"]:checked').value;
+
+      if (mode === 'simple') {
+        // シンプルモードでは枠データなし（従来通りrequired_count/pay_unitを使用）
+        return null;
+      }
+
+      const tbody = document.getElementById('slots-table-body');
+      const rows = tbody.querySelectorAll('tr');
+      const slots = [];
+
+      rows.forEach((row, index) => {
+        slots.push({
+          slot_id: row.dataset.slotId || '',
+          slot_time_slot: row.querySelector('.slot-time-slot').value,
+          slot_pay_unit: row.querySelector('.slot-pay-unit').value,
+          slot_count: parseInt(row.querySelector('.slot-count').value, 10) || 1,
+          notes: row.querySelector('.slot-notes').value || '',
+          sort_order: index + 1
+        });
+      });
+
+      return slots;
+    }
+
+    /**
+     * 枠データをUIにロード
+     */
+    function loadSlotsToUI(slots) {
+      const tbody = document.getElementById('slots-table-body');
+      tbody.innerHTML = '';
+      currentSlots = slots || [];
+
+      if (currentSlots.length > 0) {
+        // 詳細モードに切り替え
+        document.querySelector('input[name="slots_mode"][value="detailed"]').checked = true;
+        toggleSlotsMode();
+
+        currentSlots.forEach(slot => {
+          addSlotRow(slot);
+        });
+      } else {
+        // シンプルモードに
+        document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
+        toggleSlotsMode();
+      }
+    }
+
+    /**
+     * モーダルオープン時に枠UIをリセット
+     */
+    function resetSlotsUI() {
+      const tbody = document.getElementById('slots-table-body');
+      tbody.innerHTML = '';
+      currentSlots = [];
+      document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
+      toggleSlotsMode();
     }
 
     // 開始時間のフォーマット（無効なDate文字列を除外）

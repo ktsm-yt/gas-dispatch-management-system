@@ -6,9 +6,9 @@
 
 const JobService = {
   /**
-   * 案件を取得（配置情報付き）
+   * 案件を取得（配置情報・枠情報付き）
    * @param {string} jobId - 案件ID
-   * @returns {Object|null} { job, assignments[] } または null
+   * @returns {Object|null} { job, assignments[], slots[], slotStatus } または null
    */
   get: function(jobId) {
     const job = JobRepository.findById(jobId);
@@ -24,12 +24,25 @@ const JobService = {
       customer_name: customerMap[job.customer_id] || ''
     };
 
-    // TODO: 配置情報取得（P1-4で実装）
-    const assignments = [];
+    // 配置情報取得
+    const assignmentsData = AssignmentService.getAssignmentsByJobId(jobId);
+    const assignments = assignmentsData.assignments || [];
+
+    // 枠情報取得
+    const slotsData = SlotService.getSlotsByJobId(jobId);
+    const slots = slotsData.slots || [];
+
+    // 枠充足状況を取得（枠がある場合のみ）
+    let slotStatus = null;
+    if (slots.length > 0) {
+      slotStatus = SlotService.getSlotStatus(jobId);
+    }
 
     return {
       job: jobWithCustomer,
-      assignments: assignments
+      assignments: assignments,
+      slots: slots,
+      slotStatus: slotStatus
     };
   },
 
@@ -200,9 +213,26 @@ const JobService = {
    * 案件を保存（新規/更新）
    * @param {Object} job - 案件データ
    * @param {string|null} expectedUpdatedAt - 期待するupdated_at（更新時）
-   * @returns {Object} { success, job?, error? }
+   * @param {Object[]} slots - 枠データ（オプション）
+   * @returns {Object} { success, job?, slots?, error? }
    */
-  save: function(job, expectedUpdatedAt) {
+  save: function(job, expectedUpdatedAt, slots) {
+    // 枠データがある場合、required_countとpay_unitのデフォルト値を設定
+    // （詳細モードでは案件レベルのこれらのフィールドは枠で管理されるため）
+    if (slots && Array.isArray(slots) && slots.length > 0) {
+      // required_count: 枠の合計人数
+      const totalCount = slots.reduce((sum, slot) => sum + (Number(slot.count) || 1), 0);
+      if (!job.required_count) {
+        job.required_count = totalCount;
+      }
+      // pay_unit: 最初の枠の単価区分（バリデーション用のデフォルト）
+      if (!job.pay_unit && slots[0].pay_unit) {
+        job.pay_unit = slots[0].pay_unit;
+      } else if (!job.pay_unit) {
+        job.pay_unit = 'basic'; // フォールバック
+      }
+    }
+
     // バリデーション（validation.js の validateJob_ を使用）
     try {
       validateJob_(job, !job.job_id);
@@ -224,9 +254,23 @@ const JobService = {
       // 監査ログ
       logCreate('T_Jobs', newJob.job_id, newJob);
 
+      // 枠が指定されていれば保存
+      let savedSlots = [];
+      if (slots && Array.isArray(slots) && slots.length > 0) {
+        const slotResult = SlotService.saveSlots(newJob.job_id, slots, null);
+        if (slotResult.ok) {
+          savedSlots = slotResult.data.slots || [];
+          // 枠合計で required_count を更新（DBにも反映済み）
+        }
+      }
+
+      // 最新のjobを取得（スロット保存でrequired_countが更新されている可能性）
+      const createdJob = JobRepository.findById(newJob.job_id);
+
       return {
         success: true,
-        job: newJob
+        job: createdJob,
+        slots: savedSlots
       };
     }
 
@@ -241,9 +285,24 @@ const JobService = {
     const diff = getDiff(result.before, result.job);
     logUpdate('T_Jobs', job.job_id, diff.before, diff.after);
 
+    // 枠が指定されていれば保存
+    let savedSlots = [];
+    if (slots && Array.isArray(slots)) {
+      // 空配列は「枠をすべて削除」を意味する
+      const slotResult = SlotService.saveSlots(job.job_id, slots, result.job.updated_at);
+      if (slotResult.ok) {
+        savedSlots = slotResult.data.slots || [];
+        // required_countはSlotService.saveSlotsで既に更新済み
+      }
+    }
+
+    // 最新の job を取得
+    const updatedJob = JobRepository.findById(job.job_id);
+
     return {
       success: true,
-      job: result.job
+      job: updatedJob,
+      slots: savedSlots
     };
   },
 

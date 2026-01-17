@@ -207,25 +207,24 @@ function getDailyRateByJobType_(staff, jobType) {
 
 /**
  * 給与/請求区分に基づく係数を取得
+ *
+ * 【KTSM-XX: 係数廃止】
+ * 以前は halfday/am/pm に 0.5 を返していたが、これは二重減額の原因となっていた。
+ * マスターにはすでにハーフ用金額（unit_price_half, daily_rate_half）が設定されており、
+ * ここでさらに係数を掛けると二重で減額されてしまう。
+ *
+ * 解決策: 係数は常に 1.0 を返し、マスターの単価をそのまま使用する。
+ * 単価の種類による金額差は getUnitPriceByJobType_ / getDailyRateByJobType_ で
+ * 適切なマスター値を取得することで実現する。
+ *
  * @param {string} unit - 区分（FULLDAY/fullday/halfday/hourly等、自動正規化）
- * @returns {number} 係数（1.0 = 全日、0.5 = 半日）
+ * @returns {number} 係数（常に 1.0）
+ * @deprecated 将来的に廃止予定。直接マスター値を使用すること。
  */
 function getUnitMultiplier_(unit) {
-  const normalizedUnit = normalizeUnit_(unit);
-  switch (normalizedUnit) {
-    case 'fullday':
-    case 'shuujitsu':
-    case 'jotou':
-      return 1.0;
-    case 'halfday':
-    case 'am':
-    case 'pm':
-      return 0.5;
-    case 'yakin':
-      return 1.0; // 夜勤は基本全日扱い（別途夜勤手当がある場合は別計算）
-    default:
-      return 1.0;
-  }
+  // 互換性のため関数は残すが、常に 1.0 を返す
+  // マスターの単価をそのまま使用するため、係数による調整は不要
+  return 1.0;
 }
 
 /**
