@@ -427,6 +427,191 @@ function getTransportFeeAreas() {
 }
 
 /**
+ * 案件の枠一覧を取得
+ *
+ * @param {string} jobId - 案件ID
+ * @returns {Object} APIレスポンス { ok: true, data: { slots, totalCount } }
+ */
+function getJobSlots(jobId) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!jobId) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '案件IDは必須です',
+        { field: 'jobId' },
+        requestId
+      );
+    }
+
+    const result = SlotService.getSlotsByJobId(jobId);
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (e) {
+    console.error('getJobSlots error:', e);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      'システムエラーが発生しました',
+      { message: e.message },
+      requestId
+    );
+  }
+}
+
+/**
+ * 案件の枠充足状況を取得
+ *
+ * @param {string} jobId - 案件ID
+ * @returns {Object} APIレスポンス { ok: true, data: { slotStatuses, total } }
+ */
+function getSlotStatus(jobId) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!jobId) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '案件IDは必須です',
+        { field: 'jobId' },
+        requestId
+      );
+    }
+
+    const result = SlotService.getSlotStatus(jobId);
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (e) {
+    console.error('getSlotStatus error:', e);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      'システムエラーが発生しました',
+      { message: e.message },
+      requestId
+    );
+  }
+}
+
+/**
+ * 配置を枠に割り当て
+ *
+ * @param {string} assignmentId - 配置ID
+ * @param {string} slotId - 枠ID
+ * @param {string} expectedUpdatedAt - 期待するupdated_at
+ * @returns {Object} APIレスポンス
+ */
+function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!assignmentId || !slotId) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '配置IDと枠IDは必須です',
+        {},
+        requestId
+      );
+    }
+
+    // サービス呼び出し
+    return SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
+
+  } catch (e) {
+    console.error('assignToSlot error:', e);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      'システムエラーが発生しました',
+      { message: e.message },
+      requestId
+    );
+  }
+}
+
+/**
+ * 日付ごとの枠充足状況サマリーを取得
+ *
+ * @param {string} date - 日付（YYYY-MM-DD形式）
+ * @returns {Object} APIレスポンス
+ */
+function getSlotStatusByDate(date) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+
+    // 日付のバリデーション
+    if (!date || !isValidDate(date)) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '有効な日付を指定してください（YYYY-MM-DD形式）',
+        { field: 'date' },
+        requestId
+      );
+    }
+
+    const result = SlotService.getSlotStatusByDate(date);
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (e) {
+    console.error('getSlotStatusByDate error:', e);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      'システムエラーが発生しました',
+      { message: e.message },
+      requestId
+    );
+  }
+}
+
+/**
  * ダッシュボード用の配置情報を取得（案件＋配置＋過不足）
  *
  * @param {string} date - 日付（YYYY-MM-DD形式）
