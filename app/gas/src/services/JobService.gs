@@ -233,6 +233,11 @@ const JobService = {
       }
     }
 
+    // 新規作成時のデフォルト値設定
+    if (!job.job_id && !job.status) {
+      job.status = 'pending';
+    }
+
     // バリデーション（validation.js の validateJob_ を使用）
     try {
       validateJob_(job, !job.job_id);

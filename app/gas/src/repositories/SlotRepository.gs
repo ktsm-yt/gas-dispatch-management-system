@@ -261,11 +261,11 @@ const SlotRepository = {
       slot.sort_order = i; // 配列順にsort_orderを設定
 
       if (slot.slot_id && existingMap.has(slot.slot_id)) {
-        // 更新
+        // 更新（スロット自身のupdated_atを使用して楽観ロック）
         const existing = existingMap.get(slot.slot_id);
         const result = this.update(
           { ...slot, job_id: jobId },
-          expectedUpdatedAt || existing.updated_at
+          existing.updated_at
         );
         if (result.success) {
           results.updated.push(result.slot);
