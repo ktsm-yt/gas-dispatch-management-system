@@ -5,6 +5,58 @@
 <!-- Callback: onAssignmentModalClose(jobId, job, assignments) - define in host page to handle updates -->
 
 <script>
+// ========== Job Cache ==========
+// 最近開いた案件のキャッシュ（即座に表示するため）
+let assignmentJobCache = {};
+const ASSIGNMENT_CACHE_MAX_SIZE = 10;  // 最大10件
+const ASSIGNMENT_CACHE_EXPIRE_MS = 5 * 60 * 1000;  // 5分
+
+/**
+ * キャッシュから案件データを取得
+ * @param {string} jobId
+ * @returns {Object|null} キャッシュされたデータ、または null
+ */
+function getAssignmentJobFromCache(jobId) {
+  const cached = assignmentJobCache[jobId];
+  if (!cached) return null;
+
+  // expireチェック
+  const age = Date.now() - cached.timestamp;
+  if (age > ASSIGNMENT_CACHE_EXPIRE_MS) {
+    delete assignmentJobCache[jobId];
+    return null;
+  }
+
+  return cached.data;
+}
+
+/**
+ * キャッシュに案件データを保存
+ * @param {string} jobId
+ * @param {Object} data - {job, assignments, slots, slotStatus, allStaff}
+ */
+function saveAssignmentJobToCache(jobId, data) {
+  // キャッシュサイズ制限（古いものから削除）
+  const keys = Object.keys(assignmentJobCache);
+  if (keys.length >= ASSIGNMENT_CACHE_MAX_SIZE) {
+    // 最も古いエントリを削除
+    let oldestKey = keys[0];
+    let oldestTime = assignmentJobCache[oldestKey].timestamp;
+    keys.forEach(key => {
+      if (assignmentJobCache[key].timestamp < oldestTime) {
+        oldestKey = key;
+        oldestTime = assignmentJobCache[key].timestamp;
+      }
+    });
+    delete assignmentJobCache[oldestKey];
+  }
+
+  assignmentJobCache[jobId] = {
+    data: data,
+    timestamp: Date.now()
+  };
+}
+
 // ========== Modal State ==========
 let assignmentModalState = {
   jobId: null,
@@ -45,17 +97,21 @@ function openJobAssignments(jobId) {
   // Show modal
   document.getElementById('assignment-modal').style.display = 'flex';
 
-  // Clear modal header and stats (prevent showing old data)
-  document.getElementById('modal-job-name').textContent = '読み込み中...';
-  document.getElementById('modal-job-date').textContent = '-';
-  document.getElementById('modal-job-time').textContent = '-';
-  document.getElementById('modal-job-type').textContent = '-';
-  document.getElementById('modal-required').textContent = '0';
-  document.getElementById('modal-assigned').textContent = '0';
-  document.getElementById('modal-shortage-badge').style.display = 'none';
-
-  // Clear staff list (will be set to loading in loadAssignmentModalData)
-  document.getElementById('staff-list').innerHTML = '';
+  // キャッシュがあれば即座に表示（UX改善）
+  const cachedData = getAssignmentJobFromCache(jobId);
+  if (cachedData) {
+    fillAssignmentModalFromCache(cachedData);
+  } else {
+    // キャッシュがない場合は初期化（ローディング表示）
+    document.getElementById('modal-job-name').textContent = '読み込み中...';
+    document.getElementById('modal-job-date').textContent = '-';
+    document.getElementById('modal-job-time').textContent = '-';
+    document.getElementById('modal-job-type').textContent = '-';
+    document.getElementById('modal-required').textContent = '0';
+    document.getElementById('modal-assigned').textContent = '0';
+    document.getElementById('modal-shortage-badge').style.display = 'none';
+    document.getElementById('staff-list').innerHTML = '';
+  }
 
   // Hide slot select row (will be shown if slots exist)
   const slotSelectRow = document.getElementById('slot-select-row');
@@ -88,11 +144,45 @@ function openJobAssignments(jobId) {
   // Reset save button
   updateSaveButton();
 
-  // Load data
-  loadAssignmentModalData(jobId);
+  // Load data (pass cache status to avoid overwriting cached display)
+  loadAssignmentModalData(jobId, !!cachedData);
 
   // Load transport areas (cached)
   loadTransportAreas();
+}
+
+/**
+ * キャッシュされたデータでモーダルを埋める（即座に表示）
+ * @param {Object} cachedData - {job, assignments, slots, slotStatus, allStaff}
+ */
+function fillAssignmentModalFromCache(cachedData) {
+  if (!cachedData) return;
+
+  const { job, assignments, slots, slotStatus, allStaff } = cachedData;
+
+  // 状態を更新
+  assignmentModalState.job = job;
+  assignmentModalState.assignments = assignments || [];
+  assignmentModalState.slots = slots || [];
+  assignmentModalState.slotStatus = slotStatus || null;
+  assignmentModalState.jobUpdatedAt = job.updated_at;
+  assignmentModalState.allStaff = allStaff || [];
+  assignmentModalState.assignmentsLoaded = true;
+
+  // ヘッダー更新
+  document.getElementById('modal-job-name').textContent = job.site_name || '-';
+  document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
+  document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
+  document.getElementById('modal-job-type').textContent = job.work_category || '-';
+
+  // 枠セレクト更新
+  updateSlotSelect();
+
+  // 統計更新
+  updateModalStats();
+
+  // スタッフリスト描画
+  filterStaffList();
 }
 
 function closeAssignmentModal() {
@@ -126,15 +216,17 @@ function closeAssignmentModal() {
   };
 }
 
-function loadAssignmentModalData(jobId) {
+function loadAssignmentModalData(jobId, hasCache = false) {
   const currentJobId = jobId;  // クロージャでキャプチャ
 
   // ローディング状態を設定
   assignmentModalState.isLoadingJob = true;
   assignmentModalState.isLoadingStaff = true;
 
-  // Show loading
-  document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  // Show loading only if no cache (キャッシュがない場合のみローディング表示)
+  if (!hasCache) {
+    document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  }
 
   // Load job, assignments, and slots (getJobはslots/slotStatusも返す)
   google.script.run
@@ -190,6 +282,15 @@ function handleAssignmentData(response, requestJobId) {
   if (!assignmentModalState.isLoadingStaff && assignmentModalState.allStaff.length > 0) {
     assignmentModalState.assignmentsLoaded = true;
     filterStaffList();
+
+    // キャッシュに保存（次回即座に表示するため）
+    saveAssignmentJobToCache(requestJobId, {
+      job: assignmentModalState.job,
+      assignments: assignmentModalState.assignments,
+      slots: assignmentModalState.slots,
+      slotStatus: assignmentModalState.slotStatus,
+      allStaff: assignmentModalState.allStaff
+    });
   }
 }
 
@@ -213,6 +314,15 @@ function handleStaffData(response, requestJobId) {
   if (!assignmentModalState.isLoadingJob && assignmentModalState.job) {
     assignmentModalState.assignmentsLoaded = true;
     filterStaffList();
+
+    // キャッシュに保存（次回即座に表示するため）
+    saveAssignmentJobToCache(requestJobId, {
+      job: assignmentModalState.job,
+      assignments: assignmentModalState.assignments,
+      slots: assignmentModalState.slots,
+      slotStatus: assignmentModalState.slotStatus,
+      allStaff: assignmentModalState.allStaff
+    });
   }
 }
 
