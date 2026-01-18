@@ -83,6 +83,10 @@ const JobService = {
       assignmentsByJob[a.job_id].push(a);
     }
 
+    // スロットデータを一括取得
+    const jobIds = jobs.map(j => j.job_id);
+    const slotsByJob = SlotRepository.findByJobIds(jobIds);
+
     // 顧客名と配置情報をJOIN
     const jobsWithCustomer = jobs.map(job => {
       const jobAssignments = assignmentsByJob[job.job_id] || [];
@@ -91,6 +95,9 @@ const JobService = {
       // 一意なスタッフIDでカウント（重複レコードがあっても正しくカウント）
       const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
       const staffNames = Array.from(uniqueStaffIds).map(id => staffMap[id] || '（削除済み）');
+
+      // スロットデータを含める
+      const jobSlots = slotsByJob[job.job_id] || [];
 
       return {
         job_id: job.job_id,
@@ -107,7 +114,8 @@ const JobService = {
         supervisor_name: job.supervisor_name || '',
         notes: job.notes || '',
         staff_names: staffNames,
-        updated_at: job.updated_at
+        updated_at: job.updated_at,
+        slots: jobSlots
       };
     });
 
@@ -142,7 +150,7 @@ const JobService = {
   /**
    * 案件を検索
    * @param {Object} query - 検索条件
-   * @returns {Object[]} 案件配列（顧客名・配置数付き）
+   * @returns {Object[]} 案件配列（顧客名・配置数・スロット付き）
    */
   search: function(query) {
     const jobs = JobRepository.search(query);
@@ -162,11 +170,16 @@ const JobService = {
       }
     }
 
+    // スロットデータを一括取得
+    const jobIds = jobs.map(j => j.job_id);
+    const slotsByJob = SlotRepository.findByJobIds(jobIds);
+
     // 顧客名と配置数をJOIN（一意なスタッフ数）
     let result = jobs.map(job => ({
       ...job,
       customer_name: customerMap[job.customer_id] || '',
-      assigned_count: staffIdsByJob[job.job_id] ? staffIdsByJob[job.job_id].size : 0
+      assigned_count: staffIdsByJob[job.job_id] ? staffIdsByJob[job.job_id].size : 0,
+      slots: slotsByJob[job.job_id] || []
     }));
 
     // 検索ワードで絞り込み（顧客名・現場名の両方を検索）
@@ -221,13 +234,13 @@ const JobService = {
     // （詳細モードでは案件レベルのこれらのフィールドは枠で管理されるため）
     if (slots && Array.isArray(slots) && slots.length > 0) {
       // required_count: 枠の合計人数
-      const totalCount = slots.reduce((sum, slot) => sum + (Number(slot.count) || 1), 0);
+      const totalCount = slots.reduce((sum, slot) => sum + (Number(slot.slot_count) || 1), 0);
       if (!job.required_count) {
         job.required_count = totalCount;
       }
       // pay_unit: 最初の枠の単価区分（バリデーション用のデフォルト）
-      if (!job.pay_unit && slots[0].pay_unit) {
-        job.pay_unit = slots[0].pay_unit;
+      if (!job.pay_unit && slots[0].slot_pay_unit) {
+        job.pay_unit = slots[0].slot_pay_unit;
       } else if (!job.pay_unit) {
         job.pay_unit = 'basic'; // フォールバック
       }
@@ -266,6 +279,20 @@ const JobService = {
         if (slotResult.ok) {
           savedSlots = slotResult.data.slots || [];
           // 枠合計で required_count を更新（DBにも反映済み）
+        } else {
+          // スロット保存失敗 - エラーを返す
+          // 注: 案件は既に作成されているが、スロットがないため不整合状態
+          // より厳密には、案件も削除してロールバックすべきだが、
+          // GASの制約上トランザクション制御が困難なため、エラーで通知
+          return {
+            success: false,
+            error: 'SLOT_SAVE_ERROR',
+            details: {
+              message: slotResult.error?.message || 'スロットの保存に失敗しました',
+              jobId: newJob.job_id,
+              jobCreated: true // 案件は作成済み
+            }
+          };
         }
       }
 
@@ -298,6 +325,18 @@ const JobService = {
       if (slotResult.ok) {
         savedSlots = slotResult.data.slots || [];
         // required_countはSlotService.saveSlotsで既に更新済み
+      } else {
+        // スロット保存失敗 - エラーを返す
+        // 注: 案件は既に更新されているが、スロットは古いまま不整合状態
+        return {
+          success: false,
+          error: 'SLOT_SAVE_ERROR',
+          details: {
+            message: slotResult.error?.message || 'スロットの保存に失敗しました',
+            jobId: job.job_id,
+            jobUpdated: true // 案件は更新済み
+          }
+        };
       }
     }
 
