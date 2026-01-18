@@ -14,8 +14,62 @@ let jobModalState = {
   customers: [],
   customerDropdownIndex: -1,
   isSaving: false,
+  isLoadingJob: false,  // 案件データ読み込み中かどうか
   saveAndContinue: false
 };
+
+// ========== Job Cache ==========
+let jobCache = {};
+const JOB_CACHE_MAX_SIZE = 10;
+const JOB_CACHE_EXPIRE_MS = 5 * 60 * 1000; // 5分
+
+/**
+ * キャッシュから案件データを取得
+ * @param {string} jobId - 案件ID
+ * @returns {Object|null} - キャッシュされた案件データ（期限切れの場合はnull）
+ */
+function getJobFromCache(jobId) {
+  if (!jobId) return null;
+  const cached = jobCache[jobId];
+  if (!cached) return null;
+
+  const age = Date.now() - cached.timestamp;
+  if (age > JOB_CACHE_EXPIRE_MS) {
+    delete jobCache[jobId];
+    return null;
+  }
+
+  return cached.data;
+}
+
+/**
+ * 案件データをキャッシュに保存
+ * @param {string} jobId - 案件ID
+ * @param {Object} data - 案件データ（job + slots）
+ */
+function saveJobToCache(jobId, data) {
+  if (!jobId) return;
+
+  // LRU: キャッシュサイズ制限
+  const cacheKeys = Object.keys(jobCache);
+  if (cacheKeys.length >= JOB_CACHE_MAX_SIZE && !jobCache[jobId]) {
+    // 最も古いエントリを削除
+    let oldestKey = cacheKeys[0];
+    let oldestTime = jobCache[oldestKey].timestamp;
+    cacheKeys.forEach(key => {
+      if (jobCache[key].timestamp < oldestTime) {
+        oldestTime = jobCache[key].timestamp;
+        oldestKey = key;
+      }
+    });
+    delete jobCache[oldestKey];
+  }
+
+  jobCache[jobId] = {
+    timestamp: Date.now(),
+    data: data
+  };
+}
 
 // ========== Job Modal Functions ==========
 
@@ -34,6 +88,7 @@ function openJobModal(jobId = null, options = {}) {
   jobModalState.job = null;
   jobModalState.slots = [];
   jobModalState.jobUpdatedAt = null;
+  jobModalState.isLoadingJob = false;
   jobModalState.saveAndContinue = false;
 
   // Reset form
@@ -74,9 +129,10 @@ function openJobModal(jobId = null, options = {}) {
 
   // Load job data if editing
   if (jobId) {
-    // キャッシュされた案件データがある場合は先に表示（スロット含む）
-    if (options.cachedJob) {
-      fillFormFromCache(options.cachedJob);
+    // キャッシュを自動チェックして即座に表示
+    const cachedData = getJobFromCache(jobId);
+    if (cachedData) {
+      fillFormFromCache(cachedData);
     }
     // 完全なデータをバックグラウンドで取得
     loadJobData(jobId);
@@ -136,8 +192,19 @@ function closeJobModal() {
 }
 
 function loadJobData(jobId) {
+  const requestJobId = jobId;  // クロージャでキャプチャ
+  jobModalState.isLoadingJob = true;
+
   google.script.run
     .withSuccessHandler((response) => {
+      // 古いリクエストの結果を無視
+      if (jobModalState.jobId !== requestJobId) {
+        console.log('Ignoring stale getJob response for:', requestJobId);
+        return;
+      }
+
+      jobModalState.isLoadingJob = false;
+
       if (!response.ok) {
         showToast(response.error?.message || 'データの取得に失敗しました', 'error');
         return;
@@ -179,8 +246,21 @@ function loadJobData(jobId) {
       } else {
         resetSlotsUI();
       }
+
+      // キャッシュに保存（スロット含む完全なデータ）
+      saveJobToCache(job.job_id, {
+        ...job,
+        slots: slots || []
+      });
     })
     .withFailureHandler((error) => {
+      // 古いリクエストのエラーを無視
+      if (jobModalState.jobId !== requestJobId) {
+        console.log('Ignoring stale getJob error for:', requestJobId);
+        return;
+      }
+
+      jobModalState.isLoadingJob = false;
       showToast(error.message, 'error');
     })
     .getJob(jobId);
@@ -535,6 +615,10 @@ function loadSlotsToUI(slots) {
   tbody.innerHTML = '';
   currentSlots = slots || [];
 
+  // 現在選択されているモードを確認
+  const currentModeRadio = document.querySelector('input[name="slots_mode"]:checked');
+  const currentMode = currentModeRadio ? currentModeRadio.value : null;
+
   if (currentSlots.length > 0) {
     // 先にスロット行を追加（toggleSlotsModeの自動追加を防ぐ）
     currentSlots.forEach(slot => {
@@ -544,9 +628,16 @@ function loadSlotsToUI(slots) {
     document.querySelector('input[name="slots_mode"][value="detailed"]').checked = true;
     toggleSlotsMode();
   } else {
-    // シンプルモードに
-    document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
-    toggleSlotsMode();
+    // スロットが空の場合
+    // ユーザーが既に詳細モードを選択している場合はそのまま維持
+    if (currentMode === 'detailed') {
+      // 詳細モードを維持したまま、toggleSlotsModeを呼んで空行を追加
+      toggleSlotsMode();
+    } else {
+      // ユーザーがまだモードを選択していないか、シンプルモードの場合のみシンプルモードに設定
+      document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
+      toggleSlotsMode();
+    }
   }
 }
 
