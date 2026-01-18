@@ -61,10 +61,29 @@ function openJobAssignments(jobId) {
   const slotSelectRow = document.getElementById('slot-select-row');
   if (slotSelectRow) slotSelectRow.style.display = 'none';
 
+  // Reset slot select (clear options and reset to default)
+  const slotSelect = document.getElementById('form-slot-id');
+  if (slotSelect) {
+    slotSelect.innerHTML = '<option value="">（枠を選択）</option>';
+    slotSelect.value = '';
+  }
+  const slotHint = document.getElementById('slot-status-hint');
+  if (slotHint) slotHint.textContent = '';
+
   // Reset filters and search
   document.getElementById('staff-search').value = '';
   document.getElementById('staff-skill-filter').value = '';
   document.getElementById('staff-type-filter').value = '';
+
+  // Reset form fields (prevent old values from previous job)
+  document.getElementById('form-invoice-unit').value = 'basic';
+  document.getElementById('form-transport-area').value = '';
+  document.getElementById('form-transport-amount').value = '';
+  document.getElementById('form-assignment-role').value = '';
+  document.getElementById('form-is-leader').checked = false;
+
+  // Reset selected count display
+  document.getElementById('selected-count').textContent = '';
 
   // Reset save button
   updateSaveButton();
