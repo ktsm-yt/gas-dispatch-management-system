@@ -1,0 +1,715 @@
+<!-- Job Modal JavaScript - Shared Component -->
+<!-- Usage: <?!= include('job_modal_js'); ?> -->
+<!-- Requires: escapeHtml(), showToast() functions to be defined by host page -->
+<!-- Callback: onJobModalSave(job, slots, isNew) - define in host page to handle updates -->
+<!-- Callback: onJobModalClose() - define in host page to handle modal close -->
+
+<script>
+// ========== Job Modal State ==========
+let jobModalState = {
+  jobId: null,
+  job: null,
+  slots: [],
+  jobUpdatedAt: null,
+  customers: [],
+  customerDropdownIndex: -1,
+  isSaving: false,
+  saveAndContinue: false
+};
+
+// ========== Job Modal Functions ==========
+
+/**
+ * 案件モーダルを開く
+ * @param {string|null} jobId - 編集する案件ID（新規の場合はnull）
+ * @param {Object} options - オプション
+ * @param {string} options.defaultDate - デフォルトの作業日
+ * @param {string} options.defaultCustomerId - デフォルトの顧客ID
+ * @param {string} options.defaultCustomerName - デフォルトの顧客名
+ * @param {boolean} options.showSaveNext - 「保存して次へ」ボタンを表示
+ * @param {Object} options.cachedJob - キャッシュされた案件データ（スロット含む）
+ */
+function openJobModal(jobId = null, options = {}) {
+  jobModalState.jobId = jobId;
+  jobModalState.job = null;
+  jobModalState.slots = [];
+  jobModalState.jobUpdatedAt = null;
+  jobModalState.saveAndContinue = false;
+
+  // Reset form
+  document.getElementById('job-form').reset();
+  document.getElementById('job-id').value = '';
+  document.getElementById('job-updated-at').value = '';
+  document.getElementById('customer-id').value = '';
+  document.getElementById('customer-search').value = '';
+
+  // Reset slots UI
+  resetSlotsUI();
+
+  // Title
+  document.getElementById('job-modal-title').textContent = jobId ? '案件編集' : '案件登録';
+
+  // Save buttons
+  const saveNextBtn = document.getElementById('job-save-next-btn');
+  const deleteBtn = document.getElementById('job-delete-btn');
+  if (saveNextBtn) {
+    saveNextBtn.style.display = options.showSaveNext ? 'inline-block' : 'none';
+  }
+  // Delete button - only show in edit mode
+  if (deleteBtn) {
+    deleteBtn.style.display = jobId ? 'inline-block' : 'none';
+  }
+
+  // Default values
+  if (options.defaultDate) {
+    document.getElementById('work-date').value = options.defaultDate;
+  }
+  if (options.defaultCustomerId && options.defaultCustomerName) {
+    document.getElementById('customer-id').value = options.defaultCustomerId;
+    document.getElementById('customer-search').value = options.defaultCustomerName;
+  }
+
+  // Show modal
+  document.getElementById('job-modal').style.display = 'flex';
+
+  // Load job data if editing
+  if (jobId) {
+    // キャッシュされた案件データがある場合は先に表示（スロット含む）
+    if (options.cachedJob) {
+      fillFormFromCache(options.cachedJob);
+    }
+    // 完全なデータをバックグラウンドで取得
+    loadJobData(jobId);
+  }
+}
+
+/**
+ * キャッシュされた案件データでフォームを埋める（即座に表示）
+ * @param {Object} job - キャッシュされた案件データ
+ */
+function fillFormFromCache(job) {
+  if (!job) return;
+
+  document.getElementById('job-id').value = job.job_id || '';
+  document.getElementById('customer-id').value = job.customer_id || '';
+  document.getElementById('customer-search').value = job.customer_name || '';
+  document.getElementById('site-name').value = job.site_name || '';
+  document.getElementById('site-address').value = job.site_address || '';
+  document.getElementById('work-date').value = job.work_date || '';
+  document.getElementById('time-slot').value = job.time_slot || 'am';
+  document.getElementById('start-time').value = formatStartTimeForModal(job.start_time);
+  document.getElementById('work-category').value = job.work_category || '';
+  document.getElementById('status').value = job.status || 'pending';
+  document.getElementById('supervisor-name').value = job.supervisor_name || '';
+  document.getElementById('notes').value = job.notes || '';
+
+  // pay_unit正規化: 'half'(旧) → 'halfday'(新)
+  const normalizedPayUnit = job.pay_unit === 'half' ? 'halfday' : (job.pay_unit || '');
+  document.getElementById('pay-unit').value = normalizedPayUnit;
+  document.getElementById('required-count').value = job.required_count || 1;
+
+  // キャッシュにスロットがあれば即座にロード
+  if (job.slots && job.slots.length > 0) {
+    loadSlotsToUI(job.slots);
+  }
+}
+
+function closeJobModal() {
+  document.getElementById('job-modal').style.display = 'none';
+
+  // Call callback if defined
+  if (typeof onJobModalClose === 'function') {
+    onJobModalClose();
+  }
+
+  // Reset state
+  jobModalState = {
+    jobId: null,
+    job: null,
+    slots: [],
+    jobUpdatedAt: null,
+    customers: jobModalState.customers, // Keep customer cache
+    customerDropdownIndex: -1,
+    isSaving: false,
+    saveAndContinue: false
+  };
+}
+
+function loadJobData(jobId) {
+  google.script.run
+    .withSuccessHandler((response) => {
+      if (!response.ok) {
+        showToast(response.error?.message || 'データの取得に失敗しました', 'error');
+        return;
+      }
+
+      const { job, slots } = response.data;
+      jobModalState.job = job;
+      jobModalState.slots = slots || [];
+      jobModalState.jobUpdatedAt = job.updated_at;
+
+      // Fill form
+      document.getElementById('job-id').value = job.job_id;
+      document.getElementById('job-updated-at').value = job.updated_at;
+      document.getElementById('customer-id').value = job.customer_id;
+      document.getElementById('customer-search').value = job.customer_name || '';
+      document.getElementById('site-name').value = job.site_name || '';
+      document.getElementById('site-address').value = job.site_address || '';
+      document.getElementById('work-date').value = job.work_date || '';
+      document.getElementById('time-slot').value = job.time_slot || 'am';
+      document.getElementById('start-time').value = formatStartTimeForModal(job.start_time);
+      document.getElementById('work-category').value = job.work_category || '';
+      document.getElementById('work-detail').value = job.work_detail || '';
+      document.getElementById('status').value = job.status || 'pending';
+      document.getElementById('supervisor-name').value = job.supervisor_name || '';
+      document.getElementById('order-number').value = job.order_number || '';
+      document.getElementById('branch-office').value = job.branch_office || '';
+      document.getElementById('property-code').value = job.property_code || '';
+      document.getElementById('construction-div').value = job.construction_div || '';
+      document.getElementById('notes').value = job.notes || '';
+
+      // pay_unit正規化: 'half'(旧) → 'halfday'(新)
+      const normalizedPayUnit = job.pay_unit === 'half' ? 'halfday' : (job.pay_unit || '');
+      document.getElementById('pay-unit').value = normalizedPayUnit;
+      document.getElementById('required-count').value = job.required_count || 1;
+
+      // Load slots
+      if (slots && slots.length > 0) {
+        loadSlotsToUI(slots);
+      } else {
+        resetSlotsUI();
+      }
+    })
+    .withFailureHandler((error) => {
+      showToast(error.message, 'error');
+    })
+    .getJob(jobId);
+}
+
+function submitJobModal(saveAndContinue = false) {
+  if (jobModalState.isSaving) return;
+
+  const form = document.getElementById('job-form');
+  if (!form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+
+  const customerId = document.getElementById('customer-id').value;
+  if (!customerId) {
+    showToast('顧客を選択してください', 'error');
+    document.getElementById('customer-search').focus();
+    return;
+  }
+
+  jobModalState.saveAndContinue = saveAndContinue;
+
+  const formData = new FormData(form);
+  const job = {};
+  formData.forEach((value, key) => {
+    if (value !== '') {
+      job[key] = value;
+    }
+  });
+
+  if (job.required_count) {
+    job.required_count = parseInt(job.required_count, 10);
+  }
+
+  const jobId = document.getElementById('job-id').value;
+  const updatedAt = document.getElementById('job-updated-at').value;
+
+  if (jobId) {
+    job.job_id = jobId;
+  } else {
+    delete job.job_id;
+  }
+
+  // Get slots data (null if simple mode)
+  const slotsData = getSlotsData();
+
+  // In detailed mode, remove simple mode fields
+  if (slotsData !== null) {
+    delete job.required_count;
+    delete job.pay_unit;
+  }
+
+  // Preserve values for "Save and Next" mode
+  const preservedDate = document.getElementById('work-date').value;
+  const preservedCustomerId = customerId;
+  const preservedCustomerName = document.getElementById('customer-search').value;
+
+  // Disable buttons
+  jobModalState.isSaving = true;
+  const saveBtn = document.getElementById('job-save-btn');
+  const saveNextBtn = document.getElementById('job-save-next-btn');
+  saveBtn.disabled = true;
+  saveNextBtn.disabled = true;
+  const clickedBtn = saveAndContinue ? saveNextBtn : saveBtn;
+  clickedBtn.textContent = '保存中...';
+
+  google.script.run
+    .withSuccessHandler((response) => {
+      jobModalState.isSaving = false;
+      saveBtn.disabled = false;
+      saveNextBtn.disabled = false;
+      saveBtn.textContent = '保存';
+      saveNextBtn.textContent = '保存して次へ';
+
+      if (response.ok) {
+        showToast('保存しました', 'success');
+
+        // Callback to host page
+        const isNew = !jobId;
+        if (typeof onJobModalSave === 'function') {
+          onJobModalSave(response.data.job, response.data.slots, isNew);
+        }
+
+        if (jobModalState.saveAndContinue) {
+          // Reset form for next entry but preserve date and customer
+          resetJobFormForNext(preservedDate, preservedCustomerId, preservedCustomerName);
+        } else {
+          closeJobModal();
+        }
+      } else {
+        if (response.error?.code === 'CONFLICT_ERROR') {
+          showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
+        } else {
+          showToast(response.error?.message || '保存に失敗しました', 'error');
+        }
+      }
+    })
+    .withFailureHandler((error) => {
+      jobModalState.isSaving = false;
+      saveBtn.disabled = false;
+      saveNextBtn.disabled = false;
+      saveBtn.textContent = '保存';
+      saveNextBtn.textContent = '保存して次へ';
+      showToast(error.message, 'error');
+    })
+    .saveJob(job, updatedAt || null, slotsData);
+}
+
+function resetJobFormForNext(date, customerId, customerName) {
+  // Reset form but keep date and customer
+  document.getElementById('job-form').reset();
+  document.getElementById('job-id').value = '';
+  document.getElementById('job-updated-at').value = '';
+
+  if (date) document.getElementById('work-date').value = date;
+  if (customerId) document.getElementById('customer-id').value = customerId;
+  if (customerName) document.getElementById('customer-search').value = customerName;
+
+  resetSlotsUI();
+  document.getElementById('job-modal-title').textContent = '案件登録';
+}
+
+/**
+ * 案件を削除
+ * Callback: onJobModalDelete(jobId, job) - define in host page to handle delete
+ */
+function deleteJobModal() {
+  const jobId = document.getElementById('job-id').value;
+  if (!jobId) return;
+
+  const job = jobModalState.job;
+  const jobName = job ? `${job.site_name}（${job.customer_name || ''}）` : '案件';
+
+  // 確認ダイアログ（ConfirmationModalがある場合はそちらを使用、なければconfirm）
+  if (typeof ConfirmationModal !== 'undefined' && ConfirmationModal.show) {
+    ConfirmationModal.show({
+      type: 'danger',
+      title: '削除の確認',
+      message: `「${jobName}」を削除しますか？\n\n※この操作は取り消せません。\n※関連する配置データも確認してください。`,
+      confirmText: '削除',
+      onConfirm: () => executeDeleteJob(jobId, job)
+    });
+  } else {
+    if (confirm(`「${jobName}」を削除しますか？\n\nこの操作は取り消せません。`)) {
+      executeDeleteJob(jobId, job);
+    }
+  }
+}
+
+function executeDeleteJob(jobId, job) {
+  const updatedAt = document.getElementById('job-updated-at').value;
+
+  // Callback for optimistic UI update
+  if (typeof onJobModalDelete === 'function') {
+    onJobModalDelete(jobId, job, false); // isConfirmed = false (before server response)
+  }
+
+  closeJobModal();
+  showToast('削除しています...', 'info');
+
+  google.script.run
+    .withSuccessHandler((response) => {
+      if (response.ok) {
+        showToast('削除しました', 'success');
+        if (typeof onJobModalDelete === 'function') {
+          onJobModalDelete(jobId, job, true); // isConfirmed = true (after server response)
+        }
+      } else {
+        if (response.error?.code === 'CONFLICT_ERROR') {
+          showToast('他のユーザーによって更新されています。再読み込みします。', 'error');
+        } else if (response.error?.code === 'HAS_ASSIGNMENTS') {
+          showToast('この案件には配置データが存在するため削除できません。', 'error');
+        } else {
+          showToast(response.error?.message || '削除に失敗しました', 'error');
+        }
+        // Rollback - notify host page to reload
+        if (typeof onJobModalDeleteFailed === 'function') {
+          onJobModalDeleteFailed(jobId);
+        }
+      }
+    })
+    .withFailureHandler((error) => {
+      showToast('削除に失敗しました: ' + error.message, 'error');
+      if (typeof onJobModalDeleteFailed === 'function') {
+        onJobModalDeleteFailed(jobId);
+      }
+    })
+    .deleteJob(jobId, updatedAt || null);
+}
+
+// ========== Slot Functions ==========
+
+let currentSlots = []; // 現在編集中の枠データ
+
+/**
+ * シンプル/詳細モードを切り替え
+ */
+function toggleSlotsMode() {
+  const modeRadio = document.querySelector('input[name="slots_mode"]:checked');
+  if (!modeRadio) return;
+
+  const mode = modeRadio.value;
+  const simpleMode = document.getElementById('simple-slots-mode');
+  const detailedMode = document.getElementById('detailed-slots-mode');
+  const requiredCount = document.getElementById('required-count');
+  const payUnit = document.getElementById('pay-unit');
+
+  if (!simpleMode || !detailedMode) return;
+
+  if (mode === 'simple') {
+    simpleMode.style.display = 'block';
+    detailedMode.style.display = 'none';
+    // シンプルモードに戻るとき、必要人数と単価区分を必須に
+    if (requiredCount) requiredCount.required = true;
+    if (payUnit) payUnit.required = true;
+  } else {
+    simpleMode.style.display = 'none';
+    detailedMode.style.display = 'block';
+    // 詳細モードではシンプルモードの入力は必須でなくする
+    if (requiredCount) requiredCount.required = false;
+    if (payUnit) payUnit.required = false;
+    // 枠行がなければ1行追加
+    const tbody = document.getElementById('slots-table-body');
+    if (tbody && tbody.children.length === 0) {
+      addSlotRow();
+    }
+  }
+}
+
+/**
+ * 枠行を追加
+ */
+function addSlotRow(slotData = null) {
+  const tbody = document.getElementById('slots-table-body');
+
+  // デフォルト値
+  const slot = slotData || {
+    slot_id: '',
+    slot_time_slot: document.getElementById('time-slot').value || 'am',
+    slot_pay_unit: 'basic',
+    slot_count: 1,
+    notes: ''
+  };
+
+  const row = document.createElement('tr');
+  row.dataset.slotId = slot.slot_id || '';
+  row.innerHTML = `
+    <td>
+      <select class="slot-time-slot" onchange="updateSlotsTotal()">
+        <option value="jotou" ${slot.slot_time_slot === 'jotou' ? 'selected' : ''}>上棟</option>
+        <option value="shuujitsu" ${slot.slot_time_slot === 'shuujitsu' ? 'selected' : ''}>終日</option>
+        <option value="am" ${slot.slot_time_slot === 'am' ? 'selected' : ''}>AM</option>
+        <option value="pm" ${slot.slot_time_slot === 'pm' ? 'selected' : ''}>PM</option>
+        <option value="yakin" ${slot.slot_time_slot === 'yakin' ? 'selected' : ''}>夜勤</option>
+        <option value="mitei" ${slot.slot_time_slot === 'mitei' ? 'selected' : ''}>未定</option>
+      </select>
+    </td>
+    <td>
+      <select class="slot-pay-unit">
+        <option value="basic" ${slot.slot_pay_unit === 'basic' ? 'selected' : ''}>基本</option>
+        <option value="halfday" ${slot.slot_pay_unit === 'halfday' ? 'selected' : ''}>ハーフ</option>
+        <option value="fullday" ${slot.slot_pay_unit === 'fullday' ? 'selected' : ''}>終日</option>
+        <option value="night" ${slot.slot_pay_unit === 'night' ? 'selected' : ''}>夜勤</option>
+        <option value="tobi" ${slot.slot_pay_unit === 'tobi' ? 'selected' : ''}>鳶</option>
+        <option value="tobiage" ${slot.slot_pay_unit === 'tobiage' ? 'selected' : ''}>鳶揚げ</option>
+      </select>
+    </td>
+    <td>
+      <input type="number" class="slot-count" min="1" value="${slot.slot_count || 1}" onchange="updateSlotsTotal()">
+    </td>
+    <td>
+      <input type="text" class="slot-notes" value="${typeof escapeHtml === 'function' ? escapeHtml(slot.notes || '') : (slot.notes || '')}" placeholder="備考">
+    </td>
+    <td>
+      <button type="button" class="btn btn-danger btn-sm" onclick="removeSlotRow(this)">×</button>
+    </td>
+  `;
+
+  tbody.appendChild(row);
+  updateSlotsTotal();
+}
+
+/**
+ * 枠行を削除
+ */
+function removeSlotRow(btn) {
+  const row = btn.closest('tr');
+  const slotId = row.dataset.slotId;
+
+  // 既存の枠の場合、警告
+  if (slotId) {
+    if (!confirm('この枠を削除しますか？\n※この枠に紐づく配置がある場合は削除できません。')) {
+      return;
+    }
+  }
+
+  row.remove();
+  updateSlotsTotal();
+}
+
+/**
+ * 枠の合計人数を更新
+ */
+function updateSlotsTotal() {
+  const tbody = document.getElementById('slots-table-body');
+  const rows = tbody.querySelectorAll('tr');
+  let total = 0;
+
+  rows.forEach(row => {
+    const countInput = row.querySelector('.slot-count');
+    total += parseInt(countInput.value, 10) || 0;
+  });
+
+  document.getElementById('slots-total-count').textContent = total;
+}
+
+/**
+ * 枠データを収集
+ */
+function getSlotsData() {
+  const mode = document.querySelector('input[name="slots_mode"]:checked').value;
+
+  if (mode === 'simple') {
+    // シンプルモードでは枠データなし
+    return null;
+  }
+
+  const tbody = document.getElementById('slots-table-body');
+  const rows = tbody.querySelectorAll('tr');
+  const slots = [];
+
+  rows.forEach((row, index) => {
+    slots.push({
+      slot_id: row.dataset.slotId || '',
+      slot_time_slot: row.querySelector('.slot-time-slot').value,
+      slot_pay_unit: row.querySelector('.slot-pay-unit').value,
+      slot_count: parseInt(row.querySelector('.slot-count').value, 10) || 1,
+      notes: row.querySelector('.slot-notes').value || '',
+      sort_order: index + 1
+    });
+  });
+
+  return slots;
+}
+
+/**
+ * 枠データをUIにロード
+ */
+function loadSlotsToUI(slots) {
+  const tbody = document.getElementById('slots-table-body');
+  tbody.innerHTML = '';
+  currentSlots = slots || [];
+
+  if (currentSlots.length > 0) {
+    // 先にスロット行を追加（toggleSlotsModeの自動追加を防ぐ）
+    currentSlots.forEach(slot => {
+      addSlotRow(slot);
+    });
+    // その後で詳細モードに切り替え（既に行があるので自動追加されない）
+    document.querySelector('input[name="slots_mode"][value="detailed"]').checked = true;
+    toggleSlotsMode();
+  } else {
+    // シンプルモードに
+    document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
+    toggleSlotsMode();
+  }
+}
+
+/**
+ * モーダルオープン時に枠UIをリセット
+ */
+function resetSlotsUI() {
+  const tbody = document.getElementById('slots-table-body');
+  if (!tbody) {
+    console.warn('resetSlotsUI: slots-table-body not found');
+    return;
+  }
+  tbody.innerHTML = '';
+  currentSlots = [];
+  const simpleRadio = document.querySelector('input[name="slots_mode"][value="simple"]');
+  if (simpleRadio) {
+    simpleRadio.checked = true;
+    toggleSlotsMode();
+  }
+}
+
+// ========== Customer Autocomplete ==========
+
+function setupCustomerAutocomplete() {
+  const searchInput = document.getElementById('customer-search');
+  const dropdown = document.getElementById('customer-dropdown');
+
+  if (!searchInput || !dropdown) return;
+
+  let debounceTimer;
+
+  searchInput.addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    const query = e.target.value.trim();
+
+    if (query.length < 1) {
+      dropdown.style.display = 'none';
+      return;
+    }
+
+    debounceTimer = setTimeout(() => {
+      searchCustomers(query);
+    }, 200);
+  });
+
+  searchInput.addEventListener('focus', () => {
+    if (searchInput.value.trim().length >= 1) {
+      searchCustomers(searchInput.value.trim());
+    }
+  });
+
+  searchInput.addEventListener('blur', () => {
+    // Delay to allow click on dropdown
+    setTimeout(() => {
+      dropdown.style.display = 'none';
+    }, 200);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    const items = dropdown.querySelectorAll('.autocomplete-item');
+    if (items.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      jobModalState.customerDropdownIndex = Math.min(jobModalState.customerDropdownIndex + 1, items.length - 1);
+      updateDropdownHighlight(items);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      jobModalState.customerDropdownIndex = Math.max(jobModalState.customerDropdownIndex - 1, 0);
+      updateDropdownHighlight(items);
+    } else if (e.key === 'Enter' && jobModalState.customerDropdownIndex >= 0) {
+      e.preventDefault();
+      items[jobModalState.customerDropdownIndex].click();
+    } else if (e.key === 'Escape') {
+      dropdown.style.display = 'none';
+    }
+  });
+}
+
+function searchCustomers(query) {
+  const dropdown = document.getElementById('customer-dropdown');
+
+  google.script.run
+    .withSuccessHandler((response) => {
+      if (!response.ok || !response.data.customers) {
+        dropdown.style.display = 'none';
+        return;
+      }
+
+      const customers = response.data.customers;
+      if (customers.length === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-item no-result">該当なし</div>';
+        dropdown.style.display = 'block';
+        return;
+      }
+
+      jobModalState.customerDropdownIndex = -1;
+      dropdown.innerHTML = customers.map((c, i) => {
+        const displayName = c.company_name + (c.branch_name ? ' ' + c.branch_name : '');
+        return `<div class="autocomplete-item" data-id="${c.customer_id}" data-name="${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>`;
+      }).join('');
+
+      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.getElementById('customer-id').value = item.dataset.id;
+          document.getElementById('customer-search').value = item.dataset.name;
+          dropdown.style.display = 'none';
+        });
+      });
+
+      dropdown.style.display = 'block';
+    })
+    .withFailureHandler(() => {
+      dropdown.style.display = 'none';
+    })
+    .searchCustomers({ search_term: query, limit: 10 });
+}
+
+function updateDropdownHighlight(items) {
+  items.forEach((item, i) => {
+    item.classList.toggle('highlighted', i === jobModalState.customerDropdownIndex);
+  });
+}
+
+// ========== Utility Functions ==========
+
+function formatStartTimeForModal(startTime) {
+  if (!startTime) return '';
+  // 1899年のDateや長いISO文字列は無効とみなす
+  if (typeof startTime === 'string' && (startTime.includes('1899') || startTime.length > 10)) {
+    return '';
+  }
+  return startTime;
+}
+
+// ========== Event Listeners Setup ==========
+
+function setupJobModalEventListeners() {
+  // Close modal on overlay click
+  const modal = document.getElementById('job-modal');
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target.id === 'job-modal') {
+        closeJobModal();
+      }
+    });
+  }
+
+  // Close on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('job-modal').style.display !== 'none') {
+      closeJobModal();
+    }
+  });
+
+  // Setup customer autocomplete
+  setupCustomerAutocomplete();
+}
+
+// Auto-setup when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupJobModalEventListeners);
+} else {
+  setupJobModalEventListeners();
+}
+</script>

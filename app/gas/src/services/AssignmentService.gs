@@ -116,14 +116,37 @@ const AssignmentService = {
       // 追加/更新処理
       if (changes.upserts && changes.upserts.length > 0) {
         for (const assignment of changes.upserts) {
-          // invoice_unit を小文字に正規化（UI互換性のため）
-          if (assignment.invoice_unit) {
-            assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
-          }
+          // slot_id検証とpay_unit同期
+          if (assignment.slot_id) {
+            // スロットが指定されている場合、検証を行う
+            const slot = SlotRepository.findById(assignment.slot_id);
 
-          // pay_unit = invoice_unit で強制同期（搾取防止）
-          // 請求区分と給与区分は常に一致させる
-          assignment.pay_unit = assignment.invoice_unit;
+            if (!slot) {
+              // スロットが存在しない
+              Logger.log(`Warning: slot_id ${assignment.slot_id} not found for assignment`);
+              continue; // この配置をスキップ
+            }
+
+            if (slot.job_id !== jobId) {
+              // スロットが別の案件に属している - セキュリティリスク
+              Logger.log(`Error: slot_id ${assignment.slot_id} belongs to job ${slot.job_id}, not ${jobId}`);
+              continue; // この配置をスキップ
+            }
+
+            // スロットのpay_unitで上書き（データ整合性）
+            assignment.invoice_unit = slot.slot_pay_unit;
+            assignment.pay_unit = slot.slot_pay_unit;
+          } else {
+            // スロット指定なし - 従来通りinvoice_unitを使用
+            // invoice_unit を小文字に正規化（UI互換性のため）
+            if (assignment.invoice_unit) {
+              assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
+            }
+
+            // pay_unit = invoice_unit で強制同期（搾取防止）
+            // 請求区分と給与区分は常に一致させる
+            assignment.pay_unit = assignment.invoice_unit;
+          }
 
           // 単価オーバーライドは無効化（常にマスタ参照）
           // 調整が必要な場合は支払画面/請求画面の調整額を使用
@@ -220,12 +243,24 @@ const AssignmentService = {
         };
       });
 
+      // スロット情報を取得（配置モーダルの状態更新用）
+      const slotsData = SlotService.getSlotsByJobId(jobId);
+      const slots = slotsData.slots || [];
+
+      // スロット充足状況を取得
+      let slotStatus = null;
+      if (slots.length > 0) {
+        slotStatus = SlotService.getSlotStatus(jobId);
+      }
+
       return buildSuccessResponse({
         assignments: enrichedAssignments,
         inserted: results.inserted.length,
         updated: results.updated.length,
         deleted: results.deleted.length,
-        job: JobRepository.findById(jobId)
+        job: JobRepository.findById(jobId),
+        slots: slots,
+        slotStatus: slotStatus
       }, requestId);
 
     } catch (e) {

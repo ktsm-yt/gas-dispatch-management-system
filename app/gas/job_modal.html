@@ -1,0 +1,228 @@
+<!-- Job Modal - Shared Component -->
+<!-- Usage: <?!= include('job_modal'); ?> -->
+<!-- Requires: job_modal_js.html, job_modal_styles.html -->
+<!-- Callback: onJobModalSave(job, slots) - define in host page to handle save response -->
+
+<!-- Job Edit Modal -->
+<div class="modal-overlay" id="job-modal" style="display: none;">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <h2 class="modal-title" id="job-modal-title">案件編集</h2>
+      <button class="modal-close" onclick="closeJobModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="job-form">
+        <input type="hidden" id="job-id" name="job_id">
+        <input type="hidden" id="job-updated-at" name="updated_at">
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="customer-search">顧客 *</label>
+            <div class="autocomplete-wrapper">
+              <input type="text" id="customer-search" placeholder="会社名を入力..." autocomplete="off" required>
+              <input type="hidden" id="customer-id" name="customer_id">
+              <div class="autocomplete-dropdown" id="customer-dropdown"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="work-date">作業日 *</label>
+            <input type="date" id="work-date" name="work_date" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="site-name">現場名 *</label>
+          <input type="text" id="site-name" name="site_name" required placeholder="〇〇マンション新築工事">
+        </div>
+
+        <div class="form-group">
+          <label for="site-address">現場住所</label>
+          <input type="text" id="site-address" name="site_address" placeholder="東京都〇〇区...">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="time-slot">時間区分 *</label>
+            <select id="time-slot" name="time_slot" required>
+              <option value="jotou">上棟</option>
+              <option value="shuujitsu">終日</option>
+              <option value="am">AM</option>
+              <option value="pm">PM</option>
+              <option value="yakin">夜勤</option>
+              <option value="mitei">未定</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="start-time">開始時間</label>
+            <input type="time" id="start-time" name="start_time">
+          </div>
+        </div>
+
+        <!-- 人員枠設定セクション -->
+        <div class="slots-section">
+          <div class="slots-header">
+            <label>人員枠設定</label>
+            <div class="slots-mode-toggle">
+              <label class="radio-label">
+                <input type="radio" name="slots_mode" value="simple" checked onchange="toggleSlotsMode()">
+                シンプル
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="slots_mode" value="detailed" onchange="toggleSlotsMode()">
+                詳細
+              </label>
+            </div>
+          </div>
+
+          <!-- シンプルモード（従来通り） -->
+          <div id="simple-slots-mode">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="required-count">必要人数 *</label>
+                <input type="number" id="required-count" name="required_count" min="1" value="1" required>
+              </div>
+              <div class="form-group">
+                <label for="pay-unit">単価区分 *</label>
+                <select id="pay-unit" name="pay_unit" required>
+                  <option value="">選択してください</option>
+                  <option value="basic">基本</option>
+                  <option value="halfday">ハーフ</option>
+                  <option value="fullday">終日</option>
+                  <option value="night">夜勤</option>
+                  <option value="tobi">鳶</option>
+                  <option value="tobiage">鳶揚げ</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 詳細モード（枠設定） -->
+          <div id="detailed-slots-mode" style="display: none;">
+            <div class="slots-table-container">
+              <table class="slots-table">
+                <thead>
+                  <tr>
+                    <th>時間区分</th>
+                    <th>単価区分</th>
+                    <th>人数</th>
+                    <th>備考</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="slots-table-body">
+                  <!-- 動的に追加される -->
+                </tbody>
+              </table>
+            </div>
+            <div class="slots-footer">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addSlotRow()">+ 枠を追加</button>
+              <span class="slots-total">合計: <strong id="slots-total-count">0</strong> 名</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="work-category">作業カテゴリ</label>
+            <select id="work-category" name="work_category">
+              <option value="">選択してください</option>
+              <option value="jotou">上棟</option>
+              <option value="keisagyo">軽作業</option>
+              <option value="niage">荷揚げ</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="work-detail">作業詳細</label>
+            <select id="work-detail" name="work_detail">
+              <option value="">選択してください</option>
+              <!-- 資材系 -->
+              <option value="sekkou">ボード</option>
+              <option value="tategu">建具</option>
+              <option value="kitchen">キッチン</option>
+              <option value="unit_bath">ユニットバス</option>
+              <option value="flooring">フローリング</option>
+              <option value="habaki">幅木</option>
+              <option value="cross">クロス</option>
+              <option value="prefab">プレハブ材</option>
+              <option value="scaffold">足場材</option>
+              <option value="material">資材一般</option>
+              <option value="sk">SK</option>
+              <option value="toilet">トイレ</option>
+              <option value="furniture">家具</option>
+              <option value="appliance">家電</option>
+              <!-- 上棟系 -->
+              <option value="tobi">鳶</option>
+              <option value="tobi_hojo">鳶補助</option>
+              <option value="niage">荷揚げ</option>
+              <option value="tobiage">鳶揚げ</option>
+              <!-- 作業系 -->
+              <option value="hansyutsu">搬出</option>
+              <option value="temoto">手元</option>
+              <option value="kaitai">解体</option>
+              <option value="seisou">清掃</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="status">ステータス</label>
+            <select id="status" name="status">
+              <option value="pending">未配置</option>
+              <option value="assigned">配置済</option>
+              <option value="hold">保留</option>
+              <option value="completed">完了</option>
+              <option value="cancelled">キャンセル</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="supervisor-name">担当監督名</label>
+            <input type="text" id="supervisor-name" name="supervisor_name">
+          </div>
+        </div>
+
+        <details class="invoice-fields">
+          <summary>請求書用項目</summary>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="order-number">発注ナンバー</label>
+              <input type="text" id="order-number" name="order_number">
+            </div>
+            <div class="form-group">
+              <label for="branch-office">営業所</label>
+              <input type="text" id="branch-office" name="branch_office">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="property-code">物件コード</label>
+              <input type="text" id="property-code" name="property_code">
+            </div>
+            <div class="form-group">
+              <label for="construction-div">担当工事課</label>
+              <input type="text" id="construction-div" name="construction_div">
+            </div>
+          </div>
+        </details>
+
+        <div class="form-group">
+          <label for="notes">備考</label>
+          <textarea id="notes" name="notes" rows="3" placeholder="特記事項があれば記入"></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <div class="modal-footer-left">
+        <button type="button" class="btn btn-danger" id="job-delete-btn" onclick="deleteJobModal()" style="display: none;">削除</button>
+      </div>
+      <div class="modal-footer-right">
+        <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
+        <button type="button" class="btn btn-primary" id="job-save-btn" onclick="submitJobModal()">保存</button>
+        <button type="button" class="btn btn-primary" id="job-save-next-btn" onclick="submitJobModal(true)" style="display: none;">保存して次へ</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Note: Host page must also include job_modal_styles and job_modal_js separately -->

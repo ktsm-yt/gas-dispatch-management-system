@@ -181,9 +181,10 @@ function getJob(jobId) {
  * 案件を保存（新規/更新）
  * @param {Object} job - 案件データ
  * @param {string|null} expectedUpdatedAt - 期待するupdated_at（更新時）
+ * @param {Object[]} slots - 枠データ（オプション）
  * @returns {Object} APIレスポンス
  */
-function saveJob(job, expectedUpdatedAt) {
+function saveJob(job, expectedUpdatedAt, slots) {
   const requestId = generateRequestId();
   let lock = null;
 
@@ -220,8 +221,11 @@ function saveJob(job, expectedUpdatedAt) {
       );
     }
 
-    // Service呼び出し
-    const result = JobService.save(job, expectedUpdatedAt);
+    // Service呼び出し（枠データも渡す）
+    Logger.log('saveJob: job data = ' + JSON.stringify(job));
+    Logger.log('saveJob: slots data = ' + JSON.stringify(slots));
+    const result = JobService.save(job, expectedUpdatedAt, slots);
+    Logger.log('saveJob: result = ' + JSON.stringify(result));
 
     if (!result.success) {
       // エラーコード変換
@@ -230,7 +234,9 @@ function saveJob(job, expectedUpdatedAt) {
 
       if (result.error === 'VALIDATION_ERROR') {
         errorCode = ERROR_CODES.VALIDATION_ERROR;
-        message = 'Validation failed';
+        // 詳細なバリデーションエラーメッセージを返す
+        message = result.details?.message || 'Validation failed';
+        Logger.log('saveJob: validation error details = ' + JSON.stringify(result.details));
       } else if (result.error === 'CONFLICT_ERROR') {
         errorCode = ERROR_CODES.CONFLICT_ERROR;
         message = '他のユーザーによって更新されています。画面を再読み込みしてください。';
@@ -247,7 +253,10 @@ function saveJob(job, expectedUpdatedAt) {
       );
     }
 
-    return buildSuccessResponse({ job: result.job }, requestId);
+    return buildSuccessResponse({
+      job: result.job,
+      slots: result.slots || []
+    }, requestId);
 
   } catch (error) {
     Logger.log(`saveJob error: ${error.message}`);
