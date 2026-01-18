@@ -14,6 +14,7 @@ let jobModalState = {
   customers: [],
   customerDropdownIndex: -1,
   isSaving: false,
+  isLoadingJob: false,  // 案件データ読み込み中かどうか
   saveAndContinue: false
 };
 
@@ -34,6 +35,7 @@ function openJobModal(jobId = null, options = {}) {
   jobModalState.job = null;
   jobModalState.slots = [];
   jobModalState.jobUpdatedAt = null;
+  jobModalState.isLoadingJob = false;
   jobModalState.saveAndContinue = false;
 
   // Reset form
@@ -136,8 +138,19 @@ function closeJobModal() {
 }
 
 function loadJobData(jobId) {
+  const requestJobId = jobId;  // クロージャでキャプチャ
+  jobModalState.isLoadingJob = true;
+
   google.script.run
     .withSuccessHandler((response) => {
+      // 古いリクエストの結果を無視
+      if (jobModalState.jobId !== requestJobId) {
+        console.log('Ignoring stale getJob response for:', requestJobId);
+        return;
+      }
+
+      jobModalState.isLoadingJob = false;
+
       if (!response.ok) {
         showToast(response.error?.message || 'データの取得に失敗しました', 'error');
         return;
@@ -181,6 +194,13 @@ function loadJobData(jobId) {
       }
     })
     .withFailureHandler((error) => {
+      // 古いリクエストのエラーを無視
+      if (jobModalState.jobId !== requestJobId) {
+        console.log('Ignoring stale getJob error for:', requestJobId);
+        return;
+      }
+
+      jobModalState.isLoadingJob = false;
       showToast(error.message, 'error');
     })
     .getJob(jobId);
