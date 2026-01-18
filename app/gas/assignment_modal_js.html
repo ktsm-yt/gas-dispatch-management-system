@@ -45,6 +45,22 @@ function openJobAssignments(jobId) {
   // Show modal
   document.getElementById('assignment-modal').style.display = 'flex';
 
+  // Clear modal header and stats (prevent showing old data)
+  document.getElementById('modal-job-name').textContent = '読み込み中...';
+  document.getElementById('modal-job-date').textContent = '-';
+  document.getElementById('modal-job-time').textContent = '-';
+  document.getElementById('modal-job-type').textContent = '-';
+  document.getElementById('modal-required').textContent = '0';
+  document.getElementById('modal-assigned').textContent = '0';
+  document.getElementById('modal-shortage-badge').style.display = 'none';
+
+  // Clear staff list (will be set to loading in loadAssignmentModalData)
+  document.getElementById('staff-list').innerHTML = '';
+
+  // Hide slot select row (will be shown if slots exist)
+  const slotSelectRow = document.getElementById('slot-select-row');
+  if (slotSelectRow) slotSelectRow.style.display = 'none';
+
   // Reset filters and search
   document.getElementById('staff-search').value = '';
   document.getElementById('staff-skill-filter').value = '';
