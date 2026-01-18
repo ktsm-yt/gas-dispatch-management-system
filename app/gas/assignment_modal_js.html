@@ -19,14 +19,27 @@ let assignmentModalState = {
   selectedStaffIds: [],   // 選択中のスタッフID（追加/更新対象）
   stagedDeletes: [],      // 削除予定の配置ID
   isSaving: false,
+  isLoadingJob: false,    // 案件データ読み込み中かどうか
+  isLoadingStaff: false,  // スタッフデータ読み込み中かどうか
   assignmentsLoaded: false  // 配置データがロード済みかどうか
 };
 
 // ========== Modal Functions ==========
 function openJobAssignments(jobId) {
   assignmentModalState.jobId = jobId;
+
+  // 前の案件のデータを完全クリア
+  assignmentModalState.allStaff = [];
+  assignmentModalState.filteredStaff = [];
+  assignmentModalState.job = null;
+  assignmentModalState.assignments = [];
+  assignmentModalState.slots = [];
+  assignmentModalState.slotStatus = null;
+  assignmentModalState.jobUpdatedAt = null;
   assignmentModalState.selectedStaffIds = [];
   assignmentModalState.stagedDeletes = [];
+  assignmentModalState.isLoadingJob = false;
+  assignmentModalState.isLoadingStaff = false;
   assignmentModalState.assignmentsLoaded = false;
 
   // Show modal
@@ -79,23 +92,41 @@ function closeAssignmentModal() {
 }
 
 function loadAssignmentModalData(jobId) {
+  const currentJobId = jobId;  // クロージャでキャプチャ
+
+  // ローディング状態を設定
+  assignmentModalState.isLoadingJob = true;
+  assignmentModalState.isLoadingStaff = true;
+
   // Show loading
   document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
 
   // Load job, assignments, and slots (getJobはslots/slotStatusも返す)
   google.script.run
-    .withSuccessHandler(handleAssignmentData)
+    .withSuccessHandler(function(response) {
+      handleAssignmentData(response, currentJobId);
+    })
     .withFailureHandler(handleAssignmentModalError)
     .getJob(jobId);
 
   // Load available staff
   google.script.run
-    .withSuccessHandler(handleStaffData)
+    .withSuccessHandler(function(response) {
+      handleStaffData(response, currentJobId);
+    })
     .withFailureHandler(handleAssignmentModalError)
     .getAvailableStaff({ jobId: jobId, excludeAssigned: false });
 }
 
-function handleAssignmentData(response) {
+function handleAssignmentData(response, requestJobId) {
+  // 古いリクエストの結果を無視
+  if (assignmentModalState.jobId !== requestJobId) {
+    console.log('Ignoring stale getJob response for:', requestJobId);
+    return;
+  }
+
+  assignmentModalState.isLoadingJob = false;
+
   if (!response.ok) {
     showToast(response.error?.message || 'データの取得に失敗しました', 'error');
     return;
@@ -107,7 +138,6 @@ function handleAssignmentData(response) {
   assignmentModalState.slots = slots || [];
   assignmentModalState.slotStatus = slotStatus || null;
   assignmentModalState.jobUpdatedAt = job.updated_at;
-  assignmentModalState.assignmentsLoaded = true;
 
   // Update header
   document.getElementById('modal-job-name').textContent = job.site_name || '-';
@@ -121,23 +151,41 @@ function handleAssignmentData(response) {
   // Update stats
   updateModalStats();
 
-  // Re-render staff list if already loaded
-  if (assignmentModalState.allStaff.length > 0) {
+  // 両方のデータが揃った場合のみ描画
+  if (!assignmentModalState.isLoadingStaff && assignmentModalState.allStaff.length > 0) {
+    assignmentModalState.assignmentsLoaded = true;
     filterStaffList();
   }
 }
 
-function handleStaffData(response) {
+function handleStaffData(response, requestJobId) {
+  // 古いリクエストの結果を無視
+  if (assignmentModalState.jobId !== requestJobId) {
+    console.log('Ignoring stale getAvailableStaff response for:', requestJobId);
+    return;
+  }
+
+  assignmentModalState.isLoadingStaff = false;
+
   if (!response.ok) {
     document.getElementById('staff-list').innerHTML = '<div class="panel-empty">スタッフの取得に失敗しました</div>';
     return;
   }
 
   assignmentModalState.allStaff = response.data.staff || [];
-  filterStaffList();
+
+  // 両方のデータが揃った場合のみ描画
+  if (!assignmentModalState.isLoadingJob && assignmentModalState.job) {
+    assignmentModalState.assignmentsLoaded = true;
+    filterStaffList();
+  }
 }
 
 function handleAssignmentModalError(error) {
+  // ローディング状態をリセット
+  assignmentModalState.isLoadingJob = false;
+  assignmentModalState.isLoadingStaff = false;
+
   showToast('エラー: ' + error.message, 'error');
 }
 
