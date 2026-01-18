@@ -18,6 +18,59 @@ let jobModalState = {
   saveAndContinue: false
 };
 
+// ========== Job Cache ==========
+let jobCache = {};
+const JOB_CACHE_MAX_SIZE = 10;
+const JOB_CACHE_EXPIRE_MS = 5 * 60 * 1000; // 5分
+
+/**
+ * キャッシュから案件データを取得
+ * @param {string} jobId - 案件ID
+ * @returns {Object|null} - キャッシュされた案件データ（期限切れの場合はnull）
+ */
+function getJobFromCache(jobId) {
+  if (!jobId) return null;
+  const cached = jobCache[jobId];
+  if (!cached) return null;
+
+  const age = Date.now() - cached.timestamp;
+  if (age > JOB_CACHE_EXPIRE_MS) {
+    delete jobCache[jobId];
+    return null;
+  }
+
+  return cached.data;
+}
+
+/**
+ * 案件データをキャッシュに保存
+ * @param {string} jobId - 案件ID
+ * @param {Object} data - 案件データ（job + slots）
+ */
+function saveJobToCache(jobId, data) {
+  if (!jobId) return;
+
+  // LRU: キャッシュサイズ制限
+  const cacheKeys = Object.keys(jobCache);
+  if (cacheKeys.length >= JOB_CACHE_MAX_SIZE && !jobCache[jobId]) {
+    // 最も古いエントリを削除
+    let oldestKey = cacheKeys[0];
+    let oldestTime = jobCache[oldestKey].timestamp;
+    cacheKeys.forEach(key => {
+      if (jobCache[key].timestamp < oldestTime) {
+        oldestTime = jobCache[key].timestamp;
+        oldestKey = key;
+      }
+    });
+    delete jobCache[oldestKey];
+  }
+
+  jobCache[jobId] = {
+    timestamp: Date.now(),
+    data: data
+  };
+}
+
 // ========== Job Modal Functions ==========
 
 /**
@@ -76,9 +129,10 @@ function openJobModal(jobId = null, options = {}) {
 
   // Load job data if editing
   if (jobId) {
-    // キャッシュされた案件データがある場合は先に表示（スロット含む）
-    if (options.cachedJob) {
-      fillFormFromCache(options.cachedJob);
+    // キャッシュを自動チェックして即座に表示
+    const cachedData = getJobFromCache(jobId);
+    if (cachedData) {
+      fillFormFromCache(cachedData);
     }
     // 完全なデータをバックグラウンドで取得
     loadJobData(jobId);
@@ -192,6 +246,12 @@ function loadJobData(jobId) {
       } else {
         resetSlotsUI();
       }
+
+      // キャッシュに保存（スロット含む完全なデータ）
+      saveJobToCache(job.job_id, {
+        ...job,
+        slots: slots || []
+      });
     })
     .withFailureHandler((error) => {
       // 古いリクエストのエラーを無視
