@@ -377,7 +377,7 @@
       border-radius: var(--radius-md);
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       display: none;
-      z-index: 1000;
+      z-index: 9999;
     }
 
     .toast.show { display: block; }
@@ -514,251 +514,10 @@
   <!-- Assignment Modal (shared component) -->
   <?!= include('assignment_modal'); ?>
 
-  <!-- Job Edit Modal -->
-  <div class="modal-overlay" id="job-modal" style="display: none;">
-    <div class="modal modal-md">
-      <div class="modal-header">
-        <h2 class="modal-title" id="modal-title">案件編集</h2>
-        <button class="modal-close" onclick="closeJobModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <form id="job-form">
-          <input type="hidden" id="job-id" name="job_id">
-          <input type="hidden" id="job-updated-at" name="updated_at">
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="customer-search">顧客 *</label>
-              <div class="autocomplete-wrapper">
-                <input type="text" id="customer-search" placeholder="会社名を入力..." autocomplete="off" required>
-                <input type="hidden" id="customer-id" name="customer_id">
-                <div class="autocomplete-dropdown" id="customer-dropdown"></div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label for="work-date">作業日 *</label>
-              <input type="date" id="work-date" name="work_date" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="site-name">現場名 *</label>
-            <input type="text" id="site-name" name="site_name" required placeholder="〇〇マンション新築工事">
-          </div>
-
-          <div class="form-group">
-            <label for="site-address">現場住所</label>
-            <input type="text" id="site-address" name="site_address" placeholder="東京都〇〇区...">
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="time-slot">時間区分 *</label>
-              <select id="time-slot" name="time_slot" required>
-                <option value="jotou">上棟</option>
-                <option value="shuujitsu">終日</option>
-                <option value="am">AM</option>
-                <option value="pm">PM</option>
-                <option value="yakin">夜勤</option>
-                <option value="mitei">未定</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="start-time">開始時間</label>
-              <input type="time" id="start-time" name="start_time">
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="required-count">必要人数 *</label>
-              <input type="number" id="required-count" name="required_count" min="1" value="1" required>
-            </div>
-            <div class="form-group">
-              <label for="pay-unit">単価区分 *</label>
-              <select id="pay-unit" name="pay_unit" required>
-                <option value="">選択してください</option>
-                <option value="basic">基本</option>
-                <option value="half">ハーフ</option>
-                <option value="fullday">終日</option>
-                <option value="night">夜勤</option>
-                <option value="tobi">鳶</option>
-                <option value="tobiage">鳶揚げ</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="work-category">作業カテゴリ</label>
-              <select id="work-category" name="work_category">
-                <option value="">選択してください</option>
-                <option value="jotou">上棟</option>
-                <option value="keisagyo">軽作業</option>
-                <option value="niage">荷揚げ</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="work-detail">作業詳細</label>
-              <select id="work-detail" name="work_detail">
-                <option value="">選択してください</option>
-                <!-- 資材系 -->
-                <option value="sekkou">ボード</option>
-                <option value="tategu">建具</option>
-                <option value="kitchen">キッチン</option>
-                <option value="unit_bath">ユニットバス</option>
-                <option value="flooring">フローリング</option>
-                <option value="habaki">幅木</option>
-                <option value="cross">クロス</option>
-                <option value="prefab">プレハブ材</option>
-                <option value="scaffold">足場材</option>
-                <option value="material">資材一般</option>
-                <option value="sk">SK</option>
-                <option value="toilet">トイレ</option>
-                <option value="furniture">家具</option>
-                <option value="appliance">家電</option>
-                <!-- 上棟系 -->
-                <option value="tobi">鳶</option>
-                <option value="tobi_hojo">鳶補助</option>
-                <option value="niage">荷揚げ</option>
-                <option value="tobiage">鳶揚げ</option>
-                <!-- 作業系 -->
-                <option value="hansyutsu">搬出</option>
-                <option value="temoto">手元</option>
-                <option value="kaitai">解体</option>
-                <option value="seisou">清掃</option>
-                <option value="other">その他</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label for="status">ステータス</label>
-              <select id="status" name="status">
-                <option value="pending">未配置</option>
-                <option value="assigned">配置済</option>
-                <option value="hold">保留</option>
-                <option value="completed">完了</option>
-                <option value="cancelled">キャンセル</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="supervisor-name">担当監督名</label>
-              <input type="text" id="supervisor-name" name="supervisor_name">
-            </div>
-          </div>
-
-          <details class="invoice-fields">
-            <summary>請求書用項目</summary>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="order-number">発注ナンバー</label>
-                <input type="text" id="order-number" name="order_number">
-              </div>
-              <div class="form-group">
-                <label for="branch-office">営業所</label>
-                <input type="text" id="branch-office" name="branch_office">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="property-code">物件コード</label>
-                <input type="text" id="property-code" name="property_code">
-              </div>
-              <div class="form-group">
-                <label for="construction-div">担当工事課</label>
-                <input type="text" id="construction-div" name="construction_div">
-              </div>
-            </div>
-          </details>
-
-          <div class="form-group">
-            <label for="notes">備考</label>
-            <textarea id="notes" name="notes" rows="2"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <div class="modal-footer-left">
-          <button type="button" class="btn btn-danger" id="delete-btn" onclick="deleteJob()" style="display: none;">削除</button>
-        </div>
-        <div class="modal-footer-right">
-          <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
-          <button type="button" class="btn btn-primary" id="save-btn" onclick="submitJob(false)">保存</button>
-          <button type="button" class="btn btn-outline" id="save-next-btn" onclick="submitJob(true)" style="display: none;">保存して次へ</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <style>
-    /* Job Modal Specific Styles */
-    /* Autocomplete */
-    .autocomplete-wrapper {
-      position: relative;
-    }
-
-    .autocomplete-dropdown {
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: white;
-      border: 1px solid var(--border-color);
-      border-top: none;
-      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 1001;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-
-    .autocomplete-dropdown.show {
-      display: block;
-    }
-
-    .autocomplete-item {
-      padding: var(--spacing-sm) var(--spacing-md);
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    .autocomplete-item:hover,
-    .autocomplete-item.selected {
-      background: var(--bg-hover);
-    }
-
-    .autocomplete-item .company-name {
-      font-weight: 500;
-    }
-
-    .autocomplete-item .branch-name {
-      color: var(--text-muted);
-      font-size: 12px;
-      margin-left: var(--spacing-xs);
-    }
-
-    .autocomplete-empty {
-      padding: var(--spacing-sm) var(--spacing-md);
-      color: var(--text-muted);
-      font-size: 13px;
-    }
-
-    .invoice-fields {
-      margin: var(--spacing-md) 0;
-      padding: var(--spacing-md);
-      background: var(--bg-card);
-      border-radius: var(--radius-sm);
-    }
-
-    .invoice-fields summary {
-      cursor: pointer;
-      font-weight: 500;
-      margin-bottom: var(--spacing-sm);
-    }
-  </style>
+  <!-- Job Edit Modal (shared component) -->
+  <?!= include('job_modal'); ?>
+  <?!= include('job_modal_styles'); ?>
+  <?!= include('job_modal_js'); ?>
 
   <?!= include('assignment_modal_js'); ?>
 
@@ -830,7 +589,7 @@
       renderColumns();
       initializeWithServerDate();
       setupEventListeners();
-      setupCustomerAutocomplete();
+      // Note: Customer autocomplete is now handled by the shared job_modal_js component
     });
 
     function initializeWithServerDate() {
@@ -884,7 +643,7 @@
       });
 
       document.getElementById('add-job-btn').addEventListener('click', () => {
-        openJobModal(null);
+        openJobModalForDashboard(null);
       });
     }
 
@@ -1073,7 +832,7 @@
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${job.customer_name || '-'}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
-              <button class="card-edit-btn" onclick="event.stopPropagation(); openJobModal('${job.job_id}')" title="案件編集">
+              <button class="card-edit-btn" onclick="event.stopPropagation(); openJobModalForDashboard('${job.job_id}')" title="案件編集">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -1224,435 +983,60 @@
       dashboardData.stats = { total, assigned, pending, byTimeSlot };
     }
 
-    function openJobModal(jobId) {
-      const modal = document.getElementById('job-modal');
-      const form = document.getElementById('job-form');
+    // ========== Job Modal Callbacks ==========
+    // These callbacks integrate the shared job_modal component with dashboard-specific logic
 
-      // Reset form
-      form.reset();
-      document.getElementById('job-id').value = '';
-      document.getElementById('job-updated-at').value = '';
-      document.getElementById('customer-search').value = '';
-      document.getElementById('customer-id').value = '';
+    /**
+     * Callback: 案件モーダルで保存が完了したとき
+     * @param {Object} job - 保存された案件データ
+     * @param {Object[]} slots - 保存された枠データ
+     * @param {boolean} isNew - 新規作成かどうか
+     */
+    function onJobModalSave(job, slots, isNew) {
+      updateJobInDashboard(job, isNew);
+    }
 
-      // Load customers for autocomplete
-      loadCustomersForSelect();
-
-      // Show/hide buttons based on mode
-      const saveNextBtn = document.getElementById('save-next-btn');
-      const deleteBtn = document.getElementById('delete-btn');
-
-      if (jobId) {
-        // Edit mode
-        document.getElementById('modal-title').textContent = '案件編集';
-        saveNextBtn.style.display = 'none';
-        deleteBtn.style.display = 'inline-block';
-
-        // キャッシュからデータを即座に反映
-        const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
-        if (cachedJob) {
-          document.getElementById('job-id').value = cachedJob.job_id;
-          setCustomerById(cachedJob.customer_id, cachedJob.customer_name);
-          document.getElementById('work-date').value = dashboardData.date || '';
-          document.getElementById('site-name').value = cachedJob.site_name || '';
-          document.getElementById('site-address').value = cachedJob.site_address || '';
-          document.getElementById('time-slot').value = cachedJob.time_slot || 'am';
-          document.getElementById('start-time').value = cachedJob.start_time || '';
-          document.getElementById('required-count').value = cachedJob.required_count || 1;
-          document.getElementById('pay-unit').value = cachedJob.pay_unit || '';
-          document.getElementById('work-category').value = cachedJob.work_category || '';
-          document.getElementById('work-detail').value = cachedJob.work_detail || '';
-          document.getElementById('status').value = cachedJob.status || 'pending';
-          document.getElementById('supervisor-name').value = cachedJob.supervisor_name || '';
-          document.getElementById('notes').value = cachedJob.notes || '';
-        }
-
-        // 詳細データをバックグラウンドで取得（住所、備考等）
-        loadJobData(jobId);
-      } else {
-        // Create mode
-        document.getElementById('modal-title').textContent = '新規案件';
-        document.getElementById('work-date').value = formatDate(currentDate);
-        saveNextBtn.style.display = 'inline-block';
-        deleteBtn.style.display = 'none';
-      }
-
-      modal.style.display = 'flex';
-
-      // モーダル内を上部にスクロール
-      const modalBody = document.querySelector('.modal-body');
-      if (modalBody) {
-        modalBody.scrollTop = 0;
+    /**
+     * Callback: 案件モーダルで削除が実行されたとき
+     * @param {string} jobId - 削除された案件ID
+     * @param {Object} job - 削除された案件データ
+     * @param {boolean} isConfirmed - サーバー確認済みかどうか
+     */
+    function onJobModalDelete(jobId, job, isConfirmed) {
+      if (!isConfirmed && dashboardData) {
+        // 楽観的更新: UIを即座に更新
+        dashboardData.jobs = dashboardData.jobs.filter(j => j.job_id !== jobId);
+        recalculateStats();
+        renderDashboard();
+        saveToCachedDate(dashboardData.date, dashboardData);
       }
     }
 
-    // 顧客インクリメンタルサーチ
-    let customersCache = null;
-    let selectedCustomerIndex = -1;
-
-    function loadCustomersForSelect() {
-      // キャッシュがあれば何もしない
-      if (customersCache) {
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler((response) => {
-          if (response.ok) {
-            customersCache = (response.data.items || []).filter(c => c.is_active !== false);
-          }
-        })
-        .withFailureHandler(() => {
-          console.error('顧客一覧の取得に失敗しました');
-        })
-        .listCustomers({ includeDeleted: false });
+    /**
+     * Callback: 案件削除がサーバーで失敗したとき
+     * @param {string} jobId - 削除に失敗した案件ID
+     */
+    function onJobModalDeleteFailed(jobId) {
+      // 削除失敗時は再読み込み
+      loadDashboard();
     }
 
-    function setupCustomerAutocomplete() {
-      const searchInput = document.getElementById('customer-search');
-      const hiddenInput = document.getElementById('customer-id');
-      const dropdown = document.getElementById('customer-dropdown');
+    /**
+     * Dashboard用のopenJobModal wrapper
+     * 共通コンポーネントのopenJobModalにダッシュボード固有のオプションを渡す
+     */
+    function openJobModalForDashboard(jobId) {
+      // キャッシュから案件データを取得（スロット含む）
+      const cachedJob = jobId && dashboardData.jobs
+        ? dashboardData.jobs.find(j => j.job_id === jobId)
+        : null;
 
-      // 入力イベント
-      searchInput.addEventListener('input', () => {
-        const query = searchInput.value.trim().toLowerCase();
-        selectedCustomerIndex = -1;
-
-        if (query.length === 0) {
-          dropdown.classList.remove('show');
-          return;
-        }
-
-        const matches = (customersCache || []).filter(c => {
-          const name = (c.company_name || '').toLowerCase();
-          const branch = (c.branch_name || '').toLowerCase();
-          return name.includes(query) || branch.includes(query);
-        }).slice(0, 10); // 最大10件
-
-        renderCustomerDropdown(matches);
-      });
-
-      // フォーカスアウトで閉じる（少し遅延）
-      searchInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          dropdown.classList.remove('show');
-        }, 200);
-      });
-
-      // キーボードナビゲーション
-      searchInput.addEventListener('keydown', (e) => {
-        const items = dropdown.querySelectorAll('.autocomplete-item');
-        if (items.length === 0) return;
-
-        if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          selectedCustomerIndex = Math.min(selectedCustomerIndex + 1, items.length - 1);
-          updateSelectedItem(items);
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          selectedCustomerIndex = Math.max(selectedCustomerIndex - 1, 0);
-          updateSelectedItem(items);
-        } else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (selectedCustomerIndex >= 0 && items[selectedCustomerIndex]) {
-            items[selectedCustomerIndex].click();
-          }
-        } else if (e.key === 'Escape') {
-          dropdown.classList.remove('show');
-        }
+      openJobModal(jobId, {
+        defaultDate: formatDate(currentDate),
+        showSaveNext: !jobId,  // 新規作成時のみ「保存して次へ」を表示
+        cachedJob: cachedJob   // キャッシュデータを渡す（スロット即座表示）
       });
     }
-
-    function renderCustomerDropdown(customers) {
-      const dropdown = document.getElementById('customer-dropdown');
-
-      if (customers.length === 0) {
-        dropdown.innerHTML = '<div class="autocomplete-empty">該当する顧客がありません</div>';
-        dropdown.classList.add('show');
-        return;
-      }
-
-      dropdown.innerHTML = customers.map((c, i) => `
-        <div class="autocomplete-item" data-customer-id="${c.customer_id}" data-index="${i}">
-          <span class="company-name">${c.company_name}</span>
-          ${c.branch_name ? `<span class="branch-name">${c.branch_name}</span>` : ''}
-        </div>
-      `).join('');
-
-      // クリックイベント
-      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
-        item.addEventListener('click', () => {
-          selectCustomer(item.dataset.customerId);
-        });
-      });
-
-      dropdown.classList.add('show');
-    }
-
-    function updateSelectedItem(items) {
-      items.forEach((item, i) => {
-        item.classList.toggle('selected', i === selectedCustomerIndex);
-      });
-    }
-
-    function selectCustomer(customerId) {
-      const customer = (customersCache || []).find(c => c.customer_id === customerId);
-      if (!customer) return;
-
-      const searchInput = document.getElementById('customer-search');
-      const hiddenInput = document.getElementById('customer-id');
-      const dropdown = document.getElementById('customer-dropdown');
-
-      const displayName = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
-      searchInput.value = displayName;
-      hiddenInput.value = customerId;
-      dropdown.classList.remove('show');
-    }
-
-    function setCustomerById(customerId, fallbackName) {
-      if (!customerId) return;
-
-      const searchInput = document.getElementById('customer-search');
-      const hiddenInput = document.getElementById('customer-id');
-
-      const setName = () => {
-        const customer = (customersCache || []).find(c => c.customer_id === customerId);
-        if (customer) {
-          const displayName = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
-          searchInput.value = displayName;
-          hiddenInput.value = customerId;
-          return true;
-        }
-        return false;
-      };
-
-      if (customersCache && setName()) {
-        return;
-      }
-
-      // フォールバック名がある場合は先にセット
-      if (fallbackName) {
-        searchInput.value = fallbackName;
-        hiddenInput.value = customerId;
-      }
-
-      // キャッシュがなければリトライ（最大10回、200ms間隔）
-      let retryCount = 0;
-      const maxRetries = 10;
-      const retryInterval = setInterval(() => {
-        retryCount++;
-        if (customersCache && setName()) {
-          clearInterval(retryInterval);
-        } else if (retryCount >= maxRetries) {
-          clearInterval(retryInterval);
-        }
-      }, 200);
-    }
-
-    function closeJobModal() {
-      document.getElementById('job-modal').style.display = 'none';
-    }
-
-    function loadJobData(jobId) {
-      google.script.run
-        .withSuccessHandler((response) => {
-          if (response.ok && response.data.job) {
-            const job = response.data.job;
-            document.getElementById('job-id').value = job.job_id;
-            document.getElementById('job-updated-at').value = job.updated_at;
-            // 顧客名をフォールバックとして渡す
-            setCustomerById(job.customer_id, job.customer_name);
-            document.getElementById('work-date').value = job.work_date || '';
-            document.getElementById('site-name').value = job.site_name || '';
-            document.getElementById('site-address').value = job.site_address || '';
-            document.getElementById('time-slot').value = job.time_slot || 'am';
-            document.getElementById('start-time').value = job.start_time || '';
-            document.getElementById('required-count').value = job.required_count || 1;
-            document.getElementById('pay-unit').value = job.pay_unit || '';
-            document.getElementById('work-category').value = job.work_category || '';
-            document.getElementById('work-detail').value = job.work_detail || '';
-            document.getElementById('status').value = job.status || 'pending';
-            document.getElementById('supervisor-name').value = job.supervisor_name || '';
-            document.getElementById('order-number').value = job.order_number || '';
-            document.getElementById('branch-office').value = job.branch_office || '';
-            document.getElementById('property-code').value = job.property_code || '';
-            document.getElementById('construction-div').value = job.construction_div || '';
-            document.getElementById('notes').value = job.notes || '';
-          } else {
-            showToast('案件データの取得に失敗しました', true);
-            closeJobModal();
-          }
-        })
-        .withFailureHandler((error) => {
-          showToast(error.message, true);
-          closeJobModal();
-        })
-        .getJob(jobId);
-    }
-
-    function submitJob(saveAndContinue = false) {
-      const form = document.getElementById('job-form');
-
-      // Basic validation
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-      }
-
-      // Customer validation (hidden field)
-      const customerId = document.getElementById('customer-id').value;
-      if (!customerId) {
-        showToast('顧客を選択してください', true);
-        document.getElementById('customer-search').focus();
-        return;
-      }
-
-      const formData = new FormData(form);
-      const job = {};
-      formData.forEach((value, key) => {
-        if (value !== '') {
-          job[key] = value;
-        }
-      });
-
-      // Convert required_count to number
-      if (job.required_count) {
-        job.required_count = parseInt(job.required_count, 10);
-      }
-
-      const jobId = document.getElementById('job-id').value;
-      const updatedAt = document.getElementById('job-updated-at').value;
-
-      // Set job_id for update, or remove for create
-      if (jobId) {
-        job.job_id = jobId;
-      } else {
-        delete job.job_id;
-      }
-
-      // Preserve values for "Save and Next" mode
-      const preservedDate = document.getElementById('work-date').value;
-      const preservedCustomerId = customerId;
-      const preservedCustomerName = document.getElementById('customer-search').value;
-
-      // Disable buttons while saving
-      const saveBtn = document.getElementById('save-btn');
-      const saveNextBtn = document.getElementById('save-next-btn');
-      const clickedBtn = saveAndContinue ? saveNextBtn : saveBtn;
-      saveBtn.disabled = true;
-      saveNextBtn.disabled = true;
-      clickedBtn.textContent = '保存中...';
-
-      google.script.run
-        .withSuccessHandler((response) => {
-          saveBtn.disabled = false;
-          saveNextBtn.disabled = false;
-          saveBtn.textContent = '保存';
-          saveNextBtn.textContent = '保存して次へ';
-
-          if (response.ok) {
-            showToast('保存しました');
-            updateJobInDashboard(response.data.job, !jobId); // 差分更新（新規かどうか）
-
-            if (saveAndContinue) {
-              // Reset form for next entry but preserve date and customer
-              resetJobFormForNext(preservedDate, preservedCustomerId, preservedCustomerName);
-            } else {
-              closeJobModal();
-            }
-          } else {
-            if (response.error?.code === 'CONFLICT_ERROR') {
-              showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', true);
-            } else {
-              showToast(response.error?.message || '保存に失敗しました', true);
-            }
-          }
-        })
-        .withFailureHandler((error) => {
-          saveBtn.disabled = false;
-          saveNextBtn.disabled = false;
-          saveBtn.textContent = '保存';
-          saveNextBtn.textContent = '保存して次へ';
-          showToast(error.message, true);
-        })
-        .saveJob(job, updatedAt || null);
-    }
-
-    function resetJobFormForNext(date, customerId, customerName) {
-      const form = document.getElementById('job-form');
-      form.reset();
-      document.getElementById('job-id').value = '';
-      document.getElementById('job-updated-at').value = '';
-      // Restore preserved values
-      document.getElementById('work-date').value = date || '';
-      document.getElementById('customer-search').value = customerName || '';
-      document.getElementById('customer-id').value = customerId || '';
-      // Focus on site name for quick entry
-      document.getElementById('site-name').focus();
-    }
-
-    function deleteJob() {
-      const jobId = document.getElementById('job-id').value;
-      if (!jobId) return;
-
-      const cachedJob = dashboardData?.jobs?.find(j => j.job_id === jobId);
-      const jobName = cachedJob ? `${cachedJob.site_name}（${cachedJob.customer_name}）` : '案件';
-
-      ConfirmationModal.show({
-        type: 'danger',
-        title: '削除の確認',
-        message: `「${jobName}」を削除しますか？\n\n※この操作は取り消せません。\n※関連する配置データも確認してください。`,
-        confirmText: '削除',
-        onConfirm: () => {
-          const updatedAt = document.getElementById('job-updated-at').value;
-
-          // 楽観的更新: UIを即座に更新
-          if (dashboardData) {
-            const oldSlot = cachedJob?.time_slot;
-            dashboardData.jobs = dashboardData.jobs.filter(j => j.job_id !== jobId);
-            recalculateStats();
-            renderDashboard();
-            saveToCachedDate(dashboardData.date, dashboardData);
-          }
-          closeJobModal();
-          showToast(`${jobName}を削除しました`);
-
-          // バックグラウンドでAPI呼び出し
-          google.script.run
-            .withSuccessHandler((response) => {
-              if (!response.ok) {
-                if (response.error?.code === 'CONFLICT_ERROR') {
-                  showToast('他のユーザーによって更新されています。再読み込みします。', true);
-                } else if (response.error?.code === 'HAS_ASSIGNMENTS') {
-                  showToast('この案件には配置データが存在するため削除できません。', true);
-                } else {
-                  showToast(response.error?.message || '削除に失敗しました。再読み込みします。', true);
-                }
-                loadDashboard();
-              }
-            })
-            .withFailureHandler((error) => {
-              showToast('削除に失敗しました。再読み込みします。', true);
-              loadDashboard();
-            })
-            .deleteJob(jobId, updatedAt || null);
-        }
-      });
-    }
-
-    // Close modal on overlay click
-    document.getElementById('job-modal').addEventListener('click', (e) => {
-      if (e.target.id === 'job-modal') {
-        closeJobModal();
-      }
-    });
-
-    // Close modal on Escape key
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeJobModal();
-      }
-    });
 
     function handleError(error) {
       console.error('Error:', error);

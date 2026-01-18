@@ -1,0 +1,141 @@
+<!-- Job Modal Styles - Shared Component -->
+<!-- Usage: <?!= include('job_modal_styles'); ?> -->
+
+<style>
+  /* Slots Section */
+  .slots-section {
+    margin: var(--spacing-md) 0;
+    padding: var(--spacing-md);
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+  }
+
+  .slots-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .slots-header > label {
+    font-weight: 600;
+    font-size: 14px;
+  }
+
+  .slots-mode-toggle {
+    display: flex;
+    gap: var(--spacing-md);
+  }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .radio-label input[type="radio"] {
+    margin: 0;
+  }
+
+  .slots-table-container {
+    overflow-x: auto;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .slots-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .slots-table th,
+  .slots-table td {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .slots-table th {
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    background: white;
+  }
+
+  .slots-table select,
+  .slots-table input {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    width: 100%;
+  }
+
+  .slots-table input[type="number"] {
+    width: 60px;
+  }
+
+  .slots-table input[type="text"] {
+    width: 100px;
+  }
+
+  .slots-table .btn-remove,
+  .slots-table .btn-danger {
+    background: none;
+    border: none;
+    color: var(--color-danger, #dc3545);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 16px;
+  }
+
+  .slots-table .btn-remove:hover,
+  .slots-table .btn-danger:hover {
+    color: #c82333;
+  }
+
+  .slots-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--spacing-sm);
+  }
+
+  .slots-total {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .slots-total strong {
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  /* Invoice fields collapsible */
+  .invoice-fields {
+    margin-top: var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-sm);
+  }
+
+  .invoice-fields summary {
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: var(--spacing-xs);
+  }
+
+  .invoice-fields summary:hover {
+    color: var(--text-primary);
+  }
+
+  .invoice-fields[open] summary {
+    margin-bottom: var(--spacing-sm);
+  }
+</style>

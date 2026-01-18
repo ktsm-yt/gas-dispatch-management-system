@@ -73,10 +73,19 @@ const TABLE_DEFINITIONS = {
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
     ]
   },
+  T_JobSlots: {
+    sheetName: '案件枠',
+    headers: [
+      'slot_id', 'job_id', 'slot_time_slot', 'slot_pay_unit', 'slot_count',
+      'sort_order', 'notes',
+      'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
+    ]
+  },
   T_JobAssignments: {
     sheetName: '配置',
     headers: [
       'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
+      'slot_id',  // 枠システム: 配置が紐づく枠のID（NULL許可）
       'display_time_slot', 'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
       'transport_area', 'transport_amount', 'transport_is_manual', 'site_role',
       'assignment_role', 'is_leader',
@@ -562,4 +571,107 @@ function migrateAddPayoutIdColumn() {
 
   Logger.log('\n=== マイグレーション完了 ===');
   Logger.log('payout_idカラムを追加しました（二重計上防止用）');
+}
+
+/**
+ * 枠システム用マイグレーション: T_JobSlotsシートを追加
+ * GASエディタから実行: migrateAddJobSlotsSheet()
+ */
+function migrateAddJobSlotsSheet() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // 案件枠シートが既にあるか確認
+  const existingSheet = ss.getSheetByName('案件枠');
+  if (existingSheet) {
+    Logger.log('✓ 案件枠シートは既に存在します');
+    return;
+  }
+
+  // T_JobSlotsの定義
+  const definition = TABLE_DEFINITIONS.T_JobSlots;
+  createSheet(ss, 'T_JobSlots', definition);
+
+  Logger.log('\n=== マイグレーション完了 ===');
+  Logger.log('✓ 案件枠シートを追加しました');
+}
+
+/**
+ * 枠システム用マイグレーション: 配置シートにslot_idカラムを追加
+ * GASエディタから実行: migrateAddSlotIdColumn()
+ */
+function migrateAddSlotIdColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('配置');
+
+  if (!sheet) {
+    Logger.log('✗ 配置シートが見つかりません');
+    return;
+  }
+
+  // 現在のヘッダーを取得
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log(`現在のカラム数: ${lastCol}`);
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // slot_idが既に存在するか確認
+  if (headers.includes('slot_id')) {
+    Logger.log('✓ slot_idカラムは既に存在します');
+    return;
+  }
+
+  // subcontractor_idの後に挿入（subcontractor_idの位置を見つける）
+  const subcontractorIdIndex = headers.indexOf('subcontractor_id');
+  if (subcontractorIdIndex === -1) {
+    Logger.log('✗ subcontractor_idカラムが見つかりません。手動で追加してください。');
+    return;
+  }
+
+  // 挿入位置（subcontractor_idの次）
+  const insertPosition = subcontractorIdIndex + 2; // 1-indexed
+
+  // カラムを挿入
+  sheet.insertColumnAfter(insertPosition - 1);
+  sheet.getRange(1, insertPosition).setValue('slot_id');
+  Logger.log(`✓ カラム追加: slot_id (位置: ${insertPosition})`);
+
+  // ヘッダー行のスタイルを適用
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('\n=== マイグレーション完了 ===');
+  Logger.log('slot_idカラムを追加しました（枠システム用）');
+}
+
+/**
+ * 枠システム用マイグレーション: 全てのマイグレーションを実行
+ * GASエディタから実行: migrateSlotSystem()
+ */
+function migrateSlotSystem() {
+  Logger.log('=== 枠システムマイグレーション開始 ===\n');
+
+  Logger.log('--- Step 1: T_JobSlotsシート追加 ---');
+  migrateAddJobSlotsSheet();
+
+  Logger.log('\n--- Step 2: slot_idカラム追加 ---');
+  migrateAddSlotIdColumn();
+
+  Logger.log('\n=== 枠システムマイグレーション完了 ===');
 }

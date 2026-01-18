@@ -53,6 +53,18 @@
       <div class="modal-panel form-panel">
         <div class="assignment-form-container" id="batch-form-container">
           <div class="assignment-form-title">一括配置設定</div>
+
+          <!-- 枠選択（枠が設定されている場合のみ表示） -->
+          <div class="form-row" id="slot-select-row" style="display: none;">
+            <div class="form-group" style="flex: 1;">
+              <label>配置枠</label>
+              <select id="form-slot-id" onchange="onSlotChange()">
+                <option value="">（枠を選択）</option>
+              </select>
+              <small class="form-hint" id="slot-status-hint"></small>
+            </div>
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label>単価区分</label>

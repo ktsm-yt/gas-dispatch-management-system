@@ -10,6 +10,8 @@ let assignmentModalState = {
   jobId: null,
   job: null,
   assignments: [],        // サーバーからの現在の配置データ
+  slots: [],              // 案件の枠データ
+  slotStatus: null,       // 枠ごとの充足状況
   allStaff: [],
   filteredStaff: [],
   transportAreas: [],
@@ -63,6 +65,8 @@ function closeAssignmentModal() {
     jobId: null,
     job: null,
     assignments: [],
+    slots: [],
+    slotStatus: null,
     allStaff: [],
     filteredStaff: [],
     transportAreas: assignmentModalState.transportAreas,
@@ -78,11 +82,11 @@ function loadAssignmentModalData(jobId) {
   // Show loading
   document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
 
-  // Load job and assignments
+  // Load job, assignments, and slots (getJobはslots/slotStatusも返す)
   google.script.run
     .withSuccessHandler(handleAssignmentData)
     .withFailureHandler(handleAssignmentModalError)
-    .getAssignments(jobId);
+    .getJob(jobId);
 
   // Load available staff
   google.script.run
@@ -97,9 +101,11 @@ function handleAssignmentData(response) {
     return;
   }
 
-  const { job, assignments } = response.data;
+  const { job, assignments, slots, slotStatus } = response.data;
   assignmentModalState.job = job;
   assignmentModalState.assignments = assignments || [];
+  assignmentModalState.slots = slots || [];
+  assignmentModalState.slotStatus = slotStatus || null;
   assignmentModalState.jobUpdatedAt = job.updated_at;
   assignmentModalState.assignmentsLoaded = true;
 
@@ -108,6 +114,9 @@ function handleAssignmentData(response) {
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
   document.getElementById('modal-job-type').textContent = job.work_category || '-';
+
+  // 枠セレクトを更新
+  updateSlotSelect();
 
   // Update stats
   updateModalStats();
@@ -164,6 +173,128 @@ function updateModalStats() {
     shortageValue.textContent = shortage;
   } else {
     shortageBadge.style.display = 'none';
+  }
+}
+
+// ========== Slot Functions ==========
+/**
+ * 枠セレクトを更新
+ */
+function updateSlotSelect() {
+  const slotSelectRow = document.getElementById('slot-select-row');
+  const slotSelect = document.getElementById('form-slot-id');
+  const slots = assignmentModalState.slots || [];
+
+  if (slots.length === 0) {
+    // 枠が設定されていない場合は非表示
+    slotSelectRow.style.display = 'none';
+    return;
+  }
+
+  // 枠が設定されている場合は表示
+  slotSelectRow.style.display = 'flex';
+
+  // 枠充足状況を取得
+  const slotStatus = assignmentModalState.slotStatus;
+  const slotStatuses = slotStatus?.slotStatuses || [];
+
+  // セレクトオプションを構築
+  slotSelect.innerHTML = '<option value="">（枠を選択してください）</option>';
+
+  const timeSlotLabels = {
+    'jotou': '上棟',
+    'shuujitsu': '終日',
+    'am': 'AM',
+    'pm': 'PM',
+    'yakin': '夜勤',
+    'mitei': '未定'
+  };
+
+  const payUnitLabels = {
+    'basic': '基本',
+    'halfday': 'ハーフ',
+    'fullday': '終日',
+    'night': '夜勤',
+    'tobi': '鳶',
+    'tobiage': '鳶揚げ'
+  };
+
+  slots.forEach(slot => {
+    const option = document.createElement('option');
+    option.value = slot.slot_id;
+    option.dataset.payUnit = slot.slot_pay_unit;
+    option.dataset.timeSlot = slot.slot_time_slot;
+
+    // 充足状況を取得
+    const status = slotStatuses.find(s => s.slot_id === slot.slot_id);
+    const assigned = status?.assigned || 0;
+    const required = slot.slot_count || 0;
+    const shortage = required - assigned;
+
+    const timeLabel = timeSlotLabels[slot.slot_time_slot] || slot.slot_time_slot;
+    const payLabel = payUnitLabels[slot.slot_pay_unit] || slot.slot_pay_unit;
+
+    // 表示形式: "AM / 基本 (2/3名)"
+    const statusText = shortage > 0 ? `${assigned}/${required}名 不足${shortage}` : `${assigned}/${required}名 充足`;
+    option.textContent = `${timeLabel} / ${payLabel} (${statusText})`;
+
+    // 充足状態でスタイル変更のためのdata属性
+    option.dataset.status = shortage > 0 ? 'shortage' : 'filled';
+
+    slotSelect.appendChild(option);
+  });
+
+  // ヒントを更新
+  updateSlotStatusHint();
+}
+
+/**
+ * 枠選択時のハンドラー
+ */
+function onSlotChange() {
+  const slotSelect = document.getElementById('form-slot-id');
+  const invoiceUnitSelect = document.getElementById('form-invoice-unit');
+  const selectedOption = slotSelect.options[slotSelect.selectedIndex];
+
+  if (selectedOption && selectedOption.dataset.payUnit) {
+    // 枠の単価区分を自動設定
+    invoiceUnitSelect.value = selectedOption.dataset.payUnit;
+  }
+
+  updateSlotStatusHint();
+}
+
+/**
+ * 枠充足状況のヒントを更新
+ */
+function updateSlotStatusHint() {
+  const hintEl = document.getElementById('slot-status-hint');
+  const slotSelect = document.getElementById('form-slot-id');
+  const selectedSlotId = slotSelect.value;
+
+  if (!selectedSlotId) {
+    hintEl.textContent = '枠を選択すると単価区分が自動設定されます';
+    hintEl.style.color = 'var(--text-muted)';
+    return;
+  }
+
+  const slotStatus = assignmentModalState.slotStatus;
+  const status = slotStatus?.slotStatuses?.find(s => s.slot_id === selectedSlotId);
+
+  if (status) {
+    const shortage = status.shortage;
+    if (shortage > 0) {
+      hintEl.textContent = `この枠はあと${shortage}名不足しています`;
+      hintEl.style.color = 'var(--danger)';
+    } else if (shortage < 0) {
+      hintEl.textContent = `この枠は${Math.abs(shortage)}名超過しています`;
+      hintEl.style.color = 'var(--warning)';
+    } else {
+      hintEl.textContent = 'この枠は充足しています';
+      hintEl.style.color = 'var(--success)';
+    }
+  } else {
+    hintEl.textContent = '';
   }
 }
 
@@ -392,6 +523,7 @@ function saveAllChanges() {
 
   if (selectedIds.length === 0 && deleteIds.length === 0) return;
 
+  const slotId = document.getElementById('form-slot-id')?.value || '';
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
@@ -420,6 +552,11 @@ function saveAllChanges() {
       assignment_role: assignmentRole,
       is_leader: isLeader
     };
+
+    // 枠IDが選択されていれば追加
+    if (slotId) {
+      data.slot_id = slotId;
+    }
 
     if (assignmentMap[staffId]) {
       data.assignment_id = assignmentMap[staffId];
@@ -456,12 +593,19 @@ function saveAllChanges() {
 
         // Update state with server response
         assignmentModalState.assignments = response.data.assignments || [];
+        assignmentModalState.slots = response.data.slots || assignmentModalState.slots;
+        assignmentModalState.slotStatus = response.data.slotStatus || assignmentModalState.slotStatus;
         assignmentModalState.jobUpdatedAt = response.data.job?.updated_at;
 
         // Clear staged changes
         assignmentModalState.selectedStaffIds = [];
         assignmentModalState.stagedDeletes = [];
 
+        // 枠選択をリセット
+        const slotSelect = document.getElementById('form-slot-id');
+        if (slotSelect) slotSelect.value = '';
+
+        updateSlotSelect();  // 枠セレクトを更新（充足状況反映）
         updateModalStats();
         filterStaffList();
         updateSaveButton();

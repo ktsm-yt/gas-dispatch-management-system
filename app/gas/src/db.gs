@@ -14,6 +14,7 @@ const TABLE_SHEET_MAP = {
   'M_TransportFee': '交通費',
   'M_Company': '自社情報',
   'T_Jobs': '案件',
+  'T_JobSlots': '案件枠',  // 枠システム用
   'T_JobAssignments': '配置',
   'T_Invoices': '請求',
   'T_InvoiceLines': '請求明細',
