@@ -535,6 +535,10 @@ function loadSlotsToUI(slots) {
   tbody.innerHTML = '';
   currentSlots = slots || [];
 
+  // 現在選択されているモードを確認
+  const currentModeRadio = document.querySelector('input[name="slots_mode"]:checked');
+  const currentMode = currentModeRadio ? currentModeRadio.value : null;
+
   if (currentSlots.length > 0) {
     // 先にスロット行を追加（toggleSlotsModeの自動追加を防ぐ）
     currentSlots.forEach(slot => {
@@ -544,9 +548,16 @@ function loadSlotsToUI(slots) {
     document.querySelector('input[name="slots_mode"][value="detailed"]').checked = true;
     toggleSlotsMode();
   } else {
-    // シンプルモードに
-    document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
-    toggleSlotsMode();
+    // スロットが空の場合
+    // ユーザーが既に詳細モードを選択している場合はそのまま維持
+    if (currentMode === 'detailed') {
+      // 詳細モードを維持したまま、toggleSlotsModeを呼んで空行を追加
+      toggleSlotsMode();
+    } else {
+      // ユーザーがまだモードを選択していないか、シンプルモードの場合のみシンプルモードに設定
+      document.querySelector('input[name="slots_mode"][value="simple"]').checked = true;
+      toggleSlotsMode();
+    }
   }
 }
 
