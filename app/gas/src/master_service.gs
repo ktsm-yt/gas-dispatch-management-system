@@ -446,6 +446,26 @@ function deleteStaff(staffId, expectedUpdatedAt) {
   );
 }
 
+/**
+ * 作業員名簿を生成
+ * @param {string[]} staffIds - スタッフIDの配列
+ * @param {Object} options - オプション
+ * @param {string} options.mode - 出力モード（'pdf' | 'excel' | 'edit'）
+ * @param {string} options.action - 既存ファイル処理（'overwrite' | 'rename'）
+ * @returns {Object} APIレスポンス
+ */
+function generateWorkerRoster(staffIds, options) {
+  return WorkerRosterService.generate(staffIds, options);
+}
+
+/**
+ * 作業員名簿の設定状況を取得
+ * @returns {Object} 設定状況
+ */
+function getWorkerRosterConfigStatus() {
+  return WorkerRosterService.getConfigStatus();
+}
+
 // ========================================
 // M_Subcontractors (外注先)
 // ========================================
