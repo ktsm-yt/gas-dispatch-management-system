@@ -287,6 +287,8 @@
     .toast.show { display: block; }
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
+    .toast.warning { background: var(--color-warning); color: #333; }
+    .toast.info { background: var(--color-secondary); }
 
     /* Staff Modal Specific Styles */
     .form-section-title {
@@ -337,6 +339,134 @@
       font-weight: 600;
       color: var(--text-primary);
     }
+
+    /* Selection Mode */
+    .select-col {
+      width: 40px;
+      text-align: center;
+    }
+
+    .select-col.hidden {
+      display: none;
+    }
+
+    .select-col input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .btn-select-mode {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: var(--bg-main);
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-select-mode:hover {
+      background: var(--bg-hover);
+    }
+
+    .btn-select-mode.active {
+      background: var(--color-primary);
+      color: white;
+      border-color: var(--color-primary);
+    }
+
+    .btn-generate {
+      padding: var(--spacing-xs) var(--spacing-md);
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--color-success);
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-generate:hover:not(:disabled) {
+      background: #218838;
+    }
+
+    .btn-generate:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .selection-info {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .selection-info .count {
+      font-weight: 600;
+      color: var(--color-primary);
+    }
+
+    .selection-controls {
+      display: none;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .selection-controls.visible {
+      display: flex;
+    }
+
+    /* Row click disabled in select mode */
+    .data-table.select-mode tbody tr {
+      cursor: default;
+    }
+
+    .data-table.select-mode tbody tr:hover {
+      background: var(--bg-card);
+    }
+
+    /* Roster Modal */
+    .roster-modal-content {
+      text-align: center;
+      padding: var(--spacing-lg);
+    }
+
+    .roster-modal-content p {
+      margin-bottom: var(--spacing-lg);
+      color: var(--text-muted);
+    }
+
+    .roster-mode-buttons {
+      display: flex;
+      gap: var(--spacing-md);
+      justify-content: center;
+    }
+
+    .roster-mode-btn {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: var(--bg-main);
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 120px;
+    }
+
+    .roster-mode-btn:hover {
+      background: var(--bg-hover);
+      border-color: var(--color-primary);
+    }
+
+    .roster-mode-btn .icon {
+      font-size: 24px;
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .roster-mode-btn .label {
+      font-size: 14px;
+      font-weight: 500;
+    }
   </style>
 </head>
 <body>
@@ -372,15 +502,27 @@
         <span>全 <span class="count" id="stats-total">-</span> 名</span>
         <span>有効 <span class="count" id="stats-active">-</span> 名</span>
       </div>
+      <button type="button" class="btn-select-mode" id="toggle-select-mode" onclick="toggleSelectMode()">
+        選択モード
+      </button>
+      <div class="selection-controls" id="selection-controls">
+        <span class="selection-info"><span class="count" id="selected-count">0</span>名選択中</span>
+        <button type="button" class="btn-generate" id="generate-roster-btn" onclick="showRosterModal()" disabled>
+          名簿生成
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Main Content -->
   <main class="main-content">
     <div class="table-container">
-      <table class="data-table">
+      <table class="data-table" id="staff-table">
         <thead>
           <tr>
+            <th class="select-col hidden" id="select-all-header">
+              <input type="checkbox" id="select-all" onclick="handleSelectAll(this)">
+            </th>
             <th>氏名</th>
             <th>種別</th>
             <th>電話番号</th>
@@ -401,6 +543,35 @@
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
+
+  <!-- Worker Roster Modal -->
+  <div class="modal-overlay" id="roster-modal" style="display: none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">作業員名簿生成</h2>
+        <button class="modal-close" onclick="closeRosterModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="roster-modal-content">
+          <p><span id="roster-staff-count">0</span>名のスタッフを選択しています。<br>出力形式を選択してください。</p>
+          <div class="roster-mode-buttons">
+            <button type="button" class="roster-mode-btn" onclick="generateRoster('pdf')">
+              <div class="icon">📄</div>
+              <div class="label">PDF</div>
+            </button>
+            <button type="button" class="roster-mode-btn" onclick="generateRoster('excel')">
+              <div class="icon">📊</div>
+              <div class="label">Excel</div>
+            </button>
+            <button type="button" class="roster-mode-btn" onclick="generateRoster('edit')">
+              <div class="icon">📝</div>
+              <div class="label">編集</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Staff Edit Modal -->
   <div class="modal-overlay" id="staff-modal" style="display: none;">
@@ -667,6 +838,11 @@
     let currentStaff = null;
     let subcontractors = [];
 
+    // Selection Mode State
+    let isSelectMode = false;
+    const selectedStaffIds = new Set();
+    const MAX_STAFF_FOR_ROSTER = 10;
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
       initNavBar('staff', 'スタッフ');
@@ -820,11 +996,12 @@
 
     function renderTable() {
       const tbody = document.getElementById('staff-table-body');
+      const colSpan = isSelectMode ? 8 : 7;
 
       if (filteredStaff.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7">
+            <td colspan="${colSpan}">
               <div class="empty-state">スタッフデータがありません</div>
             </td>
           </tr>
@@ -847,8 +1024,19 @@
         const rateType = document.getElementById('rate-type').value;
         const rate = getRateByType(staff, rateType);
 
+        const isSelected = selectedStaffIds.has(staff.staff_id);
+        const checkboxCell = isSelectMode ? `
+          <td class="select-col">
+            <input type="checkbox" class="staff-checkbox" data-staff-id="${staff.staff_id}"
+              ${isSelected ? 'checked' : ''} onclick="handleStaffSelect(event, '${staff.staff_id}')">
+          </td>
+        ` : '';
+
+        const rowClick = isSelectMode ? '' : `onclick="openModal('${staff.staff_id}')"`;
+
         return `
-          <tr class="${staff.is_active ? '' : 'inactive'}" onclick="openModal('${staff.staff_id}')">
+          <tr class="${staff.is_active ? '' : 'inactive'}" ${rowClick}>
+            ${checkboxCell}
             <td>
               <div class="cell-name">${escapeHtml(staff.name)}</div>
               ${staff.name_kana ? `<div class="cell-kana">${escapeHtml(staff.name_kana)}</div>` : ''}
@@ -908,6 +1096,167 @@
       div.textContent = text;
       return div.innerHTML;
     }
+
+    // ========================================
+    // Selection Mode Functions
+    // ========================================
+
+    function toggleSelectMode() {
+      isSelectMode = !isSelectMode;
+
+      const toggleBtn = document.getElementById('toggle-select-mode');
+      const selectionControls = document.getElementById('selection-controls');
+      const selectAllHeader = document.getElementById('select-all-header');
+      const table = document.getElementById('staff-table');
+
+      if (isSelectMode) {
+        toggleBtn.classList.add('active');
+        selectionControls.classList.add('visible');
+        selectAllHeader.classList.remove('hidden');
+        table.classList.add('select-mode');
+      } else {
+        toggleBtn.classList.remove('active');
+        selectionControls.classList.remove('visible');
+        selectAllHeader.classList.add('hidden');
+        table.classList.remove('select-mode');
+        // Clear selection when exiting select mode
+        selectedStaffIds.clear();
+        document.getElementById('select-all').checked = false;
+      }
+
+      renderTable();
+      updateSelectionUI();
+    }
+
+    function handleStaffSelect(event, staffId) {
+      event.stopPropagation(); // Prevent row click
+
+      if (selectedStaffIds.has(staffId)) {
+        selectedStaffIds.delete(staffId);
+      } else {
+        // Check max limit
+        if (selectedStaffIds.size >= MAX_STAFF_FOR_ROSTER) {
+          showToast(`最大${MAX_STAFF_FOR_ROSTER}名まで選択できます`, 'warning');
+          event.target.checked = false;
+          return;
+        }
+        selectedStaffIds.add(staffId);
+      }
+
+      updateSelectionUI();
+      updateSelectAllCheckbox();
+    }
+
+    function handleSelectAll(checkbox) {
+      if (checkbox.checked) {
+        // Select all visible staff (up to max limit)
+        let count = 0;
+        for (const staff of filteredStaff) {
+          if (count >= MAX_STAFF_FOR_ROSTER) {
+            showToast(`最大${MAX_STAFF_FOR_ROSTER}名まで選択しました`, 'warning');
+            checkbox.checked = false;
+            break;
+          }
+          if (!selectedStaffIds.has(staff.staff_id)) {
+            selectedStaffIds.add(staff.staff_id);
+            count++;
+          }
+        }
+      } else {
+        // Deselect all visible staff
+        for (const staff of filteredStaff) {
+          selectedStaffIds.delete(staff.staff_id);
+        }
+      }
+
+      renderTable();
+      updateSelectionUI();
+    }
+
+    function updateSelectAllCheckbox() {
+      const selectAll = document.getElementById('select-all');
+      const visibleSelected = filteredStaff.filter(s => selectedStaffIds.has(s.staff_id)).length;
+      const totalVisible = filteredStaff.length;
+
+      if (visibleSelected === 0) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      } else if (visibleSelected === totalVisible || visibleSelected >= MAX_STAFF_FOR_ROSTER) {
+        selectAll.checked = true;
+        selectAll.indeterminate = false;
+      } else {
+        selectAll.checked = false;
+        selectAll.indeterminate = true;
+      }
+    }
+
+    function updateSelectionUI() {
+      const count = selectedStaffIds.size;
+      document.getElementById('selected-count').textContent = count;
+
+      const generateBtn = document.getElementById('generate-roster-btn');
+      generateBtn.disabled = count === 0;
+    }
+
+    function showRosterModal() {
+      if (selectedStaffIds.size === 0) {
+        showToast('スタッフを選択してください', 'error');
+        return;
+      }
+
+      document.getElementById('roster-staff-count').textContent = selectedStaffIds.size;
+      document.getElementById('roster-modal').style.display = 'flex';
+    }
+
+    function closeRosterModal() {
+      document.getElementById('roster-modal').style.display = 'none';
+    }
+
+    function generateRoster(mode) {
+      if (selectedStaffIds.size === 0) {
+        showToast('スタッフを選択してください', 'error');
+        return;
+      }
+
+      closeRosterModal();
+      showToast('名簿を生成中...', 'info');
+
+      const staffIds = Array.from(selectedStaffIds);
+
+      google.script.run
+        .withSuccessHandler(handleRosterSuccess)
+        .withFailureHandler(handleRosterError)
+        .generateWorkerRoster(staffIds, { mode: mode, action: 'overwrite' });
+    }
+
+    function handleRosterSuccess(result) {
+      if (!result.ok) {
+        showToast(result.error?.message || '名簿生成に失敗しました', 'error');
+        return;
+      }
+
+      const data = result.data;
+      showToast(`名簿を生成しました（${data.staffCount}名）`, 'success');
+
+      // Open the generated file in a new tab
+      if (data.url) {
+        window.open(data.url, '_blank');
+      }
+
+      // Clear selection after successful generation
+      selectedStaffIds.clear();
+      updateSelectionUI();
+      renderTable();
+    }
+
+    function handleRosterError(error) {
+      console.error('Roster generation error:', error);
+      showToast('名簿生成中にエラーが発生しました', 'error');
+    }
+
+    // ========================================
+    // Modal Functions
+    // ========================================
 
     function openModal(staffId) {
       const modal = document.getElementById('staff-modal');

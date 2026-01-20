@@ -62,3 +62,4 @@ secrets.*
 
 # Worktree marker
 .current-branch
+.claude
