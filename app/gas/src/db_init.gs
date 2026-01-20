@@ -30,7 +30,8 @@ const TABLE_DEFINITIONS = {
       'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
       'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'staff_type',
       'subcontractor_id', 'ccus_id', 'birth_date', 'gender', 'blood_type',
-      'emergency_contact', 'job_title', 'health_insurance_type', 'pension_type',
+      'emergency_contact_name', 'emergency_contact_address', 'emergency_contact_phone',  // 緊急連絡先3分割
+      'job_title', 'health_insurance_type', 'pension_type', 'pension_number',  // 厚生年金番号追加
       'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
       'special_training', 'skill_training', 'licenses', 'hire_date', 'foreigner_type',
       'payment_frequency',  // P2-3: 支払いサイクル (daily/weekly/biweekly/monthly)
@@ -674,4 +675,71 @@ function migrateSlotSystem() {
   migrateAddSlotIdColumn();
 
   Logger.log('\n=== 枠システムマイグレーション完了 ===');
+}
+
+/**
+ * M_Staff列追加マイグレーション
+ * - emergency_contact → emergency_contact_name, emergency_contact_address, emergency_contact_phone
+ * - pension_number 追加
+ * GASエディタから実行: migrateStaffEmergencyContactColumns()
+ */
+function migrateStaffEmergencyContactColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('スタッフ');
+
+  if (!sheet) {
+    Logger.log('ERROR: スタッフシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log('現在のヘッダー: ' + headers.join(', '));
+
+  // emergency_contact の位置を探す
+  const ecIndex = headers.indexOf('emergency_contact');
+
+  if (ecIndex === -1) {
+    Logger.log('emergency_contact列が見つかりません。すでにマイグレーション済みかもしれません。');
+
+    // 新しい列があるか確認
+    if (headers.indexOf('emergency_contact_name') !== -1) {
+      Logger.log('新しい列はすでに存在します。');
+    }
+    return;
+  }
+
+  Logger.log('emergency_contact列を発見: 列 ' + (ecIndex + 1));
+
+  // 1. emergency_contact を emergency_contact_name に変更
+  sheet.getRange(1, ecIndex + 1).setValue('emergency_contact_name');
+
+  // 2. emergency_contact_address を挿入
+  sheet.insertColumnAfter(ecIndex + 1);
+  sheet.getRange(1, ecIndex + 2).setValue('emergency_contact_address');
+
+  // 3. emergency_contact_phone を挿入
+  sheet.insertColumnAfter(ecIndex + 2);
+  sheet.getRange(1, ecIndex + 3).setValue('emergency_contact_phone');
+
+  Logger.log('緊急連絡先列を3分割しました');
+
+  // 4. pension_number を pension_type の後に追加
+  const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const ptIndex = updatedHeaders.indexOf('pension_type');
+
+  if (ptIndex !== -1 && updatedHeaders.indexOf('pension_number') === -1) {
+    sheet.insertColumnAfter(ptIndex + 1);
+    sheet.getRange(1, ptIndex + 2).setValue('pension_number');
+    Logger.log('pension_number列を追加しました');
+  }
+
+  Logger.log('=== マイグレーション完了 ===');
 }
