@@ -100,6 +100,9 @@ const WorkerRosterService = {
       // 6. データを埋め込み
       this._populateTemplate(spreadsheet, staffData);
 
+      // 6.5. シートのクリーンアップ（不要行削除・印刷範囲設定）
+      this._cleanupSheet(spreadsheet, staffData.length);
+
       // 7. 出力フォルダに移動
       const folder = this._getOutputFolder();
       const file = DriveApp.getFileById(spreadsheet.getId());
@@ -209,20 +212,33 @@ const WorkerRosterService = {
    * @returns {Object[]} スタッフデータの配列
    */
   _getStaffByIds: function(staffIds) {
-    const allStaff = listStaff({ includeDeleted: false });
-    if (!allStaff.ok || !allStaff.data) {
+    const result = listStaff({ includeDeleted: false });
+    if (!result.ok) {
+      Logger.log('listStaff error: ' + JSON.stringify(result));
       return [];
     }
 
+    // listStaff returns { data: { items: [...], count: N } }
+    const allStaff = result.data?.items || [];
+    if (!Array.isArray(allStaff)) {
+      Logger.log('listStaff returned non-array items: ' + typeof allStaff);
+      return [];
+    }
+
+    Logger.log('_getStaffByIds: found ' + allStaff.length + ' staff, looking for ' + staffIds.length + ' IDs');
+
     const staffMap = {};
-    for (const staff of allStaff.data) {
+    for (const staff of allStaff) {
       staffMap[staff.staff_id] = staff;
     }
 
     // 選択順を維持して返す
-    return staffIds
+    const found = staffIds
       .filter(id => staffMap[id])
       .map(id => staffMap[id]);
+
+    Logger.log('_getStaffByIds: matched ' + found.length + ' staff');
+    return found;
   },
 
   /**
@@ -293,6 +309,37 @@ const WorkerRosterService = {
   },
 
   /**
+   * シートのクリーンアップ（不要行削除）
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet - スプレッドシート
+   * @param {number} staffCount - スタッフ数
+   */
+  _cleanupSheet: function(spreadsheet, staffCount) {
+    const sheet = spreadsheet.getSheets()[0];
+
+    // 1. 余分なシートを削除（最初のシート以外）
+    const sheets = spreadsheet.getSheets();
+    for (let i = sheets.length - 1; i > 0; i--) {
+      spreadsheet.deleteSheet(sheets[i]);
+    }
+
+    // 2. データ範囲の最終行を計算
+    // ヘッダー部分(18行) + スタッフ10名分(6行×10) + フッター注釈
+    const lastDataRow = this.DATA_START_ROW + (this.MAX_STAFF_COUNT * this.ROWS_PER_STAFF) + 2;
+
+    // 3. 不要な行を削除
+    const maxRows = sheet.getMaxRows();
+    if (maxRows > lastDataRow) {
+      try {
+        sheet.deleteRows(lastDataRow + 1, maxRows - lastDataRow);
+      } catch (e) {
+        Logger.log('Row deletion warning: ' + e.message);
+      }
+    }
+
+    SpreadsheetApp.flush();
+  },
+
+  /**
    * 1人分のスタッフデータを行に埋め込み
    * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
    * @param {number} baseRow - 開始行（1-indexed）
@@ -309,8 +356,7 @@ const WorkerRosterService = {
     // フリガナ（Row 1）
     sheet.getRange(baseRow, 2).setValue(staff.name_kana || '');
 
-    // 職種（Row 1）
-    sheet.getRange(baseRow, 5).setValue(staff.job_title || '');
+    // 職種（Row 1）- ユーザーが手動入力
 
     // 雇入年月日（Row 1）
     const hireDateStr = this._formatJapaneseDate(staff.hire_date);
@@ -344,17 +390,26 @@ const WorkerRosterService = {
       sheet.getRange(baseRow + 3, 13).setValue(age + ' 歳');
     }
 
-    // 家族連絡先（Row 4）
-    sheet.getRange(baseRow + 3, 17).setValue(staff.emergency_contact || '');
+    // 家族連絡先氏名（Row 4, column Q）
+    sheet.getRange(baseRow + 3, 17).setValue(staff.emergency_contact_name || '');
+
+    // 家族連絡先住所（Row 5, column Q）
+    sheet.getRange(baseRow + 4, 17).setValue(staff.emergency_contact_address || '');
+
+    // 家族連絡先電話番号（Row 4, column Z）
+    sheet.getRange(baseRow + 3, 26).setValue(staff.emergency_contact_phone || '');
 
     // 血液型（Row 1, column AH）
     sheet.getRange(baseRow, 34).setValue(staff.blood_type || '');
 
-    // 健康保険（Row 1, column AL）
-    sheet.getRange(baseRow, 38).setValue(staff.health_insurance_type || '');
+    // 健康保険（Row 1, column AM）
+    sheet.getRange(baseRow, 39).setValue(staff.health_insurance_type || '');
 
     // 年金保険（Row 3）
     sheet.getRange(baseRow + 2, 38).setValue(staff.pension_type || '');
+
+    // 年金番号（Row 4）- 厚生年金番号
+    sheet.getRange(baseRow + 3, 38).setValue(staff.pension_number || '');
 
     // 雇用保険（Row 5）- 下4桁のみ
     const insuranceNo = this._formatInsuranceNumber(staff.employment_insurance_no);
@@ -671,15 +726,54 @@ function setWorkerRosterTemplateId() {
 
 /**
  * 作業員名簿出力フォルダIDを設定（GASエディタから一度だけ実行）
- * 出力フォルダ: gas-dispatch-system > 出力 > 作業員名簿
+ * gas-dispatch-system > 出力 > 作業員名簿
+ *
+ * 親フォルダIDを指定: setWorkerRosterFolderId('親フォルダID')
+ * または引数なしで実行すると、INVOICE_EXPORT_FOLDER_ID/PAYOUT_EXPORT_FOLDER_IDの
+ * 親フォルダ（出力フォルダ）を自動検出して使用
  */
-function setWorkerRosterFolderId() {
-  // 出力フォルダ内に「作業員名簿」フォルダを作成または取得
+function setWorkerRosterFolderId(parentFolderId) {
   const props = PropertiesService.getScriptProperties();
-  const outputFolderId = props.getProperty('OUTPUT_FOLDER_ID');
+
+  // 親フォルダIDを決定
+  let outputFolderId = parentFolderId;
 
   if (!outputFolderId) {
-    Logger.log('ERROR: OUTPUT_FOLDER_ID が未設定です。先にルートの出力フォルダを設定してください。');
+    // 既存の出力フォルダ設定から親フォルダを推測
+    const invoiceFolderId = props.getProperty('INVOICE_EXPORT_FOLDER_ID');
+    const payoutFolderId = props.getProperty('PAYOUT_EXPORT_FOLDER_ID');
+
+    if (invoiceFolderId) {
+      try {
+        const invoiceFolder = DriveApp.getFolderById(invoiceFolderId);
+        const parents = invoiceFolder.getParents();
+        if (parents.hasNext()) {
+          outputFolderId = parents.next().getId();
+          Logger.log('請求書フォルダの親から出力フォルダを検出: ' + outputFolderId);
+        }
+      } catch (e) {
+        Logger.log('請求書フォルダにアクセスできません: ' + e.message);
+      }
+    }
+
+    if (!outputFolderId && payoutFolderId) {
+      try {
+        const payoutFolder = DriveApp.getFolderById(payoutFolderId);
+        const parents = payoutFolder.getParents();
+        if (parents.hasNext()) {
+          outputFolderId = parents.next().getId();
+          Logger.log('給与フォルダの親から出力フォルダを検出: ' + outputFolderId);
+        }
+      } catch (e) {
+        Logger.log('給与フォルダにアクセスできません: ' + e.message);
+      }
+    }
+  }
+
+  if (!outputFolderId) {
+    Logger.log('ERROR: 親フォルダIDを指定してください。');
+    Logger.log('使用方法: setWorkerRosterFolderId("親フォルダID")');
+    Logger.log('または INVOICE_EXPORT_FOLDER_ID / PAYOUT_EXPORT_FOLDER_ID を先に設定してください。');
     return;
   }
 
