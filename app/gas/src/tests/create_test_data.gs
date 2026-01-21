@@ -626,3 +626,283 @@ function clearEverything() {
   console.log('⚠️ 全データ削除を実行します');
   return clearTestData({ jobs: true, assignments: true, customers: true, staff: true });
 }
+
+/**
+ * 作業員名簿（統一様式第5号）用テストデータを作成
+ * GASエディタから createWorkerRosterTestData() を実行
+ */
+function createWorkerRosterTestData() {
+  console.log('=== 作業員名簿用テストデータ作成開始 ===');
+
+  const staffList = [
+    {
+      name: '鈴木一郎',
+      name_kana: 'スズキイチロウ',
+      phone: '090-1001-1001',
+      postal_code: '150-0001',
+      address: '東京都渋谷区神宮前1-2-3',
+      birth_date: '1985-03-15',
+      hire_date: '2015-04-01',
+      gender: '男',
+      blood_type: 'A',
+      emergency_contact_name: '鈴木花子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1001-1002',
+      health_insurance_type: '協会けんぽ',
+      pension_type: '厚生年金',
+      pension_number: '1234-567890',
+      employment_insurance_no: '1234-567890-1',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS001234567',
+      skills: '鳶,揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '田中太郎',
+      name_kana: 'タナカタロウ',
+      phone: '090-1002-1001',
+      postal_code: '160-0022',
+      address: '東京都新宿区新宿2-4-5',
+      birth_date: '1990-07-20',
+      hire_date: '2018-09-01',
+      gender: '男',
+      blood_type: 'B',
+      emergency_contact_name: '田中美子',
+      emergency_contact_address: '東京都新宿区西新宿3-5-6',
+      emergency_contact_phone: '090-1002-1002',
+      health_insurance_type: '建設国保',
+      pension_type: '厚生年金',
+      pension_number: '2345-678901',
+      employment_insurance_no: '2345-678901-2',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '有',
+      ccus_id: 'CCUS002345678',
+      skills: '揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '山田健二',
+      name_kana: 'ヤマダケンジ',
+      phone: '090-1003-1001',
+      postal_code: '170-0013',
+      address: '東京都豊島区東池袋4-5-6',
+      birth_date: '1978-11-05',
+      hire_date: '2010-04-01',
+      gender: '男',
+      blood_type: 'O',
+      emergency_contact_name: '山田良子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1003-1002',
+      health_insurance_type: '協会けんぽ',
+      pension_type: '厚生年金',
+      pension_number: '3456-789012',
+      employment_insurance_no: '3456-789012-3',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS003456789',
+      skills: '鳶,鳶揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '佐々木三郎',
+      name_kana: 'ササキサブロウ',
+      phone: '090-1004-1001',
+      postal_code: '180-0004',
+      address: '東京都武蔵野市吉祥寺本町1-2-3',
+      birth_date: '1995-02-28',
+      hire_date: '2020-04-01',
+      gender: '男',
+      blood_type: 'AB',
+      emergency_contact_name: '佐々木春子',
+      emergency_contact_address: '東京都武蔵野市御殿山2-3-4',
+      emergency_contact_phone: '0422-12-3456',
+      health_insurance_type: '国民健康保険',
+      pension_type: '国民年金',
+      pension_number: '',
+      employment_insurance_no: '4567-890123-4',
+      kensetsu_kyosai: '無',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS004567890',
+      skills: '揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '高橋四郎',
+      name_kana: 'タカハシシロウ',
+      phone: '090-1005-1001',
+      postal_code: '141-0021',
+      address: '東京都品川区上大崎3-4-5',
+      birth_date: '1988-06-10',
+      hire_date: '2016-07-01',
+      gender: '男',
+      blood_type: 'A',
+      emergency_contact_name: '高橋夏子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1005-1002',
+      health_insurance_type: '協会けんぽ',
+      pension_type: '厚生年金',
+      pension_number: '5678-901234',
+      employment_insurance_no: '5678-901234-5',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '有',
+      ccus_id: 'CCUS005678901',
+      skills: '鳶,揚げ,鳶揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '伊藤五郎',
+      name_kana: 'イトウゴロウ',
+      phone: '090-1006-1001',
+      postal_code: '113-0033',
+      address: '東京都文京区本郷5-6-7',
+      birth_date: '1982-09-22',
+      hire_date: '2012-10-01',
+      gender: '男',
+      blood_type: 'B',
+      emergency_contact_name: '伊藤秋子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1006-1002',
+      health_insurance_type: '建設国保',
+      pension_type: '厚生年金',
+      pension_number: '6789-012345',
+      employment_insurance_no: '6789-012345-6',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS006789012',
+      skills: '鳶',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '渡辺六郎',
+      name_kana: 'ワタナベロクロウ',
+      phone: '090-1007-1001',
+      postal_code: '104-0061',
+      address: '東京都中央区銀座6-7-8',
+      birth_date: '1992-12-01',
+      hire_date: '2019-01-15',
+      gender: '男',
+      blood_type: 'O',
+      emergency_contact_name: '渡辺冬子',
+      emergency_contact_address: '東京都中央区日本橋1-2-3',
+      emergency_contact_phone: '03-1234-5678',
+      health_insurance_type: '協会けんぽ',
+      pension_type: '厚生年金',
+      pension_number: '7890-123456',
+      employment_insurance_no: '7890-123456-7',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '有',
+      ccus_id: 'CCUS007890123',
+      skills: '揚げ,鳶揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '中村七郎',
+      name_kana: 'ナカムラシチロウ',
+      phone: '090-1008-1001',
+      postal_code: '162-0065',
+      address: '東京都新宿区住吉町7-8-9',
+      birth_date: '1975-04-18',
+      hire_date: '2005-05-01',
+      gender: '男',
+      blood_type: 'A',
+      emergency_contact_name: '中村文子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1008-1002',
+      health_insurance_type: '建設国保',
+      pension_type: '厚生年金',
+      pension_number: '8901-234567',
+      employment_insurance_no: '8901-234567-8',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS008901234',
+      skills: '鳶,揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '小林八郎',
+      name_kana: 'コバヤシハチロウ',
+      phone: '090-1009-1001',
+      postal_code: '106-0032',
+      address: '東京都港区六本木8-9-10',
+      birth_date: '1998-08-08',
+      hire_date: '2022-04-01',
+      gender: '男',
+      blood_type: 'AB',
+      emergency_contact_name: '小林梅子',
+      emergency_contact_address: '神奈川県横浜市中区1-2-3',
+      emergency_contact_phone: '045-123-4567',
+      health_insurance_type: '協会けんぽ',
+      pension_type: '厚生年金',
+      pension_number: '9012-345678',
+      employment_insurance_no: '9012-345678-9',
+      kensetsu_kyosai: '無',
+      chusho_kyosai: '無',
+      ccus_id: 'CCUS009012345',
+      skills: '揚げ',
+      staff_type: 'regular',
+      is_active: true
+    },
+    {
+      name: '加藤九郎',
+      name_kana: 'カトウクロウ',
+      phone: '090-1010-1001',
+      postal_code: '135-0064',
+      address: '東京都江東区青海9-10-11',
+      birth_date: '1980-01-25',
+      hire_date: '2008-08-01',
+      gender: '男',
+      blood_type: 'B',
+      emergency_contact_name: '加藤桜子',
+      emergency_contact_address: '同上',
+      emergency_contact_phone: '090-1010-1002',
+      health_insurance_type: '建設国保',
+      pension_type: '厚生年金',
+      pension_number: '0123-456789',
+      employment_insurance_no: '0123-456789-0',
+      kensetsu_kyosai: '有',
+      chusho_kyosai: '有',
+      ccus_id: 'CCUS010123456',
+      skills: '鳶,揚げ,鳶揚げ',
+      staff_type: 'regular',
+      is_active: true
+    }
+  ];
+
+  // 既存データを確認（名前で重複チェック）
+  const existing = listStaff({ includeDeleted: false });
+  const existingNames = new Set();
+  if (existing.ok && existing.data?.items) {
+    existing.data.items.forEach(s => existingNames.add(s.name));
+  }
+
+  let created = 0;
+  let skipped = 0;
+
+  for (const staff of staffList) {
+    if (existingNames.has(staff.name)) {
+      console.log(`スキップ（既存）: ${staff.name}`);
+      skipped++;
+      continue;
+    }
+
+    const result = saveStaff(staff);
+    if (result.ok) {
+      console.log(`作成: ${staff.name}`);
+      created++;
+    } else {
+      console.log(`エラー: ${staff.name} - ${result.error?.message}`);
+    }
+  }
+
+  console.log(`=== 作業員名簿用テストデータ作成完了 ===`);
+  console.log(`作成: ${created}件, スキップ: ${skipped}件`);
+}
