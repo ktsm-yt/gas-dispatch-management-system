@@ -26,6 +26,7 @@ function runAllMasterTests() {
   const testSuites = [
     { name: 'Customer Tests', fn: runCustomerTests },
     { name: 'Staff Tests', fn: runStaffTests },
+    { name: 'Subcontractor Tests', fn: runSubcontractorTests },
     { name: 'TransportFee Tests', fn: runTransportFeeTests }
   ];
 
@@ -62,7 +63,9 @@ function runCustomerTests() {
     testCustomerFindById,
     testCustomerUpdate,
     testCustomerSearch,
-    testCustomerSoftDelete
+    testCustomerSoftDelete,
+    testCustomerDeletedAtRecorded,
+    testCustomerDuplicateAfterSoftDelete
   ];
 
   for (const test of tests) {
@@ -275,6 +278,109 @@ function testCustomerSoftDelete() {
   );
   assertEq(deletedCustomers.length, 1, 'deleted customer should exist with is_deleted=true');
   assertTruthy(deletedCustomers[0].is_deleted, 'is_deleted should be true');
+}
+
+/**
+ * 論理削除時に deleted_at/deleted_by が正しく記録されることを確認
+ * (優先度2: 削除日時・削除者の記録テスト)
+ */
+function testCustomerDeletedAtRecorded() {
+  let createdId = null;
+
+  try {
+    // 1. 顧客を作成
+    const result1 = saveCustomer({
+      company_name: '削除日時テスト会社_' + Utilities.getUuid().substring(0, 8),
+      is_active: true
+    });
+    assertTruthy(result1.ok, 'customer should be created');
+    createdId = result1.data.customer_id;
+
+    // 2. 論理削除
+    const latestCustomer = getCustomer(createdId);
+    const deleteResult = deleteCustomer(createdId, latestCustomer.data.updated_at);
+    assertTruthy(deleteResult.ok, 'delete should succeed');
+
+    // 3. 削除済みレコードを取得して確認
+    const deletedCustomers = getAllRecords('M_Customers', { includeDeleted: true }).filter(c =>
+      c.customer_id === createdId
+    );
+    assertEq(deletedCustomers.length, 1, 'deleted customer should exist');
+
+    const deleted = deletedCustomers[0];
+    assertTruthy(deleted.is_deleted, 'is_deleted should be true');
+    assertTruthy(deleted.deleted_at, 'deleted_at should be recorded');
+    assertTruthy(deleted.deleted_by, 'deleted_by should be recorded');
+
+    // deleted_at は ISO 8601 形式のタイムスタンプであるべき
+    assertTruthy(
+      deleted.deleted_at.toString().includes('T') || deleted.deleted_at instanceof Date,
+      'deleted_at should be timestamp format'
+    );
+
+    console.log(`deleted_at: ${deleted.deleted_at}`);
+    console.log(`deleted_by: ${deleted.deleted_by}`);
+
+  } catch (e) {
+    if (createdId) softDeleteMasterRecord('M_Customers', 'customer_id', createdId);
+    throw e;
+  }
+}
+
+/**
+ * 論理削除後に同名の顧客を再登録できることを確認
+ * (優先度1: ユニーク制約ロジックの修正テスト)
+ */
+function testCustomerDuplicateAfterSoftDelete() {
+  const testCompanyName = '再登録テスト会社_' + Utilities.getUuid().substring(0, 8);
+  let createdId1 = null;
+  let createdId2 = null;
+
+  try {
+    // 1. 最初の顧客を作成（IDは自動生成）
+    const result1 = saveCustomer({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(result1.ok, 'first customer should be created');
+    createdId1 = result1.data.customer_id;
+
+    // 2. 同名の顧客を作成しようとする → エラーになるべき
+    const result2 = saveCustomer({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(!result2.ok, 'duplicate company_name should fail');
+
+    // 3. 最初の顧客を論理削除（フォルダ作成で updated_at が変わるため、最新を取得）
+    const latestCustomer = getCustomer(createdId1);
+    assertTruthy(latestCustomer.ok, 'getCustomer should succeed');
+    const deleteResult = deleteCustomer(createdId1, latestCustomer.data.updated_at);
+    assertTruthy(deleteResult.ok, 'delete should succeed: ' + JSON.stringify(deleteResult));
+
+    // 削除が反映されるのを待つ
+    SpreadsheetApp.flush();
+
+    // 4. 削除後、同名の顧客を作成できるべき
+    const result3 = saveCustomer({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    if (!result3.ok) {
+      console.log('result3 error: ' + JSON.stringify(result3));
+    }
+    assertTruthy(result3.ok, 'same company_name should be allowed after soft delete');
+    createdId2 = result3.data.customer_id;
+
+    // クリーンアップ
+    softDeleteMasterRecord('M_Customers', 'customer_id', createdId1);
+    softDeleteMasterRecord('M_Customers', 'customer_id', createdId2);
+
+  } catch (e) {
+    if (createdId1) softDeleteMasterRecord('M_Customers', 'customer_id', createdId1);
+    if (createdId2) softDeleteMasterRecord('M_Customers', 'customer_id', createdId2);
+    throw e;
+  }
 }
 
 // ============================================================
@@ -490,6 +596,146 @@ function testStaffSoftDelete() {
     s.staff_id === testId && !s.is_deleted
   );
   assertEq(staffRecords.length, 0, 'deleted staff should not be found');
+}
+
+// ============================================================
+// Subcontractor Tests
+// ============================================================
+
+function runSubcontractorTests() {
+  const results = { passed: 0, failed: 0, errors: [] };
+
+  const tests = [
+    testSubcontractorInsert,
+    testSubcontractorDuplicateCheck,
+    testSubcontractorDuplicateAfterSoftDelete
+  ];
+
+  for (const test of tests) {
+    try {
+      test();
+      console.log(`[PASS] ${test.name}`);
+      results.passed++;
+    } catch (e) {
+      console.log(`[FAIL] ${test.name}: ${e.message}`);
+      results.failed++;
+      results.errors.push({ test: test.name, error: e.message });
+    }
+  }
+
+  return results;
+}
+
+function testSubcontractorInsert() {
+  let createdId = null;
+
+  try {
+    // 挿入（IDは自動生成）
+    const result = saveSubcontractor({
+      company_name: 'テスト外注会社_' + Utilities.getUuid().substring(0, 8),
+      representative: '代表太郎',
+      phone: '03-9999-8888',
+      is_active: true
+    });
+    assertTruthy(result.ok, 'subcontractor should be created');
+    createdId = result.data.subcontractor_id;
+
+    // 確認
+    const subcontractors = getAllRecords('M_Subcontractors').filter(s =>
+      s.subcontractor_id === createdId && !s.is_deleted
+    );
+    assertEq(subcontractors.length, 1, 'subcontractor should be inserted');
+    assertTruthy(subcontractors[0].company_name.startsWith('テスト外注会社_'), 'company_name should match');
+
+    // クリーンアップ
+    softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId);
+
+  } catch (e) {
+    if (createdId) softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId);
+    throw e;
+  }
+}
+
+/**
+ * 外注先の重複チェックが機能することを確認
+ */
+function testSubcontractorDuplicateCheck() {
+  const testCompanyName = '重複テスト外注_' + Utilities.getUuid().substring(0, 8);
+  let createdId1 = null;
+
+  try {
+    // 1. 最初の外注先を作成（IDは自動生成）
+    const result1 = saveSubcontractor({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(result1.ok, 'first subcontractor should be created');
+    createdId1 = result1.data.subcontractor_id;
+
+    // 2. 同名の外注先を作成しようとする → エラーになるべき
+    const result2 = saveSubcontractor({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(!result2.ok, 'duplicate company_name should fail');
+
+    // クリーンアップ
+    softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId1);
+
+  } catch (e) {
+    if (createdId1) softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId1);
+    throw e;
+  }
+}
+
+/**
+ * 論理削除後に同名の外注先を再登録できることを確認
+ * (優先度1: ユニーク制約ロジックの修正テスト)
+ */
+function testSubcontractorDuplicateAfterSoftDelete() {
+  const testCompanyName = '再登録テスト外注_' + Utilities.getUuid().substring(0, 8);
+  let createdId1 = null;
+  let createdId2 = null;
+
+  try {
+    // 1. 最初の外注先を作成（IDは自動生成）
+    const result1 = saveSubcontractor({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(result1.ok, 'first subcontractor should be created');
+    createdId1 = result1.data.subcontractor_id;
+
+    // 2. 同名の外注先を作成しようとする → エラーになるべき
+    const result2 = saveSubcontractor({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(!result2.ok, 'duplicate company_name should fail');
+
+    // 3. 最初の外注先を論理削除
+    deleteSubcontractor(createdId1, result1.data.updated_at);
+
+    // 削除が反映されるのを待つ
+    SpreadsheetApp.flush();
+
+    // 4. 削除後、同名の外注先を作成できるべき
+    const result3 = saveSubcontractor({
+      company_name: testCompanyName,
+      is_active: true
+    });
+    assertTruthy(result3.ok, 'same company_name should be allowed after soft delete');
+    createdId2 = result3.data.subcontractor_id;
+
+    // クリーンアップ
+    softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId1);
+    softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId2);
+
+  } catch (e) {
+    if (createdId1) softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId1);
+    if (createdId2) softDeleteMasterRecord('M_Subcontractors', 'subcontractor_id', createdId2);
+    throw e;
+  }
 }
 
 // ============================================================
