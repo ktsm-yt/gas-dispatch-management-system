@@ -288,12 +288,13 @@ function validateCustomer(data) {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
 
-  // 同名会社の重複チェック
+  // 同名会社の重複チェック（削除済みは除外）
   const existingCustomers = listCustomers({ activeOnly: false });
   if (existingCustomers.ok) {
     const duplicate = existingCustomers.data.items.find(c =>
       c.company_name === data.company_name.trim() &&
-      c.customer_id !== data.customer_id  // 自分自身は除外（更新時）
+      c.customer_id !== data.customer_id &&
+      !c.is_deleted  // 削除済みは除外
     );
     if (duplicate) {
       return {
@@ -477,6 +478,24 @@ function validateSubcontractor(data) {
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
+
+  // 同名会社の重複チェック（削除済みは除外）
+  const existingSubcontractors = listSubcontractors({ activeOnly: false });
+  if (existingSubcontractors.ok) {
+    const duplicate = existingSubcontractors.data.items.find(s =>
+      s.company_name === data.company_name.trim() &&
+      s.subcontractor_id !== data.subcontractor_id &&
+      !s.is_deleted  // 削除済みは除外
+    );
+    if (duplicate) {
+      return {
+        valid: false,
+        message: `同名の外注先「${data.company_name}」が既に登録されています`,
+        details: { field: 'company_name', duplicateId: duplicate.subcontractor_id }
+      };
+    }
+  }
+
   return { valid: true };
 }
 

@@ -20,7 +20,8 @@ const TABLE_DEFINITIONS = {
       'closing_day', 'payment_day', 'payment_month_offset',
       'invoice_format', 'include_cover_page', 'tax_rate', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
-      'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted'
+      'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted',
+      'deleted_at', 'deleted_by'
     ]
   },
   M_Staff: {
@@ -36,7 +37,7 @@ const TABLE_DEFINITIONS = {
       'special_training', 'skill_training', 'licenses', 'hire_date', 'foreigner_type',
       'payment_frequency',  // P2-3: 支払いサイクル (daily/weekly/biweekly/monthly)
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by',
-      'is_active', 'is_deleted'
+      'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   M_Subcontractors: {
@@ -44,7 +45,7 @@ const TABLE_DEFINITIONS = {
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
-      'is_active', 'is_deleted'
+      'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   M_TransportFee: {
@@ -71,7 +72,8 @@ const TABLE_DEFINITIONS = {
       'pay_unit', 'work_category', 'work_detail',
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
       'status', 'is_damaged', 'is_uncollected', 'is_claimed',
-      'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
+      'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted',
+      'deleted_at', 'deleted_by'
     ]
   },
   T_JobSlots: {
@@ -79,7 +81,8 @@ const TABLE_DEFINITIONS = {
     headers: [
       'slot_id', 'job_id', 'slot_time_slot', 'slot_pay_unit', 'slot_count',
       'sort_order', 'notes',
-      'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted'
+      'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted',
+      'deleted_at', 'deleted_by'
     ]
   },
   T_JobAssignments: {
@@ -93,7 +96,7 @@ const TABLE_DEFINITIONS = {
       'entry_date', 'safety_training_date', 'status',
       'payout_id',  // P2-3: 二重計上防止のためのPayoutへの参照
       'notes', 'created_at', 'created_by',
-      'updated_at', 'updated_by', 'is_deleted'
+      'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   T_Invoices: {
@@ -103,7 +106,7 @@ const TABLE_DEFINITIONS = {
       'issue_date', 'due_date', 'subtotal', 'expense_amount', 'tax_amount',
       'total_amount', 'invoice_format', 'shipper_name', 'pdf_file_id',
       'excel_file_id', 'sheet_file_id', 'status', 'notes', 'created_at',
-      'created_by', 'updated_at', 'updated_by', 'is_deleted'
+      'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   T_InvoiceLines: {
@@ -113,7 +116,7 @@ const TABLE_DEFINITIONS = {
       'assignment_id', 'site_name', 'item_name', 'time_note', 'quantity', 'unit',
       'unit_price', 'amount', 'order_number', 'branch_office', 'construction_div',
       'supervisor_name', 'property_code', 'tax_amount', 'created_at', 'created_by',
-      'updated_at', 'updated_by', 'is_deleted'
+      'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   T_Payouts: {
@@ -123,7 +126,7 @@ const TABLE_DEFINITIONS = {
       'period_start', 'period_end', 'assignment_count',  // P2-3: 差分支払い方式
       'base_amount', 'transport_amount', 'adjustment_amount',
       'tax_amount', 'total_amount', 'status', 'paid_date', 'notes', 'created_at',
-      'created_by', 'updated_at', 'updated_by', 'is_deleted'
+      'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   T_AuditLog: {
@@ -742,4 +745,82 @@ function migrateStaffEmergencyContactColumns() {
   }
 
   Logger.log('=== マイグレーション完了 ===');
+}
+
+/**
+ * 論理削除カラム追加マイグレーション
+ * 全テーブルに deleted_at, deleted_by カラムを追加
+ * GASエディタから実行: migrateAddDeletedAtColumns()
+ */
+function migrateAddDeletedAtColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // 対象シートと日本語名のマッピング
+  const sheetsToMigrate = [
+    { name: '顧客', tableName: 'M_Customers' },
+    { name: 'スタッフ', tableName: 'M_Staff' },
+    { name: '外注先', tableName: 'M_Subcontractors' },
+    { name: '案件', tableName: 'T_Jobs' },
+    { name: '案件枠', tableName: 'T_JobSlots' },
+    { name: '配置', tableName: 'T_JobAssignments' },
+    { name: '請求', tableName: 'T_Invoices' },
+    { name: '請求明細', tableName: 'T_InvoiceLines' },
+    { name: '支払', tableName: 'T_Payouts' }
+  ];
+
+  Logger.log('=== deleted_at/deleted_by カラム追加マイグレーション ===\n');
+
+  for (const sheetInfo of sheetsToMigrate) {
+    const sheet = ss.getSheetByName(sheetInfo.name);
+
+    if (!sheet) {
+      Logger.log(`✗ ${sheetInfo.name} シートが見つかりません`);
+      continue;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    // is_deleted の位置を探す
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    if (isDeletedIndex === -1) {
+      Logger.log(`✗ ${sheetInfo.name}: is_deleted カラムが見つかりません`);
+      continue;
+    }
+
+    // deleted_at が既に存在するかチェック
+    if (headers.includes('deleted_at')) {
+      Logger.log(`✓ ${sheetInfo.name}: deleted_at/deleted_by は既に存在します`);
+      continue;
+    }
+
+    // is_deleted の後に deleted_at, deleted_by を挿入
+    const insertPosition = isDeletedIndex + 2; // 1-indexed
+
+    // deleted_by を挿入
+    sheet.insertColumnAfter(isDeletedIndex + 1);
+    sheet.getRange(1, insertPosition).setValue('deleted_at');
+
+    // deleted_by を挿入
+    sheet.insertColumnAfter(insertPosition);
+    sheet.getRange(1, insertPosition + 1).setValue('deleted_by');
+
+    // ヘッダー行のスタイルを適用
+    const newLastCol = sheet.getLastColumn();
+    sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log(`✓ ${sheetInfo.name}: deleted_at, deleted_by カラムを追加しました`);
+  }
+
+  Logger.log('\n=== マイグレーション完了 ===');
+  Logger.log('deleted_at: 削除日時を記録（復元しても履歴が残る）');
+  Logger.log('deleted_by: 削除者を記録');
 }
