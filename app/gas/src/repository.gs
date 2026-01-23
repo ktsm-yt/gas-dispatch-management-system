@@ -142,6 +142,8 @@ function softDeleteRow(sheet, rowIndex, deletedBy) {
   const now = new Date().toISOString();
   return updateRow(sheet, rowIndex, {
     is_deleted: true,
+    deleted_at: now,       // 削除日時を専用カラムに記録
+    deleted_by: deletedBy, // 削除者を専用カラムに記録
     updated_at: now,
     updated_by: deletedBy
   });
