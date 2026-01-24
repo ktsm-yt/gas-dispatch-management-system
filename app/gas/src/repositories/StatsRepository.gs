@@ -3,6 +3,9 @@
  *
  * T_MonthlyStats テーブルのシートI/O処理
  * P2-6: 売上分析ダッシュボード用の月次統計データ管理
+ *
+ * スキーマ: year（西暦年）+ month で管理
+ * 会計年度は必要に応じて動的に計算: month >= 4 ? year : year - 1
  */
 
 const StatsRepository = {
@@ -21,16 +24,16 @@ const StatsRepository = {
   },
 
   /**
-   * 年度と月で統計を取得
-   * @param {number} fiscalYear - 会計年度
+   * 年と月で統計を取得
+   * @param {number} year - 西暦年
    * @param {number} month - 月（1-12）
    * @returns {Object|null} 統計レコードまたはnull
    */
-  findByPeriod: function(fiscalYear, month) {
+  findByPeriod: function(year, month) {
     const records = getAllRecords(this.TABLE_NAME);
 
     const found = records.find(r =>
-      r.fiscal_year === fiscalYear &&
+      r.year === year &&
       r.month === month
     );
 
@@ -50,14 +53,14 @@ const StatsRepository = {
   },
 
   /**
-   * 暦年で統計を検索（従来の動作）
+   * 暦年で統計を検索
    * @param {number} calendarYear - 暦年（例: 2025 = 2025年1月〜12月）
    * @returns {Object[]} 統計配列（月順）
    */
   findByCalendarYear: function(calendarYear) {
     let records = getAllRecords(this.TABLE_NAME);
 
-    records = records.filter(r => r.fiscal_year === calendarYear);
+    records = records.filter(r => r.year === calendarYear);
 
     // 月順でソート
     records.sort((a, b) => a.month - b.month);
@@ -67,9 +70,9 @@ const StatsRepository = {
 
   /**
    * 期間で統計を検索
-   * @param {number} startYear - 開始年度
+   * @param {number} startYear - 開始年（西暦）
    * @param {number} startMonth - 開始月
-   * @param {number} endYear - 終了年度
+   * @param {number} endYear - 終了年（西暦）
    * @param {number} endMonth - 終了月
    * @returns {Object[]} 統計配列（年月順）
    */
@@ -77,7 +80,7 @@ const StatsRepository = {
     let records = getAllRecords(this.TABLE_NAME);
 
     records = records.filter(r => {
-      const recordYM = r.fiscal_year * 100 + r.month;
+      const recordYM = r.year * 100 + r.month;
       const startYM = startYear * 100 + startMonth;
       const endYM = endYear * 100 + endMonth;
       return recordYM >= startYM && recordYM <= endYM;
@@ -85,8 +88,8 @@ const StatsRepository = {
 
     // 年月順でソート
     records.sort((a, b) => {
-      if (a.fiscal_year !== b.fiscal_year) {
-        return a.fiscal_year - b.fiscal_year;
+      if (a.year !== b.year) {
+        return a.year - b.year;
       }
       return a.month - b.month;
     });
@@ -97,8 +100,6 @@ const StatsRepository = {
   /**
    * 確定済み統計のみ取得
    * @param {number} calendarYear - 暦年（省略時は全年度）
-   *   注意: DBには暦年が格納されているため、会計年度で取得したい場合は
-   *   findByFiscalYear() を使用し、結果から is_final でフィルタすること
    * @returns {Object[]} 確定済み統計配列
    */
   findFinalizedStats: function(calendarYear = null) {
@@ -107,13 +108,13 @@ const StatsRepository = {
     records = records.filter(r => r.is_final === true);
 
     if (calendarYear !== null) {
-      records = records.filter(r => r.fiscal_year === calendarYear);
+      records = records.filter(r => r.year === calendarYear);
     }
 
     // 年月順でソート
     records.sort((a, b) => {
-      if (a.fiscal_year !== b.fiscal_year) {
-        return a.fiscal_year - b.fiscal_year;
+      if (a.year !== b.year) {
+        return a.year - b.year;
       }
       return a.month - b.month;
     });
@@ -131,7 +132,7 @@ const StatsRepository = {
 
     const newStats = {
       stat_id: stats.stat_id || generateId('stat'),
-      fiscal_year: stats.fiscal_year,
+      year: stats.year,
       month: stats.month,
       job_count: stats.job_count || 0,
       assignment_count: stats.assignment_count || 0,
@@ -156,13 +157,13 @@ const StatsRepository = {
 
   /**
    * 統計を更新（upsert: 存在しなければ作成）
-   * @param {number} fiscalYear - 会計年度
+   * @param {number} year - 西暦年
    * @param {number} month - 月
    * @param {Object} stats - 統計データ
    * @returns {Object} 更新結果 { success: boolean, stats: Object, created: boolean }
    */
-  upsert: function(fiscalYear, month, stats) {
-    const existing = this.findByPeriod(fiscalYear, month);
+  upsert: function(year, month, stats) {
+    const existing = this.findByPeriod(year, month);
 
     if (existing) {
       // 既存レコードを更新
@@ -176,7 +177,7 @@ const StatsRepository = {
       // 新規作成
       const newStats = this.insert({
         ...stats,
-        fiscal_year: fiscalYear,
+        year: year,
         month: month
       });
       return {
@@ -237,12 +238,12 @@ const StatsRepository = {
 
   /**
    * 統計を確定（is_final = true）
-   * @param {number} fiscalYear - 会計年度
+   * @param {number} year - 西暦年
    * @param {number} month - 月
    * @returns {Object} 確定結果 { success: boolean, stats?: Object, error?: string }
    */
-  finalize: function(fiscalYear, month) {
-    const existing = this.findByPeriod(fiscalYear, month);
+  finalize: function(year, month) {
+    const existing = this.findByPeriod(year, month);
 
     if (!existing) {
       return { success: false, error: 'NOT_FOUND' };
@@ -265,8 +266,8 @@ const StatsRepository = {
 
     // 年月順でソート
     records.sort((a, b) => {
-      if (a.fiscal_year !== b.fiscal_year) {
-        return a.fiscal_year - b.fiscal_year;
+      if (a.year !== b.year) {
+        return a.year - b.year;
       }
       return a.month - b.month;
     });
@@ -338,7 +339,7 @@ const StatsRepository = {
   _normalizeRecord: function(record) {
     return {
       ...record,
-      fiscal_year: Number(record.fiscal_year) || 0,
+      year: Number(record.year) || 0,
       month: Number(record.month) || 0,
       job_count: Number(record.job_count) || 0,
       assignment_count: Number(record.assignment_count) || 0,

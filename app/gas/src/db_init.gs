@@ -140,7 +140,7 @@ const TABLE_DEFINITIONS = {
   T_MonthlyStats: {
     sheetName: '月次統計',
     headers: [
-      'stat_id', 'fiscal_year', 'month',
+      'stat_id', 'year', 'month',
       // 案件・配置
       'job_count', 'assignment_count',
       // 売上内訳

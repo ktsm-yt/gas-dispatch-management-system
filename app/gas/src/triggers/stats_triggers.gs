@@ -118,7 +118,7 @@ function dailyStatsUpdate() {
 
     if (result.success) {
       Logger.log('✓ 当月統計を更新しました');
-      Logger.log(`  - 年月: ${result.stats.fiscal_year}年${result.stats.month}月`);
+      Logger.log(`  - 年月: ${result.stats.year}年${result.stats.month}月`);
       Logger.log(`  - 売上合計: ¥${result.stats.invoice_total.toLocaleString()}`);
       Logger.log(`  - 粗利率: ${result.stats.margin_rate}%`);
     } else {
@@ -152,7 +152,7 @@ function monthlyStatsFinalize() {
 
     if (result.success) {
       Logger.log('✓ 前月統計を確定しました');
-      Logger.log(`  - 年月: ${result.stats.fiscal_year}年${result.stats.month}月`);
+      Logger.log(`  - 年月: ${result.stats.year}年${result.stats.month}月`);
       Logger.log(`  - 売上合計: ¥${result.stats.invoice_total.toLocaleString()}`);
       Logger.log(`  - 粗利率: ${result.stats.margin_rate}%`);
       Logger.log(`  - 確定フラグ: ${result.stats.is_final}`);
