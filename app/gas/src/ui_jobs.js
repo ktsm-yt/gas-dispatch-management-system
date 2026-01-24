@@ -23,7 +23,9 @@ function doGet(e) {
     // P2-1: 請求管理
     invoices: { file: 'invoices', title: '請求管理' },
     // P2-3: 支払管理
-    payouts: { file: 'payouts', title: '支払管理' }
+    payouts: { file: 'payouts', title: '支払管理' },
+    // P2-6: 売上分析ダッシュボード
+    sales_analytics: { file: 'sales_analytics', title: '売上分析' }
   };
 
   const config = pages[page] || pages.dashboard;
