@@ -217,21 +217,39 @@ function sendArchiveWarningEmail() {
 ```
 1. アーカイブ対象年度の確認
    ↓
-2. アーカイブ先スプレッドシートの作成（なければ）
+2. 【P2-6】月次統計の確定（T_MonthlyStats）
+   ├── 前年度12ヶ月分の統計を再計算
+   └── is_final = true で確定（以後変更不可）
    ↓
-3. 各シートのデータを年度でフィルタして移動
+3. アーカイブ先スプレッドシートの作成（なければ）
+   ↓
+4. 各シートのデータを年度でフィルタして移動
    ├── T_Jobs（案件）
    ├── T_JobAssignments（配置）
    ├── T_Invoices（請求）
    ├── T_InvoiceLines（請求明細）
    └── T_Payouts（支払）
    ↓
-4. 移動完了後、現行DBから該当データを削除
+5. 移動完了後、現行DBから該当データを削除
    ↓
-5. 完了通知メール送信
+6. 完了通知メール送信
    ↓
-6. 監査ログ記録
+7. 監査ログ記録
 ```
+
+### アーカイブ対象外のテーブル
+
+以下のテーブルは**アーカイブ対象外**（現行DBに永続保持）:
+
+| テーブル | 理由 |
+|---------|------|
+| M_Customers | マスターデータ |
+| M_Staff | マスターデータ |
+| M_Subcontractors | マスターデータ |
+| M_TransportFee | マスターデータ |
+| M_Company | マスターデータ |
+| **T_MonthlyStats** | **【P2-6】売上分析用の集計データ。アーカイブ後も過去の売上推移を参照可能にするため永続保持** |
+| T_AuditLog | 監査証跡（全期間保持推奨） |
 
 ### 実装
 
@@ -247,10 +265,15 @@ function executeYearlyArchive() {
     }
 
     const previousFiscalYear = getCurrentFiscalYear() - 1;
-    const archiveStartDate = `${previousFiscalYear}-04-01`;
-    const archiveEndDate = `${previousFiscalYear + 1}-03-31`;
+    const archiveStartDate = previousFiscalYear + '-04-01';
+    const archiveEndDate = (previousFiscalYear + 1) + '-03-31';
 
-    Logger.log(`Starting archive for fiscal year ${previousFiscalYear}`);
+    Logger.log('Starting archive for fiscal year ' + previousFiscalYear);
+
+    // 【P2-6】月次統計を確定（アーカイブ前に必須）
+    Logger.log('Finalizing monthly stats...');
+    finalizeYearlyStats(previousFiscalYear);
+    Logger.log('Monthly stats finalized');
 
     // 1. アーカイブ先スプレッドシート取得/作成
     const archiveDbId = getOrCreateArchiveDb(previousFiscalYear);
@@ -392,6 +415,22 @@ function getCurrentFiscalYear() {
   const year = today.getFullYear();
   // 4月〜3月を1年度とする
   return month >= 4 ? year : year - 1;
+}
+
+/**
+ * 【P2-6】年度の月次統計を全て確定
+ * アーカイブ前に呼び出し、統計データの整合性を保証
+ */
+function finalizeYearlyStats(fiscalYear) {
+  // 4月〜翌3月の12ヶ月分を確定
+  for (let m = 4; m <= 12; m++) {
+    StatsService.finalizeMonthStats(fiscalYear, m);
+  }
+  for (let m = 1; m <= 3; m++) {
+    StatsService.finalizeMonthStats(fiscalYear + 1, m);
+  }
+
+  Logger.log('Finalized stats for fiscal year ' + fiscalYear + ' (12 months)');
 }
 ```
 
@@ -537,3 +576,51 @@ const CONFIG = {
 - [05_database.md](../03_spec/05_database.md) - データベース設計
 - [10_implementation_risks.md](../03_spec/10_implementation_risks.md) - 実装リスク（6分制限対策）
 - [11_deployment.md](11_deployment.md) - バックアップ/復旧
+
+---
+
+## 15.10 【P2-6】月次統計との連携
+
+### T_MonthlyStats の役割
+
+アーカイブ後も売上分析を可能にするため、月次統計データは**アーカイブ対象外**として永続保持する。
+
+| 項目 | 説明 |
+|------|------|
+| 保存場所 | 現行DB（T_MonthlyStats シート） |
+| データ量 | 年間12行（非常に軽量） |
+| 保持期間 | 無期限（全年度分を保持） |
+
+### アーカイブ前の統計確定フロー
+
+```
+1. アーカイブ対象年度（前年度）の12ヶ月分を再計算
+   ├── 4月〜12月（前年度）
+   └── 1月〜3月（当年）
+   ↓
+2. 各月の is_final = true に設定
+   ↓
+3. 確定後は統計値の変更不可
+   ↓
+4. トランザクションデータをアーカイブ
+```
+
+### 統計データの活用
+
+アーカイブ後も売上分析ダッシュボードで:
+
+- 年度別売上推移の比較
+- 過去年度の粗利率確認
+- 月次推移グラフの全期間表示
+
+が可能。
+
+### トリガー設定
+
+```javascript
+// stats_triggers.gs で設定済み
+// - 日次（3:00 AM）: 当月統計を更新
+// - 月次（1日 4:00 AM）: 前月統計を確定
+```
+
+詳細は `app/gas/src/triggers/stats_triggers.gs` を参照。
