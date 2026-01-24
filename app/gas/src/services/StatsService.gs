@@ -317,12 +317,14 @@ const StatsService = {
     }
 
     // 配置を取得
+    // ASSIGNED: 配置済み, CONFIRMED: 確定済み（両方とも有効な配置としてカウント）
+    const VALID_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CONFIRMED'];
     const allAssignments = getAllRecords('T_JobAssignments');
     let assignmentCount = 0;
 
     for (const asg of allAssignments) {
       if (asg.is_deleted) continue;
-      if (asg.status !== 'ASSIGNED') continue;
+      if (!VALID_ASSIGNMENT_STATUSES.includes(asg.status)) continue;
 
       // 配置が紐づく案件が月内にあるか確認
       if (jobIdsInMonth.has(asg.job_id)) {
