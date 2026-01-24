@@ -38,14 +38,26 @@ const StatsRepository = {
   },
 
   /**
-   * 年度で統計を検索
-   * @param {number} fiscalYear - 会計年度
-   * @returns {Object[]} 統計配列（月順）
+   * 会計年度で統計を検索
+   * 日本の会計年度（4月〜翌年3月）に対応
+   * @param {number} fiscalYear - 会計年度（例: 2025 = 2025年4月〜2026年3月）
+   * @returns {Object[]} 統計配列（月順: 4,5,...,12,1,2,3）
    */
   findByFiscalYear: function(fiscalYear) {
+    // 会計年度は4月〜翌年3月
+    // fiscalYear=2025 → 2025年4月〜2026年3月
+    return this.findByRange(fiscalYear, 4, fiscalYear + 1, 3);
+  },
+
+  /**
+   * 暦年で統計を検索（従来の動作）
+   * @param {number} calendarYear - 暦年（例: 2025 = 2025年1月〜12月）
+   * @returns {Object[]} 統計配列（月順）
+   */
+  findByCalendarYear: function(calendarYear) {
     let records = getAllRecords(this.TABLE_NAME);
 
-    records = records.filter(r => r.fiscal_year === fiscalYear);
+    records = records.filter(r => r.fiscal_year === calendarYear);
 
     // 月順でソート
     records.sort((a, b) => a.month - b.month);
@@ -84,16 +96,18 @@ const StatsRepository = {
 
   /**
    * 確定済み統計のみ取得
-   * @param {number} fiscalYear - 会計年度（省略時は全年度）
+   * @param {number} calendarYear - 暦年（省略時は全年度）
+   *   注意: DBには暦年が格納されているため、会計年度で取得したい場合は
+   *   findByFiscalYear() を使用し、結果から is_final でフィルタすること
    * @returns {Object[]} 確定済み統計配列
    */
-  findFinalizedStats: function(fiscalYear = null) {
+  findFinalizedStats: function(calendarYear = null) {
     let records = getAllRecords(this.TABLE_NAME);
 
     records = records.filter(r => r.is_final === true);
 
-    if (fiscalYear !== null) {
-      records = records.filter(r => r.fiscal_year === fiscalYear);
+    if (calendarYear !== null) {
+      records = records.filter(r => r.fiscal_year === calendarYear);
     }
 
     // 年月順でソート
@@ -261,8 +275,9 @@ const StatsRepository = {
   },
 
   /**
-   * 年度の集計サマリーを取得
-   * @param {number} fiscalYear - 会計年度
+   * 会計年度の集計サマリーを取得
+   * 日本の会計年度（4月〜翌年3月）で集計
+   * @param {number} fiscalYear - 会計年度（例: 2025 = 2025年4月〜2026年3月）
    * @returns {Object} 集計結果
    */
   getYearlySummary: function(fiscalYear) {
