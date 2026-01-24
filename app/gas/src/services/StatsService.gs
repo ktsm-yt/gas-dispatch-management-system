@@ -34,7 +34,7 @@ const StatsService = {
       : 0;
 
     return {
-      fiscal_year: year,
+      year: year,
       month: month,
       // 案件・配置
       job_count: jobStats.job_count,
