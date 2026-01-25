@@ -83,6 +83,33 @@
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
     }
 
+    .archive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      transition: background 0.2s;
+      margin-left: 8px;
+    }
+
+    .archive-toggle:hover {
+      background: var(--bg-secondary);
+    }
+
+    .archive-toggle input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .archive-toggle span {
+      white-space: nowrap;
+    }
+
     .toolbar-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -515,6 +542,10 @@
         <option value="unpaid">未回収</option>
         <option value="paid">入金済</option>
       </select>
+      <label class="archive-toggle" title="アーカイブされた過去年度のデータも検索対象に含めます">
+        <input type="checkbox" id="includeArchive">
+        <span>過去年度を含む</span>
+      </label>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
     </div>
     <div class="toolbar-actions">
@@ -1024,6 +1055,10 @@
       }
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
+
+      // 過去年度を含む
+      const includeArchive = document.getElementById('includeArchive').checked;
+      if (includeArchive) query.includeArchive = true;
 
       // Save filter state
       saveFilterState();
