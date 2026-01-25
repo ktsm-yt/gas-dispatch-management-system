@@ -338,6 +338,11 @@
       border-color: #28A745;
     }
 
+    .action-btn.pdf-cover {
+      color: #D97706;
+      border-color: #D97706;
+    }
+
     .action-btn.excel-cover {
       color: #6F42C1;
       border-color: #6F42C1;
@@ -596,7 +601,7 @@
         <thead>
           <tr>
             <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
-            <th style="width: 30px;"></th>
+            <th style="width: 20px;"></th>
             <th>請求番号</th>
             <th>顧客名</th>
             <th>請求年月</th>
@@ -815,17 +820,17 @@
       return data.invoices;
     }
 
-    // Cache functions - Customers (no TTL)
+    // Cache functions - Customers (localStorage for persistence across navigation)
     function saveCustomersToCache(data) {
-      sessionStorage.setItem(SS_CUSTOMERS_KEY, JSON.stringify(data));
+      localStorage.setItem(SS_CUSTOMERS_KEY, JSON.stringify(data));
     }
 
     function loadCustomersFromCache() {
-      const saved = sessionStorage.getItem(SS_CUSTOMERS_KEY);
+      const saved = localStorage.getItem(SS_CUSTOMERS_KEY);
       return saved ? JSON.parse(saved) : null;
     }
 
-    // Cache functions - Filter state (no TTL)
+    // Cache functions - Filter state (localStorage for persistence across navigation)
     function saveFilterState() {
       const filter = {
         year: document.getElementById('filterYear').value,
@@ -833,11 +838,11 @@
         customer: document.getElementById('filterCustomer').value,
         status: document.getElementById('filterStatus').value
       };
-      sessionStorage.setItem(SS_FILTER_KEY, JSON.stringify(filter));
+      localStorage.setItem(SS_FILTER_KEY, JSON.stringify(filter));
     }
 
     function loadFilterState() {
-      const saved = sessionStorage.getItem(SS_FILTER_KEY);
+      const saved = localStorage.getItem(SS_FILTER_KEY);
       return saved ? JSON.parse(saved) : null;
     }
 
@@ -884,11 +889,16 @@
     // Modal ESC key and click-outside handlers
     function initCustomersFromCache() {
       const cached = loadCustomersFromCache();
-      if (!cached) return;
-      customers = cached;
-      customersLoaded = true;
-      populateCustomerSelects();
-      restoreFilterState();
+      if (cached) {
+        customers = cached;
+        customersLoaded = true;
+        populateCustomerSelects();
+      }
+      // 顧客キャッシュの有無に関わらず、フィルター状態を復元して自動検索を試みる
+      const restored = restoreFilterState();
+      if (restored) {
+        loadInvoices();
+      }
     }
 
     function initCustomerLazyLoad() {
@@ -1133,9 +1143,10 @@
         rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
         rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
         rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
-          '<button class="action-btn pdf" onclick="exportPdf(\'' + inv.invoice_id + '\')" title="PDF出力">PDF</button>' +
+          '<button class="action-btn pdf" onclick="exportPdf(\'' + inv.invoice_id + '\')" title="PDF出力（詳細のみ）">PDF</button>' +
+          '<button class="action-btn pdf-cover" onclick="exportPdfWithCover(\'' + inv.invoice_id + '\')" title="PDF出力（頭紙付き）">PDF+頭紙</button>' +
           '<button class="action-btn excel" onclick="exportExcel(\'' + inv.invoice_id + '\')" title="Excel出力（詳細のみ）">Excel</button>' +
-          '<button class="action-btn excel-cover" onclick="exportExcelWithCover(\'' + inv.invoice_id + '\')" title="Excel出力（頭紙付き）">頭紙</button>' +
+          '<button class="action-btn excel-cover" onclick="exportCoverOnly(\'' + inv.invoice_id + '\')" title="頭紙のみ出力">頭紙</button>' +
           '</td>';
         rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
           '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()"></td>';
@@ -1696,15 +1707,19 @@
     let pendingExport = null;
 
     function exportPdf(invoiceId) {
-      exportInvoice(invoiceId, 'pdf');
+      exportInvoice(invoiceId, 'pdf', { includeCoverPage: false });
+    }
+
+    function exportPdfWithCover(invoiceId) {
+      exportInvoice(invoiceId, 'pdf', { includeCoverPage: true });
     }
 
     function exportExcel(invoiceId) {
-      exportInvoice(invoiceId, 'excel');
+      exportInvoice(invoiceId, 'excel', { includeCoverPage: false });
     }
 
-    function exportExcelWithCover(invoiceId) {
-      exportInvoice(invoiceId, 'excel', { includeCoverPage: true });
+    function exportCoverOnly(invoiceId) {
+      exportInvoice(invoiceId, 'cover');
     }
 
     function exportInvoice(invoiceId, mode, options = {}) {
@@ -1855,16 +1870,18 @@
 
     function confirmOverwrite() {
       if (!pendingExport) return;
+      // closeFileOverwriteModal() で pendingExport = null になるので先に値を保存
+      const { invoiceId, mode, options } = pendingExport;
       closeFileOverwriteModal();
-      executeInvoiceExport(pendingExport.invoiceId, pendingExport.mode,
-        { ...pendingExport.options, action: 'overwrite' });
+      executeInvoiceExport(invoiceId, mode, { ...options, action: 'overwrite' });
     }
 
     function confirmRename() {
       if (!pendingExport) return;
+      // closeFileOverwriteModal() で pendingExport = null になるので先に値を保存
+      const { invoiceId, mode, options } = pendingExport;
       closeFileOverwriteModal();
-      executeInvoiceExport(pendingExport.invoiceId, pendingExport.mode,
-        { ...pendingExport.options, action: 'rename' });
+      executeInvoiceExport(invoiceId, mode, { ...options, action: 'rename' });
     }
 
     // Billing Export Modal
