@@ -52,15 +52,22 @@ const InvoiceRepository = {
    * @param {number} year - 請求年
    * @param {number} month - 請求月
    * @param {Object} options - オプション
+   * @param {boolean} options.includeArchive - アーカイブデータを含めるか
    * @returns {Object[]} 請求書配列
    */
   findByPeriod: function(year, month, options = {}) {
     let records = getAllRecords(this.TABLE_NAME);
 
+    // アーカイブデータを含める場合
+    if (options.includeArchive) {
+      const archiveRecords = this._getArchiveRecords(year, month);
+      records = records.concat(archiveRecords);
+    }
+
     records = records.filter(r =>
       !r.is_deleted &&
       r.billing_year === year &&
-      r.billing_month === month
+      (month === null || r.billing_month === month)  // monthがnullの場合は年のみで絞り込み
     );
 
     // ステータスで絞り込み
@@ -85,10 +92,17 @@ const InvoiceRepository = {
    * @param {string} query.status - ステータス
    * @param {string} query.invoice_format - 書式
    * @param {number} query.limit - 取得件数制限
+   * @param {boolean} query.includeArchive - アーカイブデータを含めるか
    * @returns {Object[]} 請求書配列
    */
   search: function(query = {}) {
     let records = getAllRecords(this.TABLE_NAME);
+
+    // アーカイブデータを含める場合
+    if (query.includeArchive && query.billing_year) {
+      const archiveRecords = this._getArchiveRecords(query.billing_year, query.billing_month);
+      records = records.concat(archiveRecords);
+    }
 
     // 論理削除除外
     records = records.filter(r => !r.is_deleted);
@@ -188,6 +202,11 @@ const InvoiceRepository = {
   update: function(invoice, expectedUpdatedAt) {
     if (!invoice.invoice_id) {
       return { success: false, error: 'invoice_id is required' };
+    }
+
+    // アーカイブデータの編集を防止
+    if (invoice._archived) {
+      return { success: false, error: 'ARCHIVED_DATA', message: '過去年度のデータは編集できません。' };
     }
 
     const sheet = getSheet(this.TABLE_NAME);
@@ -479,5 +498,60 @@ const InvoiceRepository = {
 
     // 文字列の場合はスラッシュをハイフンに変換
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * アーカイブDBからレコードを取得（P2-5）
+   * @param {number} year - 請求年
+   * @param {number} month - 請求月（nullの場合は年全体）
+   * @returns {Object[]} アーカイブレコード配列（_archived: trueフラグ付き）
+   */
+  _getArchiveRecords: function(year, month) {
+    const archiveRecords = [];
+
+    // 請求年から対象の年度を特定
+    // 1-3月は前年度、4-12月は当年度
+    const targetYears = [];
+    if (month) {
+      const fiscalYear = month >= 4 ? year : year - 1;
+      targetYears.push(fiscalYear);
+    } else {
+      // 月が指定されていない場合は両方の年度をチェック
+      targetYears.push(year);
+      targetYears.push(year - 1);
+    }
+
+    for (const fiscalYear of targetYears) {
+      const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+      if (!archiveDbId) continue;
+
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        // TABLE_SHEET_MAPを使って日本語シート名に変換
+        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+        const sheet = archiveDb.getSheetByName(sheetName);
+        if (!sheet) continue;
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+
+        const headers = data[0];
+
+        for (let i = 1; i < data.length; i++) {
+          const record = {};
+          for (let j = 0; j < headers.length; j++) {
+            record[headers[j]] = data[i][j];
+          }
+          // アーカイブフラグを付与
+          record._archived = true;
+          record._archiveFiscalYear = fiscalYear;
+          archiveRecords.push(record);
+        }
+      } catch (e) {
+        Logger.log(`アーカイブDB読み込みエラー (${fiscalYear}): ${e.message}`);
+      }
+    }
+
+    return archiveRecords;
   }
 };
