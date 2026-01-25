@@ -7,6 +7,7 @@
     <a href="#" id="nav-assignments">配置管理</a>
     <a href="#" id="nav-invoices">請求</a>
     <a href="#" id="nav-payouts">支払</a>
+    <a href="#" id="nav-sales-analytics">売上分析</a>
     <div class="nav-dropdown">
       <a href="#" id="nav-settings">設定</a>
       <div class="nav-dropdown-menu" id="settings-menu">
@@ -32,6 +33,7 @@ function initNavBar(currentPage, pageTitle) {
     'assignments': 'nav-assignments',
     'invoices': 'nav-invoices',
     'payouts': 'nav-payouts',
+    'sales_analytics': 'nav-sales-analytics',
     'customers': 'nav-settings',
     'staff': 'nav-settings',
     'subcontractors': 'nav-settings',
@@ -64,6 +66,10 @@ function initNavBar(currentPage, pageTitle) {
   document.getElementById('nav-payouts').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('payouts');
+  });
+  document.getElementById('nav-sales-analytics').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('sales_analytics');
   });
 
   // Settings dropdown
