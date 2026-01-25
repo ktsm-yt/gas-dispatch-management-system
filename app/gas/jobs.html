@@ -110,6 +110,32 @@
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
     }
 
+    .archive-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      transition: background 0.2s;
+    }
+
+    .archive-toggle:hover {
+      background: var(--bg-secondary);
+    }
+
+    .archive-toggle input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .archive-toggle span {
+      white-space: nowrap;
+    }
+
     .toolbar-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -463,6 +489,10 @@
       <div class="search-box">
         <input type="text" id="search-input" placeholder="顧客名・現場名で検索...">
       </div>
+      <label class="archive-toggle" title="アーカイブされた過去年度のデータも検索対象に含めます">
+        <input type="checkbox" id="include-archive">
+        <span>過去年度を含む</span>
+      </label>
     </div>
     <div class="toolbar-actions">
       <div class="stats-bar">
@@ -730,10 +760,12 @@
       const status = document.getElementById('status-filter').value;
       const timeSlot = document.getElementById('time-slot-filter').value;
       const searchTerm = document.getElementById('search-input').value;
+      const includeArchive = document.getElementById('include-archive').checked;
 
       if (status) query.status = status;
       if (timeSlot) query.time_slot = timeSlot;
       if (searchTerm) query.search_term = searchTerm; // 顧客名・現場名の両方を検索
+      if (includeArchive) query.includeArchive = true;
 
       console.log('loadJobs query:', query);
 

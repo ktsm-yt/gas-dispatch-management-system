@@ -62,10 +62,17 @@ const JobRepository = {
    * @param {string} query.time_slot - 時間区分
    * @param {string} query.site_name - 現場名（部分一致）
    * @param {number} query.limit - 取得件数制限
+   * @param {boolean} query.includeArchive - アーカイブデータを含めるか
    * @returns {Object[]} 案件配列
    */
   search: function(query = {}) {
     let records = getAllRecords(this.TABLE_NAME);
+
+    // アーカイブデータを含める場合
+    if (query.includeArchive) {
+      const archiveRecords = this._getArchiveRecords(query);
+      records = records.concat(archiveRecords);
+    }
 
     // 論理削除除外
     records = records.filter(r => !r.is_deleted);
@@ -194,6 +201,11 @@ const JobRepository = {
   update: function(job, expectedUpdatedAt) {
     if (!job.job_id) {
       return { success: false, error: 'job_id is required' };
+    }
+
+    // アーカイブデータの編集を防止
+    if (job._archived) {
+      return { success: false, error: 'ARCHIVED_DATA', message: '過去年度のデータは編集できません。' };
     }
 
     const sheet = getSheet(this.TABLE_NAME);
@@ -343,5 +355,81 @@ const JobRepository = {
 
     // 既に文字列の場合はそのまま返す
     return String(timeValue);
+  },
+
+  /**
+   * アーカイブDBからレコードを取得（P2-5）
+   * @param {Object} query - 検索条件
+   * @returns {Object[]} アーカイブレコード配列（_archived: trueフラグ付き）
+   */
+  _getArchiveRecords: function(query) {
+    const archiveRecords = [];
+
+    // 日付範囲から対象年度を特定
+    const targetYears = this._getTargetFiscalYears(query);
+
+    for (const fiscalYear of targetYears) {
+      const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+      if (!archiveDbId) continue;
+
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        // TABLE_SHEET_MAPを使って日本語シート名に変換
+        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+        const sheet = archiveDb.getSheetByName(sheetName);
+        if (!sheet) continue;
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+
+        const headers = data[0];
+
+        for (let i = 1; i < data.length; i++) {
+          const record = {};
+          for (let j = 0; j < headers.length; j++) {
+            record[headers[j]] = data[i][j];
+          }
+          // アーカイブフラグを付与
+          record._archived = true;
+          record._archiveFiscalYear = fiscalYear;
+          archiveRecords.push(record);
+        }
+      } catch (e) {
+        Logger.log(`アーカイブDB読み込みエラー (${fiscalYear}): ${e.message}`);
+      }
+    }
+
+    return archiveRecords;
+  },
+
+  /**
+   * 検索条件から対象の年度を特定
+   * @param {Object} query - 検索条件
+   * @returns {number[]} 対象年度の配列
+   */
+  _getTargetFiscalYears: function(query) {
+    const years = [];
+    const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
+
+    // 日付範囲が指定されている場合
+    if (query.work_date_from || query.work_date_to) {
+      const from = query.work_date_from ? new Date(query.work_date_from) : new Date('2020-04-01');
+      const to = query.work_date_to ? new Date(query.work_date_to) : new Date();
+
+      // 開始日と終了日から年度を算出
+      const fromYear = from.getMonth() >= 3 ? from.getFullYear() : from.getFullYear() - 1;
+      const toYear = to.getMonth() >= 3 ? to.getFullYear() : to.getFullYear() - 1;
+
+      for (let y = fromYear; y <= toYear && y < currentFiscalYear; y++) {
+        years.push(y);
+      }
+    } else {
+      // 日付範囲が指定されていない場合は直近3年度分をチェック
+      for (let y = currentFiscalYear - 3; y < currentFiscalYear; y++) {
+        if (y >= 2020) years.push(y);
+      }
+    }
+
+    return years;
   }
 };
