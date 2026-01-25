@@ -577,6 +577,8 @@
     </select>
     <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
+    <span style="border-left: 1px solid #ddd; margin: 0 8px;"></span>
+    <button class="btn" style="background: #2196F3; color: white;" onclick="openBulkExportModal()">帳票一括出力</button>
   </div>
 
   <!-- ステータス変更確認モーダル -->
@@ -591,6 +593,89 @@
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeStatusConfirm()">キャンセル</button>
         <button class="btn btn-primary" id="statusConfirmBtn" onclick="executeStatusUpdate()">変更する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 一括出力モーダル -->
+  <div class="modal-overlay" id="bulkExportModal">
+    <div class="modal" style="max-width: 420px;">
+      <div class="modal-header">
+        <h2>帳票一括出力</h2>
+        <button class="close-btn" onclick="closeBulkExportModal()">&times;</button>
+      </div>
+
+      <!-- モード選択画面 -->
+      <div id="bulkExportSelectView">
+        <div class="modal-body">
+          <p style="margin-bottom: 16px;">
+            <strong id="bulkExportCount">0</strong> 件の請求書を出力します。
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label class="export-mode-option" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="bulkExportMode" value="pdf" checked>
+              <span>📄 PDF</span>
+              <span style="color: #666; font-size: 0.9em;">（頭紙なし）</span>
+            </label>
+            <label class="export-mode-option" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="bulkExportMode" value="pdf_cover">
+              <span>📄 PDF + 頭紙</span>
+              <span style="color: #666; font-size: 0.9em;">（送付状付き）</span>
+            </label>
+            <label class="export-mode-option" style="display: flex; align-items: center; gap: 8px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer;">
+              <input type="radio" name="bulkExportMode" value="excel">
+              <span>📊 Excel</span>
+              <span style="color: #666; font-size: 0.9em;">（編集可能）</span>
+            </label>
+          </div>
+          <p style="margin-top: 16px; color: #666; font-size: 0.85em;">
+            ※ 出力ファイルは各顧客の「請求書」フォルダに保存されます。<br>
+            ※ 既存ファイルがある場合は上書きされます。
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeBulkExportModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="startBulkExport()">出力開始</button>
+        </div>
+      </div>
+
+      <!-- 進捗表示画面 -->
+      <div id="bulkExportProgressView" style="display: none;">
+        <div class="modal-body">
+          <div style="margin-bottom: 16px;">
+            <span id="bulkExportProgressText">0 / 0 件完了</span>
+          </div>
+          <div style="background: #eee; border-radius: 4px; height: 20px; overflow: hidden;">
+            <div id="bulkExportProgressBar" style="background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s;"></div>
+          </div>
+          <div id="bulkExportErrorCount" style="margin-top: 12px; color: #d32f2f; display: none;">
+            <span id="bulkExportErrorText">0 件のエラー</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="cancelBulkExport()">キャンセル</button>
+        </div>
+      </div>
+
+      <!-- 完了画面 -->
+      <div id="bulkExportCompleteView" style="display: none;">
+        <div class="modal-body">
+          <div style="text-align: center; padding: 20px;">
+            <span style="font-size: 48px;">✅</span>
+            <h3 style="margin-top: 16px;">出力完了</h3>
+            <p id="bulkExportCompleteText">0 件の帳票を出力しました</p>
+            <div id="bulkExportCompleteErrors" style="margin-top: 16px; display: none;">
+              <p style="color: #d32f2f;">⚠️ <span id="bulkExportCompleteErrorCount">0</span> 件のエラー</p>
+              <details style="text-align: left; margin-top: 8px;">
+                <summary style="cursor: pointer;">エラー詳細を表示</summary>
+                <ul id="bulkExportErrorList" style="max-height: 200px; overflow-y: auto; font-size: 0.85em; margin-top: 8px;"></ul>
+              </details>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" onclick="closeBulkExportModal()">閉じる</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1882,6 +1967,222 @@
       const { invoiceId, mode, options } = pendingExport;
       closeFileOverwriteModal();
       executeInvoiceExport(invoiceId, mode, { ...options, action: 'rename' });
+    }
+
+    // ========== 一括出力機能 ==========
+
+    let bulkExportParams = null;
+    let bulkExportPollInterval = null;
+
+    /**
+     * 選択された請求書IDを取得
+     */
+    function getSelectedInvoiceIds() {
+      const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
+      return Array.from(checkboxes).map(cb => cb.dataset.invoiceId);
+    }
+
+    /**
+     * 一括出力モーダルを開く
+     */
+    function openBulkExportModal() {
+      const selectedIds = getSelectedInvoiceIds();
+      if (selectedIds.length === 0) {
+        showToast('出力する請求書を選択してください', 'warning');
+        return;
+      }
+
+      // 件数を表示
+      document.getElementById('bulkExportCount').textContent = selectedIds.length;
+
+      // 画面をモード選択に切り替え
+      document.getElementById('bulkExportSelectView').style.display = 'block';
+      document.getElementById('bulkExportProgressView').style.display = 'none';
+      document.getElementById('bulkExportCompleteView').style.display = 'none';
+
+      // デフォルトでPDFを選択
+      document.querySelector('input[name="bulkExportMode"][value="pdf"]').checked = true;
+
+      // モーダルを表示
+      document.getElementById('bulkExportModal').classList.add('active');
+    }
+
+    /**
+     * 一括出力モーダルを閉じる
+     */
+    function closeBulkExportModal() {
+      document.getElementById('bulkExportModal').classList.remove('active');
+
+      // ポーリングを停止
+      if (bulkExportPollInterval) {
+        clearInterval(bulkExportPollInterval);
+        bulkExportPollInterval = null;
+      }
+
+      bulkExportParams = null;
+    }
+
+    /**
+     * 一括出力を開始
+     */
+    function startBulkExport() {
+      const selectedIds = getSelectedInvoiceIds();
+      const exportMode = document.querySelector('input[name="bulkExportMode"]:checked').value;
+
+      bulkExportParams = {
+        invoiceIds: selectedIds,
+        exportMode: exportMode
+      };
+
+      // 進捗画面に切り替え
+      document.getElementById('bulkExportSelectView').style.display = 'none';
+      document.getElementById('bulkExportProgressView').style.display = 'block';
+
+      // 進捗をリセット
+      updateBulkExportProgress({
+        processedCount: 0,
+        totalCount: selectedIds.length,
+        errorCount: 0
+      });
+
+      // 出力を実行（ポーリングは実行完了後に開始）
+      executeBulkExportRequest();
+    }
+
+    let bulkExportInFlight = false;  // リクエスト実行中フラグ
+
+    /**
+     * 一括出力リクエストを実行
+     */
+    function executeBulkExportRequest() {
+      if (bulkExportInFlight) {
+        console.log('一括出力: リクエスト実行中のためスキップ');
+        return;
+      }
+      bulkExportInFlight = true;
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          bulkExportInFlight = false;
+          handleBulkExportResult(result);
+        })
+        .withFailureHandler(function(error) {
+          bulkExportInFlight = false;
+          showToast('一括出力でエラーが発生しました: ' + error.message, 'error');
+          closeBulkExportModal();
+        })
+        .startBulkExport(bulkExportParams);
+    }
+
+    /**
+     * 一括出力結果を処理
+     */
+    function handleBulkExportResult(result) {
+      if (!result.ok) {
+        showToast(result.error?.message || '一括出力に失敗しました', 'error');
+        closeBulkExportModal();
+        return;
+      }
+
+      const data = result.data;
+
+      // タイムアウトで中断した場合は自動継続
+      if (data.error === 'TIMEOUT_WILL_CONTINUE') {
+        console.log('一括出力: タイムアウトで中断、自動継続...');
+        updateBulkExportProgress(data.progress);
+        // 2秒待ってから再実行
+        setTimeout(executeBulkExportRequest, 2000);
+        return;
+      }
+
+      // 排他制御エラー
+      if (data.error === 'ALREADY_RUNNING') {
+        showToast(data.message || '別の一括出力が実行中です', 'warning');
+        closeBulkExportModal();
+        return;
+      }
+
+      // 完了
+      if (data.success) {
+        showBulkExportComplete(data);
+      }
+    }
+
+    /**
+     * 進捗UIを更新
+     */
+    function updateBulkExportProgress(progress) {
+      const processed = progress.processedCount || 0;
+      const total = progress.totalCount || 1;
+      const errors = progress.errorCount || 0;
+      const percent = Math.round((processed / total) * 100);
+
+      document.getElementById('bulkExportProgressText').textContent =
+        processed + ' / ' + total + ' 件完了';
+      document.getElementById('bulkExportProgressBar').style.width = percent + '%';
+
+      // エラーがあれば表示
+      if (errors > 0) {
+        document.getElementById('bulkExportErrorCount').style.display = 'block';
+        document.getElementById('bulkExportErrorText').textContent = errors + ' 件のエラー';
+      } else {
+        document.getElementById('bulkExportErrorCount').style.display = 'none';
+      }
+    }
+
+    /**
+     * 完了画面を表示
+     */
+    function showBulkExportComplete(data) {
+      const successCount = data.results ? data.results.length : 0;
+      const errors = data.errors || [];
+
+      // 画面を切り替え
+      document.getElementById('bulkExportProgressView').style.display = 'none';
+      document.getElementById('bulkExportCompleteView').style.display = 'block';
+
+      document.getElementById('bulkExportCompleteText').textContent =
+        successCount + ' 件の帳票を出力しました';
+
+      // エラーがあれば表示
+      if (errors.length > 0) {
+        document.getElementById('bulkExportCompleteErrors').style.display = 'block';
+        document.getElementById('bulkExportCompleteErrorCount').textContent = errors.length;
+
+        const errorList = document.getElementById('bulkExportErrorList');
+        errorList.innerHTML = errors.map(function(err) {
+          const inv = invoices.find(function(i) { return i.invoice_id === err.invoiceId; });
+          const label = inv ? (inv.customer_name + ' ' + inv.invoice_number) : err.invoiceId;
+          return '<li>' + label + ': ' + (err.message || err.error) + '</li>';
+        }).join('');
+      } else {
+        document.getElementById('bulkExportCompleteErrors').style.display = 'none';
+      }
+
+      // 成功メッセージ
+      showToast('一括出力が完了しました（' + successCount + '件成功）', 'success');
+
+      // 選択を解除
+      clearSelection();
+    }
+
+    /**
+     * 一括出力をキャンセル
+     */
+    function cancelBulkExport() {
+      if (!bulkExportParams) {
+        closeBulkExportModal();
+        return;
+      }
+
+      if (confirm('一括出力を中止しますか？')) {
+        google.script.run
+          .withSuccessHandler(function() {
+            showToast('一括出力を中止しました', 'info');
+            closeBulkExportModal();
+          })
+          .cancelBulkExport(bulkExportParams);
+      }
     }
 
     // Billing Export Modal
