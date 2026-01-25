@@ -207,6 +207,8 @@ const InvoiceExportService = {
           return this.exportToPdf(invoice, lines, customer, company, options);
         case 'excel':
           return this.exportToExcel(invoice, lines, customer, company, options);
+        case 'cover':
+          return this.exportCoverOnly(invoice, lines, customer, company, options);
         case 'edit':
           return this.createEditSheet(invoice, lines, customer, company, options);
         default:
@@ -229,8 +231,16 @@ const InvoiceExportService = {
    */
   exportToPdf: function(invoice, lines, customer, company, options = {}) {
     try {
+      // デバッグログ
+      console.log('=== exportToPdf Debug ===');
+      console.log('options:', JSON.stringify(options));
+      console.log('options.includeCoverPage:', options.includeCoverPage);
+
       // スプレッドシートを作成（PDF用：ページ分割あり）
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: true });
+      // optionsをマージ（includeCoverPage等を保持）
+      const mergedOptions = Object.assign({}, options, { forPdf: true });
+      console.log('mergedOptions:', JSON.stringify(mergedOptions));
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, mergedOptions);
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -249,14 +259,15 @@ const InvoiceExportService = {
       // 出力先フォルダを取得
       const folder = this._getOutputFolder(customer);
 
-      // ファイル名を生成（renameの場合はタイムスタンプ付き）
+      // ファイル名を生成（renameの場合はタイムスタンプ付き、頭紙付きの場合は区別）
       const addTimestamp = options.action === 'rename';
-      const fileName = this._generateFileName(invoice, customer, 'pdf', { addTimestamp });
+      const withCover = sheetResult.hasCoverPage;
+      const fileName = this._generateFileName(invoice, customer, 'pdf', { addTimestamp, withCover });
       pdfBlob.setName(fileName);
 
-      // 上書きの場合は既存ファイルを削除
+      // 上書きの場合は既存ファイルを削除（同じ頭紙設定のファイルのみ）
       if (options.action === 'overwrite') {
-        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'pdf'));
+        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'pdf', { withCover }));
         while (existingFiles.hasNext()) {
           existingFiles.next().setTrashed(true);
         }
@@ -303,9 +314,16 @@ const InvoiceExportService = {
    */
   exportToExcel: function(invoice, lines, customer, company, options = {}) {
     try {
+      // デバッグログ
+      console.log('=== exportToExcel Debug ===');
+      console.log('options:', JSON.stringify(options));
+      console.log('options.includeCoverPage:', options.includeCoverPage);
+
       // スプレッドシートを作成（Excel用：ページ分割なし、連続データ）
       // optionsをマージ（includeCoverPage等を保持）
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, Object.assign({}, options, { forPdf: false }));
+      const mergedOptions = Object.assign({}, options, { forPdf: false });
+      console.log('mergedOptions:', JSON.stringify(mergedOptions));
+      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, mergedOptions);
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -318,14 +336,15 @@ const InvoiceExportService = {
       // 出力先フォルダを取得
       const folder = this._getOutputFolder(customer);
 
-      // ファイル名を生成（renameの場合はタイムスタンプ付き）
+      // ファイル名を生成（renameの場合はタイムスタンプ付き、頭紙付きの場合は区別）
       const addTimestamp = options.action === 'rename';
-      const fileName = this._generateFileName(invoice, customer, 'xlsx', { addTimestamp });
+      const withCover = sheetResult.hasCoverPage;
+      const fileName = this._generateFileName(invoice, customer, 'xlsx', { addTimestamp, withCover });
       xlsxBlob.setName(fileName);
 
-      // 上書きの場合は既存ファイルを削除
+      // 上書きの場合は既存ファイルを削除（同じ頭紙設定のファイルのみ）
       if (options.action === 'overwrite') {
-        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'xlsx'));
+        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'xlsx', { withCover }));
         while (existingFiles.hasNext()) {
           existingFiles.next().setTrashed(true);
         }
@@ -401,6 +420,88 @@ const InvoiceExportService = {
     } catch (error) {
       console.error('createEditSheet error:', error);
       return { success: false, error: error.message || 'EDIT_SHEET_ERROR' };
+    }
+  },
+
+  /**
+   * 頭紙のみをExcel出力
+   * @param {Object} invoice - 請求書データ
+   * @param {Object[]} lines - 明細データ
+   * @param {Object} customer - 顧客データ
+   * @param {Object} company - 自社データ
+   * @param {Object} options - オプション
+   * @returns {Object} { success, fileId, url }
+   */
+  exportCoverOnly: function(invoice, lines, customer, company, options = {}) {
+    try {
+      // format1/format2のみ頭紙対応
+      const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
+      if (!supportsCoverPage) {
+        return { success: false, error: 'このフォーマットは頭紙に対応していません' };
+      }
+
+      // 頭紙テンプレートを取得
+      const coverTemplateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEYS.atamagami);
+      if (!coverTemplateId) {
+        return { success: false, error: '頭紙テンプレートが設定されていません（TEMPLATE_ATAMAGAMI_ID）' };
+      }
+
+      let coverTemplate;
+      try {
+        coverTemplate = SpreadsheetApp.openById(coverTemplateId);
+      } catch (e) {
+        return { success: false, error: `頭紙テンプレートにアクセスできません: ${e.message}` };
+      }
+
+      // テンプレートをコピー
+      const copyName = `頭紙_${invoice.invoice_number}_temp`;
+      const templateFile = DriveApp.getFileById(coverTemplateId);
+      const copy = templateFile.makeCopy(copyName);
+      const spreadsheet = SpreadsheetApp.openById(copy.getId());
+
+      // 原本シートを取得
+      const sheet = spreadsheet.getSheetByName('原本') || spreadsheet.getSheets()[0];
+
+      // 頭紙にデータを入力
+      this._populateAtagami(sheet, invoice, lines, customer, company);
+
+      // 変更を反映
+      SpreadsheetApp.flush();
+
+      // Excelに変換
+      const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet.getId());
+
+      // 出力先フォルダを取得
+      const folder = this._getOutputFolder(customer);
+
+      // ファイル名を生成
+      const addTimestamp = options.action === 'rename';
+      const fileName = this._generateFileName(invoice, customer, 'xlsx', { addTimestamp, coverOnly: true });
+      xlsxBlob.setName(fileName);
+
+      // 上書きの場合は既存ファイルを削除
+      if (options.action === 'overwrite') {
+        const existingFiles = folder.getFilesByName(this._generateFileName(invoice, customer, 'xlsx', { coverOnly: true }));
+        while (existingFiles.hasNext()) {
+          existingFiles.next().setTrashed(true);
+        }
+      }
+
+      // 出力先フォルダに保存
+      const file = folder.createFile(xlsxBlob);
+
+      // 一時スプレッドシートを削除
+      DriveApp.getFileById(spreadsheet.getId()).setTrashed(true);
+
+      return {
+        success: true,
+        fileId: file.getId(),
+        url: file.getUrl(),
+        invoiceId: invoice.invoice_id
+      };
+    } catch (error) {
+      console.error('exportCoverOnly error:', error);
+      return { success: false, error: error.message || 'COVER_EXPORT_ERROR' };
     }
   },
 
@@ -493,18 +594,38 @@ const InvoiceExportService = {
     const sheet = spreadsheet.getSheets()[0];
 
     // 頭紙（表紙）を追加するかどうか判定
-    // - PDF出力時: 顧客設定(include_cover_page)に従う
-    // - Excel出力時: options.includeCoverPageで明示指定された場合のみ
+    // - ユーザーが明示指定した場合: その値を優先
+    // - 指定がない場合: PDF出力時は顧客設定(include_cover_page)に従う、Excel出力時は頭紙なし
     const customerWantsCover = customer.include_cover_page === true || customer.include_cover_page === 'true';
     const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
-    const includeCoverByOption = options.includeCoverPage === true;
-    const hasCoverPage = supportsCoverPage && (forPdf ? customerWantsCover : includeCoverByOption);
+
+    // ユーザー指定を正規化（文字列"true"/"false"も考慮）
+    let userWantsCover = null;
+    if (options.includeCoverPage === true || options.includeCoverPage === 'true') {
+      userWantsCover = true;
+    } else if (options.includeCoverPage === false || options.includeCoverPage === 'false') {
+      userWantsCover = false;
+    }
+
+    // 頭紙を付けるかどうかの最終判定
+    let hasCoverPage = false;
+    if (supportsCoverPage) {
+      if (userWantsCover !== null) {
+        // ユーザーが明示指定した場合はその値を使用
+        hasCoverPage = userWantsCover;
+      } else if (forPdf) {
+        // PDF出力時は顧客設定に従う
+        hasCoverPage = customerWantsCover;
+      }
+      // Excel出力時でユーザー指定がない場合は頭紙なし（hasCoverPage = false）
+    }
 
     // デバッグログ
     console.log('=== Cover Page Debug ===');
     console.log('forPdf:', forPdf);
     console.log('customerWantsCover:', customerWantsCover);
-    console.log('includeCoverByOption:', includeCoverByOption);
+    console.log('userWantsCover:', userWantsCover);
+    console.log('options.includeCoverPage:', options.includeCoverPage, 'type:', typeof options.includeCoverPage);
     console.log('supportsCoverPage:', supportsCoverPage);
     console.log('hasCoverPage:', hasCoverPage);
     console.log('invoice_format:', invoice.invoice_format);
@@ -570,11 +691,16 @@ const InvoiceExportService = {
         this._populateFormat1(sheet, invoice, lines, customer, company);
     }
 
-    // FORMAT2のPDF出力の場合、ページ分割された印刷用シートを作成
+    // PDFページ分割用シート作成（format1/format2共通）
     let hasPrintSheets = false;
-    if (invoice.invoice_format === 'format2' && lines.length > 0 && forPdf) {
-      this._createPrintSheetsForFormat2(spreadsheet, sheet, lines);
-      hasPrintSheets = true;
+    if (lines.length > 0 && forPdf) {
+      if (invoice.invoice_format === 'format1') {
+        this._createPrintSheetsForFormat1(spreadsheet, sheet, lines, invoice);
+        hasPrintSheets = true;
+      } else if (invoice.invoice_format === 'format2') {
+        this._createPrintSheetsForFormat2(spreadsheet, sheet, lines, invoice);
+        hasPrintSheets = true;
+      }
     }
 
     // 変更を反映
@@ -599,30 +725,86 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateFormat1: function(sheet, invoice, lines, customer, company) {
-    // ヘッダー部分
-    sheet.getRange('A2').setValue(customer.company_name || '');
-    sheet.getRange('C5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
-    sheet.getRange('C6').setValue(invoice.shipper_name || '');
-    sheet.getRange('H5').setValue(invoice.total_amount);
+    const spreadsheet = sheet.getParent();
+    let dataSheet = spreadsheet.getSheetByName('データ');
 
-    // 自社情報
-    if (company.company_name) {
-      sheet.getRange('E2').setValue(company.company_name);
+    // === ヘッダー情報 ===
+    if (dataSheet) {
+      // データシートがある場合はそちらに書き込み（数式で参照される）
+      dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
+      dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
+      dataSheet.getRange('B4').setValue(invoice.total_amount || 0);  // 合計金額
+      dataSheet.getRange('B5').setValue(invoice.shipper_name || '');  // 荷主名
+      dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
+    } else {
+      // データシートがない場合は直接書き込み
+      sheet.getRange('A2').setValue(customer.company_name || '');
+      sheet.getRange('C5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
+      sheet.getRange('C6').setValue(invoice.shipper_name || '');
+      sheet.getRange('H5').setValue(invoice.total_amount);
+      if (company.company_name) {
+        sheet.getRange('E2').setValue(company.company_name);
+      }
     }
 
-    // 明細行（A10から開始）
+    // === 明細行（A10から開始、視認性のため1行おき）===
+    // テンプレート列構成: A=日付, B=案件名, C=(空), D=品目, E=(空), F=時間/備考, G=数量, H=単位, I=単価, J=金額
     const startRow = 10;
+    const templateFormatRow = 10;
+    const lastTemplateRow = sheet.getLastRow();
+    const lastNeededRow = startRow + ((lines.length - 1) * 2);  // 1行おきに必要な最終行
+
+    // テンプレートの行数が足りない場合、書式を一括拡張
+    if (lastNeededRow > lastTemplateRow) {
+      const rowsToExtend = lastNeededRow - lastTemplateRow + 1;
+      this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
+    }
+
     for (let i = 0; i < lines.length; i++) {
-      const row = startRow + i;
+      const row = startRow + (i * 2);  // 1行おきに入力
       const line = lines[i];
       sheet.getRange(row, 1).setValue(line.work_date || '');      // A: 日付
       sheet.getRange(row, 2).setValue(line.site_name || '');      // B: 案件名
-      sheet.getRange(row, 3).setValue(line.item_name || '');      // C: 品目
-      sheet.getRange(row, 4).setValue(line.time_note || '');      // D: 時間/備考
-      sheet.getRange(row, 5).setValue(line.quantity || 0);        // E: 数量
-      sheet.getRange(row, 6).setValue(line.unit || '人');         // F: 単位
-      sheet.getRange(row, 7).setValue(line.unit_price || 0);      // G: 単価
-      sheet.getRange(row, 8).setValue(line.amount || 0);          // H: 金額
+      // C列はスキップ
+      sheet.getRange(row, 4).setValue(line.item_name || '');      // D: 品目
+      // E列はスキップ
+      sheet.getRange(row, 6).setValue(line.time_note || '');      // F: 時間/備考
+      sheet.getRange(row, 7).setValue(line.quantity || 0);        // G: 数量
+      sheet.getRange(row, 8).setValue(line.unit || '人');         // H: 単位
+      sheet.getRange(row, 9).setValue(line.unit_price || 0);      // I: 単価
+      sheet.getRange(row, 10).setValue(line.amount || 0);         // J: 金額
+    }
+
+    // === 合計行を追加（税別小計）===
+    let totalRow;
+    if (lines.length > 0) {
+      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
+      sheet.getRange(totalRow, 9).setValue('合計');                // I: ラベル
+      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+
+      // 合計行の上下に罫線を追加
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        true, true, true, true, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+    } else {
+      totalRow = startRow;
+    }
+
+    // === 余分な行を削除（テンプレートより明細が少ない場合）===
+    const currentLastRow = sheet.getLastRow();
+    if (currentLastRow > totalRow) {
+      // 合計行の下の余分な行を削除
+      const rowsToDelete = currentLastRow - totalRow;
+      if (rowsToDelete > 0) {
+        sheet.deleteRows(totalRow + 1, rowsToDelete);
+      }
+    }
+
+    // データシートを非表示
+    if (dataSheet) {
+      dataSheet.hideSheet();
     }
   },
 
@@ -684,13 +866,30 @@ const InvoiceExportService = {
       sheet.getRange(row, 10).setValue(line.amount || 0);          // J: 金額
     }
 
-    // === 最終行に閉じる罫線を追加 ===
+    // === 合計行を追加 ===
+    let totalRow;
     if (lines.length > 0) {
-      const lastRow = startRow + ((lines.length - 1) * 2);
-      sheet.getRange(lastRow, 1, 1, 10).setBorder(
-        null, null, true, null, null, null,
+      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
+      sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
+      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+
+      // 合計行の上下に罫線を追加
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        true, true, true, true, null, null,
         '#000000', SpreadsheetApp.BorderStyle.SOLID
       );
+    } else {
+      totalRow = startRow;
+    }
+
+    // === 余分な行を削除（テンプレートより明細が少ない場合）===
+    const currentLastRow = sheet.getLastRow();
+    if (currentLastRow > totalRow) {
+      const rowsToDelete = currentLastRow - totalRow;
+      if (rowsToDelete > 0) {
+        sheet.deleteRows(totalRow + 1, rowsToDelete);
+      }
     }
 
     // データシートを非表示（PDF/Excel出力時に見えないように）
@@ -748,13 +947,30 @@ const InvoiceExportService = {
       sheet.getRange(row, 10).setValue(line.amount || 0);
     }
 
-    // 最終行に閉じる罫線
+    // 合計行と最終行に閉じる罫線
+    let totalRow;
     if (lines.length > 0) {
-      const lastRow = startRow + ((lines.length - 1) * 2);
-      sheet.getRange(lastRow, 1, 1, 10).setBorder(
-        null, null, true, null, null, null,
+      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
+      sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
+      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+
+      // 合計行の上下に罫線を追加
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        true, true, true, true, null, null,
         '#000000', SpreadsheetApp.BorderStyle.SOLID
       );
+    } else {
+      totalRow = startRow;
+    }
+
+    // === 余分な行を削除（テンプレートより明細が少ない場合）===
+    const currentLastRow = sheet.getLastRow();
+    if (currentLastRow > totalRow) {
+      const rowsToDelete = currentLastRow - totalRow;
+      if (rowsToDelete > 0) {
+        sheet.deleteRows(totalRow + 1, rowsToDelete);
+      }
     }
   },
 
@@ -836,10 +1052,11 @@ const InvoiceExportService = {
       sheet.getRange('E3').setValue(customer.address);
     }
 
-    // 顧客名＋担当者名
+    // 顧客名＋担当者名（敬称は顧客設定に従う）
     let customerDisplay = customer.company_name || '';
     if (customer.contact_name) {
-      customerDisplay += `　${customer.contact_name}様`;
+      const honorific = customer.honorific === 'なし' ? '' : (customer.honorific || '様');
+      customerDisplay += `　${customer.contact_name}${honorific ? '　' + honorific : ''}`;
     }
     sheet.getRange('E5').setValue(customerDisplay);
 
@@ -951,7 +1168,10 @@ const InvoiceExportService = {
     if (customer.address) sheet.getRange('E3').setValue(customer.address);
 
     let customerDisplay = customer.company_name || '';
-    if (customer.contact_name) customerDisplay += `　${customer.contact_name}様`;
+    if (customer.contact_name) {
+      const honorific = customer.honorific === 'なし' ? '' : (customer.honorific || '様');
+      customerDisplay += `　${customer.contact_name}${honorific ? '　' + honorific : ''}`;
+    }
     sheet.getRange('E5').setValue(customerDisplay);
 
     // 発行日（ラベル+値を連結）
@@ -1090,14 +1310,16 @@ const InvoiceExportService = {
    * - 行1-8: ヘッダー情報
    * - 行9: 列ヘッダー（凍結 → 2ページ目以降で繰り返し）
    * - 行10以降: 明細データ
+   * - 最終: 合計行
    * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet - スプレッドシート
    * @param {GoogleAppsScript.Spreadsheet.Sheet} dataSheet - データシート
    * @param {Array} lines - 明細行データ
+   * @param {Object} invoice - 請求書データ（subtotal等を参照）
    */
-  _createPrintSheetsForFormat2: function(spreadsheet, dataSheet, lines) {
+  _createPrintSheetsForFormat2: function(spreadsheet, dataSheet, lines, invoice) {
     // === 2シート構成アプローチ（改良版） ===
-    // 1. 表紙シート: 行1-9（ヘッダー全体）+ 1ページ目のデータ
-    // 2. 明細シート: 行9（列ヘッダー）を凍結 + 残りのデータ
+    // 1. 表紙シート: 行1-9（ヘッダー全体）+ 1ページ目のデータ + (合計行:1ページに収まる場合)
+    // 2. 明細シート: 行9（列ヘッダー）を凍結 + 残りのデータ + 合計行
     // → fzr=true で凍結行が各ページに自動繰り返し
 
     console.log(`=== FORMAT2 2シート構成（改良版） ===`);
@@ -1112,7 +1334,12 @@ const InvoiceExportService = {
     // 明細シートに入れるデータ行数
     const detailDataRows = lines.length - coverDataRows;
 
+    // 元シートの合計行位置を計算
+    const lastDataRowInSource = dataStartRow + ((lines.length - 1) * 2);
+    const totalRowInSource = lastDataRowInSource + 2;
+
     console.log(`表紙データ行: ${coverDataRows}, 明細データ行: ${detailDataRows}`);
+    console.log(`元シート合計行: ${totalRowInSource}`);
 
     // === 1. 表紙シートを作成 ===
     const coverSheet = spreadsheet.insertSheet('表紙');
@@ -1161,28 +1388,133 @@ const InvoiceExportService = {
       // 残りのデータ行をバッチコピー - パフォーマンス最適化
       const detailSourceStart = dataStartRow + coverDataRows * 2;  // 表紙分をスキップ
       this._batchCopyInterleavedRows(dataSheet, detailSheet, detailSourceStart, 2, detailDataRows, 10, true);
-      const detailLastRow = 1 + detailDataRows * 2;
+      const detailLastDataRow = 1 + detailDataRows * 2;
 
-      // 最終行に閉じる罫線
-      detailSheet.getRange(detailLastRow, 1, 1, 10).setBorder(
-        null, null, true, null, null, null,
-        '#000000', SpreadsheetApp.BorderStyle.SOLID
-      );
+      // 合計行を明細シートの最後に追加
+      const targetTotalRow = detailLastDataRow + 1;  // 最終データ行の直下
+      const totalRange = dataSheet.getRange(totalRowInSource, 1, 1, 10);
+      totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      detailSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
 
-      console.log(`明細シート作成完了（バッチ処理）: ${detailLastRow}行`);
+      console.log(`明細シート作成完了（バッチ処理）: ${targetTotalRow}行（合計行含む）`);
     } else {
-      // データが1ページに収まる場合は表紙の最終行に罫線
-      coverSheet.getRange(coverLastRow, 1, 1, 10).setBorder(
-        null, null, true, null, null, null,
-        '#000000', SpreadsheetApp.BorderStyle.SOLID
-      );
-      console.log(`明細シート不要（1ページで収まる）`);
+      // データが1ページに収まる場合は表紙に合計行を追加
+      const targetTotalRow = coverLastRow + 1;  // 最終データ行の直下
+      const totalRange = dataSheet.getRange(totalRowInSource, 1, 1, 10);
+      totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      coverSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
+
+      console.log(`明細シート不要（1ページで収まる、合計行含む）`);
     }
 
     // データシートを非表示
     dataSheet.hideSheet();
 
     console.log(`2シート構成完了`);
+  },
+
+  /**
+   * FORMAT1用の印刷用シートを作成（2シート構成）
+   * - 行1-9: ヘッダー情報
+   * - 行9: 列ヘッダー（凍結 → 2ページ目以降で繰り返し）
+   * - 行10以降: 明細データ（1行おき）
+   * - 最終: 合計行
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet - スプレッドシート
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} dataSheet - データシート
+   * @param {Array} lines - 明細行データ
+   * @param {Object} invoice - 請求書データ（subtotal等を参照）
+   */
+  _createPrintSheetsForFormat1: function(spreadsheet, dataSheet, lines, invoice) {
+    console.log(`=== FORMAT1 2シート構成 ===`);
+    console.log(`明細行数: ${lines.length}`);
+
+    const FIRST_PAGE_DATA_ROWS = 27;  // 1ページ目に入るデータ行数
+    const dataStartRow = 10;
+
+    const coverDataRows = Math.min(FIRST_PAGE_DATA_ROWS, lines.length);
+    const detailDataRows = lines.length - coverDataRows;
+
+    // 元シートの合計行位置
+    const lastDataRowInSource = dataStartRow + ((lines.length - 1) * 2);
+    const totalRowInSource = lastDataRowInSource + 2;
+
+    console.log(`表紙データ行: ${coverDataRows}, 明細データ行: ${detailDataRows}`);
+    console.log(`元シート合計行: ${totalRowInSource}`);
+
+    // === 1. 表紙シートを作成 ===
+    const coverSheet = spreadsheet.insertSheet('表紙');
+
+    // 列幅をコピー
+    for (let col = 1; col <= 10; col++) {
+      coverSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+    }
+
+    // 行1-9（ヘッダー全体）をコピー
+    const headerRange = dataSheet.getRange('A1:J9');
+    headerRange.copyTo(coverSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+    headerRange.copyTo(coverSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+    // 行高さをコピー（行1-9）
+    for (let row = 1; row <= 9; row++) {
+      coverSheet.setRowHeight(row, dataSheet.getRowHeight(row));
+    }
+
+    // 表紙にデータ行をバッチコピー
+    if (coverDataRows > 0) {
+      this._batchCopyInterleavedRows(dataSheet, coverSheet, dataStartRow, 10, coverDataRows, 10, true);
+    }
+    const coverLastRow = 9 + coverDataRows * 2;
+
+    console.log(`表紙シート作成完了（バッチ処理）: ${coverLastRow}行`);
+
+    // === 2. 明細シートを作成（残りデータがある場合のみ）===
+    if (detailDataRows > 0) {
+      const detailSheet = spreadsheet.insertSheet('明細');
+
+      // 列幅をコピー
+      for (let col = 1; col <= 10; col++) {
+        detailSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+      }
+
+      // 行9（列ヘッダー）を明細シートの1行目にコピー
+      const columnHeaderRange = dataSheet.getRange('A9:J9');
+      columnHeaderRange.copyTo(detailSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      columnHeaderRange.copyTo(detailSheet.getRange('A1'), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      detailSheet.setRowHeight(1, dataSheet.getRowHeight(9));
+
+      // 1行目を凍結（各ページで繰り返される）
+      detailSheet.setFrozenRows(1);
+
+      // 残りのデータ行をバッチコピー
+      const detailSourceStart = dataStartRow + coverDataRows * 2;
+      this._batchCopyInterleavedRows(dataSheet, detailSheet, detailSourceStart, 2, detailDataRows, 10, true);
+      const detailLastDataRow = 1 + detailDataRows * 2;
+
+      // 合計行を明細シートの最後に追加
+      const targetTotalRow = detailLastDataRow + 1;  // 最終データ行の直下
+      const totalRange = dataSheet.getRange(totalRowInSource, 1, 1, 10);
+      totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      detailSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
+
+      console.log(`明細シート作成完了: ${targetTotalRow}行（合計行含む）`);
+    } else {
+      // データが1ページに収まる場合は表紙に合計行を追加
+      const targetTotalRow = coverLastRow + 1;  // 最終データ行の直下
+      const totalRange = dataSheet.getRange(totalRowInSource, 1, 1, 10);
+      totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+      totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+      coverSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
+
+      console.log(`表紙シート作成完了: ${targetTotalRow}行（合計行含む）`);
+    }
+
+    // データシートを非表示
+    dataSheet.hideSheet();
+
+    console.log(`FORMAT1 2シート構成完了`);
   },
 
   /**
@@ -1376,7 +1708,18 @@ const InvoiceExportService = {
     const period = `${invoice.billing_year}年${String(invoice.billing_month).padStart(2, '0')}月`;
 
     const extension = type === 'sheet' ? '' : `.${type}`;
-    const prefix = type === 'sheet' ? '【編集用】' : '【請求書】';
+
+    // プレフィックス（頭紙のみ/頭紙付き/通常で区別）
+    let prefix;
+    if (type === 'sheet') {
+      prefix = '【編集用】';
+    } else if (options.coverOnly) {
+      prefix = '【頭紙】';
+    } else if (options.withCover) {
+      prefix = '【請求書・頭紙付】';
+    } else {
+      prefix = '【請求書】';
+    }
 
     // タイムスタンプを追加（別名保存時）
     const timestamp = options.addTimestamp
