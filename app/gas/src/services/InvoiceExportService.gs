@@ -130,10 +130,11 @@ const InvoiceExportService = {
   /**
    * 同名ファイルの存在をチェック
    * @param {string} invoiceId - 請求ID
-   * @param {string} mode - 出力モード（pdf/excel）
+   * @param {string} mode - 出力モード（pdf/excel/cover）
+   * @param {Object} options - オプション（includeCoverPage: true で頭紙付きファイル名をチェック）
    * @returns {Object} { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
    */
-  checkExistingFile: function(invoiceId, mode) {
+  checkExistingFile: function(invoiceId, mode, options = {}) {
     try {
       const invoiceData = InvoiceService.get(invoiceId);
       if (!invoiceData) {
@@ -142,8 +143,19 @@ const InvoiceExportService = {
 
       const { invoice, customer } = this._extractInvoiceData(invoiceData);
       const folder = this._getOutputFolder(customer);
-      const fileType = mode === 'excel' ? 'xlsx' : 'pdf';
-      const fileName = this._generateFileName(invoice, customer, fileType);
+
+      // modeとoptionsに基づいてファイル名オプションを決定
+      let fileType, fileNameOptions;
+      if (mode === 'cover') {
+        // 頭紙のみ出力
+        fileType = 'xlsx';
+        fileNameOptions = { coverOnly: true };
+      } else {
+        fileType = mode === 'excel' ? 'xlsx' : 'pdf';
+        fileNameOptions = { withCover: options.includeCoverPage === true };
+      }
+
+      const fileName = this._generateFileName(invoice, customer, fileType, fileNameOptions);
 
       const files = folder.getFilesByName(fileName);
       if (files.hasNext()) {

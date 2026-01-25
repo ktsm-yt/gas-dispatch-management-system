@@ -1807,6 +1807,25 @@
       exportInvoice(invoiceId, 'cover');
     }
 
+    /**
+     * エクスポートモードとオプションから表示ラベルを生成
+     * @param {string} mode - 出力モード（pdf/excel/cover）
+     * @param {Object} options - オプション
+     * @returns {string} 表示ラベル
+     */
+    function getExportLabel(mode, options) {
+      if (mode === 'cover') {
+        return '頭紙';
+      }
+      if (mode === 'pdf') {
+        return options.includeCoverPage ? 'PDF（頭紙付き）' : 'PDF';
+      }
+      if (mode === 'excel') {
+        return options.includeCoverPage ? 'Excel（頭紙付き）' : 'Excel';
+      }
+      return mode.toUpperCase();
+    }
+
     function exportInvoice(invoiceId, mode, options = {}) {
       // actionが指定されていれば直接実行（モーダルからの呼び出し時はタブを新規作成）
       if (options.action) {
@@ -1817,7 +1836,7 @@
       // ポップアップブロック回避: ユーザーアクション時に先にタブを開く
       const preOpenedTab = window.open('about:blank', '_blank');
 
-      // まず同名ファイルチェック
+      // まず同名ファイルチェック（optionsを渡して正しいファイル名パターンをチェック）
       showLoading('ファイル確認中...');
       google.script.run
         .withSuccessHandler(function (result) {
@@ -1838,7 +1857,7 @@
           console.warn('File check failed, proceeding with export:', error);
           executeInvoiceExport(invoiceId, mode, options, preOpenedTab);
         })
-        .checkInvoiceExportFile(invoiceId, mode);
+        .checkInvoiceExportFile(invoiceId, mode, options);
     }
 
     function executeInvoiceExport(invoiceId, mode, options, preOpenedTab) {
@@ -1847,7 +1866,8 @@
 
       // 新しいタブにローディングメッセージを表示
       if (newTab) {
-        const label = options.includeCoverPage ? 'Excel（頭紙付き）' : mode.toUpperCase();
+        // モードとオプションに基づいて正しいラベルを生成
+        const label = getExportLabel(mode, options);
         const loadingHtml = '<!DOCTYPE html>' +
           '<html>' +
           '<head>' +
@@ -1894,16 +1914,16 @@
           hideLoading();
           if (result.ok) {
             const url = result.data.url;
-            const label = options.includeCoverPage ? 'EXCEL（頭紙付き）' : mode.toUpperCase();
+            const successLabel = getExportLabel(mode, options);
 
             if (url && newTab) {
               // 正常ケース: 新しいタブでURLを開く
               newTab.location.href = url;
-              showToast(label + 'を出力しました', 'success');
+              showToast(successLabel + 'を出力しました', 'success');
             } else if (url && !newTab) {
               // ポップアップブロック時: リンクを表示してクリックで開けるようにする
-              showToast(label + 'を出力しました。ポップアップがブロックされた可能性があります。', 'success');
-              showFileLink(url, label);
+              showToast(successLabel + 'を出力しました。ポップアップがブロックされた可能性があります。', 'success');
+              showFileLink(url, successLabel);
             } else {
               if (newTab) newTab.close();
               showToast('出力に成功しました', 'success');
