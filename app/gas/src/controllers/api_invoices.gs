@@ -346,10 +346,11 @@ function bulkUpdateInvoiceStatus(updates, status) {
 /**
  * 請求書エクスポート時の同名ファイル存在チェック
  * @param {string} invoiceId - 請求ID
- * @param {string} mode - 出力モード（pdf/excel）
+ * @param {string} mode - 出力モード（pdf/excel/cover）
+ * @param {Object} options - オプション（includeCoverPage: true で頭紙付きファイル名をチェック）
  * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
  */
-function checkInvoiceExportFile(invoiceId, mode) {
+function checkInvoiceExportFile(invoiceId, mode, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -364,7 +365,7 @@ function checkInvoiceExportFile(invoiceId, mode) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    const validModes = ['pdf', 'excel'];
+    const validModes = ['pdf', 'excel', 'cover'];
     if (!mode || !validModes.includes(mode)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -374,8 +375,8 @@ function checkInvoiceExportFile(invoiceId, mode) {
       );
     }
 
-    // Service呼び出し
-    const result = InvoiceExportService.checkExistingFile(invoiceId, mode);
+    // Service呼び出し（optionsを渡して正しいファイル名パターンをチェック）
+    const result = InvoiceExportService.checkExistingFile(invoiceId, mode, options);
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
