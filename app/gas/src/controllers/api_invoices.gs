@@ -769,3 +769,139 @@ function calculateBillingPeriodFromWorkDate_(workDate, closingDay) {
   // 締め日以前の作業日 → 当月請求
   return { billingYear: year, billingMonth: month };
 }
+
+// ============================================================
+// 一括出力 API
+// ============================================================
+
+/**
+ * 一括出力を開始
+ * @param {Object} params - { invoiceIds: string[], exportMode: 'pdf'|'pdf_cover'|'excel' }
+ * @returns {Object} APIレスポンス
+ */
+function startBulkExport(params) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message,
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!params || !params.invoiceIds || !Array.isArray(params.invoiceIds)) {
+      return buildErrorResponse(
+        ERROR_CODES.INVALID_INPUT,
+        '出力する請求書を選択してください',
+        {},
+        requestId
+      );
+    }
+
+    if (params.invoiceIds.length === 0) {
+      return buildErrorResponse(
+        ERROR_CODES.INVALID_INPUT,
+        '出力する請求書を選択してください',
+        {},
+        requestId
+      );
+    }
+
+    const validModes = ['pdf', 'pdf_cover', 'excel'];
+    if (!params.exportMode || !validModes.includes(params.exportMode)) {
+      return buildErrorResponse(
+        ERROR_CODES.INVALID_INPUT,
+        '有効な出力モードを選択してください',
+        {},
+        requestId
+      );
+    }
+
+    // 一括出力を実行
+    const result = InvoiceBulkExportService.executeBulkExport(params);
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('startBulkExport error:', error);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      error.message,
+      {},
+      requestId
+    );
+  }
+}
+
+/**
+ * 一括出力の進捗を取得
+ * @param {Object} params - { invoiceIds: string[], exportMode: string }
+ * @returns {Object} APIレスポンス
+ */
+function getBulkExportProgress(params) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（viewer以上）
+    const authResult = checkPermission(ROLES.VIEWER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message,
+        {},
+        requestId
+      );
+    }
+
+    const progress = InvoiceBulkExportService.getProgressForApi(params);
+    return buildSuccessResponse(progress, requestId);
+
+  } catch (error) {
+    console.error('getBulkExportProgress error:', error);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      error.message,
+      {},
+      requestId
+    );
+  }
+}
+
+/**
+ * 一括出力をキャンセル
+ * @param {Object} params - { invoiceIds: string[], exportMode: string }
+ * @returns {Object} APIレスポンス
+ */
+function cancelBulkExport(params) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message,
+        {},
+        requestId
+      );
+    }
+
+    const result = InvoiceBulkExportService.cancelExport(params);
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('cancelBulkExport error:', error);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      error.message,
+      {},
+      requestId
+    );
+  }
+}
