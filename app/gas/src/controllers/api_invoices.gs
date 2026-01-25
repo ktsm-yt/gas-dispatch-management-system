@@ -406,7 +406,7 @@ function exportInvoice(invoiceId, mode, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    const validModes = ['pdf', 'excel', 'edit'];
+    const validModes = ['pdf', 'excel', 'cover', 'edit'];
     if (!mode || !validModes.includes(mode)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
