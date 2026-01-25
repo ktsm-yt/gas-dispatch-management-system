@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>売上分析</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-warning: #FFC107;
+      --color-danger: #DC3545;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-xs: 4px;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+    }
+
+    <?!= include('nav_styles'); ?>
+
+    /* Toolbar */
+    .toolbar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--spacing-md);
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    .filter-group label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .filter-group select,
+    .filter-group input {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+    }
+
+    .filter-group select:focus,
+    .filter-group input:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: var(--color-accent);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Main Content */
+    .main-content {
+      padding: var(--spacing-lg);
+    }
+
+    /* KPI Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: var(--spacing-md);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+      box-shadow: var(--shadow-card);
+    }
+
+    .kpi-card-header {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .kpi-card-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .kpi-card-value.positive {
+      color: var(--color-success);
+    }
+
+    .kpi-card-value.negative {
+      color: var(--color-danger);
+    }
+
+    .kpi-card-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: var(--spacing-xs);
+    }
+
+    /* Chart Container */
+    .chart-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .chart-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .chart-container {
+      position: relative;
+      height: 300px;
+    }
+
+    /* Data Table */
+    .data-table-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .data-table-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .data-table th,
+    .data-table td {
+      padding: var(--spacing-sm) var(--spacing-md);
+      text-align: right;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .data-table th {
+      background: var(--bg-hover);
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .data-table th:first-child,
+    .data-table td:first-child {
+      text-align: left;
+    }
+
+    .data-table tbody tr:hover {
+      background: var(--bg-hover);
+    }
+
+    .finalized-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 10px;
+      background: var(--color-success);
+      color: white;
+      border-radius: var(--radius-sm);
+    }
+
+    .draft-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 10px;
+      background: var(--color-warning);
+      color: var(--text-primary);
+      border-radius: var(--radius-sm);
+    }
+
+    /* Loading State */
+    .loading {
+      text-align: center;
+      padding: var(--spacing-lg);
+      color: var(--text-muted);
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--border-color);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error State */
+    .error-message {
+      background: #FEE2E2;
+      color: var(--color-danger);
+      padding: var(--spacing-md);
+      border-radius: var(--radius-sm);
+      margin-bottom: var(--spacing-md);
+    }
+  </style>
+</head>
+
+<body>
+  <?!= include('nav_bar'); ?>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="filter-group">
+      <label>期間:</label>
+      <select id="period-select">
+        <option value="thisMonth">今月</option>
+        <option value="lastMonth">先月</option>
+        <option value="thisYear" selected>今年度</option>
+        <option value="lastYear">前年度</option>
+        <option value="custom">カスタム</option>
+      </select>
+
+      <span id="custom-range" style="display: none;">
+        <input type="month" id="start-month" style="width: 120px;">
+        <span>〜</span>
+        <input type="month" id="end-month" style="width: 120px;">
+      </span>
+    </div>
+
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="recalculateCurrentMonth()">
+        当月を再計算
+      </button>
+      <button class="btn btn-primary" onclick="loadData()">
+        更新
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+    <div id="error-container"></div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpi-cards">
+      <div class="kpi-card">
+        <div class="kpi-card-header">売上（税込）</div>
+        <div class="kpi-card-value" id="kpi-invoice-total">-</div>
+        <div class="kpi-card-sub" id="kpi-invoice-count">案件数: -</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-header">支払総額</div>
+        <div class="kpi-card-value" id="kpi-payout-total">-</div>
+        <div class="kpi-card-sub" id="kpi-assignment-count">配置数: -</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-header">粗利益</div>
+        <div class="kpi-card-value" id="kpi-gross-margin">-</div>
+        <div class="kpi-card-sub" id="kpi-margin-rate">粗利率: -%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-header">交通費</div>
+        <div class="kpi-card-value" id="kpi-transport-total">-</div>
+        <div class="kpi-card-sub">&nbsp;</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-section">
+      <h3>月次推移</h3>
+      <div class="chart-container">
+        <canvas id="monthly-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="data-table-section">
+      <h3>月別詳細</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>年月</th>
+            <th>案件数</th>
+            <th>配置数</th>
+            <th>売上（税込）</th>
+            <th>支払</th>
+            <th>交通費</th>
+            <th>粗利益</th>
+            <th>粗利率</th>
+            <th>状態</th>
+          </tr>
+        </thead>
+        <tbody id="stats-table-body">
+          <tr>
+            <td colspan="9" class="loading">
+              <div class="loading-spinner"></div>
+              <span>読み込み中...</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let monthlyChart = null;
+    let currentData = null;
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', function() {
+      initNavBar('sales_analytics', '売上分析');
+      initFilters();
+      loadData();
+    });
+
+    function initFilters() {
+      const periodSelect = document.getElementById('period-select');
+      const customRange = document.getElementById('custom-range');
+
+      periodSelect.addEventListener('change', function() {
+        if (this.value === 'custom') {
+          customRange.style.display = 'inline';
+        } else {
+          customRange.style.display = 'none';
+          loadData();
+        }
+      });
+
+      document.getElementById('start-month').addEventListener('change', loadData);
+      document.getElementById('end-month').addEventListener('change', loadData);
+
+      // Set default custom range
+      var now = new Date();
+      var thisMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+      document.getElementById('start-month').value = thisMonth;
+      document.getElementById('end-month').value = thisMonth;
+    }
+
+    function getSelectedPeriod() {
+      const period = document.getElementById('period-select').value;
+
+      if (period === 'custom') {
+        const startMonth = document.getElementById('start-month').value;
+        const endMonth = document.getElementById('end-month').value;
+
+        if (startMonth && endMonth) {
+          const [startYear, startM] = startMonth.split('-').map(Number);
+          const [endYear, endM] = endMonth.split('-').map(Number);
+
+          return {
+            period: 'custom',
+            startYear: startYear,
+            startMonth: startM,
+            endYear: endYear,
+            endMonth: endM
+          };
+        }
+      }
+
+      return { period: period };
+    }
+
+    function loadData() {
+      const options = getSelectedPeriod();
+
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(handleDataLoaded)
+        .withFailureHandler(handleError)
+        .getDashboardStats(options);
+    }
+
+    function handleDataLoaded(result) {
+      if (!result.ok) {
+        showError(result.error?.message || 'データの取得に失敗しました');
+        return;
+      }
+
+      currentData = result.data;
+      updateKPIs(result.data.totals);
+      updateChart(result.data.monthly);
+      updateTable(result.data.monthly);
+    }
+
+    function updateKPIs(totals) {
+      document.getElementById('kpi-invoice-total').textContent = formatCurrency(totals.invoice_total);
+      document.getElementById('kpi-invoice-count').textContent = '案件数: ' + totals.job_count;
+
+      document.getElementById('kpi-payout-total').textContent = formatCurrency(totals.payout_total);
+      document.getElementById('kpi-assignment-count').textContent = '配置数: ' + totals.assignment_count;
+
+      var marginEl = document.getElementById('kpi-gross-margin');
+      marginEl.textContent = formatCurrency(totals.gross_margin);
+      marginEl.className = 'kpi-card-value ' + (totals.gross_margin >= 0 ? 'positive' : 'negative');
+
+      document.getElementById('kpi-margin-rate').textContent = '粗利率: ' + totals.margin_rate + '%';
+
+      document.getElementById('kpi-transport-total').textContent = formatCurrency(totals.transport_total);
+    }
+
+    function updateChart(monthlyStats) {
+      var ctx = document.getElementById('monthly-chart').getContext('2d');
+
+      var labels = monthlyStats.map(function(s) { return s.year + '/' + s.month; });
+      var invoiceData = monthlyStats.map(function(s) { return s.invoice_total; });
+      var payoutData = monthlyStats.map(function(s) { return s.payout_total; });
+      var marginData = monthlyStats.map(function(s) { return s.gross_margin; });
+
+      if (monthlyChart) {
+        monthlyChart.destroy();
+      }
+
+      monthlyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '売上',
+              data: invoiceData,
+              backgroundColor: 'rgba(23, 45, 144, 0.8)',
+              borderColor: 'rgba(23, 45, 144, 1)',
+              borderWidth: 1,
+              order: 2
+            },
+            {
+              label: '支払',
+              data: payoutData,
+              backgroundColor: 'rgba(220, 53, 69, 0.6)',
+              borderColor: 'rgba(220, 53, 69, 1)',
+              borderWidth: 1,
+              order: 3
+            },
+            {
+              label: '粗利益',
+              data: marginData,
+              type: 'line',
+              borderColor: 'rgba(40, 167, 69, 1)',
+              backgroundColor: 'rgba(40, 167, 69, 0.1)',
+              fill: true,
+              tension: 0.3,
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: function(value) {
+                  return formatCurrencyShort(value);
+                }
+              }
+            }
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + formatCurrency(context.raw);
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateTable(monthlyStats) {
+      var tbody = document.getElementById('stats-table-body');
+
+      if (monthlyStats.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">データがありません</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = monthlyStats.map(function(s) {
+        var marginColor = s.gross_margin >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+        var statusBadge = s.is_final ? '<span class="finalized-badge">確定</span>' : '<span class="draft-badge">暫定</span>';
+        return [
+          '<tr>',
+          '<td>' + s.year + '年' + s.month + '月</td>',
+          '<td>' + s.job_count + '</td>',
+          '<td>' + s.assignment_count + '</td>',
+          '<td>' + formatCurrency(s.invoice_total) + '</td>',
+          '<td>' + formatCurrency(s.payout_total) + '</td>',
+          '<td>' + formatCurrency(s.transport_total) + '</td>',
+          '<td style="color: ' + marginColor + '">' + formatCurrency(s.gross_margin) + '</td>',
+          '<td>' + s.margin_rate + '%</td>',
+          '<td>' + statusBadge + '</td>',
+          '</tr>'
+        ].join('');
+      }).join('');
+    }
+
+    function recalculateCurrentMonth() {
+      var now = new Date();
+      var year = now.getFullYear();
+      var month = now.getMonth() + 1;
+
+      if (!confirm(year + '年' + month + '月の統計を再計算しますか？')) {
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.ok) {
+            alert('統計を再計算しました');
+            loadData();
+          } else {
+            alert('エラー: ' + (result.error?.message || '再計算に失敗しました'));
+          }
+        })
+        .withFailureHandler(handleError)
+        .recalculateMonthlyStats(year, month);
+    }
+
+    function showLoading() {
+      document.getElementById('stats-table-body').innerHTML = [
+        '<tr>',
+        '<td colspan="9" class="loading">',
+        '<div class="loading-spinner"></div>',
+        '<span>読み込み中...</span>',
+        '</td>',
+        '</tr>'
+      ].join('');
+    }
+
+    function showError(message) {
+      document.getElementById('error-container').innerHTML = '<div class="error-message">' + escapeHtml(message) + '</div>';
+    }
+
+    function handleError(error) {
+      showError(error.message || 'エラーが発生しました');
+      document.getElementById('stats-table-body').innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--color-danger);">データの取得に失敗しました</td></tr>';
+    }
+
+    function formatCurrency(value) {
+      return '¥' + Math.floor(value || 0).toLocaleString();
+    }
+
+    function formatCurrencyShort(value) {
+      // 日本語圏向け表記: 100万、1000万、1億
+      if (value >= 100000000) {
+        return (value / 100000000).toFixed(1).replace(/\.0$/, '') + '億';
+      } else if (value >= 10000000) {
+        return (value / 10000).toFixed(0) + '万';
+      } else if (value >= 1000000) {
+        return (value / 10000).toFixed(0) + '万';
+      } else if (value >= 10000) {
+        return (value / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+      }
+      return '¥' + value.toLocaleString();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+
+</html>

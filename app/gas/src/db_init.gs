@@ -135,6 +135,23 @@ const TABLE_DEFINITIONS = {
       'log_id', 'timestamp', 'user_email', 'action', 'table_name', 'record_id',
       'before_data', 'after_data'
     ]
+  },
+  // P2-6: 月次統計テーブル（売上分析ダッシュボード用）
+  T_MonthlyStats: {
+    sheetName: '月次統計',
+    headers: [
+      'stat_id', 'year', 'month',
+      // 案件・配置
+      'job_count', 'assignment_count',
+      // 売上内訳
+      'work_amount', 'expense_amount', 'invoice_subtotal', 'invoice_tax', 'invoice_total',
+      // 費用
+      'payout_total', 'transport_total',
+      // 利益
+      'gross_margin', 'margin_rate',
+      // メタデータ
+      'is_final', 'created_at', 'updated_at'
+    ]
   }
 };
 
@@ -823,4 +840,36 @@ function migrateAddDeletedAtColumns() {
   Logger.log('\n=== マイグレーション完了 ===');
   Logger.log('deleted_at: 削除日時を記録（復元しても履歴が残る）');
   Logger.log('deleted_by: 削除者を記録');
+}
+
+/**
+ * P2-6: T_MonthlyStats シートを追加（売上分析ダッシュボード用）
+ * GASエディタから実行: migrateAddMonthlyStatsSheet()
+ */
+function migrateAddMonthlyStatsSheet() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // 月次統計シートが既にあるか確認
+  const existingSheet = ss.getSheetByName('月次統計');
+  if (existingSheet) {
+    Logger.log('✓ 月次統計シートは既に存在します');
+    return;
+  }
+
+  // T_MonthlyStatsの定義
+  const definition = TABLE_DEFINITIONS.T_MonthlyStats;
+  createSheet(ss, 'T_MonthlyStats', definition);
+
+  Logger.log('\n=== P2-6 マイグレーション完了 ===');
+  Logger.log('✓ 月次統計シートを追加しました');
+  Logger.log('カラム: stat_id, fiscal_year, month, job_count, assignment_count, ...');
+  Logger.log('用途: 売上分析ダッシュボード、年次アーカイブ後の統計保持');
 }
