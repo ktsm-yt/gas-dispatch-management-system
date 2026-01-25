@@ -700,6 +700,135 @@ function testFormat3Export() {
 }
 
 /**
+ * FORMAT1/FORMAT2 大量明細テスト（列配置・合計行確認用）
+ * GASエディタから直接実行: testFormat1And2BulkLines()
+ *
+ * format1とformat2の顧客に対して30件の明細を持つ請求書を作成し、
+ * Excel/PDFエクスポートで列配置と合計行を確認する
+ */
+function testFormat1And2BulkLines() {
+  Logger.log('=== FORMAT1/FORMAT2 Bulk Lines Test ===');
+
+  const customers = getAllRecords('M_Customers').filter(c =>
+    !c.is_deleted && c.is_active !== false &&
+    (c.invoice_format === 'format1' || c.invoice_format === 'format2')
+  );
+
+  if (customers.length === 0) {
+    Logger.log('✗ format1/format2の顧客が見つかりません');
+    return { success: false, error: 'NO_CUSTOMERS' };
+  }
+
+  Logger.log(`対象顧客: ${customers.length}件`);
+
+  const results = [];
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  // format1とformat2の顧客を1件ずつ処理
+  const format1Customer = customers.find(c => c.invoice_format === 'format1');
+  const format2Customer = customers.find(c => c.invoice_format === 'format2');
+
+  const targetCustomers = [format1Customer, format2Customer].filter(Boolean);
+
+  for (const customer of targetCustomers) {
+    Logger.log(`\n--- ${customer.invoice_format}: ${customer.company_name} ---`);
+
+    // 請求番号を生成
+    const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, customer.customer_id);
+
+    // 請求書を作成
+    const invoice = InvoiceRepository.insert({
+      customer_id: customer.customer_id,
+      billing_year: year,
+      billing_month: month,
+      invoice_number: invoiceNumber,
+      issue_date: `${year}-${String(month).padStart(2, '0')}-01`,
+      due_date: `${year}-${String(month + 1).padStart(2, '0')}-${customer.payment_day || 25}`,
+      subtotal: 0,  // 後で更新
+      tax_amount: 0,
+      total_amount: 0,
+      invoice_format: customer.invoice_format,
+      status: 'unsent',
+      shipper_name: customer.shipper_name || ''
+    });
+    Logger.log(`✓ 請求書作成: ${invoice.invoice_id}`);
+
+    // 30件の明細を追加
+    const itemNames = ['作業員', '鳶工', '荷揚げ', '搬入', '資材運搬'];
+    const siteNames = ['高橋倉庫外装工事', '林倉庫内装工事', '山口倉庫解体工事', '松本店舗新築工事', '鈴木病院外装工事', '加藤アパート設備工事', '佐藤住宅増築工事', '清水アパート増築工事'];
+    const branches = ['特需1', '世田谷', '立川', '本社', '横浜'];
+    let subtotal = 0;
+
+    for (let i = 0; i < 30; i++) {
+      const day = (i % 28) + 1;
+      const quantity = (i % 3) + 1;
+      const unitPrice = 21500 + (i % 5) * 1000;
+      const amount = quantity * unitPrice;
+      subtotal += amount;
+
+      const lineData = {
+        invoice_id: invoice.invoice_id,
+        line_number: i + 1,
+        work_date: `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
+        site_name: siteNames[i % siteNames.length],
+        item_name: itemNames[i % itemNames.length],
+        time_note: `12/29/18`,
+        quantity: quantity,
+        unit: '人',
+        unit_price: unitPrice,
+        amount: amount
+      };
+
+      // format2固有フィールド
+      if (customer.invoice_format === 'format2') {
+        lineData.order_number = `ORD-${String(30000 + i).padStart(6, '0')}`;
+        lineData.branch_office = branches[i % branches.length];
+      }
+
+      InvoiceLineRepository.insert(lineData);
+    }
+    Logger.log(`✓ 30件の明細を追加`);
+
+    // 請求書の合計を更新
+    const taxRate = (customer.tax_rate || 10) / 100;
+    const taxAmount = Math.floor(subtotal * taxRate);
+    InvoiceRepository.update({
+      invoice_id: invoice.invoice_id,
+      subtotal: subtotal,
+      tax_amount: taxAmount,
+      total_amount: subtotal + taxAmount
+    }, invoice.updated_at);
+    Logger.log(`✓ 合計更新: 税抜 ${subtotal.toLocaleString()}円`);
+
+    // Excelエクスポート
+    const excelResult = InvoiceExportService.export(invoice.invoice_id, 'excel', { keepSheet: true });
+    if (excelResult.success) {
+      Logger.log(`✓ Excel出力成功: ${excelResult.url}`);
+    } else {
+      Logger.log(`✗ Excel出力失敗: ${excelResult.error}`);
+    }
+
+    results.push({
+      format: customer.invoice_format,
+      customer: customer.company_name,
+      invoiceId: invoice.invoice_id,
+      subtotal: subtotal,
+      excelResult: excelResult
+    });
+  }
+
+  Logger.log('\n=== Test Complete ===');
+  Logger.log('確認ポイント:');
+  Logger.log('  1. 列配置が正しいか（ヘッダーとデータの対応）');
+  Logger.log('  2. 合計行が表示されているか');
+  Logger.log('  3. 合計行の上に罫線があるか');
+
+  return { success: true, results };
+}
+
+/**
  * FORMAT3（顧客B型）PDFエクスポートテスト
  * GASエディタから直接実行可能
  */
