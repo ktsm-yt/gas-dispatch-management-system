@@ -18,6 +18,24 @@
 const TEST_FISCAL_YEAR = 2023;
 
 /**
+ * アーカイブフォルダIDを設定（初回のみ実行）
+ * GASエディタから実行: setupArchiveFolderId()
+ */
+function setupArchiveFolderId() {
+  const ARCHIVE_FOLDER_ID = '1o5lKHrfzJDdDSeiDWGkmyPlke-YDw5t7';
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('ARCHIVE_FOLDER_ID', ARCHIVE_FOLDER_ID);
+
+  Logger.log('✓ ARCHIVE_FOLDER_ID を設定しました');
+  Logger.log(`  フォルダID: ${ARCHIVE_FOLDER_ID}`);
+
+  // 確認
+  const saved = props.getProperty('ARCHIVE_FOLDER_ID');
+  Logger.log(`  確認: ${saved === ARCHIVE_FOLDER_ID ? 'OK' : 'NG'}`);
+}
+
+/**
  * アーカイブテスト用データを作成
  * GASエディタから実行: createArchiveTestData()
  */
