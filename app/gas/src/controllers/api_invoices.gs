@@ -416,6 +416,16 @@ function exportInvoice(invoiceId, mode, options = {}) {
       );
     }
 
+    // アーカイブデータのエクスポートを拒否（P2-5）
+    if (options._archived) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '過去年度のデータは出力できません。一覧からの参照のみ可能です。',
+        {},
+        requestId
+      );
+    }
+
     // Service呼び出し
     const result = InvoiceExportService.export(invoiceId, mode, options);
 
