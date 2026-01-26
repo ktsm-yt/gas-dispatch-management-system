@@ -44,6 +44,7 @@ const TABLE_DEFINITIONS = {
     sheetName: '外注先',
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
+      'half_day_rate', 'full_day_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -872,4 +873,76 @@ function migrateAddMonthlyStatsSheet() {
   Logger.log('✓ 月次統計シートを追加しました');
   Logger.log('カラム: stat_id, fiscal_year, month, job_count, assignment_count, ...');
   Logger.log('用途: 売上分析ダッシュボード、年次アーカイブ後の統計保持');
+}
+
+/**
+ * P2-8 マイグレーション: M_Subcontractorsに単価カラムを追加
+ * GASエディタから実行: migrateAddSubcontractorRateColumns()
+ */
+function migrateAddSubcontractorRateColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('外注先');
+
+  if (!sheet) {
+    Logger.log('✗ 外注先シートが見つかりません');
+    return;
+  }
+
+  Logger.log('=== P2-8 外注先単価カラム追加マイグレーション ===\n');
+
+  // 現在のヘッダーを取得
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log(`現在のカラム数: ${lastCol}`);
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // 追加するカラム
+  const columnsToAdd = ['half_day_rate', 'full_day_rate'];
+  let addedCount = 0;
+
+  // notesの後に挿入（notesの位置を見つける）
+  const notesIndex = headers.indexOf('notes');
+  if (notesIndex === -1) {
+    Logger.log('✗ notesカラムが見つかりません。手動で追加してください。');
+    return;
+  }
+
+  // 各カラムを追加（逆順で追加すると正しい順序になる）
+  for (let i = columnsToAdd.length - 1; i >= 0; i--) {
+    const colName = columnsToAdd[i];
+
+    if (headers.includes(colName)) {
+      Logger.log(`✓ ${colName}カラムは既に存在します`);
+      continue;
+    }
+
+    // 挿入位置（notesの次）
+    const insertPosition = notesIndex + 2; // 1-indexed
+
+    // カラムを挿入
+    sheet.insertColumnAfter(notesIndex + 1);
+    sheet.getRange(1, insertPosition).setValue(colName);
+    Logger.log(`✓ カラム追加: ${colName} (位置: ${insertPosition})`);
+    addedCount++;
+  }
+
+  if (addedCount > 0) {
+    // ヘッダー行のスタイルを適用
+    const newLastCol = sheet.getLastColumn();
+    sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+  }
+
+  Logger.log('\n=== P2-8 マイグレーション完了 ===');
+  Logger.log(`${addedCount}個のカラムを追加しました（外注先単価管理用）`);
+  Logger.log('half_day_rate: ハーフ単価');
+  Logger.log('full_day_rate: 終日単価');
 }
