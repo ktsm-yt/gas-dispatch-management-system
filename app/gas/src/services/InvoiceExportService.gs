@@ -394,6 +394,7 @@ const InvoiceExportService = {
 
   /**
    * 編集用スプレッドシート作成
+   * @deprecated 2026-06 削除予定。Excel出力後にGoogle Driveで開いて編集してください。
    * @param {Object} invoice - 請求書データ
    * @param {Object[]} lines - 明細データ
    * @param {Object} customer - 顧客データ
@@ -402,6 +403,7 @@ const InvoiceExportService = {
    * @returns {Object} { success, sheetFileId, url }
    */
   createEditSheet: function(invoice, lines, customer, company, options = {}) {
+    console.warn('[DEPRECATED] createEditSheet() は 2026-06 に削除予定です。Excel出力を使用してください。');
     try {
       // スプレッドシートを作成（編集用：ページ分割なし、連続データ）
       const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: false });

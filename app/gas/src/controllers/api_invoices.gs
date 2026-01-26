@@ -527,7 +527,7 @@ function regenerateInvoice(invoiceId) {
 /**
  * 請求データをエクスポート（集計データ）
  * @param {string} ym - 対象年月（YYYY-MM形式）
- * @param {string} format - 出力形式（xlsx/csv）
+ * @param {string} format - 出力形式（xlsx/csv）。csv は @deprecated 2026-06 削除予定
  * @returns {Object} APIレスポンス { fileId, url }
  */
 function exportBillingData(ym, format = 'xlsx') {
@@ -601,6 +601,7 @@ function exportBillingData(ym, format = 'xlsx') {
     const spreadsheetId = spreadsheet.getId();
 
     if (format === 'csv') {
+      console.warn('[DEPRECATED] CSV出力は 2026-06 に削除予定です。xlsx形式を使用してください。');
       const csvContent = this._convertToCSV(data);
       blob = Utilities.newBlob(csvContent, 'text/csv');
       fileName = `請求データ_${ym}.csv`;
