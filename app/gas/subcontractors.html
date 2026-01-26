@@ -188,6 +188,16 @@
             <label>備考</label>
             <textarea id="notes" rows="3"></textarea>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>ハーフ単価</label>
+              <input type="number" id="half-day-rate" min="0" step="100" placeholder="円">
+            </div>
+            <div class="form-group">
+              <label>終日単価</label>
+              <input type="number" id="full-day-rate" min="0" step="100" placeholder="円">
+            </div>
+          </div>
           <div class="form-group">
             <label>状態</label>
             <select id="is-active">
@@ -309,6 +319,8 @@
           document.getElementById('contact-name').value = currentRecord.contact_name || '';
           document.getElementById('phone').value = currentRecord.phone || '';
           document.getElementById('notes').value = currentRecord.notes || '';
+          document.getElementById('half-day-rate').value = currentRecord.half_day_rate || '';
+          document.getElementById('full-day-rate').value = currentRecord.full_day_rate || '';
           document.getElementById('is-active').value = currentRecord.is_active ? 'true' : 'false';
         }
       } else {
@@ -331,11 +343,15 @@
 
       const id = document.getElementById('subcontractor-id').value;
       const updatedAt = document.getElementById('updated-at').value;
+      const halfDayRate = document.getElementById('half-day-rate').value;
+      const fullDayRate = document.getElementById('full-day-rate').value;
       const data = {
         company_name: document.getElementById('company-name').value,
         contact_name: document.getElementById('contact-name').value,
         phone: document.getElementById('phone').value,
         notes: document.getElementById('notes').value,
+        half_day_rate: halfDayRate ? Number(halfDayRate) : null,
+        full_day_rate: fullDayRate ? Number(fullDayRate) : null,
         is_active: document.getElementById('is-active').value === 'true'
       };
       if (id) data.subcontractor_id = id;

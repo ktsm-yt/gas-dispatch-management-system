@@ -684,8 +684,9 @@ const PayoutService = {
    * @returns {Object[]} { staffId, staffName, unpaidCount, estimatedAmount }
    */
   getUnpaidStaffList: function(endDate) {
-    // 1. 全データを一括取得
-    const staffList = StaffRepository.search({ is_active: true });
+    // 1. 全データを一括取得（外注スタッフは除外 - 外注費管理タブで別途管理）
+    const staffList = StaffRepository.search({ is_active: true })
+      .filter(s => s.staff_type !== 'subcontract');
     if (staffList.length === 0) return [];
 
     const staffMap = new Map(staffList.map(s => [s.staff_id, s]));
@@ -894,5 +895,352 @@ const PayoutService = {
     if (!date) return null;
     date.setDate(date.getDate() + days);
     return Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
+  },
+
+  // ========== Subcontractor Payout Methods (P2-8) ==========
+
+  /**
+   * 外注先の未払い配置を取得
+   * @param {string} subcontractorId - 外注先ID
+   * @param {string} endDate - 集計終了日（YYYY-MM-DD）
+   * @returns {Object[]} 未払い配置リスト（Job情報含む）
+   */
+  getUnpaidAssignmentsForSubcontractor: function(subcontractorId, endDate) {
+    // 1. 最後の支払いを取得
+    const lastPayout = PayoutRepository.findLastPayoutForSubcontractor(subcontractorId);
+    const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
+    Logger.log(`[getUnpaidAssignmentsForSubcontractor] subcontractorId=${subcontractorId}, endDate=${endDate}, lastPayout period_end=${lastPayout?.period_end}, startDate=${startDate}`);
+
+    // 2. 該当期間のJobを取得
+    const jobQuery = {
+      work_date_to: endDate,
+      sort_order: 'asc'
+    };
+    if (startDate) {
+      jobQuery.work_date_from = startDate;
+    }
+    const jobs = JobRepository.search(jobQuery);
+    const jobMap = new Map(jobs.map(j => [j.job_id, j]));
+    const jobIdSet = new Set(jobs.map(j => j.job_id));
+
+    if (jobIdSet.size === 0) {
+      return [];
+    }
+
+    // 3. 外注先に紐づくスタッフを取得
+    const subcontractorStaff = StaffRepository.search({
+      subcontractor_id: subcontractorId,
+      staff_type: 'subcontract'
+    });
+    const staffIdSet = new Set(subcontractorStaff.map(s => s.staff_id));
+    const staffMap = new Map(subcontractorStaff.map(s => [s.staff_id, s]));
+    Logger.log(`[getUnpaidAssignmentsForSubcontractor] Found ${staffIdSet.size} staff for subcontractor`);
+
+    if (staffIdSet.size === 0) {
+      return [];
+    }
+
+    // 4. 外注スタッフの配置を取得（payout_id未設定のみ）
+    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+    const unpaidAssignments = allAssignments.filter(a =>
+      !a.is_deleted &&
+      !a.payout_id &&
+      staffIdSet.has(a.staff_id) &&
+      jobIdSet.has(a.job_id)
+    );
+    Logger.log(`[getUnpaidAssignmentsForSubcontractor] unpaidAssignments: ${unpaidAssignments.length}`);
+
+    // 5. Job情報とスタッフ情報を付与して返す
+    return unpaidAssignments.map(a => {
+      const job = jobMap.get(a.job_id);
+      const staff = staffMap.get(a.staff_id);
+      return {
+        ...a,
+        work_date: job ? job.work_date : '',
+        site_name: job ? job.site_name : '',
+        customer_id: job ? job.customer_id : '',
+        staff_name: staff ? staff.name : ''
+      };
+    }).sort((a, b) => (a.work_date || '').localeCompare(b.work_date || ''));
+  },
+
+  /**
+   * 外注費を計算（プレビュー用）
+   * @param {string} subcontractorId - 外注先ID
+   * @param {string} endDate - 集計終了日
+   * @returns {Object} { assignments, baseAmount, transportAmount, totalAmount, periodStart, periodEnd }
+   */
+  calculatePayoutForSubcontractor: function(subcontractorId, endDate) {
+    const assignments = this.getUnpaidAssignmentsForSubcontractor(subcontractorId, endDate);
+
+    if (assignments.length === 0) {
+      return {
+        assignments: [],
+        assignmentCount: 0,
+        baseAmount: 0,
+        transportAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        periodStart: null,
+        periodEnd: endDate
+      };
+    }
+
+    // 金額計算（外注費は wage_rate を使用、源泉徴収なし）
+    let baseAmount = 0;
+    let transportAmount = 0;
+
+    for (const asg of assignments) {
+      const rate = asg.wage_rate || 0;
+      baseAmount += rate;
+      transportAmount += asg.transport_amount || 0;
+    }
+
+    const totalAmount = baseAmount + transportAmount;
+
+    // 期間を算出
+    const dates = assignments.map(a => a.work_date).filter(d => d);
+    const periodStart = dates.length > 0 ? dates[0] : endDate;
+
+    return {
+      assignments: assignments,
+      assignmentCount: assignments.length,
+      baseAmount: baseAmount,
+      transportAmount: transportAmount,
+      taxAmount: 0,  // 外注費は源泉徴収なし
+      totalAmount: totalAmount,
+      periodStart: periodStart,
+      periodEnd: endDate
+    };
+  },
+
+  /**
+   * 外注費を確認済みとして記録
+   * @param {string} subcontractorId - 外注先ID
+   * @param {string} endDate - 集計終了日
+   * @param {Object} options - オプション
+   * @returns {Object} { success, payout, error }
+   */
+  confirmPayoutForSubcontractor: function(subcontractorId, endDate, options = {}) {
+    Logger.log(`[confirmPayoutForSubcontractor] subcontractorId=${subcontractorId}, endDate=${endDate}`);
+
+    const calc = this.calculatePayoutForSubcontractor(subcontractorId, endDate);
+
+    if (calc.assignmentCount === 0) {
+      return {
+        success: false,
+        error: 'NO_UNPAID_ASSIGNMENTS',
+        message: '未払いの配置がありません'
+      };
+    }
+
+    const adjustmentAmount = options.adjustment_amount || 0;
+    const totalAmount = calc.totalAmount + adjustmentAmount;
+
+    const payout = PayoutRepository.insert({
+      payout_type: 'SUBCONTRACTOR',
+      subcontractor_id: subcontractorId,
+      period_start: calc.periodStart,
+      period_end: calc.periodEnd,
+      assignment_count: calc.assignmentCount,
+      base_amount: calc.baseAmount,
+      transport_amount: calc.transportAmount,
+      adjustment_amount: adjustmentAmount,
+      tax_amount: 0,
+      total_amount: totalAmount,
+      status: 'confirmed',
+      paid_date: '',
+      notes: options.notes || ''
+    });
+
+    // 対象Assignmentにpayout_idを設定
+    this._linkAssignmentsToPayout(calc.assignments, payout.payout_id);
+
+    try {
+      logCreate('T_Payouts', payout.payout_id, payout);
+    } catch (e) {
+      Logger.log(`[confirmPayoutForSubcontractor] Audit log error: ${e.message}`);
+    }
+
+    return {
+      success: true,
+      payout: this._enrichPayout(payout)
+    };
+  },
+
+  /**
+   * 外注費を支払済として記録
+   * @param {string} subcontractorId - 外注先ID
+   * @param {string} endDate - 集計終了日
+   * @param {Object} options - オプション
+   * @returns {Object} { success, payout, error }
+   */
+  markAsPaidForSubcontractor: function(subcontractorId, endDate, options = {}) {
+    Logger.log(`[markAsPaidForSubcontractor] subcontractorId=${subcontractorId}, endDate=${endDate}`);
+
+    const calc = this.calculatePayoutForSubcontractor(subcontractorId, endDate);
+
+    if (calc.assignmentCount === 0) {
+      return {
+        success: false,
+        error: 'NO_UNPAID_ASSIGNMENTS',
+        message: '未払いの配置がありません'
+      };
+    }
+
+    const adjustmentAmount = options.adjustment_amount || 0;
+    const totalAmount = calc.totalAmount + adjustmentAmount;
+    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+    const payout = PayoutRepository.insert({
+      payout_type: 'SUBCONTRACTOR',
+      subcontractor_id: subcontractorId,
+      period_start: calc.periodStart,
+      period_end: calc.periodEnd,
+      assignment_count: calc.assignmentCount,
+      base_amount: calc.baseAmount,
+      transport_amount: calc.transportAmount,
+      adjustment_amount: adjustmentAmount,
+      tax_amount: 0,
+      total_amount: totalAmount,
+      status: 'paid',
+      paid_date: paidDate,
+      notes: options.notes || ''
+    });
+
+    this._linkAssignmentsToPayout(calc.assignments, payout.payout_id);
+
+    try {
+      logCreate('T_Payouts', payout.payout_id, payout);
+    } catch (e) {
+      Logger.log(`[markAsPaidForSubcontractor] Audit log error: ${e.message}`);
+    }
+
+    return {
+      success: true,
+      payout: this._enrichPayout(payout)
+    };
+  },
+
+  /**
+   * 未払いがある外注先一覧を取得
+   * @param {string} endDate - 集計終了日
+   * @returns {Object[]} { subcontractorId, companyName, unpaidCount, estimatedAmount }
+   */
+  getUnpaidSubcontractorList: function(endDate) {
+    // 1. アクティブな外注先一覧を取得
+    const subcontractors = SubcontractorRepository.search({ is_active: true });
+    if (subcontractors.length === 0) return [];
+
+    // 2. 対象期間のJobを一括取得
+    const jobs = JobRepository.search({ work_date_to: endDate, sort_order: 'asc' });
+    if (jobs.length === 0) return [];
+
+    const jobMap = new Map(jobs.map(j => [j.job_id, j]));
+    const jobIdSet = new Set(jobs.map(j => j.job_id));
+
+    // 3. 外注スタッフ一覧を取得 & subcontractor_idでグループ化
+    const allSubcontractStaff = StaffRepository.search({ staff_type: 'subcontract' });
+    const staffBySubcontractor = new Map();
+    const staffToSubcontractor = new Map(); // staff_id -> subcontractor_id
+    for (const staff of allSubcontractStaff) {
+      if (!staff.subcontractor_id) continue;
+      if (!staffBySubcontractor.has(staff.subcontractor_id)) {
+        staffBySubcontractor.set(staff.subcontractor_id, []);
+      }
+      staffBySubcontractor.get(staff.subcontractor_id).push(staff);
+      staffToSubcontractor.set(staff.staff_id, staff.subcontractor_id);
+    }
+
+    // 4. 全Assignmentsを一括取得 & staff_idでグループ化（O(A)で1回のみ）
+    const rawAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+    const assignmentsByStaff = new Map();
+    for (const a of rawAssignments) {
+      if (a.payout_id || a.is_deleted) continue;
+      if (!staffToSubcontractor.has(a.staff_id)) continue; // 外注スタッフのみ
+      if (!assignmentsByStaff.has(a.staff_id)) {
+        assignmentsByStaff.set(a.staff_id, []);
+      }
+      assignmentsByStaff.get(a.staff_id).push(a);
+    }
+
+    // 5. 支払済み/確認済みPayoutsを取得 & 外注先ごとに最新をマップ
+    const allPayouts = PayoutRepository.search({
+      payout_type: 'SUBCONTRACTOR',
+      status_in: ['confirmed', 'paid']
+    });
+
+    const lastPayoutMap = new Map();
+    for (const p of allPayouts) {
+      if (!p.subcontractor_id) continue;
+      const existing = lastPayoutMap.get(p.subcontractor_id);
+      if (!existing || p.period_end > existing.period_end) {
+        lastPayoutMap.set(p.subcontractor_id, p);
+      }
+    }
+
+    // 6. 外注先ごとに未払い配置を集計（O(S * staffPerSub * assignmentsPerStaff)）
+    const results = [];
+
+    for (const sub of subcontractors) {
+      const subId = sub.subcontractor_id;
+      const staffList = staffBySubcontractor.get(subId) || [];
+      if (staffList.length === 0) continue;
+
+      const lastPayout = lastPayoutMap.get(subId);
+      const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
+
+      // スタッフごとの配置を集約
+      const subAssignments = [];
+      for (const staff of staffList) {
+        const staffAssignments = assignmentsByStaff.get(staff.staff_id) || [];
+        for (const a of staffAssignments) {
+          if (!jobIdSet.has(a.job_id)) continue;
+          const job = jobMap.get(a.job_id);
+          if (!job) continue;
+          if (startDate && job.work_date < startDate) continue;
+          subAssignments.push({ assignment: a, job });
+        }
+      }
+
+      if (subAssignments.length === 0) continue;
+
+      // 金額計算
+      let baseAmount = 0;
+      let transportAmount = 0;
+      let minDate = endDate;
+      for (const { assignment: asg, job } of subAssignments) {
+        baseAmount += asg.wage_rate || 0;
+        transportAmount += asg.transport_amount || 0;
+        if (job.work_date && job.work_date < minDate) {
+          minDate = job.work_date;
+        }
+      }
+
+      results.push({
+        subcontractorId: subId,
+        companyName: sub.company_name,
+        unpaidCount: subAssignments.length,
+        estimatedAmount: baseAmount + transportAmount,
+        baseAmount: baseAmount,
+        transportAmount: transportAmount,
+        periodStart: minDate,
+        periodEnd: endDate
+      });
+    }
+
+    // 金額降順でソート
+    return results.sort((a, b) => b.estimatedAmount - a.estimatedAmount);
+  },
+
+  /**
+   * 外注先の支払い履歴を取得
+   * @param {string} subcontractorId - 外注先ID
+   * @param {Object} options - オプション
+   * @returns {Object[]} 支払い履歴
+   */
+  getSubcontractorHistory: function(subcontractorId, options = {}) {
+    const payouts = PayoutRepository.findBySubcontractorId(subcontractorId, options);
+    return payouts.map(p => this._enrichPayout(p));
   }
 };

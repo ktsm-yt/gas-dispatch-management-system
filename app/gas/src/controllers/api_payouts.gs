@@ -795,3 +795,248 @@ function getPayoutExportFolderUrl() {
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
+
+// ========== Subcontractor Payout APIs (P2-8) ==========
+
+/**
+ * 外注先一覧を取得（支払い画面用）
+ * @returns {Object} { ok: true, data: { subcontractors: [] } }
+ */
+function getSubcontractorsForPayouts() {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    const subcontractors = SubcontractorRepository.search({ is_active: true });
+
+    const data = subcontractors.map(s => ({
+      subcontractor_id: s.subcontractor_id,
+      company_name: s.company_name
+    }));
+
+    return buildSuccessResponse({ subcontractors: data }, requestId);
+
+  } catch (error) {
+    console.error('getSubcontractorsForPayouts error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 外注先の未払いサマリーを取得
+ * @param {string} subcontractorId - 外注先ID
+ * @param {string} endDate - 集計終了日（YYYY-MM-DD）
+ * @returns {Object} APIレスポンス
+ */
+function getUnpaidSummaryForSubcontractor(subcontractorId, endDate) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!subcontractorId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const result = PayoutService.calculatePayoutForSubcontractor(subcontractorId, endDate);
+
+    const subcontractor = SubcontractorRepository.findById(subcontractorId);
+    result.companyName = subcontractor ? subcontractor.company_name : '(不明)';
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('getUnpaidSummaryForSubcontractor error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 未払い外注先一覧を取得
+ * @param {string} endDate - 集計終了日
+ * @returns {Object} APIレスポンス
+ */
+function getUnpaidSubcontractorList(endDate) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!endDate) {
+      endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    }
+
+    const result = PayoutService.getUnpaidSubcontractorList(endDate);
+
+    return buildSuccessResponse({
+      endDate: endDate,
+      subcontractorList: result,
+      totalCount: result.length,
+      totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0)
+    }, requestId);
+
+  } catch (error) {
+    console.error('getUnpaidSubcontractorList error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 外注費を確認済みにする
+ * @param {string} subcontractorId - 外注先ID
+ * @param {string} endDate - 集計終了日
+ * @param {Object} options - オプション
+ * @returns {Object} APIレスポンス
+ */
+function confirmSubcontractorPayout(subcontractorId, endDate, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!subcontractorId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options);
+
+    if (!result.success) {
+      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error, { message: result.message }, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('confirmSubcontractorPayout error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 外注費を支払済にする
+ * @param {string} subcontractorId - 外注先ID
+ * @param {string} endDate - 集計終了日
+ * @param {Object} options - オプション
+ * @returns {Object} APIレスポンス
+ */
+function markSubcontractorPayoutAsPaid(subcontractorId, endDate, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!subcontractorId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options);
+
+    if (!result.success) {
+      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error, { message: result.message }, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('markSubcontractorPayoutAsPaid error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 外注先の支払い履歴を取得
+ * @param {string} subcontractorId - 外注先ID
+ * @param {Object} options - オプション { limit }
+ * @returns {Object} APIレスポンス
+ */
+function getSubcontractorPayoutHistory(subcontractorId, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!subcontractorId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+    }
+
+    const history = PayoutService.getSubcontractorHistory(subcontractorId, options);
+
+    return buildSuccessResponse({
+      subcontractorId: subcontractorId,
+      history: history,
+      count: history.length
+    }, requestId);
+
+  } catch (error) {
+    console.error('getSubcontractorPayoutHistory error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 外注費の支払い一覧を検索
+ * @param {Object} query - 検索条件
+ * @returns {Object} APIレスポンス
+ */
+function searchSubcontractorPayouts(query = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 外注先支払いのみを検索
+    const searchQuery = {
+      ...query,
+      payout_type: 'SUBCONTRACTOR'
+    };
+
+    const payouts = PayoutService.search(searchQuery);
+
+    return buildSuccessResponse({
+      payouts: payouts,
+      count: payouts.length
+    }, requestId);
+
+  } catch (error) {
+    console.error('searchSubcontractorPayouts error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}

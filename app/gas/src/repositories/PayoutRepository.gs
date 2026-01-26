@@ -91,13 +91,31 @@ const PayoutRepository = {
   },
 
   /**
-   * 外注先の最新支払いを取得
+   * 外注先の最新支払いを取得（period_end の最大値で決定）
+   * 差分計算の起点として使用するため、paid_date ではなく period_end で判定
    * @param {string} subcontractorId - 外注先ID
-   * @returns {Object|null} 最新の支払いまたはnull
+   * @returns {Object|null} period_end が最大の支払いまたはnull
    */
   findLastPayoutForSubcontractor: function(subcontractorId) {
-    const payouts = this.findBySubcontractorId(subcontractorId, { limit: 1 });
-    return payouts.length > 0 ? payouts[0] : null;
+    let records = getAllRecords(this.TABLE_NAME);
+
+    records = records.filter(r =>
+      !r.is_deleted &&
+      r.payout_type === 'SUBCONTRACTOR' &&
+      r.subcontractor_id === subcontractorId &&
+      (r.status === 'confirmed' || r.status === 'paid')
+    );
+
+    if (records.length === 0) return null;
+
+    // period_end の最大値で決定（二重計上防止）
+    records.sort((a, b) => {
+      const dateA = this._parseLocalDate(a.period_end);
+      const dateB = this._parseLocalDate(b.period_end);
+      return dateB - dateA;
+    });
+
+    return this._normalizeRecord(records[0]);
   },
 
   /**
