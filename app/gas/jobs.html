@@ -285,6 +285,7 @@
     .status-hold { background: var(--color-warning); color: black; }
     .status-completed { background: var(--color-success); color: white; }
     .status-cancelled { background: #E5E7EB; color: var(--text-muted); }
+    .status-problem { background: #DC3545; color: white; }
 
     <?!= include('skeleton_styles'); ?>
     <?!= include('confirmation_modal_styles'); ?>
@@ -484,6 +485,7 @@
           <option value="hold">保留</option>
           <option value="completed">完了</option>
           <option value="cancelled">キャンセル</option>
+          <option value="problem">問題あり</option>
         </select>
       </div>
       <div class="search-box">
@@ -591,7 +593,8 @@
       assigned: '配置済',
       hold: '保留',
       completed: '完了',
-      cancelled: 'キャンセル'
+      cancelled: 'キャンセル',
+      problem: '問題あり'
     };
 
     const WORK_CATEGORY_TAG = {
