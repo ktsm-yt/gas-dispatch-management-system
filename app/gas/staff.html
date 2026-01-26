@@ -291,26 +291,77 @@
     .toast.info { background: var(--color-secondary); }
 
     /* Staff Modal Specific Styles */
+    .staff-modal .form-section {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .staff-modal .form-section-title {
+      border-bottom: 2px solid var(--color-secondary);
+      margin-bottom: var(--spacing-sm);
+      padding-bottom: 2px;
+      font-size: 12px;
+    }
+
+    .staff-modal .form-row {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .staff-modal .form-group {
+      min-width: 0;
+    }
+
+    .staff-modal .form-group label {
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+
+    .staff-modal .form-group input,
+    .staff-modal .form-group select,
+    .staff-modal .form-group textarea {
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .staff-modal .form-group textarea {
+      min-height: 60px;
+    }
+
+    .staff-modal .form-group.is-hidden {
+      display: none;
+    }
+
     .form-section-title {
       border-bottom: 2px solid var(--color-secondary);
     }
 
     .form-row-3 {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: var(--spacing-md);
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--spacing-sm);
     }
 
     .form-row-5 {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .staff-modal .form-row-5 .form-group input {
+      padding: 4px 6px;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .staff-modal .form-row-5 .form-group label {
+      font-size: 10px;
     }
 
     .form-row-4 {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: var(--spacing-md);
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--spacing-sm);
     }
 
     .checkbox-group {
@@ -505,7 +556,7 @@
 
   <!-- Staff Edit Modal -->
   <div class="modal-overlay" id="staff-modal" style="display: none;">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg staff-modal">
       <div class="modal-header">
         <h2 class="modal-title" id="modal-title">スタッフ編集</h2>
         <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -538,7 +589,7 @@
                   <option value="subcontract">外注</option>
                 </select>
               </div>
-              <div class="form-group">
+              <div class="form-group is-hidden" id="subcontractor-group">
                 <label for="subcontractor-id">外注先</label>
                 <select id="subcontractor-id" name="subcontractor_id">
                   <option value="">選択してください</option>
@@ -816,8 +867,29 @@
 
       // Staff type change - show/hide subcontractor select
       document.getElementById('staff-type').addEventListener('change', (e) => {
-        const subcontractorGroup = document.getElementById('subcontractor-id').closest('.form-group');
-        subcontractorGroup.style.display = e.target.value === 'subcontract' ? 'block' : 'none';
+        const subcontractorGroup = document.getElementById('subcontractor-group');
+        const isSubcontract = e.target.value === 'subcontract';
+        subcontractorGroup.classList.toggle('is-hidden', !isSubcontract);
+      });
+
+      // Subcontractor select - auto-fill rates for new staff
+      document.getElementById('subcontractor-id').addEventListener('change', (e) => {
+        // Only auto-fill for new staff (not editing existing)
+        if (currentStaff) return;
+
+        const subcontractorId = e.target.value;
+        if (!subcontractorId) return;
+
+        const subcontractor = subcontractors.find(s => s.subcontractor_id === subcontractorId);
+        if (!subcontractor) return;
+
+        // Auto-fill rates from subcontractor master
+        if (subcontractor.half_day_rate) {
+          document.getElementById('daily-rate-half').value = subcontractor.half_day_rate;
+        }
+        if (subcontractor.full_day_rate) {
+          document.getElementById('daily-rate-basic').value = subcontractor.full_day_rate;
+        }
       });
 
       // Modal close on overlay click
@@ -1225,7 +1297,7 @@
       document.getElementById('skill-board').checked = false;
 
       // Show subcontractor select based on staff type
-      const subcontractorGroup = document.getElementById('subcontractor-id').closest('.form-group');
+      const subcontractorGroup = document.getElementById('subcontractor-group');
 
       if (staffId) {
         // Edit mode
@@ -1235,7 +1307,8 @@
 
         if (currentStaff) {
           populateForm(currentStaff);
-          subcontractorGroup.style.display = currentStaff.staff_type === 'subcontract' ? 'block' : 'none';
+          const isSubcontract = currentStaff.staff_type === 'subcontract';
+          subcontractorGroup.classList.toggle('is-hidden', !isSubcontract);
         }
       } else {
         // Create mode
@@ -1248,7 +1321,7 @@
         document.getElementById('staff-type').value = 'regular';
         document.getElementById('has-motorbike').value = 'false';
         document.getElementById('gender').value = 'male';
-        subcontractorGroup.style.display = 'none';
+        subcontractorGroup.classList.add('is-hidden');
       }
 
       modal.style.display = 'flex';
