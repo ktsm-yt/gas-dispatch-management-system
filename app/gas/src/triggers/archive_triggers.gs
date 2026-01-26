@@ -5,8 +5,10 @@
  *
  * スケジュール:
  * - 毎日 3:00 AM: dailyArchiveCheck() - 日付に応じて処理を分岐
- *   - 5/15: 事前通知メール送信
- *   - 6/1: 自動アーカイブ実行（延期設定がなければ）
+ *   - 3/15: 事前通知メール送信
+ *   - 4/1: 自動アーカイブ実行（延期設定がなければ）
+ *
+ * 猶予期間: 年度終了後12ヶ月（例: 2025年度は2027年4月にアーカイブ）
  *
  * トリガーの設定:
  * - GASエディタから setupArchiveTriggers() を実行
@@ -32,8 +34,8 @@ function setupArchiveTriggers() {
 
   Logger.log(`✓ アーカイブトリガー設定完了 (ID: ${trigger.getUniqueId()})`);
   Logger.log('  - 実行時刻: 毎日 3:00 AM (JST)');
-  Logger.log('  - 5/15: 事前通知メール送信');
-  Logger.log('  - 6/1: 自動アーカイブ実行');
+  Logger.log('  - 3/15: 事前通知メール送信');
+  Logger.log('  - 4/1: 自動アーカイブ実行（2年前の年度が対象）');
 
   Logger.log('\n=== セットアップ完了 ===');
 }
@@ -119,13 +121,14 @@ function dailyArchiveCheck() {
     }
   }
 
-  // 5月15日: 事前通知
-  if (month === 5 && day === 15) {
+  // 3月15日: 事前通知（4月1日のアーカイブを予告）
+  if (month === 3 && day === 15) {
     Logger.log('事前通知を送信します');
     try {
-      const previousFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
-      ArchiveNotificationService.sendArchiveWarning(previousFiscalYear);
-      Logger.log('✓ 事前通知送信完了');
+      // 4月1日にアーカイブされる年度 = 現在年度 - 1（3月時点では前年度扱い）
+      const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
+      ArchiveNotificationService.sendArchiveWarning(targetFiscalYear);
+      Logger.log(`✓ 事前通知送信完了: ${targetFiscalYear}年度`);
     } catch (error) {
       Logger.log(`✗ 事前通知エラー: ${error.message}`);
       console.error('Archive warning error:', error);
@@ -133,43 +136,42 @@ function dailyArchiveCheck() {
     return;
   }
 
-  // 6月1日: 自動アーカイブ実行
-  if (month === 6 && day === 1) {
+  // 4月1日: 自動アーカイブ実行（2年前の年度が対象）
+  if (month === 4 && day === 1) {
     Logger.log('自動アーカイブを実行します');
     try {
-      const result = ArchiveService.executeYearlyArchive();
+      // 4月時点での2年前 = 12ヶ月の猶予期間を確保
+      const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 2;
+      const result = ArchiveService.executeYearlyArchive(targetFiscalYear);
 
       if (result.success) {
-        Logger.log('✓ アーカイブ完了');
+        Logger.log(`✓ アーカイブ完了: ${targetFiscalYear}年度`);
       } else if (result.error === 'TIMEOUT_WILL_CONTINUE') {
         Logger.log(`アーカイブ継続中: ${result.step} で一時停止`);
       } else {
         Logger.log(`✗ アーカイブエラー: ${result.error}`);
-        ArchiveNotificationService.sendArchiveError(
-          ArchiveService.getCurrentFiscalYear() - 1,
-          result.error
-        );
+        ArchiveNotificationService.sendArchiveError(targetFiscalYear, result.error);
       }
     } catch (error) {
       Logger.log(`✗ アーカイブエラー: ${error.message}`);
       console.error('Archive execution error:', error);
       ArchiveNotificationService.sendArchiveError(
-        ArchiveService.getCurrentFiscalYear() - 1,
+        ArchiveService.getCurrentFiscalYear() - 2,
         error
       );
     }
     return;
   }
 
-  // 6月2日〜6月7日: 中断したアーカイブの継続
-  if (month === 6 && day >= 2 && day <= 7) {
-    const previousFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
-    const progress = ArchiveService.getProgress(previousFiscalYear);
+  // 4月2日〜4月7日: 中断したアーカイブの継続
+  if (month === 4 && day >= 2 && day <= 7) {
+    const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 2;
+    const progress = ArchiveService.getProgress(targetFiscalYear);
 
     if (progress.currentStep > 0) {
-      Logger.log(`アーカイブ継続: ステップ ${progress.currentStep} から再開`);
+      Logger.log(`アーカイブ継続: ステップ ${progress.currentStep} から再開（${targetFiscalYear}年度）`);
       try {
-        const result = ArchiveService.executeYearlyArchive(previousFiscalYear);
+        const result = ArchiveService.executeYearlyArchive(targetFiscalYear);
 
         if (result.success) {
           Logger.log('✓ アーカイブ完了');
