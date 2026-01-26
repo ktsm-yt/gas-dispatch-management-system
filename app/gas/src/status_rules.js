@@ -8,14 +8,16 @@
 const JOB_STATUS_TRANSITIONS = {
   // 未配置 → 配置済/保留/キャンセル
   pending: ['assigned', 'hold', 'cancelled'],
-  // 配置済 → 完了/保留/キャンセル/未配置（配置解除時）
-  assigned: ['completed', 'hold', 'cancelled', 'pending'],
+  // 配置済 → 完了/保留/キャンセル/未配置（配置解除時）/問題あり
+  assigned: ['completed', 'hold', 'cancelled', 'pending', 'problem'],
   // 保留 → 未配置/配置済/キャンセル
   hold: ['pending', 'assigned', 'cancelled'],
-  // 完了 → 配置済（完了取消）
-  completed: ['assigned'],
+  // 完了 → 配置済（完了取消）/問題あり（問題発覚時）
+  completed: ['assigned', 'problem'],
   // キャンセル → 未配置（キャンセル取消）
-  cancelled: ['pending']
+  cancelled: ['pending'],
+  // 問題あり → 完了（解決時）/キャンセル（対応不能時）
+  problem: ['completed', 'cancelled']
 };
 
 /**
@@ -152,7 +154,8 @@ function getJobStatusLabel_(status) {
     assigned: '配置済',
     hold: '保留',
     completed: '完了',
-    cancelled: 'キャンセル'
+    cancelled: 'キャンセル',
+    problem: '問題あり'
   };
   return labels[status] || status;
 }
@@ -245,8 +248,8 @@ function getJobTypeLabel_(jobType) {
  * @returns {string} 更新後のステータス
  */
 function calculateJobStatus_(job, assignments) {
-  // キャンセル/完了は手動変更のみ
-  if (job.status === 'cancelled' || job.status === 'completed') {
+  // キャンセル/完了/問題ありは手動変更のみ
+  if (job.status === 'cancelled' || job.status === 'completed' || job.status === 'problem') {
     return job.status;
   }
 
