@@ -23,7 +23,8 @@ const JOB_STATUSES = {
   ASSIGNED: 'assigned',   // 配置済
   HOLD: 'hold',           // 保留
   COMPLETED: 'completed', // 完了
-  CANCELLED: 'cancelled'  // キャンセル
+  CANCELLED: 'cancelled', // キャンセル
+  PROBLEM: 'problem'      // 問題あり
 };
 
 /**
@@ -702,7 +703,8 @@ const JOB_STATUS_LABELS = {
   'assigned': '配置済',
   'hold': '保留',
   'completed': '完了',
-  'cancelled': 'キャンセル'
+  'cancelled': 'キャンセル',
+  'problem': '問題あり'
 };
 
 /**
