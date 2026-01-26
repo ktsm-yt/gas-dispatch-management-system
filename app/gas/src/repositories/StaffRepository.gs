@@ -23,6 +23,8 @@ const StaffRepository = {
    * スタッフを検索
    * @param {Object} query - 検索条件
    * @param {boolean} query.is_active - アクティブのみ（デフォルト: true）
+   * @param {string} query.staff_type - スタッフ種別（'internal', 'subcontract'）
+   * @param {string} query.subcontractor_id - 外注先ID
    * @param {number} query.limit - 取得件数上限
    * @returns {Object[]} スタッフ配列
    */
@@ -43,6 +45,16 @@ const StaffRepository = {
     // is_active フィルタリング
     if (query.is_active !== undefined) {
       staffList = staffList.filter(s => s.is_active === query.is_active);
+    }
+
+    // staff_type フィルタリング
+    if (query.staff_type) {
+      staffList = staffList.filter(s => s.staff_type === query.staff_type);
+    }
+
+    // subcontractor_id フィルタリング
+    if (query.subcontractor_id) {
+      staffList = staffList.filter(s => s.subcontractor_id === query.subcontractor_id);
     }
 
     return staffList;

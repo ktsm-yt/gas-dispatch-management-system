@@ -441,10 +441,60 @@
       font-weight: 500;
       color: var(--color-primary);
     }
+
+    /* ========== Tab Navigation ========== */
+    .tab-container {
+      border-bottom: 1px solid var(--border-color);
+      background: var(--bg-card);
+    }
+
+    .tab-nav {
+      display: flex;
+      gap: 0;
+      padding: 0 var(--spacing-lg);
+    }
+
+    .tab-btn {
+      padding: var(--spacing-md) var(--spacing-lg);
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-hover);
+    }
+
+    .tab-btn.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <?!= include('nav_bar'); ?>
+
+  <!-- Tab Navigation -->
+  <div class="tab-container">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('staff')" id="tabStaff">スタッフ支払い</button>
+      <button class="tab-btn" onclick="switchTab('subcontractor')" id="tabSubcontractor">外注費管理</button>
+    </div>
+  </div>
 
   <!-- Loading Overlay -->
   <div class="loading-overlay" id="loadingOverlay">
@@ -530,60 +580,103 @@
     </div>
   </div>
 
-  <div class="toolbar">
-    <div class="filter-group">
-      <label>スタッフ:</label>
-      <select id="staffFilter">
-        <option value="">全て</option>
-      </select>
+  <!-- ========== Staff Payout Tab ========== -->
+  <div id="tabContentStaff" class="tab-content active">
+    <div class="toolbar">
+      <div class="filter-group">
+        <label>スタッフ:</label>
+        <select id="staffFilter">
+          <option value="">全て</option>
+        </select>
 
-      <label>終了日:</label>
-      <input type="date" id="endDateFilter" />
+        <label>終了日:</label>
+        <input type="date" id="endDateFilter" />
 
-      <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
-    </div>
-    <div class="toolbar-actions">
-      <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
-      <a id="payout-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
-    </div>
-  </div>
-
-  <!-- 一括操作バー -->
-  <div id="bulkActionBar" class="bulk-action-bar">
-    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-      <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
-      全選択
-    </label>
-    <span class="selected-count"><span id="selectedCount">0</span>件選択中</span>
-    <select id="bulkStatusSelect">
-      <option value="">ステータス変更...</option>
-      <option value="confirmed">確認済みにする</option>
-      <option value="paid">振込済みにする</option>
-      <option value="unpaid">未払いに戻す</option>
-    </select>
-    <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
-    <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
-  </div>
-
-  <div class="main-content">
-    <!-- 未払いサマリー（開閉可能） -->
-    <div id="unpaidSection" class="summary-card">
-      <h3 class="collapsible-header" onclick="toggleUnpaidSection()">
-        <span class="collapse-icon" id="unpaidCollapseIcon">▼</span>
-        未払い集計
-      </h3>
-      <div id="unpaidSummary" class="collapsible-content">
-        スタッフを選択して「集計」をクリックしてください
+        <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
+      </div>
+      <div class="toolbar-actions">
+        <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
+        <a id="payout-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
       </div>
     </div>
 
-    <!-- 支払い履歴 -->
-    <div class="section-header">
-      <h2>支払い履歴</h2>
+    <!-- 一括操作バー -->
+    <div id="bulkActionBar" class="bulk-action-bar">
+      <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+        <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
+        全選択
+      </label>
+      <span class="selected-count"><span id="selectedCount">0</span>件選択中</span>
+      <select id="bulkStatusSelect">
+        <option value="">ステータス変更...</option>
+        <option value="confirmed">確認済みにする</option>
+        <option value="paid">振込済みにする</option>
+        <option value="unpaid">未払いに戻す</option>
+      </select>
+      <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
+      <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
     </div>
 
-    <div id="historyTable">
-      <div class="loading">読み込み中...</div>
+    <div class="main-content">
+      <!-- 未払いサマリー（開閉可能） -->
+      <div id="unpaidSection" class="summary-card">
+        <h3 class="collapsible-header" onclick="toggleUnpaidSection()">
+          <span class="collapse-icon" id="unpaidCollapseIcon">▼</span>
+          未払い集計
+        </h3>
+        <div id="unpaidSummary" class="collapsible-content">
+          スタッフを選択して「集計」をクリックしてください
+        </div>
+      </div>
+
+      <!-- 支払い履歴 -->
+      <div class="section-header">
+        <h2>支払い履歴</h2>
+      </div>
+
+      <div id="historyTable">
+        <div class="loading">読み込み中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== Subcontractor Payout Tab ========== -->
+  <div id="tabContentSubcontractor" class="tab-content">
+    <div class="toolbar">
+      <div class="filter-group">
+        <label>外注先:</label>
+        <select id="subcontractorFilter">
+          <option value="">全て</option>
+        </select>
+
+        <label>終了日:</label>
+        <input type="date" id="subEndDateFilter" />
+
+        <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
+        <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締め集計</button>
+      </div>
+    </div>
+
+    <div class="main-content">
+      <!-- 外注費未払いサマリー -->
+      <div id="subUnpaidSection" class="summary-card">
+        <h3 class="collapsible-header" onclick="toggleSubUnpaidSection()">
+          <span class="collapse-icon" id="subUnpaidCollapseIcon">▼</span>
+          外注費 未払い集計
+        </h3>
+        <div id="subUnpaidSummary" class="collapsible-content">
+          外注先を選択して「集計」をクリックしてください
+        </div>
+      </div>
+
+      <!-- 外注費支払い履歴 -->
+      <div class="section-header">
+        <h2>外注費 支払い履歴</h2>
+      </div>
+
+      <div id="subHistoryTable">
+        <div class="loading">読み込み中...</div>
+      </div>
     </div>
   </div>
 
@@ -591,24 +684,76 @@
     // State
     let staffList = [];
     let currentUnpaid = null;
+    let currentTab = 'staff';
+
+    // Subcontractor State
+    let subcontractorList = [];
+    let currentSubUnpaid = null;
 
     // SessionStorage for unpaid data persistence
     const SS_KEY = 'payouts_unpaid_data';
     const SS_HISTORY_KEY = 'payouts_history_data';
     const SS_STAFF_KEY = 'payouts_staff_data';
-    const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分
+    const SS_SUB_KEY = 'payouts_subcontractor_data';
+    const SS_SUB_UNPAID_KEY = 'payouts_sub_unpaid_data';
+    const SS_SUB_HISTORY_KEY = 'payouts_sub_history_data';
+    const CACHE_TTL = 5 * 60 * 1000; // 5分（未払いデータ）
+    const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分（履歴）
 
     function saveToSession(data) {
-      sessionStorage.setItem(SS_KEY, JSON.stringify(data));
+      sessionStorage.setItem(SS_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        ...data
+      }));
     }
 
-    function loadFromSession() {
+    function loadFromSession(endDate = null) {
       const saved = sessionStorage.getItem(SS_KEY);
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      const data = JSON.parse(saved);
+      // TTL check
+      if (Date.now() - data.timestamp > CACHE_TTL) {
+        sessionStorage.removeItem(SS_KEY);
+        return null;
+      }
+      // endDate check (キャッシュと異なる日付なら無効)
+      if (endDate && data.endDate !== endDate) {
+        return null;
+      }
+      return data;
     }
 
     function clearSession() {
       sessionStorage.removeItem(SS_KEY);
+    }
+
+    // 外注費未払いキャッシュ
+    function saveSubUnpaidToSession(data, endDate) {
+      sessionStorage.setItem(SS_SUB_UNPAID_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        endDate: endDate,
+        data: data
+      }));
+    }
+
+    function loadSubUnpaidFromSession(endDate) {
+      const saved = sessionStorage.getItem(SS_SUB_UNPAID_KEY);
+      if (!saved) return null;
+      const cache = JSON.parse(saved);
+      // TTL check
+      if (Date.now() - cache.timestamp > CACHE_TTL) {
+        sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
+        return null;
+      }
+      // endDate check
+      if (cache.endDate !== endDate) {
+        return null;
+      }
+      return cache.data;
+    }
+
+    function clearSubUnpaidSession() {
+      sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
     }
 
     // History cache functions
@@ -660,13 +805,45 @@
       // Set default date to today
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('endDateFilter').value = today;
+      document.getElementById('subEndDateFilter').value = today;
 
       loadStaffList();
       loadHistory();
       loadPayoutFolderLink();
 
+      // Load subcontractor list for second tab
+      loadSubcontractorList();
+
       // Restore from SessionStorage after staff list is loaded
       restoreFromSession();
+
+      // Event delegation for subcontractor payout undo buttons
+      document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('btn-undo-sub-payout')) {
+          const payoutId = e.target.dataset.payoutId;
+          const updatedAt = e.target.dataset.updatedAt;
+          const targetName = e.target.dataset.targetName;
+          undoSubcontractorPayoutConfirm(payoutId, updatedAt, targetName);
+        }
+      });
+    }
+
+    // ========== Tab Switching ==========
+    function switchTab(tab) {
+      currentTab = tab;
+
+      // Update tab buttons
+      document.getElementById('tabStaff').classList.toggle('active', tab === 'staff');
+      document.getElementById('tabSubcontractor').classList.toggle('active', tab === 'subcontractor');
+
+      // Update tab content
+      document.getElementById('tabContentStaff').classList.toggle('active', tab === 'staff');
+      document.getElementById('tabContentSubcontractor').classList.toggle('active', tab === 'subcontractor');
+
+      // Load data for subcontractor tab if switching to it
+      if (tab === 'subcontractor' && subcontractorList.length === 0) {
+        loadSubcontractorList();
+      }
     }
 
     // エクスポートフォルダリンクを読み込み
@@ -741,13 +918,23 @@
     }
 
     // Load unpaid summary
-    function loadUnpaidList() {
+    function loadUnpaidList(forceRefresh = false) {
       const staffId = document.getElementById('staffFilter').value;
       const endDate = document.getElementById('endDateFilter').value;
 
       if (!endDate) {
         showToast('error', '対象日を選択してください');
         return;
+      }
+
+      // キャッシュチェック（全スタッフ一覧の場合のみ）
+      if (!forceRefresh && !staffId) {
+        const cached = loadFromSession(endDate);
+        if (cached && cached.mode === 'list' && cached.data) {
+          const confirmedData = cached.confirmedData || [];
+          renderUnpaidStaffList(cached.data, confirmedData);
+          return;
+        }
       }
 
       const summaryDiv = document.getElementById('unpaidSummary');
@@ -1084,8 +1271,8 @@
         }
       }
 
-      const query = { status: 'paid', limit: 50 };
-      // Don't filter by staff on server - get all and cache
+      const query = { status: 'paid', payout_type: 'STAFF', limit: 50 };
+      // Don't filter by staff on server - get all and cache (STAFF type only)
       document.getElementById('historyTable').innerHTML = '<div class="loading">読み込み中...</div>';
 
       google.script.run
@@ -1141,7 +1328,7 @@
         const baseAmount = (p.base_amount || 0) + (p.transport_amount || 0);
         const adjustmentAmount = p.adjustment_amount || 0;
         html += `
-          <tr style="white-space: nowrap;">
+          <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
             <td>${p.target_name}</td>
             <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
             <td>${p.paid_date || '-'}</td>
@@ -1791,6 +1978,20 @@
       }).format(amount || 0);
     }
 
+    function formatNumber(num) {
+      return new Intl.NumberFormat('ja-JP').format(num || 0);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
     function getStatusLabel(status) {
       const labels = { draft: '下書き', confirmed: '確定', paid: '支払済' };
       return labels[status] || status;
@@ -2193,6 +2394,12 @@
     // ========== Export Functions ==========
 
     function formatDate(date) {
+      if (!date) return '-';
+      // 文字列の場合はそのまま返す（YYYY-MM-DD形式を想定）
+      if (typeof date === 'string') {
+        return date.substring(0, 10);
+      }
+      // Dateオブジェクトの場合
       const y = date.getFullYear();
       const m = String(date.getMonth() + 1).padStart(2, '0');
       const d = String(date.getDate()).padStart(2, '0');
@@ -2415,6 +2622,446 @@
       setTimeout(() => {
         if (box.parentElement) box.remove();
       }, 15000);
+    }
+
+    // ========== Subcontractor Payout Functions (P2-8) ==========
+
+    function loadSubcontractorList() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok && response.data.subcontractors) {
+            subcontractorList = response.data.subcontractors;
+            renderSubcontractorFilter(subcontractorList);
+            loadSubcontractorHistory();
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('loadSubcontractorList error:', error);
+        })
+        .getSubcontractorsForPayouts();
+    }
+
+    function renderSubcontractorFilter(list) {
+      const select = document.getElementById('subcontractorFilter');
+      select.innerHTML = '<option value="">全て</option>';
+      list.forEach(function(sub) {
+        const option = document.createElement('option');
+        option.value = sub.subcontractor_id;
+        option.textContent = sub.company_name;
+        select.appendChild(option);
+      });
+    }
+
+    // 末締め集計: 当月末日を設定して集計
+    function loadMonthEndSummary() {
+      const today = new Date();
+      // 当月末日を計算（翌月1日の前日）
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const lastDayStr = lastDay.toISOString().split('T')[0];
+
+      // 終了日を当月末日に設定
+      document.getElementById('subEndDateFilter').value = lastDayStr;
+      // 外注先フィルタをクリア（全外注先を集計）
+      document.getElementById('subcontractorFilter').value = '';
+
+      // キャッシュクリアして集計実行
+      clearSubUnpaidSession();
+      loadSubcontractorUnpaidList(true);
+    }
+
+    function loadSubcontractorUnpaidList(forceRefresh = false) {
+      const subId = document.getElementById('subcontractorFilter').value;
+      const endDate = document.getElementById('subEndDateFilter').value;
+
+      if (!endDate) {
+        showToast('終了日を指定してください', 'error');
+        return;
+      }
+
+      // キャッシュチェック（全外注先一覧の場合のみ）
+      if (!forceRefresh && !subId) {
+        const cached = loadSubUnpaidFromSession(endDate);
+        if (cached) {
+          renderSubcontractorUnpaidList(cached);
+          return;
+        }
+      }
+
+      showLoading('集計中...');
+
+      if (subId) {
+        // 特定の外注先の詳細を取得
+        google.script.run
+          .withSuccessHandler(function(response) {
+            hideLoading();
+            if (response.ok) {
+              currentSubUnpaid = response.data;
+              renderSubcontractorUnpaidDetail(response.data);
+            } else {
+              showToast(response.error?.message || '取得に失敗しました', 'error');
+            }
+          })
+          .withFailureHandler(function(error) {
+            hideLoading();
+            showToast('エラー: ' + error.message, 'error');
+          })
+          .getUnpaidSummaryForSubcontractor(subId, endDate);
+      } else {
+        // 全外注先の未払い一覧を取得
+        google.script.run
+          .withSuccessHandler(function(response) {
+            hideLoading();
+            if (response.ok) {
+              renderSubcontractorUnpaidList(response.data);
+              // キャッシュに保存
+              saveSubUnpaidToSession(response.data, endDate);
+            } else {
+              showToast(response.error?.message || '取得に失敗しました', 'error');
+            }
+          })
+          .withFailureHandler(function(error) {
+            hideLoading();
+            showToast('エラー: ' + error.message, 'error');
+          })
+          .getUnpaidSubcontractorList(endDate);
+      }
+    }
+
+    function renderSubcontractorUnpaidList(data) {
+      const container = document.getElementById('subUnpaidSummary');
+
+      if (!data.subcontractorList || data.subcontractorList.length === 0) {
+        container.innerHTML = '<div class="empty-state">未払いの外注費はありません</div>';
+        return;
+      }
+
+      let html = `
+        <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
+          <div class="summary-item">
+            <div class="label">外注先数</div>
+            <div class="value">${data.totalCount}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">合計金額</div>
+            <div class="value amount">¥${formatNumber(data.totalAmount)}</div>
+          </div>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>外注先</th>
+              <th>件数</th>
+              <th>期間</th>
+              <th style="text-align: right;">金額</th>
+              <th style="text-align: right;">交通費</th>
+              <th style="text-align: right;">合計</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.subcontractorList.forEach(function(sub) {
+        const periodText = sub.periodStart && sub.periodEnd
+          ? `${formatDate(sub.periodStart)} 〜 ${formatDate(sub.periodEnd)}`
+          : '-';
+        html += `
+          <tr>
+            <td>${escapeHtml(sub.companyName)}</td>
+            <td>${sub.unpaidCount}件</td>
+            <td style="font-size: 12px; white-space: nowrap;">${periodText}</td>
+            <td class="amount">¥${formatNumber(sub.baseAmount)}</td>
+            <td class="amount">¥${formatNumber(sub.transportAmount)}</td>
+            <td class="amount"><strong>¥${formatNumber(sub.estimatedAmount)}</strong></td>
+            <td>
+              <button class="btn btn-secondary" onclick="showSubcontractorDetail('${sub.subcontractorId}')">詳細</button>
+              <button class="btn btn-success" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払済</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function renderSubcontractorUnpaidDetail(data) {
+      const container = document.getElementById('subUnpaidSummary');
+
+      if (!data.assignments || data.assignments.length === 0) {
+        container.innerHTML = `
+          <p><strong>${escapeHtml(data.companyName)}</strong> の未払い配置はありません</p>
+        `;
+        return;
+      }
+
+      let html = `
+        <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
+          <div class="summary-item">
+            <div class="label">外注先</div>
+            <div class="value" style="font-size: 16px;">${escapeHtml(data.companyName)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">件数</div>
+            <div class="value">${data.assignmentCount}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">基本金額</div>
+            <div class="value amount">¥${formatNumber(data.baseAmount)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">交通費</div>
+            <div class="value">¥${formatNumber(data.transportAmount)}</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">合計</div>
+            <div class="value amount">¥${formatNumber(data.totalAmount)}</div>
+          </div>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>現場名</th>
+              <th>スタッフ</th>
+              <th style="text-align: right;">金額</th>
+              <th style="text-align: right;">交通費</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      data.assignments.forEach(function(asg) {
+        html += `
+          <tr>
+            <td>${formatDate(asg.work_date)}</td>
+            <td>${escapeHtml(asg.site_name || '-')}</td>
+            <td>${escapeHtml(asg.staff_name || '-')}</td>
+            <td class="amount">¥${formatNumber(asg.wage_rate || 0)}</td>
+            <td class="amount">¥${formatNumber(asg.transport_amount || 0)}</td>
+          </tr>
+        `;
+      });
+
+      html += `
+          </tbody>
+        </table>
+        <div style="margin-top: var(--spacing-md); text-align: right;">
+          <button class="btn btn-success" onclick="markCurrentSubcontractorPaid()">支払済にする</button>
+        </div>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function showSubcontractorDetail(subId) {
+      document.getElementById('subcontractorFilter').value = subId;
+      loadSubcontractorUnpaidList();
+    }
+
+    // ボタンのdata属性から値を取得して支払済処理を呼び出す（XSS対策）
+    function markSubcontractorPaidFromButton(button) {
+      const subId = button.dataset.subId;
+      const companyName = button.dataset.companyName;
+      const amount = parseFloat(button.dataset.amount);
+      markSubcontractorPaid(subId, companyName, amount);
+    }
+
+    function markSubcontractorPaid(subId, companyName, amount) {
+      const endDate = document.getElementById('subEndDateFilter').value;
+
+      showConfirmModal(
+        '外注費支払い確認',
+        `<p><strong>${escapeHtml(companyName)}</strong> を支払済にします。</p>
+         <p>締め日: ${endDate}</p>
+         <p>金額: <strong>¥${formatNumber(amount)}</strong></p>`,
+        '支払済にする',
+        'btn-success',
+        () => {
+          showLoading('処理中...');
+          google.script.run
+            .withSuccessHandler(function(response) {
+              hideLoading();
+              if (response.ok) {
+                showToast('success', '支払いを記録しました');
+                clearSubUnpaidSession(); // キャッシュクリア
+                loadSubcontractorUnpaidList(true); // 強制リフレッシュ
+                loadSubcontractorHistory();
+              } else {
+                showToast('error', response.error?.message || '処理に失敗しました');
+              }
+            })
+            .withFailureHandler(function(error) {
+              hideLoading();
+              showToast('error', 'エラー: ' + error.message);
+            })
+            .markSubcontractorPayoutAsPaid(subId, endDate, {});
+        }
+      );
+    }
+
+    function markCurrentSubcontractorPaid() {
+      if (!currentSubUnpaid) return;
+
+      const subId = document.getElementById('subcontractorFilter').value;
+      const endDate = document.getElementById('subEndDateFilter').value;
+      const companyName = currentSubUnpaid.companyName;
+      const amount = currentSubUnpaid.totalAmount;
+      const assignmentCount = currentSubUnpaid.assignmentCount;
+
+      showConfirmModal(
+        '外注費支払い確認',
+        `<p><strong>${escapeHtml(companyName)}</strong> を支払済にします。</p>
+         <p>配置数: ${assignmentCount}件</p>
+         <p>締め日: ${endDate}</p>
+         <p>金額: <strong>¥${formatNumber(amount)}</strong></p>`,
+        '支払済にする',
+        'btn-success',
+        () => {
+          showLoading('処理中...');
+          google.script.run
+            .withSuccessHandler(function(response) {
+              hideLoading();
+              if (response.ok) {
+                showToast('success', '支払いを記録しました');
+                currentSubUnpaid = null;
+                document.getElementById('subUnpaidSummary').innerHTML = '外注先を選択して「集計」をクリックしてください';
+                clearSubUnpaidSession(); // キャッシュクリア
+                loadSubcontractorUnpaidList(true); // 強制リフレッシュ
+                loadSubcontractorHistory();
+              } else {
+                showToast('error', response.error?.message || '処理に失敗しました');
+              }
+            })
+            .withFailureHandler(function(error) {
+              hideLoading();
+              showToast('error', 'エラー: ' + error.message);
+            })
+            .markSubcontractorPayoutAsPaid(subId, endDate, {});
+        }
+      );
+    }
+
+    function undoSubcontractorPayoutConfirm(payoutId, updatedAt, companyName) {
+      showConfirmModal(
+        '外注費支払い取消確認',
+        `<p><strong>${escapeHtml(companyName)}</strong> の支払いを取り消しますか？</p>
+         <p>取り消すと未払い状態に戻ります。</p>`,
+        '取り消す',
+        'btn-danger',
+        () => {
+          showLoading('取消処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '支払いを取り消しました');
+                // 差分リロード: 履歴から行を削除
+                removeSubcontractorHistoryRow(payoutId);
+                // キャッシュクリアして未払い一覧を再読込
+                clearSubUnpaidSession();
+                loadSubcontractorUnpaidList(true);
+              } else {
+                showToast('error', result.error?.message || '取消に失敗しました');
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .undoPayout(payoutId, updatedAt);
+        }
+      );
+    }
+
+    function removeSubcontractorHistoryRow(payoutId) {
+      const row = document.querySelector(`#subHistoryTable tr[data-payout-id="${payoutId}"]`);
+      if (row) {
+        row.remove();
+      }
+
+      // テーブルが空になった場合
+      const tbody = document.querySelector('#subHistoryTable tbody');
+      if (tbody && tbody.children.length === 0) {
+        document.getElementById('subHistoryTable').innerHTML =
+          '<div class="empty-state">支払い履歴はありません</div>';
+      }
+    }
+
+    function loadSubcontractorHistory() {
+      const container = document.getElementById('subHistoryTable');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok) {
+            renderSubcontractorHistory(response.data.payouts);
+          } else {
+            container.innerHTML = '<div class="empty-state">履歴の取得に失敗しました</div>';
+          }
+        })
+        .withFailureHandler(function(error) {
+          container.innerHTML = '<div class="empty-state">エラー: ' + error.message + '</div>';
+        })
+        .searchSubcontractorPayouts({ sort_order: 'desc' });
+    }
+
+    function renderSubcontractorHistory(payouts) {
+      const container = document.getElementById('subHistoryTable');
+
+      if (!payouts || payouts.length === 0) {
+        container.innerHTML = '<div class="empty-state">支払い履歴はありません</div>';
+        return;
+      }
+
+      let html = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>外注先</th>
+              <th>期間</th>
+              <th>件数</th>
+              <th style="text-align: right;">金額</th>
+              <th>状態</th>
+              <th>支払日</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      payouts.forEach(function(p) {
+        const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
+        const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済' : '下書き');
+
+        html += `
+          <tr data-payout-id="${p.payout_id}">
+            <td>${escapeHtml(p.target_name || '-')}</td>
+            <td>${formatDate(p.period_start)} 〜 ${formatDate(p.period_end)}</td>
+            <td>${p.assignment_count}件</td>
+            <td class="amount">¥${formatNumber(p.total_amount)}</td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td>${p.paid_date ? formatDate(p.paid_date) : '-'}</td>
+            <td>
+              <button class="btn btn-danger btn-undo-sub-payout"
+                data-payout-id="${escapeHtml(p.payout_id)}"
+                data-updated-at="${escapeHtml(p.updated_at)}"
+                data-target-name="${escapeHtml(p.target_name || '')}">取消</button>
+            </td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    function toggleSubUnpaidSection() {
+      const icon = document.getElementById('subUnpaidCollapseIcon');
+      const content = document.getElementById('subUnpaidSummary');
+      icon.classList.toggle('collapsed');
+      content.classList.toggle('collapsed');
     }
   </script>
 

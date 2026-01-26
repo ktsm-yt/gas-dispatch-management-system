@@ -263,7 +263,7 @@ function createBulkCustomers() {
     existingNames.add(companyName);
     const contactName = randomPick(BULK_TEST_CONFIG.LAST_NAMES) + randomPick(BULK_TEST_CONFIG.FIRST_NAMES);
     const area = randomPick(BULK_TEST_CONFIG.AREAS);
-    const invoiceFormat = ['format1', 'format2', 'format3', 'atamagami'][i % 4];
+    const invoiceFormat = ['format1', 'format2', 'format3'][i % 3];
 
     toInsert.push({
       customer_id: customerId,
@@ -277,16 +277,19 @@ function createBulkCustomers() {
       phone: `03-${String(1000 + i).padStart(4, '0')}-${String(1000 + (i * 7) % 10000).padStart(4, '0')}`,
       fax: i % 3 === 0 ? `03-${String(1000 + i).padStart(4, '0')}-${String(2000 + (i * 7) % 10000).padStart(4, '0')}` : '',
       email: i % 2 === 0 ? `contact${i}@${lastName.toLowerCase()}.example.com` : '',
-      unit_price_tobi: 23000 + (i % 10) * 500,
-      unit_price_age: 18000 + (i % 10) * 500,
-      unit_price_tobiage: 26000 + (i % 10) * 500,
-      unit_price_half: 11000 + (i % 10) * 200,
+      // 請求単価（税抜き・実際の価格帯に合わせる）
+      unit_price_basic: 15000 + (i % 5) * 1000,   // 基本: 15,000〜19,000円
+      unit_price_tobi: 20000 + (i % 5) * 1000,    // 上棟鳶: 20,000〜24,000円
+      unit_price_age: 18000 + (i % 5) * 1000,     // 荷揚げ: 18,000〜22,000円
+      unit_price_tobiage: 22000 + (i % 5) * 1000, // 鳶揚げ: 22,000〜26,000円
+      unit_price_half: 12000 + (i % 5) * 500,     // ハーフ: 12,000〜14,000円
       closing_day: [25, 31, 15, 20][i % 4],
       payment_month_offset: [1, 2][i % 2],
       payment_day: [5, 10, 15, 25, 31][i % 5],
       invoice_format: invoiceFormat,
+      include_cover_page: true,  // 頭紙は全会社につける
       tax_rate: 10,
-      expense_rate: invoiceFormat === 'atamagami' ? [5, 8, 10][i % 3] : 0,
+      expense_rate: i % 5 === 0 ? [5, 8, 10][i % 3] : 0,  // 20%の顧客に経費率設定
       shipper_name: i % 4 === 0 ? `${companyName} 荷主部門` : '',
       customer_code: `C${String(i).padStart(5, '0')}`,
       notes: i % 10 === 0 ? `テスト顧客${i}の備考` : '',
@@ -377,10 +380,12 @@ function createBulkStaff() {
       has_motorbike: i % 3 === 0,
       skills: skills[i % skills.length],
       ng_customers: ngCustomers,
-      daily_rate_tobi: 14000 + (i % 10) * 500,
-      daily_rate_age: 12000 + (i % 10) * 500,
-      daily_rate_tobiage: 15000 + (i % 10) * 500,
-      daily_rate_half: 7000 + (i % 10) * 200,
+      // 支払単価（請求の約70%程度・実際の価格帯に合わせる）
+      daily_rate_basic: 11000 + (i % 5) * 500,    // 基本: 11,000〜13,000円
+      daily_rate_tobi: 14000 + (i % 5) * 500,     // 上棟鳶: 14,000〜16,000円
+      daily_rate_age: 12000 + (i % 5) * 500,      // 荷揚げ: 12,000〜14,000円
+      daily_rate_tobiage: 15000 + (i % 5) * 500,  // 鳶揚げ: 15,000〜17,000円
+      daily_rate_half: 7000 + (i % 5) * 300,      // ハーフ: 7,000〜8,200円
       staff_type: isSubcontract ? 'subcontract' : 'regular',
       employment_type: employmentType,
       withholding_tax_applicable: employmentType === 'employee',
@@ -464,18 +469,18 @@ function createBulkJobs() {
   }
 
   const timeSlots = Object.values(TIME_SLOTS);
-  const jobTypes = Object.values(JOB_TYPES);
+  const jotouPayUnits = ['tobi', 'tobiage'];  // 上棟時の単価種別（ageは使用しない）
   const startTimes = ['07:00', '07:30', '08:00', '08:30', '09:00', '13:00', '14:00'];
   const supervisors = ['山田監督', '佐藤監督', '田中現場長', '鈴木主任', '高橋監督', ''];
   const branchOffices = ['特需1', '特需2', '世田谷', '立川', '本社', '横浜', ''];
   const constructionDivs = ['第1工事課', '第2工事課', '第3工事課', '特需工事課', ''];
 
-  // 作業カテゴリと詳細
-  const workCategories = ['荷揚げ', '上棟', '作業'];
+  // 作業カテゴリと詳細（英語キーを使用）
+  const workCategories = ['niage', 'jotou', 'keisagyo'];
   const workDetailsByCategory = {
-    '荷揚げ': ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'flooring', 'habaki', 'cross', 'prefab', 'scaffold', 'material', 'sk', 'toilet', 'furniture', 'appliance'],
-    '上棟': ['tobi', 'tobi_hojo', 'niage', 'tobiage'],
-    '作業': ['hansyutsu', 'temoto', 'kaitai', 'seisou', 'other']
+    'niage': ['sekkou', 'tategu', 'kitchen', 'unit_bath', 'flooring', 'habaki', 'cross', 'prefab', 'scaffold', 'material', 'sk', 'toilet', 'furniture', 'appliance'],
+    'jotou': ['tobi', 'tobi_hojo', 'niage', 'tobiage'],
+    'keisagyo': ['hansyutsu', 'temoto', 'kaitai', 'seisou', 'other']
   };
 
   const today = new Date();
@@ -497,11 +502,11 @@ function createBulkJobs() {
       const timeSlot = timeSlots[j % timeSlots.length];
       // 時間未定以外は開始時間を設定
       const startTime = timeSlot === 'mitei' ? '' : startTimes[j % startTimes.length];
-      // 上棟のみ鳶/揚げ/鳶揚げ単価をランダムに設定、それ以外は基本単価
-      const payUnit = timeSlot === 'jotou' ? randomPick(jobTypes) : 'basic';
+      // 上棟のみ鳶/鳶揚げ単価をランダムに設定、それ以外は基本単価
+      const payUnit = timeSlot === 'jotou' ? randomPick(jotouPayUnits) : 'basic';
 
       // 作業カテゴリと詳細を設定（上棟は上棟カテゴリ、それ以外はランダム）
-      const workCategory = timeSlot === 'jotou' ? '上棟' : randomPick(workCategories);
+      const workCategory = timeSlot === 'jotou' ? 'jotou' : randomPick(workCategories);
       const workDetail = randomPick(workDetailsByCategory[workCategory]);
 
       toInsert.push({
@@ -579,7 +584,7 @@ function createBulkAssignments() {
 
   const transportAreas = ['23ku_inner', '23ku_outer', 'saitama', 'chiba', 'kanagawa'];
   const transportFees = { '23ku_inner': 500, '23ku_outer': 1000, 'saitama': 1500, 'chiba': 1500, 'kanagawa': 1500 };
-  const siteRoles = ['genba_dairi', 'sagyo_shunin', 'shokcho', 'anzen_sekinin', null, null, null, null];
+  const siteRoles = ['genba_dairi', 'sagyo_shunin', 'shokcho', 'anzen_sekinin', 'shunin_gijutsu', null, null, null];
 
   // 案件の50%に配置を作成
   const jobsToAssign = allJobs.filter((_, i) => i % 2 === 0);
@@ -597,23 +602,22 @@ function createBulkAssignments() {
       const transportArea = randomPick(transportAreas);
 
       // 給与単価決定（スタッフマスターから、pay_unitに基づく）
-      let wageRate = staff.daily_rate_tobi || 15000;
-      if (payUnit === 'age') wageRate = staff.daily_rate_age || 12000;
-      if (payUnit === 'tobiage') wageRate = staff.daily_rate_tobiage || 16000;
-      if (payUnit === 'basic') wageRate = staff.daily_rate_basic || 13000;
+      let wageRate = staff.daily_rate_tobi || 14000;
+      if (payUnit === 'tobiage') wageRate = staff.daily_rate_tobiage || 15000;
+      if (payUnit === 'basic') wageRate = staff.daily_rate_basic || 11000;
 
       // 請求単価決定（顧客マスターから、pay_unitに基づく）
-      let invoiceRate = customer.unit_price_tobi || 25000;
-      if (payUnit === 'age') invoiceRate = customer.unit_price_age || 20000;
-      if (payUnit === 'tobiage') invoiceRate = customer.unit_price_tobiage || 28000;
+      let invoiceRate = customer.unit_price_tobi || 20000;
+      if (payUnit === 'tobiage') invoiceRate = customer.unit_price_tobiage || 22000;
+      if (payUnit === 'basic') invoiceRate = customer.unit_price_basic || 15000;
 
-      // 配置のpay_unit / invoice_unit 決定（FULLDAY/HALFDAY）
+      // 配置のpay_unit / invoice_unit 決定（小文字で統一）
       const timeSlot = job.time_slot || 'shuujitsu';
-      let asgPayUnit = 'FULLDAY';
-      let asgInvoiceUnit = 'FULLDAY';
+      let asgPayUnit = 'fullday';
+      let asgInvoiceUnit = 'fullday';
       if (timeSlot === 'am' || timeSlot === 'pm') {
-        asgPayUnit = 'HALFDAY';
-        asgInvoiceUnit = 'HALFDAY';
+        asgPayUnit = 'halfday';
+        asgInvoiceUnit = 'halfday';
         wageRate = staff.daily_rate_half || 7000;
         invoiceRate = customer.unit_price_half || 12000;
       }

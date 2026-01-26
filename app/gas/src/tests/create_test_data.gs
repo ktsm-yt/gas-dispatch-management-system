@@ -906,3 +906,302 @@ function createWorkerRosterTestData() {
   console.log(`=== 作業員名簿用テストデータ作成完了 ===`);
   console.log(`作成: ${created}件, スキップ: ${skipped}件`);
 }
+
+// ========== 外注費テストデータ (P2-8) ==========
+
+/**
+ * 外注費テストデータを一括作成
+ * GASエディタから createSubcontractorTestData() を実行
+ */
+function createSubcontractorTestData() {
+  console.log('=== 外注費テストデータ作成開始 ===');
+
+  // 1. 外注先マスタを作成
+  createTestSubcontractors();
+
+  // 2. 外注スタッフを作成
+  createTestSubcontractorStaff();
+
+  // 3. 外注スタッフの配置を作成
+  createSubcontractorTestAssignments();
+
+  console.log('=== 外注費テストデータ作成完了 ===');
+}
+
+/**
+ * 外注先マスタテストデータを作成
+ */
+function createTestSubcontractors() {
+  console.log('外注先マスター作成中...');
+
+  const subcontractors = [
+    {
+      subcontractor_id: 'sub_test_001',
+      company_name: 'ファーストG',
+      contact_name: '田中一郎',
+      phone: '03-1111-1111',
+      email: 'first-g@example.com',
+      address: '東京都台東区上野1-1-1',
+      notes: 'テスト外注先1',
+      is_active: true
+    },
+    {
+      subcontractor_id: 'sub_test_002',
+      company_name: 'ジール',
+      contact_name: '鈴木二郎',
+      phone: '03-2222-2222',
+      email: 'zeal@example.com',
+      address: '東京都墨田区押上2-2-2',
+      notes: 'テスト外注先2',
+      is_active: true
+    },
+    {
+      subcontractor_id: 'sub_test_003',
+      company_name: '三沢工業',
+      contact_name: '三沢三郎',
+      phone: '03-3333-3333',
+      email: 'misawa@example.com',
+      address: '東京都江東区豊洲3-3-3',
+      notes: 'テスト外注先3',
+      is_active: true
+    }
+  ];
+
+  const sheet = getSheet('M_Subcontractors');
+  const now = getCurrentTimestamp();
+
+  for (const sub of subcontractors) {
+    // 既存チェック
+    const existing = findRowById(sheet, 'subcontractor_id', sub.subcontractor_id);
+    if (existing) {
+      console.log(`外注先 ${sub.company_name} は既に存在します`);
+      continue;
+    }
+
+    const record = {
+      ...sub,
+      created_at: now,
+      created_by: 'test',
+      updated_at: now,
+      updated_by: 'test',
+      is_deleted: false
+    };
+
+    insertRecord('M_Subcontractors', record);
+    console.log(`外注先作成: ${sub.company_name}`);
+  }
+}
+
+/**
+ * 外注スタッフテストデータを作成
+ */
+function createTestSubcontractorStaff() {
+  console.log('外注スタッフ作成中...');
+
+  const staffList = [
+    // ファーストG のスタッフ
+    {
+      staff_id: 'stf_sub_001',
+      name: 'ファーストG外注',
+      name_kana: 'ファーストジーガイチュウ',
+      staff_type: 'subcontract',
+      subcontractor_id: 'sub_test_001',
+      phone: '090-1111-0001',
+      wage_unit_price_basic: 15000,
+      wage_unit_price_tobi: 18000,
+      wage_unit_price_age: 16000,
+      wage_unit_price_half: 8000,
+      is_active: true
+    },
+    // ジール のスタッフ
+    {
+      staff_id: 'stf_sub_002',
+      name: 'ジール外注A',
+      name_kana: 'ジールガイチュウエー',
+      staff_type: 'subcontract',
+      subcontractor_id: 'sub_test_002',
+      phone: '090-2222-0001',
+      wage_unit_price_basic: 14000,
+      wage_unit_price_tobi: 17000,
+      wage_unit_price_age: 15000,
+      wage_unit_price_half: 7500,
+      is_active: true
+    },
+    {
+      staff_id: 'stf_sub_003',
+      name: 'ジール外注B',
+      name_kana: 'ジールガイチュウビー',
+      staff_type: 'subcontract',
+      subcontractor_id: 'sub_test_002',
+      phone: '090-2222-0002',
+      wage_unit_price_basic: 14000,
+      wage_unit_price_tobi: 17000,
+      wage_unit_price_age: 15000,
+      wage_unit_price_half: 7500,
+      is_active: true
+    },
+    // 三沢工業 のスタッフ
+    {
+      staff_id: 'stf_sub_004',
+      name: '三沢外注',
+      name_kana: 'ミサワガイチュウ',
+      staff_type: 'subcontract',
+      subcontractor_id: 'sub_test_003',
+      phone: '090-3333-0001',
+      wage_unit_price_basic: 16000,
+      wage_unit_price_tobi: 19000,
+      wage_unit_price_age: 17000,
+      wage_unit_price_half: 8500,
+      is_active: true
+    }
+  ];
+
+  const sheet = getSheet('M_Staff');
+  const now = getCurrentTimestamp();
+
+  for (const staff of staffList) {
+    // 既存チェック
+    const existing = findRowById(sheet, 'staff_id', staff.staff_id);
+    if (existing) {
+      console.log(`外注スタッフ ${staff.name} は既に存在します`);
+      continue;
+    }
+
+    const record = {
+      ...staff,
+      created_at: now,
+      created_by: 'test',
+      updated_at: now,
+      updated_by: 'test',
+      is_deleted: false
+    };
+
+    insertRecord('M_Staff', record);
+    console.log(`外注スタッフ作成: ${staff.name} (${staff.subcontractor_id})`);
+  }
+}
+
+/**
+ * 外注スタッフの配置テストデータを作成
+ */
+function createSubcontractorTestAssignments() {
+  console.log('外注スタッフ配置作成中...');
+
+  // 今日の日付を取得
+  const today = new Date();
+  const todayStr = Utilities.formatDate(today, 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // 今日以前の案件を取得（work_date_to でフィルタ）
+  const jobs = JobRepository.search({ work_date_to: todayStr, sort_order: 'asc' });
+
+  if (jobs.length === 0) {
+    console.log('今日以前の案件がありません。先にcreateTestJobs()を実行してください。');
+    return;
+  }
+
+  // 今日以前の案件から最新6件を使用（外注スタッフ4名分）
+  const targetJobs = jobs.slice(-Math.min(6, jobs.length));
+  console.log(`対象案件: ${targetJobs.length}件 (${targetJobs.map(j => j.work_date).join(', ')})`);
+
+  const subStaffIds = ['stf_sub_001', 'stf_sub_002', 'stf_sub_003', 'stf_sub_004'];
+  const wageRates = {
+    'stf_sub_001': 18000,  // ファーストG
+    'stf_sub_002': 17000,  // ジールA
+    'stf_sub_003': 17000,  // ジールB
+    'stf_sub_004': 19000   // 三沢
+  };
+
+  let created = 0;
+
+  for (let i = 0; i < targetJobs.length; i++) {
+    const job = targetJobs[i];
+    console.log(`案件処理中: ${job.site_name} (${job.work_date})`);
+
+    // 各案件に1〜2名の外注スタッフを配置（ローテーション）
+    const startIdx = i % subStaffIds.length;
+    const staffForJob = [subStaffIds[startIdx]];
+    if (i % 2 === 0 && subStaffIds.length > 1) {
+      staffForJob.push(subStaffIds[(startIdx + 1) % subStaffIds.length]);
+    }
+
+    for (const staffId of staffForJob) {
+      // 既存配置チェック
+      const existingAssignments = AssignmentRepository.findByJobId(job.job_id);
+      const alreadyAssigned = existingAssignments.some(a => a.staff_id === staffId && !a.is_deleted);
+
+      if (alreadyAssigned) {
+        console.log(`スキップ（既存）: ${job.site_name} - ${staffId}`);
+        continue;
+      }
+
+      // AssignmentRepositoryを直接使用して配置を作成
+      const assignment = {
+        job_id: job.job_id,
+        staff_id: staffId,
+        status: 'ASSIGNED',
+        wage_rate: wageRates[staffId] || 15000,
+        transport_area: '23ku_inner',
+        transport_amount: 500,
+        transport_is_manual: false
+      };
+
+      try {
+        const result = AssignmentRepository.insert(assignment);
+        if (result && result.assignment_id) {
+          console.log(`配置作成: ${job.site_name} - ${staffId}`);
+          created++;
+        }
+      } catch (e) {
+        console.log(`配置エラー: ${job.site_name} - ${staffId}: ${e.message}`);
+      }
+    }
+  }
+
+  console.log(`外注スタッフ配置作成完了: ${created}件`);
+}
+
+/**
+ * 外注費データのデバッグ
+ * GASエディタから debugSubcontractorData() を実行
+ */
+function debugSubcontractorData() {
+  console.log('=== 外注費データデバッグ ===');
+
+  // 1. 外注先を確認
+  const subs = SubcontractorRepository.search({ is_active: true });
+  console.log(`外注先数: ${subs.length}`);
+  subs.forEach(s => console.log(`  - ${s.subcontractor_id}: ${s.company_name}`));
+
+  // 2. 外注スタッフを確認
+  const staff = StaffRepository.search({ staff_type: 'subcontract' });
+  console.log(`外注スタッフ数: ${staff.length}`);
+  staff.forEach(s => console.log(`  - ${s.staff_id}: ${s.name} (subcontractor_id: ${s.subcontractor_id})`));
+
+  // 3. 配置を確認（外注スタッフのみ）
+  const staffIds = staff.map(s => s.staff_id);
+  const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+  const subAssignments = allAssignments.filter(a => staffIds.includes(a.staff_id) && !a.is_deleted && !a.payout_id);
+  console.log(`外注スタッフの未払い配置数: ${subAssignments.length}`);
+
+  // 4. 案件の日付を確認
+  if (subAssignments.length > 0) {
+    const jobIds = [...new Set(subAssignments.map(a => a.job_id))];
+    console.log(`関連Job IDs: ${jobIds.join(', ')}`);
+
+    for (const jobId of jobIds) {
+      const job = JobRepository.findById(jobId);
+      if (job) {
+        console.log(`  Job ${jobId}: ${job.site_name}, work_date=${job.work_date}`);
+      } else {
+        console.log(`  Job ${jobId}: NOT FOUND`);
+      }
+    }
+  }
+
+  // 5. PayoutService で計算してみる
+  console.log('\n=== PayoutService計算テスト ===');
+  const endDate = '2026-01-26';
+  const result = PayoutService.getUnpaidSubcontractorList(endDate);
+  console.log(`getUnpaidSubcontractorList結果: ${result.length}件`);
+  result.forEach(r => console.log(`  - ${r.companyName}: ${r.unpaidCount}件, ¥${r.estimatedAmount}`));
+}
