@@ -1205,3 +1205,437 @@ function debugSubcontractorData() {
   console.log(`getUnpaidSubcontractorList結果: ${result.length}件`);
   result.forEach(r => console.log(`  - ${r.companyName}: ${r.unpaidCount}件, ¥${r.estimatedAmount}`));
 }
+
+/**
+ * P2-8: 諸経費請求機能テスト用データを作成（改良版）
+ * 複数日付・複数現場・複数配置のテストケースを作成
+ * GASエディタから createTransportExpenseTestData() を実行
+ */
+function createTransportExpenseTestData() {
+  console.log('=== 諸経費請求テストデータ作成開始 ===');
+
+  const now = getCurrentTimestamp();
+  const user = 'test';
+
+  // 1. 顧客に諸経費請求フラグを設定
+  console.log('\n--- 顧客に諸経費請求フラグを設定 ---');
+  const customerSheet = getSheet('M_Customers');
+  const customerHeaders = getHeaders(customerSheet);
+
+  const hasFeeCol = customerHeaders.indexOf('has_transport_fee');
+  if (hasFeeCol === -1) {
+    console.log('ERROR: has_transport_fee カラムが見つかりません');
+    console.log('先に migrateAddTransportExpenseColumns() を実行してください');
+    return;
+  }
+
+  const testCustomerId = 'cus_test_001';
+  const customerRow = findRowById(customerSheet, 'customer_id', testCustomerId);
+  if (customerRow) {
+    customerSheet.getRange(customerRow, hasFeeCol + 1).setValue(true);
+    console.log(`顧客 ${testCustomerId} に has_transport_fee=true を設定しました`);
+  } else {
+    console.log(`顧客 ${testCustomerId} が見つかりません。createTestData() を先に実行してください`);
+    return;
+  }
+
+  // 2. 既存の諸経費テスト案件・配置を削除
+  console.log('\n--- 既存テストデータを削除 ---');
+  cleanupTransportExpenseTestData();
+
+  // 3. テスト案件を複数作成（異なる日付・現場）
+  console.log('\n--- 諸経費テスト用案件を作成 ---');
+
+  const formatDate = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  // 日付を計算（今月6日〜10日）
+  const baseDate = new Date();
+  baseDate.setDate(6);  // 今月6日
+
+  const jobs = [
+    // 案件1: 1月6日 横須賀（2人配置）
+    {
+      job_id: 'job_expense_001',
+      site_name: '横須賀市野比',
+      work_date: formatDate(baseDate),
+      start_time: '08:30',
+      required_count: 2,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_station: 'YRP野比駅', transport_amount: 2000, transport_has_bus: false },
+        { staff_id: 'stf_test_002', transport_station: 'YRP野比駅', transport_amount: 2000, transport_has_bus: false }
+      ]
+    },
+    // 案件2: 1月7日 大田区（3人配置）
+    {
+      job_id: 'job_expense_002',
+      site_name: '大田区池上',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000)),  // +1日
+      start_time: '08:00',
+      required_count: 3,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false },
+        { staff_id: 'stf_test_002', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false },
+        { staff_id: 'stf_test_003', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false }
+      ]
+    },
+    // 案件3: 1月8日 町田（1人配置）
+    {
+      job_id: 'job_expense_003',
+      site_name: '町田市山崎町',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000 * 2)),  // +2日
+      start_time: '08:00',
+      required_count: 1,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_station: '町田駅', transport_amount: 1655, transport_has_bus: true }
+      ]
+    },
+    // 案件4: 1月8日 杉並（1人配置）- 同日別現場
+    {
+      job_id: 'job_expense_004',
+      site_name: '杉並区久我山',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000 * 2)),  // +2日（同日）
+      start_time: '13:00',
+      required_count: 1,
+      assignments: [
+        { staff_id: 'stf_test_002', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false }
+      ]
+    }
+  ];
+
+  let assignmentSeq = 1;
+
+  for (const jobData of jobs) {
+    // 案件作成
+    const job = {
+      job_id: jobData.job_id,
+      customer_id: testCustomerId,
+      site_name: jobData.site_name,
+      site_address: '東京都テスト住所',
+      work_date: jobData.work_date,
+      time_slot: 'am',
+      start_time: jobData.start_time,
+      required_count: jobData.required_count,
+      pay_unit: 'halfday',
+      status: 'pending',
+      created_at: now,
+      created_by: user,
+      updated_at: now,
+      updated_by: user,
+      is_deleted: false
+    };
+    insertRecord('T_Jobs', job);
+    console.log(`案件作成: ${jobData.work_date} ${jobData.site_name} (${jobData.assignments.length}人)`);
+
+    // 配置作成
+    for (const asgData of jobData.assignments) {
+      const assignment = {
+        assignment_id: `asg_expense_${String(assignmentSeq++).padStart(3, '0')}`,
+        job_id: jobData.job_id,
+        staff_id: asgData.staff_id,
+        worker_type: 'STAFF',
+        display_time_slot: 'am',
+        pay_unit: 'halfday',
+        invoice_unit: 'halfday',
+        transport_area: asgData.transport_area || '',
+        transport_amount: asgData.transport_amount,
+        transport_is_manual: true,
+        transport_station: asgData.transport_station || '',
+        transport_has_bus: asgData.transport_has_bus || false,
+        status: 'ASSIGNED',
+        created_at: now,
+        created_by: user,
+        updated_at: now,
+        updated_by: user,
+        is_deleted: false
+      };
+      insertRecord('T_JobAssignments', assignment);
+
+      const note = asgData.transport_station
+        ? `${asgData.transport_station}${asgData.transport_has_bus ? '（バス）' : ''}`
+        : (asgData.transport_area || '');
+      console.log(`  配置: ${asgData.staff_id} - ¥${asgData.transport_amount} (${note})`);
+    }
+  }
+
+  console.log('\n=== 諸経費請求テストデータ作成完了 ===');
+  console.log('');
+  console.log('作成したテストデータ:');
+  console.log('  1月6日  横須賀市野比   2人 ¥2,000×2 (YRP野比駅)');
+  console.log('  1月7日  大田区池上     3人 ¥727×3  (23区内)');
+  console.log('  1月8日  町田市山崎町   1人 ¥1,655  (町田駅・バス)');
+  console.log('  1月8日  杉並区久我山   1人 ¥727    (23区内)');
+  console.log('');
+  console.log('期待される請求書出力:');
+  console.log('  日付    | 現場名        | 品目          | 備考        | 数量 | 単価   | 金額');
+  console.log('  1月6日  | 横須賀市野比  | 作業員（ハーフ）| 08:30      | 1    | 12,000 | 12,000');
+  console.log('          |               | 諸経費        | YRP野比駅   | 1    | 2,000  | 2,000');
+  console.log('          |               | 作業員（ハーフ）| 08:30      | 1    | 12,000 | 12,000');
+  console.log('          |               | 諸経費        | YRP野比駅   | 1    | 2,000  | 2,000');
+  console.log('  1月7日  | 大田区池上    | 作業員（ハーフ）| 08:00      | 1    | 12,000 | 12,000');
+  console.log('  ...（以下略）');
+}
+
+/**
+ * P2-8: format2用の諸経費テストデータを作成
+ * GASエディタから createTransportExpenseTestDataFormat2() を実行
+ */
+function createTransportExpenseTestDataFormat2() {
+  createTransportExpenseTestDataWithFormat('format2', 'cus_test_002');
+}
+
+/**
+ * P2-8: format1用の諸経費テストデータを作成（明示的に呼び出し可能）
+ * GASエディタから createTransportExpenseTestDataFormat1() を実行
+ */
+function createTransportExpenseTestDataFormat1() {
+  createTransportExpenseTestDataWithFormat('format1', 'cus_test_001');
+}
+
+/**
+ * P2-8: 諸経費テストデータを指定フォーマット・顧客で作成
+ * @param {string} invoiceFormat - 'format1' | 'format2'
+ * @param {string} customerId - 顧客ID
+ */
+function createTransportExpenseTestDataWithFormat(invoiceFormat, customerId) {
+  console.log(`=== 諸経費請求テストデータ作成開始 (${invoiceFormat}) ===`);
+
+  const now = getCurrentTimestamp();
+  const user = 'test';
+
+  // 1. 顧客の設定を更新
+  console.log('\n--- 顧客設定を更新 ---');
+  const customerSheet = getSheet('M_Customers');
+  const customerHeaders = getHeaders(customerSheet);
+
+  const hasFeeCol = customerHeaders.indexOf('has_transport_fee');
+  const formatCol = customerHeaders.indexOf('invoice_format');
+  if (hasFeeCol === -1) {
+    console.log('ERROR: has_transport_fee カラムが見つかりません');
+    console.log('先に migrateAddTransportExpenseColumns() を実行してください');
+    return;
+  }
+
+  const customerRow = findRowById(customerSheet, 'customer_id', customerId);
+  if (customerRow) {
+    customerSheet.getRange(customerRow, hasFeeCol + 1).setValue(true);
+    if (formatCol !== -1) {
+      customerSheet.getRange(customerRow, formatCol + 1).setValue(invoiceFormat);
+    }
+    console.log(`顧客 ${customerId} に has_transport_fee=true, invoice_format=${invoiceFormat} を設定しました`);
+  } else {
+    console.log(`顧客 ${customerId} が見つかりません。createTestData() を先に実行してください`);
+    return;
+  }
+
+  // 2. 既存テストデータを削除
+  console.log('\n--- 既存テストデータを削除 ---');
+  cleanupTransportExpenseTestDataForCustomer(customerId);
+
+  // 3. テスト案件を作成
+  console.log('\n--- 諸経費テスト用案件を作成 ---');
+
+  const formatDate = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const baseDate = new Date();
+  baseDate.setDate(6);
+
+  // format2用には発注Noと営業所も追加
+  const jobPrefix = customerId === 'cus_test_002' ? 'job_expense_f2_' : 'job_expense_';
+  const asgPrefix = customerId === 'cus_test_002' ? 'asg_expense_f2_' : 'asg_expense_';
+
+  const jobs = [
+    {
+      job_id: jobPrefix + '001',
+      site_name: '横須賀市野比',
+      work_date: formatDate(baseDate),
+      start_time: '08:30',
+      order_number: 'ORD-2026-001',
+      branch_office: '横浜営業所',
+      required_count: 2,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_station: 'YRP野比駅', transport_amount: 2000, transport_has_bus: false },
+        { staff_id: 'stf_test_002', transport_station: 'YRP野比駅', transport_amount: 2000, transport_has_bus: false }
+      ]
+    },
+    {
+      job_id: jobPrefix + '002',
+      site_name: '大田区池上',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000)),
+      start_time: '08:00',
+      order_number: 'ORD-2026-002',
+      branch_office: '東京営業所',
+      required_count: 3,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false },
+        { staff_id: 'stf_test_002', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false },
+        { staff_id: 'stf_test_003', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false }
+      ]
+    },
+    {
+      job_id: jobPrefix + '003',
+      site_name: '町田市山崎町',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000 * 2)),
+      start_time: '15:00',
+      order_number: 'ORD-2026-003',
+      branch_office: '町田営業所',
+      required_count: 1,
+      assignments: [
+        { staff_id: 'stf_test_001', transport_station: '町田駅', transport_amount: 1655, transport_has_bus: true }
+      ]
+    },
+    {
+      job_id: jobPrefix + '004',
+      site_name: '杉並区久我山',
+      work_date: formatDate(new Date(baseDate.getTime() + 86400000 * 2)),
+      start_time: '20:00',
+      order_number: 'ORD-2026-004',
+      branch_office: '東京営業所',
+      required_count: 1,
+      assignments: [
+        { staff_id: 'stf_test_002', transport_area: '23ku_inner', transport_amount: 727, transport_station: '', transport_has_bus: false }
+      ]
+    }
+  ];
+
+  let assignmentSeq = 1;
+  const jobSheet = getSheet('T_Jobs');
+  const jobHeaders = getHeaders(jobSheet);
+  const asgSheet = getSheet('T_JobAssignments');
+  const asgHeaders = getHeaders(asgSheet);
+
+  for (const jobData of jobs) {
+    // 案件作成
+    const job = {
+      job_id: jobData.job_id,
+      customer_id: customerId,
+      site_name: jobData.site_name,
+      site_address: '東京都テスト住所',
+      work_date: jobData.work_date,
+      start_time: jobData.start_time,
+      order_number: jobData.order_number || '',
+      branch_office: jobData.branch_office || '',
+      job_type: 'tobi',
+      status: 'confirmed',
+      required_count: jobData.required_count,
+      pay_unit: 'halfday',
+      notes: `${invoiceFormat}テスト用案件`,
+      created_at: now,
+      created_by: user,
+      updated_at: now,
+      is_deleted: false
+    };
+
+    const jobRow = jobHeaders.map(h => job[h] !== undefined ? job[h] : '');
+    jobSheet.appendRow(jobRow);
+    console.log(`  案件作成: ${jobData.job_id} - ${jobData.site_name}`);
+
+    // 配置作成
+    for (const asgData of jobData.assignments) {
+      const asg = {
+        assignment_id: asgPrefix + String(assignmentSeq++).padStart(3, '0'),
+        job_id: jobData.job_id,
+        staff_id: asgData.staff_id,
+        status: 'CONFIRMED',
+        invoice_unit: 'halfday',
+        invoice_rate: 12000,
+        transport_area: asgData.transport_area || '',
+        transport_amount: asgData.transport_amount || 0,
+        transport_is_manual: true,
+        transport_station: asgData.transport_station || '',
+        transport_has_bus: asgData.transport_has_bus || false,
+        created_at: now,
+        created_by: user,
+        updated_at: now,
+        is_deleted: false
+      };
+
+      const asgRow = asgHeaders.map(h => asg[h] !== undefined ? asg[h] : '');
+      asgSheet.appendRow(asgRow);
+    }
+  }
+
+  console.log(`\n=== ${invoiceFormat}用テストデータ作成完了 ===`);
+  console.log(`顧客ID: ${customerId}`);
+  console.log(`案件数: ${jobs.length}`);
+  console.log(`\n請求書管理画面で該当顧客を選択して請求書を生成してください`);
+}
+
+/**
+ * 指定顧客の諸経費テストデータを削除
+ */
+function cleanupTransportExpenseTestDataForCustomer(customerId) {
+  const jobSheet = getSheet('T_Jobs');
+  const jobData = jobSheet.getDataRange().getValues();
+  const jobIdCol = jobData[0].indexOf('job_id');
+  const customerIdCol = jobData[0].indexOf('customer_id');
+
+  // 削除対象のjob_idを収集
+  const targetJobIds = [];
+  for (let i = 1; i < jobData.length; i++) {
+    const jobId = jobData[i][jobIdCol];
+    const custId = jobData[i][customerIdCol];
+    if (custId === customerId && jobId && (jobId.includes('expense') || jobId.includes('transport'))) {
+      targetJobIds.push(jobId);
+    }
+  }
+
+  // 配置削除
+  const asgSheet = getSheet('T_JobAssignments');
+  const asgData = asgSheet.getDataRange().getValues();
+  const asgJobIdCol = asgData[0].indexOf('job_id');
+  for (let i = asgData.length - 1; i >= 1; i--) {
+    const jobId = asgData[i][asgJobIdCol];
+    if (targetJobIds.includes(jobId)) {
+      asgSheet.deleteRow(i + 1);
+    }
+  }
+
+  // 案件削除
+  for (let i = jobData.length - 1; i >= 1; i--) {
+    const jobId = jobData[i][jobIdCol];
+    if (targetJobIds.includes(jobId)) {
+      jobSheet.deleteRow(i + 1);
+    }
+  }
+
+  console.log(`顧客 ${customerId} の諸経費テストデータを削除しました（${targetJobIds.length}件）`);
+}
+
+/**
+ * 諸経費テストデータを削除
+ */
+function cleanupTransportExpenseTestData() {
+  // 配置削除
+  const asgSheet = getSheet('T_JobAssignments');
+  const asgData = asgSheet.getDataRange().getValues();
+  const asgIdCol = asgData[0].indexOf('assignment_id');
+  for (let i = asgData.length - 1; i >= 1; i--) {
+    const asgId = asgData[i][asgIdCol];
+    if (asgId && (asgId.startsWith('asg_expense_') || asgId.startsWith('asg_transport_'))) {
+      asgSheet.deleteRow(i + 1);
+    }
+  }
+
+  // 案件削除
+  const jobSheet = getSheet('T_Jobs');
+  const jobData = jobSheet.getDataRange().getValues();
+  const jobIdCol = jobData[0].indexOf('job_id');
+  for (let i = jobData.length - 1; i >= 1; i--) {
+    const jobId = jobData[i][jobIdCol];
+    if (jobId && (jobId.startsWith('job_expense_') || jobId.startsWith('job_transport_'))) {
+      jobSheet.deleteRow(i + 1);
+    }
+  }
+
+  console.log('既存の諸経費テストデータを削除しました');
+}
