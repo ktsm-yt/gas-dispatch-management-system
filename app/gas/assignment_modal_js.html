@@ -135,6 +135,8 @@ function openJobAssignments(jobId) {
   document.getElementById('form-invoice-unit').value = 'basic';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
+  document.getElementById('form-transport-station').value = '';
+  document.getElementById('form-transport-has-bus').checked = false;
   document.getElementById('form-assignment-role').value = '';
   document.getElementById('form-is-leader').checked = false;
 
@@ -720,6 +722,8 @@ function saveAllChanges() {
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
+  const transportStation = document.getElementById('form-transport-station').value;
+  const transportHasBus = document.getElementById('form-transport-has-bus').checked;
   const assignmentRole = document.getElementById('form-assignment-role').value;
   const isLeader = document.getElementById('form-is-leader').checked;
 
@@ -755,12 +759,11 @@ function saveAllChanges() {
       data.assignment_id = assignmentMap[staffId];
     }
 
-    if (transportArea) {
-      data.transport_area = transportArea;
-    }
-    if (transportAmount) {
-      data.transport_amount = Number(transportAmount);
-    }
+    // P2-8: 交通費関連フィールド（空値・0も明示的に送信してクリア可能に）
+    data.transport_area = transportArea || '';
+    data.transport_amount = transportAmount !== '' ? Number(transportAmount) : '';
+    data.transport_station = transportStation || '';
+    data.transport_has_bus = transportHasBus;
 
     return data;
   });
