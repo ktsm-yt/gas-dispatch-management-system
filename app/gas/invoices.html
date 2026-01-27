@@ -738,6 +738,27 @@
     </div>
   </div>
 
+  <!-- Invoice Overwrite Confirm Modal -->
+  <div class="modal-overlay" id="invoiceOverwriteModal">
+    <div class="modal" style="max-width: 400px;">
+      <div class="modal-header">
+        <h2>請求書が既に存在します</h2>
+        <button class="modal-close" onclick="closeInvoiceOverwriteModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="invoiceOverwriteMessage">この顧客・年月の請求書は既に作成されています。</p>
+        <div id="invoiceOverwriteInfo" style="background: #f5f5f5; padding: 12px; border-radius: 4px; margin-top: 12px;">
+          <div><strong>請求番号:</strong> <span id="existingInvoiceNumber">-</span></div>
+          <div><strong>合計金額:</strong> <span id="existingInvoiceAmount">-</span></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeInvoiceOverwriteModal()">キャンセル</button>
+        <button class="btn btn-danger" onclick="confirmInvoiceOverwrite()">上書き生成</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Bulk Generate Invoice Modal -->
   <div class="modal-overlay" id="bulkGenerateModal" onclick="handleModalOverlayClick(event, 'bulkGenerateModal')">
     <div class="modal" style="max-width: 420px;">
@@ -1577,6 +1598,9 @@
       document.getElementById('generateModal').classList.remove('active');
     }
 
+    // 上書き確認用の一時データ
+    let pendingOverwrite = { customerId: null, ym: null, existingInvoice: null };
+
     function generateInvoice() {
       const customerId = document.getElementById('generateCustomer').value;
       const year = document.getElementById('generateYear').value;
@@ -1601,6 +1625,14 @@
           if (result.ok) {
             showToast('請求書を生成しました', 'success');
             loadInvoices(true);  // Skip cache after data change
+          } else if (result.error?.code === 'CONFLICT_ERROR' && result.error?.details?.existingInvoice) {
+            // 既存請求書がある場合、上書き確認モーダルを表示
+            const existing = result.error.details.existingInvoice;
+            pendingOverwrite = { customerId, ym, existingInvoice: existing };
+            document.getElementById('existingInvoiceNumber').textContent = existing.invoice_number || '-';
+            document.getElementById('existingInvoiceAmount').textContent =
+              existing.total_amount ? '¥' + Number(existing.total_amount).toLocaleString() : '-';
+            document.getElementById('invoiceOverwriteModal').classList.add('active');
           } else {
             showToast(result.error?.message || '生成に失敗しました', 'error');
           }
@@ -1610,6 +1642,53 @@
           handleError(error);
         })
         .generateInvoice(customerId, ym);
+    }
+
+    function closeInvoiceOverwriteModal() {
+      document.getElementById('invoiceOverwriteModal').classList.remove('active');
+      pendingOverwrite = { customerId: null, ym: null, existingInvoice: null };
+    }
+
+    function confirmInvoiceOverwrite() {
+      if (!pendingOverwrite.existingInvoice) {
+        closeInvoiceOverwriteModal();
+        return;
+      }
+
+      const { customerId, ym, existingInvoice } = pendingOverwrite;
+      closeInvoiceOverwriteModal();
+      showLoading();
+
+      // 既存請求書を削除してから再生成
+      google.script.run
+        .withSuccessHandler(function (deleteResult) {
+          if (deleteResult.ok) {
+            // 削除成功、新規生成
+            google.script.run
+              .withSuccessHandler(function (genResult) {
+                hideLoading();
+                if (genResult.ok) {
+                  showToast('請求書を再生成しました', 'success');
+                  loadInvoices(true);
+                } else {
+                  showToast(genResult.error?.message || '再生成に失敗しました', 'error');
+                }
+              })
+              .withFailureHandler(function (error) {
+                hideLoading();
+                handleError(error);
+              })
+              .generateInvoice(customerId, ym);
+          } else {
+            hideLoading();
+            showToast(deleteResult.error?.message || '削除に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function (error) {
+          hideLoading();
+          handleError(error);
+        })
+        .deleteInvoice(existingInvoice.invoice_id, existingInvoice.updated_at);
     }
 
     // Bulk Generate Modal

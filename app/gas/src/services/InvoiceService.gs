@@ -807,33 +807,125 @@ const InvoiceService = {
   _generateLines: function(assignments, customer) {
     const lines = [];
 
+    // P2-8: 顧客の諸経費請求設定を確認
+    const hasTransportFee = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
+
+    // P2-8: エリアコード→エリア名のマップを事前に作成（諸経費請求がONの場合のみ）
+    let transportAreaMap = {};
+    if (hasTransportFee) {
+      try {
+        const transportFees = listTransportFees();
+        transportFees.forEach(fee => {
+          transportAreaMap[fee.area_code] = fee.area_name;
+        });
+      } catch (e) {
+        console.warn('交通費マスタの取得に失敗:', e.message);
+      }
+    }
+
+    // ============================================
+    // P2-8: 同一作業種別の集約処理
+    // 同じ案件+作業種別+単価の配置は1行に集約（数量で調整）
+    // 異なる作業種別（ハーフ/終日/上棟など）は別行
+    // ============================================
+
+    // Step 1: 配置を job_id + invoice_unit + unit_price でグループ化
+    const workGroups = {};   // 作業行グループ
+    const expenseGroups = {}; // 諸経費行グループ
+
     for (const asg of assignments) {
       const job = asg.job;
+      const invoiceUnit = asg.invoice_unit || job.pay_unit || 'basic';
 
       // 請求単価を決定
       let unitPrice = asg.invoice_rate;
       if (!unitPrice && unitPrice !== 0) {
-        // 顧客マスターから取得
-        unitPrice = getUnitPriceByJobType_(customer, asg.invoice_unit || job.pay_unit || 'basic');
+        unitPrice = getUnitPriceByJobType_(customer, invoiceUnit);
       }
+      unitPrice = unitPrice || 0;
 
-      // 品目名を決定
-      const itemName = this._getItemName(asg, job, customer.invoice_format);
+      // 作業行のグループキー: job_id + invoice_unit + unit_price
+      const workKey = `${job.job_id}_${invoiceUnit}_${unitPrice}`;
+      if (!workGroups[workKey]) {
+        workGroups[workKey] = {
+          assignments: [],
+          job: job,
+          invoiceUnit: invoiceUnit,
+          unitPrice: unitPrice
+        };
+      }
+      workGroups[workKey].assignments.push(asg);
 
-      // 金額を計算
-      const quantity = 1; // 人数は1（複数人の場合は別行）
-      const amount = Math.floor((unitPrice || 0) * quantity);
+      // 諸経費行のグループ化
+      const transportAmount = Number(asg.transport_amount) || 0;
+      if (hasTransportFee && transportAmount > 0) {
+        // 備考欄の生成: 駅名があれば優先、なければエリア名
+        let expenseNote = '';
+        if (asg.transport_station) {
+          expenseNote = asg.transport_station;
+          if (asg.transport_has_bus === true || asg.transport_has_bus === 'true') {
+            expenseNote += '（バス）';
+          }
+        } else if (asg.transport_area && transportAreaMap[asg.transport_area]) {
+          expenseNote = transportAreaMap[asg.transport_area];
+        }
+
+        // 諸経費行のグループキー: job_id + expense_note + unit_price
+        const expenseKey = `${job.job_id}_${expenseNote}_${transportAmount}`;
+        if (!expenseGroups[expenseKey]) {
+          expenseGroups[expenseKey] = {
+            assignments: [],
+            job: job,
+            expenseNote: expenseNote,
+            unitPrice: transportAmount
+          };
+        }
+        expenseGroups[expenseKey].assignments.push(asg);
+      }
+    }
+
+    // Step 2: グループを日付+現場名でソートして明細行を生成
+    const workGroupsSorted = Object.values(workGroups).sort((a, b) => {
+      const dateA = a.job.work_date || '';
+      const dateB = b.job.work_date || '';
+      if (dateA !== dateB) return dateA < dateB ? -1 : 1;
+      const siteCompare = (a.job.site_name || '').localeCompare(b.job.site_name || '');
+      if (siteCompare !== 0) return siteCompare;
+      // 同一案件内は作業種別でソート
+      return (a.invoiceUnit || '').localeCompare(b.invoiceUnit || '');
+    });
+
+    // P2-8: 日付+現場名の重複表示抑制用
+    let prevDateSite = null;
+    // 各job_idの諸経費行出力済みフラグ
+    const expenseAddedForJob = {};
+
+    for (const group of workGroupsSorted) {
+      const job = group.job;
+      const quantity = group.assignments.length;
+      const unitPrice = group.unitPrice;
+      const amount = Math.floor(unitPrice * quantity);
+      const itemName = this._getItemName({ invoice_unit: group.invoiceUnit }, job, customer.invoice_format);
+
+      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
+      const currentDateSite = `${job.work_date}_${job.site_name || ''}`;
+      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
+      prevDateSite = currentDateSite;
+
+      // 作業行を追加
+      // P2-8: start_timeがDate型の場合は文字列に変換
+      const timeNote = this._formatTimeValue(job.start_time);
 
       lines.push({
-        work_date: job.work_date,
+        work_date: isFirstLineForDateSite ? job.work_date : '',
         job_id: job.job_id,
-        assignment_id: asg.assignment_id,
-        site_name: job.site_name || '',
+        assignment_id: group.assignments[0].assignment_id, // 代表として最初の配置ID
+        site_name: isFirstLineForDateSite ? (job.site_name || '') : '',
         item_name: itemName,
-        time_note: job.start_time || '',
+        time_note: timeNote,
         quantity: quantity,
         unit: '人',
-        unit_price: unitPrice || 0,
+        unit_price: unitPrice,
         amount: amount,
         order_number: job.order_number || '',
         branch_office: job.branch_office || '',
@@ -841,6 +933,36 @@ const InvoiceService = {
         supervisor_name: job.supervisor_name || '',
         property_code: job.property_code || ''
       });
+
+      // この案件の諸経費行を追加（まだ出力していない場合）
+      if (!expenseAddedForJob[job.job_id]) {
+        expenseAddedForJob[job.job_id] = true;
+
+        // この案件の諸経費グループを全て出力
+        const jobExpenseGroups = Object.values(expenseGroups).filter(eg => eg.job.job_id === job.job_id);
+        for (const expGroup of jobExpenseGroups) {
+          const expQuantity = expGroup.assignments.length;
+          const expAmount = Math.floor(expGroup.unitPrice * expQuantity);
+
+          lines.push({
+            work_date: '',
+            job_id: job.job_id,
+            assignment_id: expGroup.assignments[0].assignment_id,
+            site_name: '',
+            item_name: '諸経費',
+            time_note: expGroup.expenseNote,
+            quantity: expQuantity,
+            unit: '人',
+            unit_price: expGroup.unitPrice,
+            amount: expAmount,
+            order_number: job.order_number || '',
+            branch_office: job.branch_office || '',
+            construction_div: job.construction_div || '',
+            supervisor_name: job.supervisor_name || '',
+            property_code: job.property_code || ''
+          });
+        }
+      }
     }
 
     return lines;
@@ -877,6 +999,43 @@ const InvoiceService = {
   },
 
   /**
+   * 時間値を文字列に変換
+   * @param {Date|string|number|null} value - 時間値
+   * @returns {string} 時間文字列（HH:mm形式）または空文字
+   */
+  _formatTimeValue: function(value) {
+    if (!value) return '';
+
+    // 既に文字列の場合はそのまま返す
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    // Date型の場合は時間部分を抽出
+    if (value instanceof Date) {
+      try {
+        // 時間のみのDateオブジェクトは1899年12月30日になるため、
+        // 年が1900未満の場合は時間として解釈
+        const hours = value.getHours();
+        const minutes = value.getMinutes();
+        if (hours === 0 && minutes === 0) {
+          return '';  // 00:00は空とみなす
+        }
+        return Utilities.formatDate(value, 'Asia/Tokyo', 'HH:mm');
+      } catch (e) {
+        return '';
+      }
+    }
+
+    // 数値の場合は文字列に変換
+    if (typeof value === 'number') {
+      return String(value);
+    }
+
+    return '';
+  },
+
+  /**
    * 合計金額を計算
    * @param {Object[]} lines - 明細行
    * @param {number} taxRate - 税率
@@ -885,26 +1044,37 @@ const InvoiceService = {
    * @returns {Object} { subtotal, expenseAmount, taxAmount, totalAmount }
    */
   _calculateTotals: function(lines, taxRate, expenseRate, format) {
-    // 小計（税抜）
-    const subtotal = lines.reduce((sum, line) => {
-      return sum + (Number(line.amount) || 0);
-    }, 0);
+    // P2-8: 作業費と諸経費を分けて集計
+    let workAmount = 0;    // 作業費（諸経費以外）
+    let expenseAmount = 0; // 諸経費（交通費等）
 
-    // 頭紙の場合は諸経費を加算
-    let expenseAmount = 0;
-    if (format === 'atamagami' && expenseRate > 0) {
-      expenseAmount = calculateExpense_(subtotal, expenseRate);
+    lines.forEach(line => {
+      const amount = Number(line.amount) || 0;
+      if (line.item_name === '諸経費') {
+        expenseAmount += amount;
+      } else {
+        workAmount += amount;
+      }
+    });
+
+    // 小計（税抜）= 作業費 + 諸経費
+    const subtotal = workAmount + expenseAmount;
+
+    // 従来の諸経費率による計算（頭紙形式かつ交通費がない場合のフォールバック）
+    // ただし、交通費が明細にある場合はそちらを優先
+    if (format === 'atamagami' && expenseRate > 0 && expenseAmount === 0) {
+      expenseAmount = calculateExpense_(workAmount, expenseRate);
     }
 
     // 消費税
-    const taxableAmount = subtotal + expenseAmount;
+    const taxableAmount = subtotal;
     const taxAmount = calculateTaxAmount_(taxableAmount, taxRate);
 
     // 合計
     const totalAmount = Math.floor(taxableAmount + taxAmount);
 
     return {
-      subtotal: Math.floor(subtotal),
+      subtotal: Math.floor(workAmount),  // 頭紙用: 作業費のみ
       expenseAmount: Math.floor(expenseAmount),
       taxAmount: Math.floor(taxAmount),
       totalAmount: totalAmount
