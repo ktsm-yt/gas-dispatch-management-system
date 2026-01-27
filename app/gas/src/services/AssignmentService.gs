@@ -437,10 +437,17 @@ const AssignmentService = {
       }
     }
 
-    // エリアが未設定なら金額もクリア
+    // エリアが未設定の場合の処理
+    // ただし、駅名または金額が手入力されている場合はクリアしない
     if (!processed.transport_area) {
-      processed.transport_amount = '';
-      processed.transport_is_manual = false;
+      const hasStation = processed.transport_station && String(processed.transport_station).trim() !== '';
+      const hasManualAmount = processed.transport_amount && Number(processed.transport_amount) > 0;
+
+      if (!hasStation && !hasManualAmount) {
+        // 駅名も金額もない場合のみクリア
+        processed.transport_amount = '';
+        processed.transport_is_manual = false;
+      }
     }
 
     return processed;
