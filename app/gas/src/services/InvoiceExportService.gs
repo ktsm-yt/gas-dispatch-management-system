@@ -850,6 +850,20 @@ const InvoiceExportService = {
       }
     }
 
+    // === 合計行より下の罫線をクリア（書式拡張で残った縦罫線を除去）===
+    const maxRows = sheet.getMaxRows();
+    if (maxRows > totalRow) {
+      const rowsBelow = maxRows - totalRow;
+      sheet.getRange(totalRow + 1, 1, rowsBelow, 10).setBorder(
+        false, false, false, false, false, false
+      );
+      // 合計行の下罫線を再設定（隣接セルの罫線クリアで消えた分を復元）
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+    }
+
     // データシートを非表示
     if (dataSheet) {
       dataSheet.hideSheet();
@@ -974,6 +988,20 @@ const InvoiceExportService = {
       }
     }
 
+    // === 合計行より下の罫線をクリア（書式拡張で残った縦罫線を除去）===
+    const maxRows = sheet.getMaxRows();
+    if (maxRows > totalRow) {
+      const rowsBelow = maxRows - totalRow;
+      sheet.getRange(totalRow + 1, 1, rowsBelow, 10).setBorder(
+        false, false, false, false, false, false
+      );
+      // 合計行の下罫線を再設定（隣接セルの罫線クリアで消えた分を復元）
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+    }
+
     // データシートを非表示（PDF/Excel出力時に見えないように）
     dataSheet.hideSheet();
   },
@@ -1087,6 +1115,20 @@ const InvoiceExportService = {
       if (rowsToDelete > 0) {
         sheet.deleteRows(totalRow + 1, rowsToDelete);
       }
+    }
+
+    // === 合計行より下の罫線をクリア（書式拡張で残った縦罫線を除去）===
+    const maxRows = sheet.getMaxRows();
+    if (maxRows > totalRow) {
+      const rowsBelow = maxRows - totalRow;
+      sheet.getRange(totalRow + 1, 1, rowsBelow, 10).setBorder(
+        false, false, false, false, false, false
+      );
+      // 合計行の下罫線を再設定（隣接セルの罫線クリアで消えた分を復元）
+      sheet.getRange(totalRow, 1, 1, 10).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
     }
   },
 
