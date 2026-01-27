@@ -514,6 +514,13 @@
                 <label for="expense-rate">諸経費率(%)</label>
                 <input type="number" id="expense-rate" name="expense_rate" min="0" max="100" step="0.1" placeholder="0">
               </div>
+              <div class="form-group">
+                <label for="has-transport-fee">諸経費請求</label>
+                <div style="display: flex; align-items: center; height: 38px;">
+                  <input type="checkbox" id="has-transport-fee" name="has_transport_fee" style="width: auto; margin-right: 8px;">
+                  <span style="font-size: 14px; color: #666;">請求書に諸経費を含める</span>
+                </div>
+              </div>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -816,6 +823,7 @@
         document.getElementById('honorific').value = '様';
         document.getElementById('invoice-format').value = 'format1';
         document.getElementById('include-cover-page').checked = false;
+        document.getElementById('has-transport-fee').checked = false;
         document.getElementById('payment-month-offset').value = '1';
 
         // フォルダUI初期化（新規作成モード）
@@ -850,6 +858,7 @@
       document.getElementById('payment-day').value = customer.payment_day || '';
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
       document.getElementById('include-cover-page').checked = customer.include_cover_page === true || customer.include_cover_page === 'true';
+      document.getElementById('has-transport-fee').checked = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
       document.getElementById('tax-rate').value = customer.tax_rate ?? 10;
       document.getElementById('expense-rate').value = customer.expense_rate || '';
       document.getElementById('shipper-name').value = customer.shipper_name || '';
@@ -969,6 +978,7 @@
 
       // Handle checkbox (FormData only includes checked checkboxes)
       customer.include_cover_page = document.getElementById('include-cover-page').checked;
+      customer.has_transport_fee = document.getElementById('has-transport-fee').checked;
 
       const customerId = document.getElementById('customer-id').value;
       const updatedAt = document.getElementById('customer-updated-at').value;
