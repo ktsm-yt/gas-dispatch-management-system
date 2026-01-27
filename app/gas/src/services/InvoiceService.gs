@@ -927,8 +927,9 @@ const InvoiceService = {
         unit: '人',
         unit_price: unitPrice,
         amount: amount,
-        order_number: job.order_number || '',
-        branch_office: job.branch_office || '',
+        // format2: 同じ日付+現場の続き行は営業所・発注番号も省略
+        order_number: isFirstLineForDateSite ? (job.order_number || '') : '',
+        branch_office: isFirstLineForDateSite ? (job.branch_office || '') : '',
         construction_div: job.construction_div || '',
         supervisor_name: job.supervisor_name || '',
         property_code: job.property_code || ''
@@ -955,8 +956,9 @@ const InvoiceService = {
             unit: '人',
             unit_price: expGroup.unitPrice,
             amount: expAmount,
-            order_number: job.order_number || '',
-            branch_office: job.branch_office || '',
+            // 諸経費行は作業行の続きなので営業所・発注番号も省略
+            order_number: '',
+            branch_office: '',
             construction_div: job.construction_div || '',
             supervisor_name: job.supervisor_name || '',
             property_code: job.property_code || ''
