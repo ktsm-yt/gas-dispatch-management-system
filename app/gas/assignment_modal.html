@@ -90,6 +90,20 @@
               <input type="number" id="form-transport-amount" min="0" step="100">
             </div>
           </div>
+          <!-- P2-8: 諸経費備考（駅名＋バス利用） -->
+          <div class="form-row">
+            <div class="form-group" style="flex: 2">
+              <label>諸経費備考（駅名）</label>
+              <input type="text" id="form-transport-station" placeholder="例: 町田駅、YRP野比駅">
+            </div>
+            <div class="form-group" style="flex: 1">
+              <label>&nbsp;</label>
+              <div style="display: flex; align-items: center; height: 38px;">
+                <input type="checkbox" id="form-transport-has-bus" style="width: auto; margin-right: 8px;">
+                <span style="font-size: 14px;">バス利用</span>
+              </div>
+            </div>
+          </div>
           <div class="form-row">
             <div class="form-group">
               <label>役割</label>

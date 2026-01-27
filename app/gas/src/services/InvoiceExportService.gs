@@ -742,12 +742,15 @@ const InvoiceExportService = {
     const spreadsheet = sheet.getParent();
     let dataSheet = spreadsheet.getSheetByName('データ');
 
+    // P2-8: 合計金額は税抜（作業費 + 諸経費）
+    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+
     // === ヘッダー情報 ===
     if (dataSheet) {
       // データシートがある場合はそちらに書き込み（数式で参照される）
       dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
       dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
-      dataSheet.getRange('B4').setValue(invoice.total_amount || 0);  // 合計金額
+      dataSheet.getRange('B4').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
       dataSheet.getRange('B5').setValue(invoice.shipper_name || '');  // 荷主名
       dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
     } else {
@@ -755,7 +758,7 @@ const InvoiceExportService = {
       sheet.getRange('A2').setValue(customer.company_name || '');
       sheet.getRange('C5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
       sheet.getRange('C6').setValue(invoice.shipper_name || '');
-      sheet.getRange('H5').setValue(invoice.total_amount);
+      sheet.getRange('H5').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
       if (company.company_name) {
         sheet.getRange('E2').setValue(company.company_name);
       }
@@ -766,7 +769,18 @@ const InvoiceExportService = {
     const startRow = 10;
     const templateFormatRow = 10;
     const lastTemplateRow = sheet.getLastRow();
-    const lastNeededRow = startRow + ((lines.length - 1) * 2);  // 1行おきに必要な最終行
+
+    // P2-8: 案件間の空行数を計算（同一案件内は連続、案件が変わる時に空行）
+    let jobTransitions = 0;
+    let prevJobIdForCount = null;
+    for (const line of lines) {
+      if (prevJobIdForCount !== null && line.job_id !== prevJobIdForCount) {
+        jobTransitions++;
+      }
+      prevJobIdForCount = line.job_id;
+    }
+    const totalRowsNeeded = lines.length + jobTransitions;
+    const lastNeededRow = startRow + totalRowsNeeded - 1;
 
     // テンプレートの行数が足りない場合、書式を一括拡張
     if (lastNeededRow > lastTemplateRow) {
@@ -774,28 +788,48 @@ const InvoiceExportService = {
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
+    // P2-8: 日付+現場名の重複表示抑制用 & 案件グループ化用
+    let prevDateSite = null;
+    let prevJobId = null;
+    let currentRow = startRow;
+
     for (let i = 0; i < lines.length; i++) {
-      const row = startRow + (i * 2);  // 1行おきに入力
       const line = lines[i];
-      sheet.getRange(row, 1).setValue(line.work_date || '');      // A: 日付
-      sheet.getRange(row, 2).setValue(line.site_name || '');      // B: 案件名
+
+      // P2-8: 案件が変わったら空行を挿入（同一案件内は連続配置）
+      if (prevJobId !== null && line.job_id !== prevJobId) {
+        currentRow++;  // 空行をスキップ
+      }
+      const row = currentRow;
+      currentRow++;
+      prevJobId = line.job_id;
+
+      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
+      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
+      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
+      prevDateSite = currentDateSite;
+
+      sheet.getRange(row, 1).setValue(isFirstLineForDateSite ? (line.work_date || '') : '');  // A: 日付
+      sheet.getRange(row, 2).setValue(isFirstLineForDateSite ? (line.site_name || '') : '');  // B: 案件名
       // C列はスキップ
       sheet.getRange(row, 4).setValue(line.item_name || '');      // D: 品目
       // E列はスキップ
-      sheet.getRange(row, 6).setValue(line.time_note || '');      // F: 時間/備考
+      sheet.getRange(row, 6).setValue(this._formatTimeValue(line.time_note));  // F: 時間/備考
       sheet.getRange(row, 7).setValue(line.quantity || 0);        // G: 数量
       sheet.getRange(row, 8).setValue(line.unit || '人');         // H: 単位
       sheet.getRange(row, 9).setValue(line.unit_price || 0);      // I: 単価
       sheet.getRange(row, 10).setValue(line.amount || 0);         // J: 金額
     }
 
-    // === 合計行を追加（税別小計）===
+    // === 合計行を追加（税別小計 = 作業費 + 諸経費）===
     let totalRow;
     if (lines.length > 0) {
-      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      const lastDataRow = currentRow - 1;  // 最後に書き込んだ行
       totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
       sheet.getRange(totalRow, 9).setValue('合計');                // I: ラベル
-      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+      // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
+      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+      sheet.getRange(totalRow, 10).setValue(totalBeforeTax);       // J: 税別合計
 
       // 合計行の上下に罫線を追加
       sheet.getRange(totalRow, 1, 1, 10).setBorder(
@@ -842,22 +876,36 @@ const InvoiceExportService = {
       return;
     }
 
+    // P2-8: 合計金額は税抜（作業費 + 諸経費）
+    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+
     // === ヘッダー情報をデータシートに書き込み ===
     // （売上シートは数式で自動参照）
     dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
     dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
-    dataSheet.getRange('B4').setValue(invoice.total_amount || 0);  // 合計金額
+    dataSheet.getRange('B4').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
     dataSheet.getRange('B5').setValue(invoice.shipper_name || '');  // 荷主名（format1と統一）
     dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
     dataSheet.getRange('B7').setValue(company.postal_code ? '〒' + company.postal_code : '');  // 自社郵便番号
     dataSheet.getRange('B8').setValue(company.address || '');  // 自社住所
 
     // === 明細行を売上シートに直接書き込み ===
-    // （A10から開始、視認性のため1行おき）
+    // （A10から開始、同一案件内は連続・案件変更時に空行）
     const startRow = 10;
     const templateFormatRow = 10;  // 書式コピー元の行（テンプレートの最初のデータ行）
     const lastTemplateRow = sheet.getLastRow();  // テンプレートの最終行
-    const lastNeededRow = startRow + ((lines.length - 1) * 2);  // 必要な最終行
+
+    // P2-8: 案件間の空行数を計算（同一案件内は連続、案件が変わる時に空行）
+    let jobTransitions = 0;
+    let prevJobIdForCount = null;
+    for (const line of lines) {
+      if (prevJobIdForCount !== null && line.job_id !== prevJobIdForCount) {
+        jobTransitions++;
+      }
+      prevJobIdForCount = line.job_id;
+    }
+    const totalRowsNeeded = lines.length + jobTransitions;
+    const lastNeededRow = startRow + totalRowsNeeded - 1;
 
     // テンプレートの行数が足りない場合、書式を一括拡張（パフォーマンス最適化）
     if (lastNeededRow > lastTemplateRow) {
@@ -865,28 +913,48 @@ const InvoiceExportService = {
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
+    // P2-8: 日付+現場名の重複表示抑制用 & 案件グループ化用
+    let prevDateSite = null;
+    let prevJobId = null;
+    let currentRow = startRow;
+
     for (let i = 0; i < lines.length; i++) {
-      const row = startRow + (i * 2);  // 1行おきに入力
       const line = lines[i];
-      sheet.getRange(row, 1).setValue(line.work_date || '');       // A: 日付
-      sheet.getRange(row, 2).setValue(line.site_name || '');       // B: 案件名
+
+      // P2-8: 案件が変わったら空行を挿入（同一案件内は連続配置）
+      if (prevJobId !== null && line.job_id !== prevJobId) {
+        currentRow++;  // 空行をスキップ
+      }
+      const row = currentRow;
+      currentRow++;
+      prevJobId = line.job_id;
+
+      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
+      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
+      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
+      prevDateSite = currentDateSite;
+
+      sheet.getRange(row, 1).setValue(isFirstLineForDateSite ? (line.work_date || '') : '');  // A: 日付
+      sheet.getRange(row, 2).setValue(isFirstLineForDateSite ? (line.site_name || '') : '');  // B: 案件名
       sheet.getRange(row, 3).setValue(line.order_number || '');    // C: 発注No
       sheet.getRange(row, 4).setValue(line.branch_office || '');   // D: 営業所
       sheet.getRange(row, 5).setValue(line.item_name || '');       // E: 品目
-      sheet.getRange(row, 6).setValue(line.time_note || '');       // F: 時間/備考
+      sheet.getRange(row, 6).setValue(this._formatTimeValue(line.time_note));  // F: 時間/備考
       sheet.getRange(row, 7).setValue(line.quantity || 0);         // G: 数量
       sheet.getRange(row, 8).setValue(line.unit || '人');          // H: 単位
       sheet.getRange(row, 9).setValue(line.unit_price || 0);       // I: 単価
       sheet.getRange(row, 10).setValue(line.amount || 0);          // J: 金額
     }
 
-    // === 合計行を追加 ===
+    // === 合計行を追加（税別小計 = 作業費 + 諸経費）===
     let totalRow;
     if (lines.length > 0) {
-      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      const lastDataRow = currentRow - 1;  // 最後に書き込んだ行
       totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
       sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
-      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+      // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
+      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+      sheet.getRange(totalRow, 10).setValue(totalBeforeTax);      // J: 税別合計
 
       // 合計行の上下に罫線を追加
       sheet.getRange(totalRow, 1, 1, 10).setBorder(
@@ -919,10 +987,13 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateFormat2Legacy: function(sheet, invoice, lines, customer, company) {
+    // P2-8: 合計金額は税抜（作業費 + 諸経費）
+    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+
     // ヘッダー部分（ラベルセルを上書きしない）
     sheet.getRange('B2').setValue(customer.company_name || '');
     sheet.getRange('B5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
-    sheet.getRange('I5').setValue(invoice.total_amount);
+    sheet.getRange('I5').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
     sheet.getRange('B6').setValue(invoice.shipper_name || '');
     if (company.company_name) {
       sheet.getRange('G2').setValue(company.company_name);
@@ -934,11 +1005,22 @@ const InvoiceExportService = {
       sheet.getRange('I3').setValue(company.address);
     }
 
-    // 明細行
+    // 明細行（同一案件内は連続・案件変更時に空行）
     const startRow = 10;
     const templateFormatRow = 10;
     const lastTemplateRow = sheet.getLastRow();
-    const lastNeededRow = startRow + ((lines.length - 1) * 2);
+
+    // P2-8: 案件間の空行数を計算（同一案件内は連続、案件が変わる時に空行）
+    let jobTransitions = 0;
+    let prevJobIdForCount = null;
+    for (const line of lines) {
+      if (prevJobIdForCount !== null && line.job_id !== prevJobIdForCount) {
+        jobTransitions++;
+      }
+      prevJobIdForCount = line.job_id;
+    }
+    const totalRowsNeeded = lines.length + jobTransitions;
+    const lastNeededRow = startRow + totalRowsNeeded - 1;
 
     // テンプレートの行数が足りない場合、書式を一括拡張（パフォーマンス最適化）
     if (lastNeededRow > lastTemplateRow) {
@@ -946,11 +1028,29 @@ const InvoiceExportService = {
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
+    // P2-8: 日付+現場名の重複表示抑制用 & 案件グループ化用
+    let prevDateSite = null;
+    let prevJobId = null;
+    let currentRow = startRow;
+
     for (let i = 0; i < lines.length; i++) {
-      const row = startRow + (i * 2);
       const line = lines[i];
-      sheet.getRange(row, 1).setValue(line.work_date || '');
-      sheet.getRange(row, 2).setValue(line.site_name || '');
+
+      // P2-8: 案件が変わったら空行を挿入（同一案件内は連続配置）
+      if (prevJobId !== null && line.job_id !== prevJobId) {
+        currentRow++;  // 空行をスキップ
+      }
+      const row = currentRow;
+      currentRow++;
+      prevJobId = line.job_id;
+
+      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
+      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
+      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
+      prevDateSite = currentDateSite;
+
+      sheet.getRange(row, 1).setValue(isFirstLineForDateSite ? (line.work_date || '') : '');
+      sheet.getRange(row, 2).setValue(isFirstLineForDateSite ? (line.site_name || '') : '');
       sheet.getRange(row, 3).setValue(line.order_number || '');
       sheet.getRange(row, 4).setValue(line.branch_office || '');
       sheet.getRange(row, 5).setValue(line.item_name || '');
@@ -961,13 +1061,15 @@ const InvoiceExportService = {
       sheet.getRange(row, 10).setValue(line.amount || 0);
     }
 
-    // 合計行と最終行に閉じる罫線
+    // 合計行と最終行に閉じる罫線（税別小計 = 作業費 + 諸経費）
     let totalRow;
     if (lines.length > 0) {
-      const lastDataRow = startRow + ((lines.length - 1) * 2);
+      const lastDataRow = currentRow - 1;  // 最後に書き込んだ行
       totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
       sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
-      sheet.getRange(totalRow, 10).setValue(invoice.subtotal || 0); // J: 税別合計
+      // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
+      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+      sheet.getRange(totalRow, 10).setValue(totalBeforeTax);      // J: 税別合計
 
       // 合計行の上下に罫線を追加
       sheet.getRange(totalRow, 1, 1, 10).setBorder(
@@ -1741,6 +1843,47 @@ const InvoiceExportService = {
       : '';
 
     return `${prefix}${customerName}_${period}_${invoice.invoice_number}${timestamp}${extension}`;
+  },
+
+  /**
+   * 時間値を文字列に変換（Date型対応）
+   * Google SheetsからのDate型を "HH:mm" 形式の文字列に変換
+   * @param {Date|string|number|null} value - 時間値
+   * @returns {string} 時間文字列または空文字
+   */
+  _formatTimeValue: function(value) {
+    if (!value) return '';
+
+    // 既に文字列の場合はそのまま返す
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    // Date型の場合は時間部分を抽出
+    if (value instanceof Date) {
+      try {
+        // 1899-1900年のDateは時間のみを表すSheets内部形式
+        const year = value.getFullYear();
+        if (year < 1910) {
+          const hours = value.getHours();
+          const minutes = value.getMinutes();
+          if (hours === 0 && minutes === 0) {
+            return '';  // 00:00は空とみなす
+          }
+          return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+        return Utilities.formatDate(value, 'Asia/Tokyo', 'HH:mm');
+      } catch (e) {
+        return '';
+      }
+    }
+
+    // 数値の場合は文字列に変換
+    if (typeof value === 'number') {
+      return String(value);
+    }
+
+    return '';
   },
 
   /**
