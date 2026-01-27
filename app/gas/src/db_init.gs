@@ -18,7 +18,8 @@ const TABLE_DEFINITIONS = {
       'email', 'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
       'unit_price_half', 'unit_price_fullday', 'unit_price_night',
       'closing_day', 'payment_day', 'payment_month_offset',
-      'invoice_format', 'include_cover_page', 'tax_rate', 'expense_rate', 'shipper_name',
+      'invoice_format', 'include_cover_page', 'has_transport_fee',  // P2-8: 諸経費請求フラグ
+      'tax_rate', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted',
       'deleted_at', 'deleted_by'
@@ -92,7 +93,9 @@ const TABLE_DEFINITIONS = {
       'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
       'slot_id',  // 枠システム: 配置が紐づく枠のID（NULL許可）
       'display_time_slot', 'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
-      'transport_area', 'transport_amount', 'transport_is_manual', 'site_role',
+      'transport_area', 'transport_amount', 'transport_is_manual',
+      'transport_station', 'transport_has_bus',  // P2-8: 諸経費請求用（駅名フリー入力、バス利用フラグ）
+      'site_role',
       'assignment_role', 'is_leader',
       'entry_date', 'safety_training_date', 'status',
       'payout_id',  // P2-3: 二重計上防止のためのPayoutへの参照
@@ -945,4 +948,125 @@ function migrateAddSubcontractorRateColumns() {
   Logger.log(`${addedCount}個のカラムを追加しました（外注先単価管理用）`);
   Logger.log('half_day_rate: ハーフ単価');
   Logger.log('full_day_rate: 終日単価');
+}
+
+/**
+ * P2-8 マイグレーション: 諸経費請求機能用カラムを追加
+ * - T_JobAssignments: transport_station, transport_has_bus
+ * - M_Customers: has_transport_fee
+ * GASエディタから実行: migrateAddTransportExpenseColumns()
+ */
+function migrateAddTransportExpenseColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  Logger.log('=== P2-8 諸経費請求機能マイグレーション ===\n');
+
+  // 1. T_JobAssignments に transport_station, transport_has_bus を追加
+  migrateAssignmentTransportColumns_(ss);
+
+  // 2. M_Customers に has_transport_fee を追加
+  migrateCustomerTransportFeeColumn_(ss);
+
+  Logger.log('\n=== P2-8 諸経費請求機能マイグレーション完了 ===');
+}
+
+/**
+ * 配置シートに transport_station, transport_has_bus カラムを追加
+ */
+function migrateAssignmentTransportColumns_(ss) {
+  const sheet = ss.getSheetByName('配置');
+
+  if (!sheet) {
+    Logger.log('✗ 配置シートが見つかりません');
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log('--- 配置シート ---');
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // transport_station が既に存在するかチェック
+  if (headers.includes('transport_station')) {
+    Logger.log('✓ transport_station, transport_has_bus カラムは既に存在します');
+    return;
+  }
+
+  // transport_is_manual の後に挿入
+  const transportIsManualIndex = headers.indexOf('transport_is_manual');
+  if (transportIsManualIndex === -1) {
+    Logger.log('✗ transport_is_manual カラムが見つかりません');
+    return;
+  }
+
+  // 挿入位置（transport_is_manual の次）
+  const insertPosition = transportIsManualIndex + 2; // 1-indexed
+
+  // transport_has_bus を先に挿入（逆順で追加）
+  sheet.insertColumnAfter(transportIsManualIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('transport_has_bus');
+  Logger.log(`✓ カラム追加: transport_has_bus (位置: ${insertPosition})`);
+
+  // transport_station を挿入
+  sheet.insertColumnAfter(transportIsManualIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('transport_station');
+  Logger.log(`✓ カラム追加: transport_station (位置: ${insertPosition})`);
+
+  // ヘッダー行のスタイルを適用
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+}
+
+/**
+ * 顧客シートに has_transport_fee カラムを追加
+ */
+function migrateCustomerTransportFeeColumn_(ss) {
+  const sheet = ss.getSheetByName('顧客');
+
+  if (!sheet) {
+    Logger.log('✗ 顧客シートが見つかりません');
+    return;
+  }
+
+  const lastCol = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  Logger.log('\n--- 顧客シート ---');
+  Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
+
+  // has_transport_fee が既に存在するかチェック
+  if (headers.includes('has_transport_fee')) {
+    Logger.log('✓ has_transport_fee カラムは既に存在します');
+    return;
+  }
+
+  // include_cover_page の後に挿入
+  const includeCoverPageIndex = headers.indexOf('include_cover_page');
+  if (includeCoverPageIndex === -1) {
+    Logger.log('✗ include_cover_page カラムが見つかりません');
+    return;
+  }
+
+  // 挿入位置（include_cover_page の次）
+  const insertPosition = includeCoverPageIndex + 2; // 1-indexed
+
+  // カラムを挿入
+  sheet.insertColumnAfter(includeCoverPageIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('has_transport_fee');
+  Logger.log(`✓ カラム追加: has_transport_fee (位置: ${insertPosition})`);
+
+  // ヘッダー行のスタイルを適用
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('顧客設定で「諸経費請求」を有効にするには、該当行に TRUE を設定してください');
 }
