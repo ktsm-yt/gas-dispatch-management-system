@@ -676,11 +676,13 @@ function setupCustomerAutocomplete() {
     clearTimeout(jobModalState.customerBlurTimer); // 入力中はblurタイマーをキャンセル
     const query = e.target.value.trim();
 
-    // 入力変更時は古いドロップダウンを非表示（チラつき防止）
+    // 入力変更時は古いドロップダウンを非表示＋中身をクリア（レースコンディション防止）
     dropdown.style.display = 'none';
+    dropdown.innerHTML = '';
+    jobModalState.customerDropdownIndex = -1;
+    jobModalState.lastCustomerSearchQuery = '';
 
     if (query.length < 1) {
-      dropdown.innerHTML = ''; // 内容もクリア
       return;
     }
 
@@ -728,6 +730,11 @@ function setupCustomerAutocomplete() {
   });
 
   searchInput.addEventListener('keydown', (e) => {
+    // ドロップダウンが非表示なら操作を無視（レースコンディション防止）
+    if (dropdown.style.display === 'none') {
+      return;
+    }
+
     // 選択可能な項目のみ（no-resultは除外）
     const items = dropdown.querySelectorAll('.autocomplete-item:not(.no-result)');
     if (items.length === 0) {

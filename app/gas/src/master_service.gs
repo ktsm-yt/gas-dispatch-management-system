@@ -395,8 +395,12 @@ function searchCustomers(params) {
       return companyMatch || branchMatch;
     });
 
-    // 件数制限
-    const customers = filtered.slice(0, limit);
+    // 件数制限 + 必要フィールドのみ返す（PII最小化）
+    const customers = filtered.slice(0, limit).map(c => ({
+      customer_id: c.customer_id,
+      company_name: c.company_name,
+      branch_name: c.branch_name || ''
+    }));
 
     return successResponse({ customers: customers }, requestId);
 
