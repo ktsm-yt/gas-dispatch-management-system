@@ -445,33 +445,32 @@ const PayoutService = {
    * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
    */
   bulkPayConfirmed: function(payoutIds, options = {}) {
-    const results = [];
-    const payouts = [];
-    let success = 0;
-    let failed = 0;
+    Logger.log(`[bulkPayConfirmed] Starting bulk update for ${payoutIds.length} payouts`);
 
     const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
 
-    for (const payoutId of payoutIds) {
-      const result = this.payConfirmedPayout(payoutId, { paid_date: paidDate });
-      results.push({
-        payoutId: payoutId,
-        ...result
-      });
+    // バルク更新を使用（シートI/Oを1回に集約）
+    const result = PayoutRepository.bulkUpdateStatus(payoutIds, 'paid', { paid_date: paidDate });
 
-      if (result.success) {
-        success++;
-        payouts.push(result.payout);
-      } else {
-        failed++;
+    Logger.log(`[bulkPayConfirmed] Completed: success=${result.success}, failed=${result.failed}`);
+
+    // スタッフ名を付与
+    const enrichedPayouts = result.payouts.map(p => this._enrichPayout(p));
+
+    // 監査ログ（成功した更新のみ）
+    for (const payout of enrichedPayouts) {
+      try {
+        logUpdate('T_Payouts', payout.payout_id, { status: 'confirmed' }, payout);
+      } catch (e) {
+        Logger.log(`[bulkPayConfirmed] Audit log error: ${e.message}`);
       }
     }
 
     return {
-      success: success,
-      failed: failed,
-      results: results,
-      payouts: payouts
+      success: result.success,
+      failed: result.failed,
+      results: result.results,
+      payouts: enrichedPayouts
     };
   },
 

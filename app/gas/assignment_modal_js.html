@@ -181,6 +181,9 @@ function fillAssignmentModalFromCache(cachedData) {
   // 枠セレクト更新
   updateSlotSelect();
 
+  // スキルフィルター更新
+  populateSkillFilter();
+
   // 統計更新
   updateModalStats();
 
@@ -314,6 +317,9 @@ function handleStaffData(response, requestJobId) {
 
   assignmentModalState.allStaff = response.data.staff || [];
 
+  // スキルフィルターを動的生成
+  populateSkillFilter();
+
   // 両方のデータが揃った場合のみ描画
   if (!assignmentModalState.isLoadingJob && assignmentModalState.job) {
     assignmentModalState.assignmentsLoaded = true;
@@ -336,6 +342,43 @@ function handleAssignmentModalError(error) {
   assignmentModalState.isLoadingStaff = false;
 
   showToast('エラー: ' + error.message, 'error');
+}
+
+/**
+ * スキルフィルターを全スタッフのスキルから動的生成
+ */
+function populateSkillFilter() {
+  const select = document.getElementById('staff-skill-filter');
+  if (!select) return;
+
+  const currentValue = select.value;
+
+  // 全スタッフからユニークなスキルを収集
+  const skillSet = new Set();
+  assignmentModalState.allStaff.forEach(staff => {
+    if (staff.skills) {
+      staff.skills.split(',').forEach(skill => {
+        const trimmed = skill.trim();
+        if (trimmed) skillSet.add(trimmed);
+      });
+    }
+  });
+
+  // ソートしてオプション生成
+  const skills = Array.from(skillSet).sort((a, b) => a.localeCompare(b, 'ja'));
+
+  select.innerHTML = '<option value="">全スキル</option>';
+  skills.forEach(skill => {
+    const option = document.createElement('option');
+    option.value = skill;
+    option.textContent = skill;
+    select.appendChild(option);
+  });
+
+  // 以前の選択値を復元
+  if (currentValue && skills.includes(currentValue)) {
+    select.value = currentValue;
+  }
 }
 
 function updateModalStats() {

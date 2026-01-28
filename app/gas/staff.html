@@ -364,18 +364,94 @@
       gap: var(--spacing-sm);
     }
 
-    .checkbox-group {
+    /* Skill Preset Buttons */
+    .skill-preset-buttons {
       display: flex;
-      gap: var(--spacing-md);
       flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: var(--spacing-xs);
     }
 
-    .checkbox-group label {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-xs);
-      font-weight: normal;
+    .skill-preset-btn {
+      padding: 4px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      font-size: 11px;
       cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .skill-preset-btn:hover {
+      background: var(--color-secondary);
+      color: white;
+      border-color: var(--color-secondary);
+    }
+
+    .skill-preset-btn.added {
+      background: #E5E7EB;
+      color: var(--text-muted);
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    /* Skill Tag Input */
+    .skill-tag-input-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: white;
+      min-height: 38px;
+      align-items: center;
+    }
+
+    .skill-tag-input-container:focus-within {
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .skill-tag-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      background: var(--color-secondary);
+      color: white;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .skill-tag-item .skill-tag-remove {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      padding: 0;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0.8;
+    }
+
+    .skill-tag-item .skill-tag-remove:hover {
+      opacity: 1;
+    }
+
+    .skill-tag-input {
+      flex: 1;
+      min-width: 80px;
+      border: none;
+      outline: none;
+      font-size: 12px;
+      padding: 4px;
+    }
+
+    .skill-tag-input::placeholder {
+      color: var(--text-muted);
     }
 
     /* Stats bar */
@@ -496,14 +572,6 @@
         <option value="sole_proprietor">一人親方</option>
         <option value="subcontract">外注</option>
       </select>
-      <select id="rate-type" class="type-filter-select">
-        <option value="basic">基本</option>
-        <option value="half">ハーフ</option>
-        <option value="fullday">終日</option>
-        <option value="night">夜間</option>
-        <option value="tobi">鳶</option>
-        <option value="tobiage">鳶揚げ</option>
-      </select>
       <label class="filter-toggle">
         <input type="checkbox" id="show-inactive">
         無効も表示
@@ -538,7 +606,6 @@
             <th>電話番号</th>
             <th>住所</th>
             <th>スキル</th>
-            <th id="rate-header">日給</th>
             <th>状態</th>
           </tr>
         </thead>
@@ -599,11 +666,12 @@
             </div>
             <div class="form-group">
               <label>スキル</label>
-              <div class="checkbox-group">
-                <label><input type="checkbox" id="skill-tobi" value="鳶"> 鳶</label>
-                <label><input type="checkbox" id="skill-age" value="揚げ"> 揚げ</label>
-                <label><input type="checkbox" id="skill-tobiage" value="鳶揚げ"> 鳶揚げ</label>
-                <label><input type="checkbox" id="skill-board" value="ボード"> ボード</label>
+              <div class="skill-preset-buttons" id="skill-presets">
+                <!-- プリセットボタンはJSで動的に生成 -->
+              </div>
+              <div class="skill-tag-input-container" id="skill-tags-container">
+                <!-- タグはJSで動的に生成 -->
+                <input type="text" class="skill-tag-input" id="skill-input" placeholder="スキルを入力してEnter">
               </div>
             </div>
           </div>
@@ -653,23 +721,23 @@
             <div class="form-row-5">
               <div class="form-group">
                 <label for="daily-rate-half">ハーフ</label>
-                <input type="number" id="daily-rate-half" name="daily_rate_half" min="0" step="100" placeholder="8000">
+                <input type="number" id="daily-rate-half" name="daily_rate_half" min="0" step="100">
               </div>
               <div class="form-group">
                 <label for="daily-rate-basic">基本</label>
-                <input type="number" id="daily-rate-basic" name="daily_rate_basic" min="0" step="100" placeholder="11000">
+                <input type="number" id="daily-rate-basic" name="daily_rate_basic" min="0" step="100">
               </div>
               <div class="form-group">
                 <label for="daily-rate-fullday">終日</label>
-                <input type="number" id="daily-rate-fullday" name="daily_rate_fullday" min="0" step="100" placeholder="14000">
+                <input type="number" id="daily-rate-fullday" name="daily_rate_fullday" min="0" step="100">
               </div>
               <div class="form-group">
                 <label for="daily-rate-night">夜間</label>
-                <input type="number" id="daily-rate-night" name="daily_rate_night" min="0" step="100" placeholder="13000">
+                <input type="number" id="daily-rate-night" name="daily_rate_night" min="0" step="100">
               </div>
               <div class="form-group">
                 <label for="daily-rate-tobi">鳶</label>
-                <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100" placeholder="17000">
+                <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100">
               </div>
             </div>
           </div>
@@ -788,7 +856,16 @@
               </div>
               <div class="form-group">
                 <label for="foreigner-type">外国人区分</label>
-                <input type="text" id="foreigner-type" name="foreigner_type" placeholder="">
+                <select id="foreigner-type" name="foreigner_type">
+                  <option value="">該当なし</option>
+                  <option value="技能実習">技能実習</option>
+                  <option value="特定技能1号">特定技能1号</option>
+                  <option value="特定技能2号">特定技能2号</option>
+                  <option value="永住者">永住者</option>
+                  <option value="定住者">定住者</option>
+                  <option value="配偶者等">日本人の配偶者等</option>
+                  <option value="留学">留学</option>
+                </select>
               </div>
             </div>
             <div class="form-group">
@@ -822,9 +899,9 @@
 
   <script>
     const STAFF_SKELETON_ROWS = [
-      ['line-40', 'line-30', 'line-50', 'line-70', 'line-60', 'line-30', 'pill-40'],
-      ['line-50', 'line-30', 'line-40', 'line-60', 'line-50', 'line-30', 'pill-40'],
-      ['line-60', 'line-40', 'line-50', 'line-70', 'line-60', 'line-30', 'pill-40']
+      ['line-40', 'line-30', 'line-50', 'line-70', 'line-60', 'pill-40'],
+      ['line-50', 'line-30', 'line-40', 'line-60', 'line-50', 'pill-40'],
+      ['line-60', 'line-40', 'line-50', 'line-70', 'line-60', 'pill-40']
     ];
 
     // State
@@ -832,6 +909,7 @@
     let filteredStaff = [];
     let currentStaff = null;
     let subcontractors = [];
+    let currentSkills = [];  // 編集中のスキルタグ
 
     // Selection Mode State
     let isSelectMode = false;
@@ -852,12 +930,6 @@
 
       // Type filter
       document.getElementById('type-filter').addEventListener('change', filterStaff);
-
-      // Rate type selector
-      document.getElementById('rate-type').addEventListener('change', () => {
-        updateRateHeader();
-        renderTable();
-      });
 
       // Show inactive toggle
       document.getElementById('show-inactive').addEventListener('change', filterStaff);
@@ -903,6 +975,14 @@
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
           closeModal();
+        }
+      });
+
+      // Skill tag input
+      document.getElementById('skill-input').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addSkillFromInput();
         }
       });
     }
@@ -1012,7 +1092,7 @@
 
     function renderTable() {
       const tbody = document.getElementById('staff-table-body');
-      const colSpan = isSelectMode ? 8 : 7;
+      const colSpan = isSelectMode ? 7 : 6;
 
       if (filteredStaff.length === 0) {
         tbody.innerHTML = `
@@ -1037,9 +1117,6 @@
         const typeLabel = typeLabels[staff.staff_type] || staff.staff_type;
         const typeClass = 'type-' + staff.staff_type;
 
-        const rateType = document.getElementById('rate-type').value;
-        const rate = getRateByType(staff, rateType);
-
         const isSelected = selectedStaffIds.has(staff.staff_id);
         const checkboxCell = isSelectMode ? `
           <td class="select-col">
@@ -1063,7 +1140,6 @@
             <td>${escapeHtml(staff.phone) || '-'}</td>
             <td>${escapeHtml(staff.address) || '-'}</td>
             <td>${skillTags || '-'}</td>
-            <td class="cell-price">${formatPrice(rate)}</td>
             <td class="cell-status">
               <span class="status-badge ${staff.is_active ? 'status-active' : 'status-inactive'}">
                 ${staff.is_active ? '有効' : '無効'}
@@ -1081,31 +1157,6 @@
 
     function showTableLoading() {
       setSkeletonTableBody('staff-table-body', STAFF_SKELETON_ROWS);
-    }
-
-    function formatPrice(price) {
-      if (price === null || price === undefined || price === '') {
-        return '-';
-      }
-      return Number(price).toLocaleString() + '円';
-    }
-
-    function getRateByType(staff, rateType) {
-      switch (rateType) {
-        case 'half': return staff.daily_rate_half;
-        case 'basic': return staff.daily_rate_basic;
-        case 'fullday': return staff.daily_rate_fullday;
-        case 'night': return staff.daily_rate_night;
-        case 'tobi': return staff.daily_rate_tobi;
-        case 'tobiage': return Math.floor((staff.daily_rate_tobi || 0) * 1.5);
-        default: return staff.daily_rate_basic;
-      }
-    }
-
-    function updateRateHeader() {
-      const rateType = document.getElementById('rate-type').value;
-      const labels = { half: 'ハーフ', basic: '基本', fullday: '終日', night: '夜間', tobi: '鳶', tobiage: '鳶揚げ' };
-      document.getElementById('rate-header').textContent = labels[rateType] || '日給';
     }
 
     function escapeHtml(text) {
@@ -1290,11 +1341,9 @@
       document.getElementById('staff-id').value = '';
       document.getElementById('staff-updated-at').value = '';
 
-      // Reset skill checkboxes
-      document.getElementById('skill-tobi').checked = false;
-      document.getElementById('skill-age').checked = false;
-      document.getElementById('skill-tobiage').checked = false;
-      document.getElementById('skill-board').checked = false;
+      // Reset skill tags
+      currentSkills = [];
+      renderSkillTags();
 
       // Show subcontractor select based on staff type
       const subcontractorGroup = document.getElementById('subcontractor-group');
@@ -1364,17 +1413,108 @@
       document.getElementById('notes').value = staff.notes || '';
       document.getElementById('is-active').value = staff.is_active ? 'true' : 'false';
 
-      // Set skill checkboxes
-      const skills = parseSkills(staff.skills);
-      document.getElementById('skill-tobi').checked = skills.includes('鳶');
-      document.getElementById('skill-age').checked = skills.includes('揚げ');
-      document.getElementById('skill-tobiage').checked = skills.includes('鳶揚げ');
-      document.getElementById('skill-board').checked = skills.includes('ボード');
+      // Set skill tags
+      currentSkills = parseSkills(staff.skills);
+      renderSkillTags();
     }
 
     function closeModal() {
       document.getElementById('staff-modal').style.display = 'none';
       currentStaff = null;
+    }
+
+    // ========================================
+    // Skill Tag Functions
+    // ========================================
+
+    /**
+     * 全スタッフからユニークなスキルを取得してプリセットボタンを生成
+     */
+    function renderSkillPresets() {
+      const container = document.getElementById('skill-presets');
+      if (!container) return;
+
+      // 全スタッフからユニークなスキルを収集
+      const skillSet = new Set();
+      staffList.forEach(staff => {
+        if (staff.skills) {
+          staff.skills.split(',').forEach(skill => {
+            const trimmed = skill.trim();
+            if (trimmed) skillSet.add(trimmed);
+          });
+        }
+      });
+
+      const presets = Array.from(skillSet).sort((a, b) => a.localeCompare(b, 'ja'));
+
+      if (presets.length === 0) {
+        container.innerHTML = '<span style="font-size: 11px; color: var(--text-muted);">（スキルなし）</span>';
+        return;
+      }
+
+      container.innerHTML = presets.map(skill => {
+        const isAdded = currentSkills.includes(skill);
+        return `<button type="button" class="skill-preset-btn ${isAdded ? 'added' : ''}"
+                  onclick="addSkillFromPreset('${escapeHtml(skill)}')"
+                  ${isAdded ? 'disabled' : ''}>${escapeHtml(skill)}</button>`;
+      }).join('');
+    }
+
+    function addSkillFromPreset(skill) {
+      if (currentSkills.includes(skill)) return;
+
+      currentSkills.push(skill);
+      renderSkillTags();
+      renderSkillPresets();  // ボタン状態を更新
+    }
+
+    function renderSkillTags() {
+      const container = document.getElementById('skill-tags-container');
+      const input = document.getElementById('skill-input');
+
+      // 既存のタグを削除（入力欄は残す）
+      container.querySelectorAll('.skill-tag-item').forEach(el => el.remove());
+
+      // タグを入力欄の前に挿入
+      currentSkills.forEach(skill => {
+        const tag = document.createElement('span');
+        tag.className = 'skill-tag-item';
+        tag.innerHTML = `
+          ${escapeHtml(skill)}
+          <button type="button" class="skill-tag-remove" onclick="removeSkill('${escapeHtml(skill)}')">&times;</button>
+        `;
+        container.insertBefore(tag, input);
+      });
+
+      // プリセットボタンの状態も更新
+      renderSkillPresets();
+    }
+
+    function addSkillFromInput() {
+      const input = document.getElementById('skill-input');
+      const skill = input.value.trim();
+
+      // 入力をクリア（先にクリアしてからDOM操作）
+      input.value = '';
+
+      if (!skill) return;
+
+      if (currentSkills.includes(skill)) {
+        showToast('そのスキルは既に追加されています', 'warning');
+        input.focus();
+        return;
+      }
+
+      currentSkills.push(skill);
+      renderSkillTags();
+
+      // DOM操作後に再度フォーカス
+      document.getElementById('skill-input').focus();
+    }
+
+    function removeSkill(skill) {
+      currentSkills = currentSkills.filter(s => s !== skill);
+      renderSkillTags();
     }
 
     function saveStaffMember() {
@@ -1402,13 +1542,8 @@
         }
       });
 
-      // Collect skills
-      const skills = [];
-      if (document.getElementById('skill-tobi').checked) skills.push('鳶');
-      if (document.getElementById('skill-age').checked) skills.push('揚げ');
-      if (document.getElementById('skill-tobiage').checked) skills.push('鳶揚げ');
-      if (document.getElementById('skill-board').checked) skills.push('ボード');
-      staff.skills = skills.join(',');
+      // Collect skills from tags
+      staff.skills = currentSkills.join(',');
 
       const staffId = document.getElementById('staff-id').value;
       const updatedAt = document.getElementById('staff-updated-at').value;

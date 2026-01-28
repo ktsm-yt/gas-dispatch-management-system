@@ -924,9 +924,6 @@ const InvoiceExportService = {
 
     // === ヘッダー情報をデータシートに書き込み ===
     // （売上シートは数式で自動参照）
-    console.log('[_populateFormat2] Writing header data to dataSheet');
-    console.log('[_populateFormat2] company.postal_code:', company.postal_code);
-    console.log('[_populateFormat2] company.address:', company.address);
     dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
     dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
     dataSheet.getRange('B4').setValue(totalBeforeTax);  // P2-8: 税抜合計金額

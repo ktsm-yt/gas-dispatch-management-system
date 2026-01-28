@@ -95,19 +95,6 @@
       cursor: pointer;
     }
 
-    .price-type-select {
-      padding: var(--spacing-xs) var(--spacing-sm);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 13px;
-      background: white;
-      cursor: pointer;
-    }
-
-    .price-type-select:focus {
-      outline: none;
-      border-color: var(--color-secondary);
-    }
 
     /* Main Content */
     .main-content {
@@ -166,10 +153,6 @@
       color: var(--text-muted);
     }
 
-    .cell-price {
-      text-align: right;
-      font-family: 'SF Mono', Monaco, monospace;
-    }
 
     .cell-status {
       text-align: center;
@@ -245,8 +228,6 @@
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
 
-    /* Page-specific: 700px modal width */
-    .modal { width: 700px; }
 
     /* Page-specific form section title */
     .form-section-title {
@@ -258,17 +239,23 @@
       border-bottom: 2px solid var(--color-secondary);
     }
 
-    /* Page-specific grid layouts */
-    .form-row-3 {
+
+    /* 5-column layout for unit prices */
+    .form-row-5 {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: var(--spacing-md);
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: var(--spacing-md);
     }
 
-    .form-row-4 {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
-      gap: var(--spacing-md);
+    .form-row-5 .form-group input {
+      padding: 4px 6px;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .form-row-5 .form-group label {
+      font-size: 10px;
     }
 
     /* Stats bar */
@@ -299,13 +286,6 @@
         <input type="checkbox" id="show-inactive">
         無効な顧客も表示
       </label>
-      <select id="price-type" class="price-type-select">
-        <option value="tobi">鳶単価</option>
-        <option value="age">揚げ単価</option>
-        <option value="tobiage">鳶揚げ単価</option>
-        <option value="half">ハーフ単価</option>
-        <option value="fullday">終日単価</option>
-      </select>
       <div class="stats-bar">
         <span>全 <span class="count" id="stats-total">-</span> 件</span>
         <span>有効 <span class="count" id="stats-active">-</span> 件</span>
@@ -324,7 +304,6 @@
             <th>担当者</th>
             <th>電話番号</th>
             <th>住所</th>
-            <th id="price-header">単価</th>
             <th>締め日</th>
             <th>状態</th>
           </tr>
@@ -343,7 +322,7 @@
 
   <!-- Customer Edit Modal -->
   <div class="modal-overlay" id="customer-modal" style="display: none;">
-    <div class="modal">
+    <div class="modal modal-lg">
       <div class="modal-header">
         <h2 class="modal-title" id="modal-title">顧客編集</h2>
         <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -400,7 +379,7 @@
                 <input type="text" id="address" name="address" placeholder="東京都〇〇区...">
               </div>
             </div>
-            <div class="form-row-3">
+            <div class="form-row cols-3">
               <div class="form-group">
                 <label for="phone">電話番号</label>
                 <input type="tel" id="phone" name="phone" placeholder="03-1234-5678">
@@ -419,36 +398,26 @@
           <!-- 単価設定 -->
           <div class="form-section">
             <div class="form-section-title">単価設定（税抜）</div>
-            <div class="form-row-4">
+            <div class="form-row-5">
               <div class="form-group">
-                <label for="unit-price-basic">基本単価</label>
-                <input type="number" id="unit-price-basic" name="unit_price_basic" min="0" step="100" placeholder="20000">
+                <label for="unit-price-half">ハーフ</label>
+                <input type="number" id="unit-price-half" name="unit_price_half" min="0" step="100">
               </div>
               <div class="form-group">
-                <label for="unit-price-tobi">鳶単価</label>
-                <input type="number" id="unit-price-tobi" name="unit_price_tobi" min="0" step="100" placeholder="25000">
+                <label for="unit-price-basic">基本</label>
+                <input type="number" id="unit-price-basic" name="unit_price_basic" min="0" step="100">
               </div>
               <div class="form-group">
-                <label for="unit-price-age">揚げ単価</label>
-                <input type="number" id="unit-price-age" name="unit_price_age" min="0" step="100" placeholder="22000">
+                <label for="unit-price-fullday">終日</label>
+                <input type="number" id="unit-price-fullday" name="unit_price_fullday" min="0" step="100">
               </div>
               <div class="form-group">
-                <label for="unit-price-tobiage">鳶揚げ単価</label>
-                <input type="number" id="unit-price-tobiage" name="unit_price_tobiage" min="0" step="100" placeholder="27000">
-              </div>
-            </div>
-            <div class="form-row-4">
-              <div class="form-group">
-                <label for="unit-price-half">ハーフ単価</label>
-                <input type="number" id="unit-price-half" name="unit_price_half" min="0" step="100" placeholder="12000">
+                <label for="unit-price-night">夜間</label>
+                <input type="number" id="unit-price-night" name="unit_price_night" min="0" step="100">
               </div>
               <div class="form-group">
-                <label for="unit-price-fullday">終日単価</label>
-                <input type="number" id="unit-price-fullday" name="unit_price_fullday" min="0" step="100" placeholder="30000">
-              </div>
-              <div class="form-group">
-                <label for="unit-price-night">夜間単価</label>
-                <input type="number" id="unit-price-night" name="unit_price_night" min="0" step="100" placeholder="28000">
+                <label for="unit-price-tobi">鳶</label>
+                <input type="number" id="unit-price-tobi" name="unit_price_tobi" min="0" step="100">
               </div>
             </div>
           </div>
@@ -456,7 +425,7 @@
           <!-- 請求設定 -->
           <div class="form-section">
             <div class="form-section-title">請求設定</div>
-            <div class="form-row-3">
+            <div class="form-row cols-3">
               <div class="form-group">
                 <label for="closing-day">締め日</label>
                 <select id="closing-day" name="closing_day">
@@ -488,7 +457,7 @@
                 </select>
               </div>
             </div>
-            <div class="form-row-3">
+            <div class="form-row cols-3">
               <div class="form-group">
                 <label for="invoice-format">請求書書式</label>
                 <select id="invoice-format" name="invoice_format">
@@ -498,27 +467,14 @@
                 </select>
               </div>
               <div class="form-group">
-                <label for="include-cover-page">頭紙（表紙）</label>
-                <div style="display: flex; align-items: center; height: 38px;">
-                  <input type="checkbox" id="include-cover-page" name="include_cover_page" style="width: auto; margin-right: 8px;">
-                  <span style="font-size: 14px; color: #666;">様式1,2に頭紙を付ける</span>
-                </div>
-              </div>
-              <div class="form-group">
                 <label for="tax-rate">消費税率(%)</label>
                 <input type="number" id="tax-rate" name="tax_rate" min="0" max="100" step="1" value="10">
               </div>
-            </div>
-            <div class="form-row-3">
               <div class="form-group">
-                <label for="expense-rate">諸経費率(%)</label>
-                <input type="number" id="expense-rate" name="expense_rate" min="0" max="100" step="0.1" placeholder="0">
-              </div>
-              <div class="form-group">
-                <label for="has-transport-fee">諸経費請求</label>
+                <label for="has-transport-fee">交通費請求</label>
                 <div style="display: flex; align-items: center; height: 38px;">
                   <input type="checkbox" id="has-transport-fee" name="has_transport_fee" style="width: auto; margin-right: 8px;">
-                  <span style="font-size: 14px; color: #666;">請求書に諸経費を含める</span>
+                  <span style="font-size: 14px; color: #666;">交通費を請求する</span>
                 </div>
               </div>
             </div>
@@ -592,9 +548,9 @@
 
   <script>
     const CUSTOMER_SKELETON_ROWS = [
-      ['line-60', 'line-40', 'line-30', 'line-50', 'line-80', 'line-30', 'line-20', 'pill-40'],
-      ['line-50', 'line-30', 'line-40', 'line-40', 'line-70', 'line-30', 'line-20', 'pill-40'],
-      ['line-70', 'line-40', 'line-30', 'line-50', 'line-60', 'line-30', 'line-20', 'pill-40']
+      ['line-60', 'line-40', 'line-30', 'line-50', 'line-80', 'line-20', 'pill-40'],
+      ['line-50', 'line-30', 'line-40', 'line-40', 'line-70', 'line-20', 'pill-40'],
+      ['line-70', 'line-40', 'line-30', 'line-50', 'line-60', 'line-20', 'pill-40']
     ];
 
     // State
@@ -615,12 +571,6 @@
 
       // Show inactive toggle
       document.getElementById('show-inactive').addEventListener('change', filterCustomers);
-
-      // Price type selector
-      document.getElementById('price-type').addEventListener('change', () => {
-        updatePriceHeader();
-        renderTable();
-      });
 
       // Add button
       document.getElementById('add-customer-btn').addEventListener('click', () => openModal(null));
@@ -717,7 +667,7 @@
       if (filteredCustomers.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="8">
+            <td colspan="7">
               <div class="empty-state">顧客データがありません</div>
             </td>
           </tr>
@@ -725,11 +675,8 @@
         return;
       }
 
-      const priceType = document.getElementById('price-type').value;
-
       tbody.innerHTML = filteredCustomers.map(customer => {
         const branchDept = [customer.branch_name, customer.department_name].filter(Boolean).join(' / ');
-        const price = getPriceByType(customer, priceType);
 
         return `
           <tr class="${customer.is_active ? '' : 'inactive'}" onclick="openModal('${customer.customer_id}')">
@@ -738,7 +685,6 @@
             <td class="cell-contact">${escapeHtml(customer.contact_name) || '-'}</td>
             <td>${escapeHtml(customer.phone) || '-'}</td>
             <td>${escapeHtml(customer.address) || '-'}</td>
-            <td class="cell-price">${formatPrice(price)}</td>
             <td>${formatClosingDay(customer.closing_day)}</td>
             <td class="cell-status">
               <span class="status-badge ${customer.is_active ? 'status-active' : 'status-inactive'}">
@@ -752,32 +698,6 @@
 
     function showTableLoading() {
       setSkeletonTableBody('customer-table-body', CUSTOMER_SKELETON_ROWS);
-    }
-
-    function formatPrice(price) {
-      if (price === null || price === undefined || price === '') {
-        return '-';
-      }
-      return Number(price).toLocaleString() + '円';
-    }
-
-    function getPriceByType(customer, priceType) {
-      switch (priceType) {
-        case 'basic': return customer.unit_price_basic;
-        case 'tobi': return customer.unit_price_tobi;
-        case 'age': return customer.unit_price_age;
-        case 'tobiage': return customer.unit_price_tobiage;
-        case 'half': return customer.unit_price_half;
-        case 'fullday': return customer.unit_price_fullday;
-        case 'night': return customer.unit_price_night;
-        default: return customer.unit_price_basic || customer.unit_price_tobi;
-      }
-    }
-
-    function updatePriceHeader() {
-      const priceType = document.getElementById('price-type').value;
-      const labels = { basic: '基本単価', tobi: '鳶単価', age: '揚げ単価', tobiage: '鳶揚げ単価', half: 'ハーフ単価', fullday: '終日単価', night: '夜間単価' };
-      document.getElementById('price-header').textContent = labels[priceType] || '単価';
     }
 
     function formatClosingDay(day) {
@@ -822,7 +742,6 @@
         document.getElementById('tax-rate').value = '10';
         document.getElementById('honorific').value = '様';
         document.getElementById('invoice-format').value = 'format1';
-        document.getElementById('include-cover-page').checked = false;
         document.getElementById('has-transport-fee').checked = false;
         document.getElementById('payment-month-offset').value = '1';
 
@@ -848,8 +767,6 @@
       document.getElementById('email').value = customer.email || '';
       document.getElementById('unit-price-basic').value = customer.unit_price_basic || '';
       document.getElementById('unit-price-tobi').value = customer.unit_price_tobi || '';
-      document.getElementById('unit-price-age').value = customer.unit_price_age || '';
-      document.getElementById('unit-price-tobiage').value = customer.unit_price_tobiage || '';
       document.getElementById('unit-price-half').value = customer.unit_price_half || '';
       document.getElementById('unit-price-fullday').value = customer.unit_price_fullday || '';
       document.getElementById('unit-price-night').value = customer.unit_price_night || '';
@@ -857,10 +774,8 @@
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
       document.getElementById('payment-day').value = customer.payment_day || '';
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
-      document.getElementById('include-cover-page').checked = customer.include_cover_page === true || customer.include_cover_page === 'true';
       document.getElementById('has-transport-fee').checked = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
       document.getElementById('tax-rate').value = customer.tax_rate ?? 10;
-      document.getElementById('expense-rate').value = customer.expense_rate || '';
       document.getElementById('shipper-name').value = customer.shipper_name || '';
       document.getElementById('customer-code').value = customer.customer_code || '';
       document.getElementById('invoice-registration-number').value = customer.invoice_registration_number || '';
@@ -965,8 +880,8 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage', 'unit_price_half', 'unit_price_fullday', 'unit_price_night',
-               'closing_day', 'payment_day', 'payment_month_offset', 'tax_rate', 'expense_rate'].includes(key)) {
+          if (['unit_price_basic', 'unit_price_tobi', 'unit_price_half', 'unit_price_fullday', 'unit_price_night',
+               'closing_day', 'payment_day', 'payment_month_offset', 'tax_rate'].includes(key)) {
             customer[key] = value ? Number(value) : null;
           } else if (key === 'is_active') {
             customer[key] = value === 'true';
@@ -977,7 +892,6 @@
       });
 
       // Handle checkbox (FormData only includes checked checkboxes)
-      customer.include_cover_page = document.getElementById('include-cover-page').checked;
       customer.has_transport_fee = document.getElementById('has-transport-fee').checked;
 
       const customerId = document.getElementById('customer-id').value;
