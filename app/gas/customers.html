@@ -273,6 +273,11 @@
   </style>
 </head>
 <body>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -541,6 +546,7 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
@@ -602,13 +608,59 @@
       };
     }
 
-    function loadCustomers() {
-      showTableLoading();
+    const CUSTOMERS_CACHE_KEY = 'master_customers';
 
+    function loadCustomers() {
+      // 1. キャッシュ確認
+      const cached = PageCache.get(CUSTOMERS_CACHE_KEY);
+      if (cached) {
+        customers = cached.data || [];
+        updateStats();
+        filterCustomers();
+
+        // 30分以上古ければバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
+        return;
+      }
+
+      // 2. キャッシュなし → スケルトン表示してAPI呼び出し
+      showTableLoading();
+      fetchCustomersFromServer();
+    }
+
+    function fetchCustomersFromServer() {
       google.script.run
-        .withSuccessHandler(handleCustomersData)
+        .withSuccessHandler(function(response) {
+          if (response && response.ok) {
+            PageCache.set(CUSTOMERS_CACHE_KEY, response.data.items || []);
+          }
+          handleCustomersData(response);
+        })
         .withFailureHandler(handleError)
         .listCustomers({ includeDeleted: false });
+    }
+
+    function refreshCustomersInBackground() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (!response || !response.ok) return;
+
+          const newItems = response.data.items || [];
+          // 差分があれば更新
+          if (JSON.stringify(newItems) !== JSON.stringify(customers)) {
+            customers = newItems;
+            PageCache.set(CUSTOMERS_CACHE_KEY, newItems);
+            updateStats();
+            filterCustomers();
+          }
+        })
+        .listCustomers({ includeDeleted: false });
+    }
+
+    function invalidateCustomersCache() {
+      PageCache.clear(CUSTOMERS_CACHE_KEY);
     }
 
     function handleCustomersData(response) {
@@ -921,6 +973,8 @@
               const idx = customers.findIndex(c => c.customer_id === response.data.customer_id);
               if (idx !== -1) customers[idx] = response.data;
             }
+            // キャッシュ更新
+            PageCache.set(CUSTOMERS_CACHE_KEY, customers);
             updateStats();
             filterCustomers();
             showToast('保存しました', 'success');
@@ -956,6 +1010,8 @@
 
           // 楽観的更新: UIを即座に更新
           customers = customers.filter(c => c.customer_id !== deleteId);
+          // キャッシュ更新
+          PageCache.set(CUSTOMERS_CACHE_KEY, customers);
           updateStats();
           filterCustomers();
           closeModal();
