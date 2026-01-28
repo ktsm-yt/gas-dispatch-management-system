@@ -326,6 +326,183 @@ const InvoiceRepository = {
   },
 
   /**
+   * 複数請求書のステータスを一括更新（バルク処理）
+   * @param {Object[]} updates - [{ invoiceId, expectedUpdatedAt }, ...]
+   * @param {string} targetStatus - 更新先ステータス
+   * @returns {Object} { success: number, failed: number, results: [], invoices: [] }
+   */
+  bulkUpdateStatus: function(updates, targetStatus) {
+    if (!updates || updates.length === 0) {
+      return { success: 0, failed: 0, results: [], invoices: [] };
+    }
+
+    // ステータス正規化
+    const normalizeStatus = s => String(s || '').trim().toLowerCase();
+    const normalizedTargetStatus = normalizeStatus(targetStatus);
+
+    // 有効なステータスチェック
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    if (!validStatuses.includes(normalizedTargetStatus)) {
+      return {
+        success: 0,
+        failed: updates.length,
+        results: updates.map(u => ({
+          invoiceId: u.invoiceId,
+          success: false,
+          error: 'INVALID_STATUS'
+        })),
+        invoices: []
+      };
+    }
+
+    // ステータス遷移ルール
+    const allowedTransitions = {
+      unsent: ['sent'],
+      sent: ['paid', 'unpaid', 'unsent'],
+      unpaid: ['paid', 'sent'],
+      paid: ['sent']
+    };
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: 0,
+        failed: updates.length,
+        results: updates.map(u => ({
+          invoiceId: u.invoiceId,
+          success: false,
+          error: 'NOT_FOUND'
+        })),
+        invoices: []
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const statusIndex = headers.indexOf('status');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const isDeletedIndex = headers.indexOf('is_deleted');
+
+    if (idIndex === -1 || statusIndex === -1) {
+      return {
+        success: 0,
+        failed: updates.length,
+        results: updates.map(u => ({
+          invoiceId: u.invoiceId,
+          success: false,
+          error: 'SCHEMA_ERROR'
+        })),
+        invoices: []
+      };
+    }
+
+    // 3. 更新対象のMapを作成 (invoiceId -> expectedUpdatedAt)
+    const updateMap = new Map(
+      updates.map(u => [u.invoiceId, u.expectedUpdatedAt])
+    );
+
+    const now = getCurrentTimestamp();
+    const results = [];
+    const updatedInvoices = [];
+    let successCount = 0;
+    let failedCount = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const invoiceId = row[idIndex];
+
+      if (!updateMap.has(invoiceId)) continue;
+
+      const expectedUpdatedAt = updateMap.get(invoiceId);
+
+      // 論理削除済みチェック
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        results.push({ invoiceId, success: false, error: 'DELETED' });
+        failedCount++;
+        updateMap.delete(invoiceId); // 処理済みマーク
+        continue;
+      }
+
+      // 楽観的ロックチェック
+      const currentUpdatedAt = row[updatedAtIndex];
+      if (expectedUpdatedAt && currentUpdatedAt !== expectedUpdatedAt) {
+        results.push({
+          invoiceId,
+          success: false,
+          error: 'CONFLICT_ERROR',
+          currentUpdatedAt
+        });
+        failedCount++;
+        updateMap.delete(invoiceId);
+        continue;
+      }
+
+      // ステータス遷移チェック
+      const currentStatus = normalizeStatus(row[statusIndex]);
+      // 旧ステータス(draft, issued)はunsentとして扱う
+      const normalizedCurrentStatus = (currentStatus === 'draft' || currentStatus === 'issued')
+        ? 'unsent'
+        : currentStatus;
+
+      if (normalizedCurrentStatus !== normalizedTargetStatus &&
+          !allowedTransitions[normalizedCurrentStatus]?.includes(normalizedTargetStatus)) {
+        results.push({
+          invoiceId,
+          success: false,
+          error: 'INVALID_STATUS_TRANSITION',
+          currentStatus: normalizedCurrentStatus
+        });
+        failedCount++;
+        updateMap.delete(invoiceId);
+        continue;
+      }
+
+      // ステータス更新
+      row[statusIndex] = normalizedTargetStatus;
+      if (updatedAtIndex !== -1) {
+        row[updatedAtIndex] = now;
+      }
+
+      hasChanges = true;
+      successCount++;
+      results.push({ invoiceId, success: true });
+
+      // 更新後のレコードを構築
+      const updatedRecord = rowToObject(headers, row);
+      updatedInvoices.push(this._normalizeRecord(updatedRecord));
+
+      updateMap.delete(invoiceId); // 処理済みマーク
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const [invoiceId] of updateMap) {
+      results.push({ invoiceId, success: false, error: 'NOT_FOUND' });
+      failedCount++;
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success: successCount,
+      failed: failedCount,
+      results,
+      invoices: updatedInvoices
+    };
+  },
+
+  /**
    * 請求番号を生成（YYMM_SEQ形式）
    * 競合防止のためロックを取得し、一意性を保証する
    * @param {number} year - 年

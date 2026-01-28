@@ -807,7 +807,7 @@ const PayoutService = {
   },
 
   /**
-   * PayoutIDに紐付いたAssignmentsのpayout_idをクリア
+   * PayoutIDに紐付いたAssignmentsのpayout_idをクリア（バルク処理版）
    * @param {string} payoutId - 支払ID
    */
   _unlinkAssignmentsFromPayout: function(payoutId) {
@@ -815,15 +815,21 @@ const PayoutService = {
     const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
     const linkedAssignments = allAssignments.filter(a => a.payout_id === payoutId);
 
-    for (const assignment of linkedAssignments) {
-      try {
-        AssignmentRepository.update({
-          assignment_id: assignment.assignment_id,
-          payout_id: ''
-        });
-      } catch (e) {
-        Logger.log(`[_unlinkAssignmentsFromPayout] Error clearing assignment ${assignment.assignment_id}: ${e.message}`);
-      }
+    if (linkedAssignments.length === 0) {
+      return;
+    }
+
+    // バルク更新用のデータを作成
+    const updates = linkedAssignments.map(a => ({
+      assignment_id: a.assignment_id,
+      payout_id: ''
+    }));
+
+    try {
+      // 一括でpayout_idをクリア
+      AssignmentRepository.bulkUpdatePayoutId(updates);
+    } catch (e) {
+      Logger.log(`[_unlinkAssignmentsFromPayout] Bulk update error: ${e.message}`);
     }
   },
 
