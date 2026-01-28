@@ -317,6 +317,12 @@
   </style>
 </head>
 <body>
+  <!-- サーバー日付とスクリプトURLをテンプレートで埋め込み（RPC削減） -->
+  <script>
+    window.__SERVER_DATE__ = '<?= getServerDate() ?>';
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
 
   <div class="date-nav">
@@ -394,6 +400,7 @@
   <?!= include('assignment_modal_js'); ?>
 
   <?!= include('skeleton_helpers'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     const ASSIGNMENTS_SKELETON_ROWS = [
@@ -407,6 +414,7 @@
     let isLoading = false;
     let timeSlotSortOrder = 'asc';  // 時間区分ソート順
     let currentJobs = [];  // 現在の案件データを保持
+    const assignmentsMemoryCache = new Map();  // メモリキャッシュ
 
     // 時間区分の順序定義
     const TIME_SLOT_ORDER = {
@@ -429,34 +437,38 @@
       if (jobId && job) {
         updateJobRow(jobId, job, assignments);
         updateSummaryFromTable();
+        // キャッシュを無効化（他の日付のキャッシュに古いデータが残るのを防ぐ）
+        invalidateAssignmentsCache();
       }
     }
 
+    /**
+     * 配置関連のすべてのキャッシュを無効化
+     */
+    function invalidateAssignmentsCache() {
+      assignmentsMemoryCache.clear();
+      PageCache.clearByPrefix('assignments');
+    }
+
     function initializeDate() {
-      // URLパラメータから日付を取得
+      // URLパラメータ → 埋め込み日付 → フォールバック の優先順位で日付を取得（RPC不要）
       const urlParams = new URLSearchParams(window.location.search);
       const dateParam = urlParams.get('date');
 
       if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
         // URLに有効な日付がある場合はそれを使用
         currentDate = new Date(dateParam + 'T00:00:00');
-        loadAssignments();
+      } else if (window.__SERVER_DATE__) {
+        // テンプレート埋め込みの日付を使用
+        currentDate = new Date(window.__SERVER_DATE__ + 'T00:00:00');
+        updateUrlDate();
       } else {
-        // URLに日付がない場合はサーバー日付を取得
-        google.script.run
-          .withSuccessHandler(function(serverDate) {
-            currentDate = new Date(serverDate + 'T00:00:00');
-            updateUrlDate();
-            loadAssignments();
-          })
-          .withFailureHandler(function(error) {
-            console.error('getServerDate failed:', error);
-            currentDate = new Date();
-            updateUrlDate();
-            loadAssignments();
-          })
-          .getServerDate();
+        // フォールバック: クライアント時間
+        console.warn('Server date not available, using client time');
+        currentDate = new Date();
+        updateUrlDate();
       }
+      loadAssignments();
     }
 
     function updateUrlDate() {
@@ -477,18 +489,11 @@
         }
       });
       document.getElementById('today-btn').addEventListener('click', () => {
-        google.script.run
-          .withSuccessHandler(function(serverDate) {
-            currentDate = new Date(serverDate + 'T00:00:00');
-            updateUrlDate();
-            loadAssignments();
-          })
-          .withFailureHandler(function(error) {
-            currentDate = new Date();
-            updateUrlDate();
-            loadAssignments();
-          })
-          .getServerDate();
+        // クライアント側でAsia/Tokyo日付を取得（深夜跨ぎ対応、RPC不要）
+        const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        currentDate = new Date(todayStr + 'T00:00:00');
+        updateUrlDate();
+        loadAssignments();
       });
     }
 
@@ -498,18 +503,82 @@
       loadAssignments();
     }
 
+    function getAssignmentsCacheKey(dateStr) {
+      return PageCache.makeKey('assignments', dateStr);
+    }
+
     function loadAssignments() {
       const dateStr = formatDateISO(currentDate);
-      const requestId = ++currentRequestId;  // 新しいリクエストID（古いレスポンスは無視される）
+      const requestId = ++currentRequestId;
+      const cacheKey = getAssignmentsCacheKey(dateStr);
 
-      isLoading = true;
       updateDateDisplay();
 
+      // 1. メモリキャッシュ確認
+      if (assignmentsMemoryCache.has(cacheKey)) {
+        const cachedData = assignmentsMemoryCache.get(cacheKey);
+        handleData(cachedData, requestId, dateStr);
+        // TTL超過ならバックグラウンド更新
+        const cached = PageCache.get(cacheKey);
+        if (!cached || cached.age > PageCache.DEFAULT_TTL) {
+          refreshAssignmentsInBackground(dateStr, requestId);
+        }
+        return;
+      }
+
+      // 2. sessionStorageキャッシュ確認（Stale-While-Revalidate: 常に即表示）
+      const cached = PageCache.get(cacheKey);
+      if (cached) {
+        assignmentsMemoryCache.set(cacheKey, cached.data);
+        handleData(cached.data, requestId, dateStr);
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.DEFAULT_TTL) {
+          refreshAssignmentsInBackground(dateStr, requestId);
+        }
+        return;
+      }
+
+      // 3. キャッシュなし → スケルトン表示してAPI呼び出し（初回のみ）
+      isLoading = true;
       setSkeletonTableBody('jobs-tbody', ASSIGNMENTS_SKELETON_ROWS);
+      fetchAssignmentsFromServer(dateStr, requestId);
+    }
+
+    function fetchAssignmentsFromServer(dateStr, requestId) {
+      const cacheKey = getAssignmentsCacheKey(dateStr);
 
       google.script.run
-        .withSuccessHandler((response) => handleData(response, requestId, dateStr))
+        .withSuccessHandler((response) => {
+          if (response && response.ok) {
+            assignmentsMemoryCache.set(cacheKey, response);
+            PageCache.set(cacheKey, response);
+          }
+          handleData(response, requestId, dateStr);
+        })
         .withFailureHandler((error) => handleError(error, requestId))
+        .getDashboardAssignments(dateStr);
+    }
+
+    function refreshAssignmentsInBackground(dateStr, requestId) {
+      const cacheKey = getAssignmentsCacheKey(dateStr);
+
+      google.script.run
+        .withSuccessHandler((response) => {
+          // 古いリクエストのレスポンスは無視
+          if (requestId !== currentRequestId) return;
+          if (!response || !response.ok) return;
+
+          const oldData = assignmentsMemoryCache.get(cacheKey);
+          const newJobs = response.data?.jobs || [];
+          const oldJobs = oldData?.data?.jobs || [];
+
+          // 差分があれば更新
+          if (JSON.stringify(newJobs) !== JSON.stringify(oldJobs)) {
+            assignmentsMemoryCache.set(cacheKey, response);
+            PageCache.set(cacheKey, response);
+            handleData(response, requestId, dateStr);
+          }
+        })
         .getDashboardAssignments(dateStr);
     }
 
