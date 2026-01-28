@@ -364,6 +364,49 @@ function listCustomers(options = {}) {
 }
 
 /**
+ * 顧客検索（インクリメンタルサーチ用）
+ * @param {Object} params - 検索パラメータ
+ *   - search_term: 検索キーワード（会社名・支店名で部分一致）
+ *   - limit: 返す最大件数（デフォルト10）
+ * @returns {Object} APIレスポンス { ok: true, data: { customers: [...] } }
+ */
+function searchCustomers(params) {
+  const requestId = generateRequestId();
+
+  try {
+    const searchTerm = (params.search_term || '').trim();
+    const limit = params.limit || 10;
+
+    if (!searchTerm) {
+      return successResponse({ customers: [] }, requestId);
+    }
+
+    // アクティブな顧客のみ取得
+    const result = listCustomers({ activeOnly: true });
+    if (!result.ok) {
+      return result;
+    }
+
+    // 会社名・支店名で部分一致検索（大文字小文字を区別しない）
+    const query = searchTerm.toLowerCase();
+    const filtered = result.data.items.filter(customer => {
+      const companyMatch = (customer.company_name || '').toLowerCase().includes(query);
+      const branchMatch = (customer.branch_name || '').toLowerCase().includes(query);
+      return companyMatch || branchMatch;
+    });
+
+    // 件数制限
+    const customers = filtered.slice(0, limit);
+
+    return successResponse({ customers: customers }, requestId);
+
+  } catch (error) {
+    Logger.log('searchCustomers error: ' + error.message);
+    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
+  }
+}
+
+/**
  * 顧客を削除（論理削除）
  * @param {string} customerId - 顧客ID
  * @param {string} expectedUpdatedAt - 楽観ロック用

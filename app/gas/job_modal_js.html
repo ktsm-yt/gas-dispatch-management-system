@@ -15,7 +15,9 @@ let jobModalState = {
   customerDropdownIndex: -1,
   isSaving: false,
   isLoadingJob: false,  // 案件データ読み込み中かどうか
-  saveAndContinue: false
+  saveAndContinue: false,
+  customerBlurTimer: null,  // 顧客検索のblurタイマー
+  lastCustomerSearchQuery: ''  // 最後に検索したクエリ（チラつき防止）
 };
 
 // ========== Job Cache ==========
@@ -671,10 +673,14 @@ function setupCustomerAutocomplete() {
 
   searchInput.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
+    clearTimeout(jobModalState.customerBlurTimer); // 入力中はblurタイマーをキャンセル
     const query = e.target.value.trim();
 
+    // 入力変更時は古いドロップダウンを非表示（チラつき防止）
+    dropdown.style.display = 'none';
+
     if (query.length < 1) {
-      dropdown.style.display = 'none';
+      dropdown.innerHTML = ''; // 内容もクリア
       return;
     }
 
@@ -684,33 +690,71 @@ function setupCustomerAutocomplete() {
   });
 
   searchInput.addEventListener('focus', () => {
-    if (searchInput.value.trim().length >= 1) {
-      searchCustomers(searchInput.value.trim());
+    clearTimeout(jobModalState.customerBlurTimer); // フォーカス時にblurタイマーをキャンセル
+    // フォーカス時は、現在の入力値と最後の検索クエリが一致する場合のみドロップダウンを表示
+    // （古い検索結果のチラつき防止）
+    const currentQuery = searchInput.value.trim();
+    if (currentQuery.length >= 1 &&
+        currentQuery === jobModalState.lastCustomerSearchQuery &&
+        dropdown.innerHTML.trim() !== '') {
+      dropdown.style.display = 'block';
     }
   });
 
   searchInput.addEventListener('blur', () => {
     // Delay to allow click on dropdown
-    setTimeout(() => {
+    jobModalState.customerBlurTimer = setTimeout(() => {
       dropdown.style.display = 'none';
     }, 200);
   });
 
+  // 顧客選択処理（共通関数）
+  function selectCustomerItem(item) {
+    if (!item) return;
+    clearTimeout(jobModalState.customerBlurTimer);
+    document.getElementById('customer-id').value = item.dataset.id;
+    document.getElementById('customer-search').value = item.dataset.name;
+    dropdown.style.display = 'none';
+    jobModalState.customerDropdownIndex = -1;
+  }
+
+  // イベント委譲: ドロップダウンコンテナで一括処理（ラグ解消）
+  dropdown.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.autocomplete-item:not(.no-result)');
+    if (item) {
+      e.preventDefault(); // blurイベントを防止
+      selectCustomerItem(item);
+    }
+  });
+
   searchInput.addEventListener('keydown', (e) => {
-    const items = dropdown.querySelectorAll('.autocomplete-item');
-    if (items.length === 0) return;
+    // 選択可能な項目のみ（no-resultは除外）
+    const items = dropdown.querySelectorAll('.autocomplete-item:not(.no-result)');
+    if (items.length === 0) {
+      if (e.key === 'Escape') {
+        dropdown.style.display = 'none';
+      }
+      return;
+    }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      jobModalState.customerDropdownIndex = Math.min(jobModalState.customerDropdownIndex + 1, items.length - 1);
+      // -1から始まる場合は0に、それ以外は+1（最大は末尾）
+      if (jobModalState.customerDropdownIndex < 0) {
+        jobModalState.customerDropdownIndex = 0;
+      } else {
+        jobModalState.customerDropdownIndex = Math.min(jobModalState.customerDropdownIndex + 1, items.length - 1);
+      }
       updateDropdownHighlight(items);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       jobModalState.customerDropdownIndex = Math.max(jobModalState.customerDropdownIndex - 1, 0);
       updateDropdownHighlight(items);
-    } else if (e.key === 'Enter' && jobModalState.customerDropdownIndex >= 0) {
+    } else if (e.key === 'Enter') {
       e.preventDefault();
-      items[jobModalState.customerDropdownIndex].click();
+      // ハイライトがなければ最初の項目を選択
+      const selectIndex = jobModalState.customerDropdownIndex >= 0 ? jobModalState.customerDropdownIndex : 0;
+      selectCustomerItem(items[selectIndex]);
     } else if (e.key === 'Escape') {
       dropdown.style.display = 'none';
     }
@@ -719,9 +763,19 @@ function setupCustomerAutocomplete() {
 
 function searchCustomers(query) {
   const dropdown = document.getElementById('customer-dropdown');
+  const searchInput = document.getElementById('customer-search');
 
   google.script.run
     .withSuccessHandler((response) => {
+      // 検索結果表示時にblurタイマーをキャンセル（チラつき防止）
+      clearTimeout(jobModalState.customerBlurTimer);
+
+      // 現在の入力値と検索クエリが一致しない場合は結果を無視（入力クリア後の表示防止）
+      const currentValue = searchInput ? searchInput.value.trim() : '';
+      if (currentValue !== query) {
+        return;
+      }
+
       if (!response.ok || !response.data.customers) {
         dropdown.style.display = 'none';
         return;
@@ -729,24 +783,20 @@ function searchCustomers(query) {
 
       const customers = response.data.customers;
       if (customers.length === 0) {
+        jobModalState.lastCustomerSearchQuery = query; // 検索クエリを記録
         dropdown.innerHTML = '<div class="autocomplete-item no-result">該当なし</div>';
         dropdown.style.display = 'block';
         return;
       }
 
       jobModalState.customerDropdownIndex = -1;
+      jobModalState.lastCustomerSearchQuery = query; // 検索クエリを記録
       dropdown.innerHTML = customers.map((c, i) => {
         const displayName = c.company_name + (c.branch_name ? ' ' + c.branch_name : '');
         return `<div class="autocomplete-item" data-id="${c.customer_id}" data-name="${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}">${typeof escapeHtml === 'function' ? escapeHtml(displayName) : displayName}</div>`;
       }).join('');
 
-      dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
-        item.addEventListener('click', () => {
-          document.getElementById('customer-id').value = item.dataset.id;
-          document.getElementById('customer-search').value = item.dataset.name;
-          dropdown.style.display = 'none';
-        });
-      });
+      // クリックハンドラはイベント委譲で処理（setupCustomerAutocomplete内）
 
       dropdown.style.display = 'block';
     })
@@ -758,7 +808,12 @@ function searchCustomers(query) {
 
 function updateDropdownHighlight(items) {
   items.forEach((item, i) => {
-    item.classList.toggle('highlighted', i === jobModalState.customerDropdownIndex);
+    const isHighlighted = i === jobModalState.customerDropdownIndex;
+    item.classList.toggle('highlighted', isHighlighted);
+    // ハイライト項目をスクロール領域内に表示
+    if (isHighlighted) {
+      item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   });
 }
 

@@ -553,11 +553,40 @@ const InvoiceExportService = {
 
   /**
    * 自社情報を取得
+   * 注意: M_Companyシートの列名が日本語の場合もマッピングする
    * @returns {Object} 自社情報
    */
   _getCompanyInfo: function() {
     const records = getAllRecords('M_Company');
-    return records.length > 0 ? records[0] : {};
+    if (records.length === 0) {
+      console.warn('[InvoiceExportService] M_Company にレコードがありません');
+      return {};
+    }
+    const raw = records[0];
+    // デバッグ: 会社情報のキーを出力
+    console.log('[InvoiceExportService] M_Company keys:', Object.keys(raw).join(', '));
+
+    // 日本語列名のマッピング（シートの列名が日本語の場合に対応）
+    const company = {
+      ...raw,
+      // 英語キーがない場合、日本語キーからマッピング
+      company_name: raw.company_name || raw['会社名'] || raw['自社名'] || '',
+      postal_code: raw.postal_code || raw['郵便番号'] || '',
+      address: raw.address || raw['住所'] || raw['所在地'] || '',
+      tel: raw.tel || raw['電話番号'] || raw['TEL'] || '',
+      fax: raw.fax || raw['FAX'] || raw['ファックス'] || '',
+      bank_info: raw.bank_info || raw['振込先'] || raw['銀行情報'] || '',
+      invoice_number: raw.invoice_number || raw['登録番号'] || raw['インボイス番号'] || ''
+    };
+
+    // 請求書に必要なフィールドの確認
+    if (!company.postal_code) {
+      console.warn('[InvoiceExportService] M_Company.postal_code が未設定です（日本語キーも確認済み）');
+    }
+    if (!company.address) {
+      console.warn('[InvoiceExportService] M_Company.address が未設定です（日本語キーも確認済み）');
+    }
+    return company;
   },
 
   /**
@@ -895,6 +924,9 @@ const InvoiceExportService = {
 
     // === ヘッダー情報をデータシートに書き込み ===
     // （売上シートは数式で自動参照）
+    console.log('[_populateFormat2] Writing header data to dataSheet');
+    console.log('[_populateFormat2] company.postal_code:', company.postal_code);
+    console.log('[_populateFormat2] company.address:', company.address);
     dataSheet.getRange('B2').setValue(customer.company_name || '');  // 請求先会社名
     dataSheet.getRange('B3').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);  // 作業年月
     dataSheet.getRange('B4').setValue(totalBeforeTax);  // P2-8: 税抜合計金額

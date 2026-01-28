@@ -172,6 +172,7 @@ function fillAssignmentModalFromCache(cachedData) {
   assignmentModalState.assignmentsLoaded = true;
 
   // ヘッダー更新
+  document.getElementById('modal-customer-name').textContent = job.customer_name || '-';
   document.getElementById('modal-job-name').textContent = job.site_name || '-';
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
@@ -269,6 +270,7 @@ function handleAssignmentData(response, requestJobId) {
   assignmentModalState.jobUpdatedAt = job.updated_at;
 
   // Update header
+  document.getElementById('modal-customer-name').textContent = job.customer_name || '-';
   document.getElementById('modal-job-name').textContent = job.site_name || '-';
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
@@ -785,7 +787,7 @@ function saveAllChanges() {
         const msg = [];
         if (selectedIds.length > 0) msg.push(`${selectedIds.length}名を登録`);
         if (deleteIds.length > 0) msg.push(`${deleteIds.length}件を削除`);
-        showToast(msg.join('、') + 'しました', 'success');
+        showToast(msg.join('、') + 'しました ✓', 'success');
 
         // Update state with server response
         assignmentModalState.assignments = response.data.assignments || [];
@@ -828,10 +830,12 @@ function batchAddStaff() {
 
 /**
  * 請求書存在チェック - 配置変更後に請求担当への通知を促す
+ * トーストではなくモーダル内バナーで表示
  */
 function checkInvoiceExistsNotification() {
   const job = assignmentModalState.job;
   if (!job || !job.customer_id || !job.work_date) {
+    hideInvoiceExistsBanner();
     return;
   }
 
@@ -840,18 +844,41 @@ function checkInvoiceExistsNotification() {
       if (response.ok && response.data.exists) {
         const inv = response.data.invoice;
         const periodLabel = `${inv.billing_year}年${inv.billing_month}月`;
-        showToast(
-          `この案件の請求書は生成済みです（${periodLabel}）。請求一覧をご確認ください。`,
-          'info',
-          5000  // 5秒間表示
+        showInvoiceExistsBanner(
+          `この案件の請求書は生成済みです（${periodLabel}）。変更は請求書に反映されません。`
         );
+      } else {
+        hideInvoiceExistsBanner();
       }
     })
     .withFailureHandler(function(error) {
       // 失敗しても通知するだけなので無視
       console.log('checkInvoiceExistsForJob error:', error);
+      hideInvoiceExistsBanner();
     })
     .checkInvoiceExistsForJob(job.customer_id, job.work_date);
+}
+
+/**
+ * 請求書生成済みバナーを表示
+ */
+function showInvoiceExistsBanner(message) {
+  const banner = document.getElementById('invoice-exists-banner');
+  const messageEl = document.getElementById('invoice-exists-message');
+  if (banner && messageEl) {
+    messageEl.textContent = message;
+    banner.style.display = 'flex';
+  }
+}
+
+/**
+ * 請求書生成済みバナーを非表示
+ */
+function hideInvoiceExistsBanner() {
+  const banner = document.getElementById('invoice-exists-banner');
+  if (banner) {
+    banner.style.display = 'none';
+  }
 }
 
 function loadTransportAreas() {

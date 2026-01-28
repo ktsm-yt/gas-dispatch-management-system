@@ -1077,7 +1077,12 @@
         .withSuccessHandler((response) => {
           if (response.ok && response.data.maxUpdatedAt) {
             if (lastMaxUpdatedAt && response.data.maxUpdatedAt !== lastMaxUpdatedAt) {
-              showToast('データが更新されました。再読み込みしてください。');
+              // モーダルが開いている間はトーストを表示しない（モーダル内で更新されるため）
+              const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
+                             || document.getElementById('job-modal')?.style.display !== 'none';
+              if (!modalOpen) {
+                showToast('データが更新されました。再読み込みしてください。');
+              }
             }
             lastMaxUpdatedAt = response.data.maxUpdatedAt;
           }
