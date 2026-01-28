@@ -4,6 +4,7 @@
 /* Assignment Modal Styles */
 .assignment-modal-layout {
 /* modal-xl provides width/max-width */
+height: 85vh;
 max-height: 85vh;
 }
 
@@ -117,7 +118,7 @@ align-items: center;
 
 .panel-content {
 flex: 1;
-overflow-y: auto;
+overflow-y: scroll;  /* 常にスクロールバー表示でガタつき防止 */
 border: 1px solid var(--border-color);
 border-radius: var(--radius-sm);
 background: var(--bg-card);
@@ -155,6 +156,10 @@ border-bottom: 1px solid var(--border-color);
 cursor: pointer;
 transition: background 0.1s;
 gap: var(--spacing-sm);
+height: 42px;  /* 固定高さでフィルタ時のガタつき防止 */
+min-height: 42px;
+max-height: 42px;
+box-sizing: border-box;
 }
 
 .staff-list-item:last-child {
@@ -228,6 +233,8 @@ display: flex;
 align-items: center;
 gap: var(--spacing-sm);
 min-width: 0;
+flex-wrap: nowrap;  /* バッジの折り返し防止 */
+overflow: hidden;   /* はみ出し部分は非表示 */
 }
 
 .staff-list-name {
