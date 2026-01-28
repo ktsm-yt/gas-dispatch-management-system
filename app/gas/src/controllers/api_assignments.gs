@@ -313,8 +313,8 @@ function getAvailableStaff(options = {}) {
       );
     }
 
-    // スタッフ一覧を取得
-    let staff = getAllRecords('M_Staff').filter(s => s.is_active);
+    // スタッフ一覧を取得（MasterCacheでキャッシュ）
+    let staff = MasterCache.getStaff().filter(s => s.is_active);
 
     // 案件が指定されている場合
     let job = null;
@@ -648,21 +648,16 @@ function getDashboardAssignments(date) {
     // 配置を取得
     const assignments = AssignmentRepository.findByDate(date);
 
-    // 顧客情報を一括取得してキャッシュ
-    const allCustomers = getAllRecords('M_Customers');
+    // 顧客情報を取得（MasterCacheでキャッシュ）
+    const customerMapFull = MasterCache.getCustomerMap();
     const customerCache = {};
-    for (const customer of allCustomers) {
-      if (customer.customer_id && !customer.is_deleted) {
-        customerCache[customer.customer_id] = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
-      }
+    for (const customerId in customerMapFull) {
+      const customer = customerMapFull[customerId];
+      customerCache[customerId] = customer.company_name + (customer.branch_name ? ' ' + customer.branch_name : '');
     }
 
-    // スタッフ情報を一括取得してキャッシュ
-    const allStaff = getAllRecords('M_Staff');
-    const staffCache = {};
-    for (const staff of allStaff) {
-      staffCache[staff.staff_id] = staff;
-    }
+    // スタッフ情報を取得（MasterCacheでキャッシュ）
+    const staffCache = MasterCache.getStaffMap();
 
     // 配置にスタッフ名を付加
     const enrichedAssignments = assignments.map(a => {

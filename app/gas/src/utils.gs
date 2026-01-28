@@ -243,3 +243,105 @@ function safeJsonParse(jsonStr, defaultValue) {
     return defaultValue;
   }
 }
+
+/**
+ * マスターデータキャッシュ
+ *
+ * リクエストスコープ内でM_Staff/M_Customersの重複読み込みを防ぐ。
+ * GASはリクエストごとに新しいスクリプトインスタンスが生成されるため、
+ * このキャッシュは自然にリクエスト終了時にクリアされる。
+ *
+ * 使い方:
+ *   const staff = MasterCache.getStaff();      // 初回: シートから読込、以降: キャッシュ
+ *   const customers = MasterCache.getCustomers();
+ *   MasterCache.invalidate();                   // 更新後にキャッシュをクリア
+ */
+const MasterCache = {
+  _staffCache: null,
+  _staffMap: null,
+  _customerCache: null,
+  _customerMap: null,
+
+  /**
+   * M_Staffの全レコードを取得（キャッシュ付き）
+   * @returns {Object[]} スタッフ配列
+   */
+  getStaff: function() {
+    if (this._staffCache === null) {
+      this._staffCache = getAllRecords('M_Staff').filter(s => !s.is_deleted);
+    }
+    return this._staffCache;
+  },
+
+  /**
+   * M_Staffをマップ形式で取得（staff_id → staff）
+   * @returns {Object} スタッフマップ
+   */
+  getStaffMap: function() {
+    if (this._staffMap === null) {
+      const staff = this.getStaff();
+      this._staffMap = {};
+      for (const s of staff) {
+        if (s.staff_id) {
+          this._staffMap[s.staff_id] = s;
+        }
+      }
+    }
+    return this._staffMap;
+  },
+
+  /**
+   * M_Customersの全レコードを取得（キャッシュ付き）
+   * @returns {Object[]} 顧客配列
+   */
+  getCustomers: function() {
+    if (this._customerCache === null) {
+      this._customerCache = getAllRecords('M_Customers').filter(c => !c.is_deleted);
+    }
+    return this._customerCache;
+  },
+
+  /**
+   * M_Customersをマップ形式で取得（customer_id → customer）
+   * @returns {Object} 顧客マップ
+   */
+  getCustomerMap: function() {
+    if (this._customerMap === null) {
+      const customers = this.getCustomers();
+      this._customerMap = {};
+      for (const c of customers) {
+        if (c.customer_id) {
+          this._customerMap[c.customer_id] = c;
+        }
+      }
+    }
+    return this._customerMap;
+  },
+
+  /**
+   * キャッシュをクリア
+   * マスターデータ更新後に呼び出す
+   */
+  invalidate: function() {
+    this._staffCache = null;
+    this._staffMap = null;
+    this._customerCache = null;
+    this._customerMap = null;
+  },
+
+  /**
+   * スタッフキャッシュのみクリア
+   */
+  invalidateStaff: function() {
+    this._staffCache = null;
+    this._staffMap = null;
+  },
+
+  /**
+   * 顧客キャッシュのみクリア
+   */
+  invalidateCustomers: function() {
+    this._customerCache = null;
+    this._customerMap = null;
+  }
+};
