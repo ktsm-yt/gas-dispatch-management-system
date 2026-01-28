@@ -288,6 +288,12 @@
 </head>
 
 <body>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
+  <?!= include('cache_utils'); ?>
   <?!= include('nav_bar'); ?>
 
   <!-- Toolbar -->
@@ -442,14 +448,53 @@
       return { period: period };
     }
 
+    function getSalesAnalyticsCacheKey(options) {
+      return PageCache.makeKey('sales_analytics', options);
+    }
+
     function loadData() {
       const options = getSelectedPeriod();
+      const cacheKey = getSalesAnalyticsCacheKey(options);
 
+      // 1. キャッシュ確認（Stale-While-Revalidate: 常に即表示）
+      const cached = PageCache.get(cacheKey);
+      if (cached) {
+        handleDataLoaded(cached.data);
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.ANALYTICS_TTL) {
+          refreshSalesInBackground(options, cacheKey);
+        }
+        return;
+      }
+
+      // 2. キャッシュなし → ローディング表示してAPI呼び出し（初回のみ）
       showLoading();
+      fetchSalesFromServer(options, cacheKey);
+    }
 
+    function fetchSalesFromServer(options, cacheKey) {
       google.script.run
-        .withSuccessHandler(handleDataLoaded)
+        .withSuccessHandler(function(result) {
+          if (result && result.ok) {
+            PageCache.set(cacheKey, result);
+          }
+          handleDataLoaded(result);
+        })
         .withFailureHandler(handleError)
+        .getDashboardStats(options);
+    }
+
+    function refreshSalesInBackground(options, cacheKey) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (!result || !result.ok) return;
+
+          const cached = PageCache.get(cacheKey);
+          if (cached && JSON.stringify(result.data) !== JSON.stringify(cached.data?.data)) {
+            PageCache.set(cacheKey, result);
+            handleDataLoaded(result);
+          }
+        })
         .getDashboardStats(options);
     }
 

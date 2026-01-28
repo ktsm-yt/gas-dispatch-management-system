@@ -527,6 +527,11 @@
 </head>
 
 <body>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
