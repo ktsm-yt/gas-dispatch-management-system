@@ -129,6 +129,11 @@
   </style>
 </head>
 <body>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -218,12 +223,15 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
   </script>
 
   <script>
+    const SUBCONTRACTOR_CACHE_KEY = 'master_subcontractors';
+
     const SUBCONTRACTOR_SKELETON_ROWS = [
       ['line-60', 'line-40', 'line-50', 'line-80', 'pill-40'],
       ['line-50', 'line-30', 'line-40', 'line-60', 'pill-40'],
@@ -248,11 +256,30 @@
     }
 
     function loadData() {
+      // 1. キャッシュ確認
+      const cached = PageCache.get(SUBCONTRACTOR_CACHE_KEY);
+      if (cached) {
+        dataList = cached.data || [];
+        updateStats();
+        filterData();
+
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshDataInBackground();
+        }
+        return;
+      }
+
+      // 2. キャッシュなし → スケルトン表示してAPI呼び出し
       setSkeletonTableBody('table-body', SUBCONTRACTOR_SKELETON_ROWS);
+      fetchDataFromServer();
+    }
+
+    function fetchDataFromServer() {
       google.script.run
         .withSuccessHandler((response) => {
           if (response.ok) {
             dataList = response.data.items || [];
+            PageCache.set(SUBCONTRACTOR_CACHE_KEY, dataList);
             updateStats();
             filterData();
           } else {
@@ -260,6 +287,21 @@
           }
         })
         .withFailureHandler((e) => showToast(e.message, 'error'))
+        .listSubcontractors({ includeDeleted: false });
+    }
+
+    function refreshDataInBackground() {
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (!response || !response.ok) return;
+          const newItems = response.data.items || [];
+          if (JSON.stringify(newItems) !== JSON.stringify(dataList)) {
+            dataList = newItems;
+            PageCache.set(SUBCONTRACTOR_CACHE_KEY, dataList);
+            updateStats();
+            filterData();
+          }
+        })
         .listSubcontractors({ includeDeleted: false });
     }
 
@@ -372,6 +414,7 @@
               const idx = dataList.findIndex(d => d.subcontractor_id === response.data.subcontractor_id);
               if (idx !== -1) dataList[idx] = response.data;
             }
+            PageCache.set(SUBCONTRACTOR_CACHE_KEY, dataList);
             updateStats();
             filterData();
             showToast('保存しました', 'success');
@@ -403,6 +446,7 @@
 
           // 楽観的更新: UIを即座に更新
           dataList = dataList.filter(d => d.subcontractor_id !== deleteId);
+          PageCache.set(SUBCONTRACTOR_CACHE_KEY, dataList);
           updateStats();
           filterData();
           closeModal();
