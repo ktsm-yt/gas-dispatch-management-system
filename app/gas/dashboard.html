@@ -480,6 +480,12 @@
   </style>
 </head>
 <body>
+  <!-- サーバー日付とスクリプトURLをテンプレートで埋め込み（RPC削減） -->
+  <script>
+    window.__SERVER_DATE__ = '<?= getServerDate() ?>';
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -594,21 +600,23 @@
     });
 
     function initializeWithServerDate() {
-      // サーバー時間（Asia/Tokyo）を取得して初期化
-      google.script.run
-        .withSuccessHandler(function(serverDate) {
-          currentDate = new Date(serverDate + 'T00:00:00');
-          loadDashboard();
-          startPolling();
-        })
-        .withFailureHandler(function(error) {
-          // フォールバック: クライアント時間を使用
-          console.error('getServerDate failed:', error);
-          currentDate = new Date();
-          loadDashboard();
-          startPolling();
-        })
-        .getServerDate();
+      // URLパラメータ → 埋め込み日付 → フォールバック の優先順位で日付を取得（RPC不要）
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        // URLパラメータから日付を取得
+        currentDate = new Date(dateParam + 'T00:00:00');
+      } else if (window.__SERVER_DATE__) {
+        // テンプレート埋め込みの日付を使用
+        currentDate = new Date(window.__SERVER_DATE__ + 'T00:00:00');
+      } else {
+        // フォールバック: クライアント時間
+        console.warn('Server date not available, using client time');
+        currentDate = new Date();
+      }
+      loadDashboard();
+      startPolling();
     }
 
     function setupEventListeners() {
@@ -622,17 +630,10 @@
       });
 
       document.getElementById('today-btn').addEventListener('click', () => {
-        // サーバー時間で「今日」に移動
-        google.script.run
-          .withSuccessHandler(function(serverDate) {
-            currentDate = new Date(serverDate + 'T00:00:00');
-            loadDashboard();
-          })
-          .withFailureHandler(function(error) {
-            currentDate = new Date();
-            loadDashboard();
-          })
-          .getServerDate();
+        // クライアント側でAsia/Tokyo日付を取得（深夜跨ぎ対応、RPC不要）
+        const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        currentDate = new Date(todayStr + 'T00:00:00');
+        loadDashboard();
       });
 
       // カレンダー日付選択
