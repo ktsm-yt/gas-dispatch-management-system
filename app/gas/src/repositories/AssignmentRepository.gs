@@ -60,10 +60,13 @@ const AssignmentRepository = {
       return [];
     }
 
+    // Set化してO(1)ルックアップに最適化
+    const jobIdSet = new Set(jobIds);
+
     // 全配置を取得してフィルタリング
     const allAssignments = getAllRecords(this.TABLE_NAME);
     return allAssignments.filter(a =>
-      !a.is_deleted && jobIds.includes(a.job_id)
+      !a.is_deleted && jobIdSet.has(a.job_id)
     );
   },
 

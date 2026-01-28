@@ -527,12 +527,23 @@ const AssignmentService = {
   },
 
   /**
-   * 時間帯が重複する配置を取得
+   * 時間帯が重複する配置を取得（最適化版）
    * @private
    */
   _getConflictingAssignments: function(staffId, targetJob) {
-    // 同日の他の案件を取得
+    // 同日の案件と配置を一括取得
     const sameDayJobs = JobRepository.findByDate(targetJob.work_date);
+    const sameDayAssignments = AssignmentRepository.findByDate(targetJob.work_date);
+
+    // 配置をjob_idでグループ化（メモリ上で1回だけ）
+    const assignmentsByJob = {};
+    for (const a of sameDayAssignments) {
+      if (!assignmentsByJob[a.job_id]) {
+        assignmentsByJob[a.job_id] = [];
+      }
+      assignmentsByJob[a.job_id].push(a);
+    }
+
     const conflicting = [];
 
     for (const job of sameDayJobs) {
@@ -542,9 +553,9 @@ const AssignmentService = {
 
       // 時間帯の重複をチェック
       if (this._isTimeSlotConflict(targetJob.time_slot, job.time_slot)) {
-        // このスタッフがこの案件に配置されているか
-        const assignments = AssignmentRepository.findByJobId(job.job_id);
-        const assigned = assignments.find(a =>
+        // このスタッフがこの案件に配置されているか（キャッシュから検索）
+        const jobAssignments = assignmentsByJob[job.job_id] || [];
+        const assigned = jobAssignments.find(a =>
           a.staff_id === staffId && a.status !== 'CANCELLED'
         );
 

@@ -357,12 +357,8 @@ function deleteJob(jobId, expectedUpdatedAt) {
       );
     }
 
-    // 関連する配置データの存在チェック
-    const assignmentSheet = getSheetDirect('配置');
-    const allAssignments = getAllRecords('T_JobAssignments');
-    const relatedAssignments = allAssignments.filter(a =>
-      a.job_id === jobId && !a.is_deleted
-    );
+    // 関連する配置データの存在チェック（Repositoryを使用）
+    const relatedAssignments = AssignmentRepository.findByJobId(jobId);
 
     if (relatedAssignments.length > 0) {
       return buildErrorResponse(
