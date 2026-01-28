@@ -265,17 +265,19 @@
 
     .toast {
       position: fixed;
-      bottom: 12px;
-      right: 12px;
-      padding: 8px 12px;
+      bottom: 20px;
+      right: 20px;
+      padding: var(--spacing-md) var(--spacing-lg);
       border-radius: var(--radius-md);
-      background: #333;
+      background: var(--color-primary);
       color: white;
       z-index: 9999;
       display: none;
-      font-size: 12px;
+      font-size: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
 
+    .toast.show { display: block; }
     .toast.error { background: var(--color-danger); }
     .toast.success { background: var(--color-success); }
 
