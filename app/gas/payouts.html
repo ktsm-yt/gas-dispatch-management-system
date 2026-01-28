@@ -373,6 +373,48 @@
       font-size: 12px;
     }
 
+    /* 出勤現場一覧 */
+    .assignment-list-section {
+      margin-bottom: var(--spacing-md);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: var(--bg-card);
+    }
+
+    .assignment-list-wrapper {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .assignment-list-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    .assignment-list-table th,
+    .assignment-list-table td {
+      padding: 6px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .assignment-list-table th {
+      background: var(--bg-secondary);
+      font-weight: 500;
+      position: sticky;
+      top: 0;
+    }
+
+    .assignment-list-table tbody tr:last-child td {
+      border-bottom: none;
+    }
+
+    .assignment-list-table tbody tr:hover {
+      background: var(--bg-secondary);
+    }
+
     /* Loading Overlay */
     .loading-overlay {
       display: none;
@@ -491,7 +533,7 @@
   <!-- Tab Navigation -->
   <div class="tab-container">
     <div class="tab-nav">
-      <button class="tab-btn active" onclick="switchTab('staff')" id="tabStaff">スタッフ支払い</button>
+      <button class="tab-btn active" onclick="switchTab('staff')" id="tabStaff">スタッフ支払</button>
       <button class="tab-btn" onclick="switchTab('subcontractor')" id="tabSubcontractor">外注費管理</button>
     </div>
   </div>
@@ -610,28 +652,28 @@
       <select id="bulkStatusSelect">
         <option value="">ステータス変更...</option>
         <option value="confirmed">確認済みにする</option>
-        <option value="paid">振込済みにする</option>
-        <option value="unpaid">未払いに戻す</option>
+        <option value="paid">支払済にする</option>
+        <option value="unpaid">未払に戻す</option>
       </select>
       <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
       <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
     </div>
 
     <div class="main-content">
-      <!-- 未払いサマリー（開閉可能） -->
+      <!-- 未払サマリー（開閉可能） -->
       <div id="unpaidSection" class="summary-card">
         <h3 class="collapsible-header" onclick="toggleUnpaidSection()">
           <span class="collapse-icon" id="unpaidCollapseIcon">▼</span>
-          未払い集計
+          未払集計
         </h3>
         <div id="unpaidSummary" class="collapsible-content">
           スタッフを選択して「集計」をクリックしてください
         </div>
       </div>
 
-      <!-- 支払い履歴 -->
+      <!-- 支払履歴 -->
       <div class="section-header">
-        <h2>支払い履歴</h2>
+        <h2>支払履歴</h2>
       </div>
 
       <div id="historyTable">
@@ -653,25 +695,25 @@
         <input type="date" id="subEndDateFilter" />
 
         <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
-        <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締め集計</button>
+        <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締集計</button>
       </div>
     </div>
 
     <div class="main-content">
-      <!-- 外注費未払いサマリー -->
+      <!-- 外注費未払サマリー -->
       <div id="subUnpaidSection" class="summary-card">
         <h3 class="collapsible-header" onclick="toggleSubUnpaidSection()">
           <span class="collapse-icon" id="subUnpaidCollapseIcon">▼</span>
-          外注費 未払い集計
+          外注費 未払集計
         </h3>
         <div id="subUnpaidSummary" class="collapsible-content">
           外注先を選択して「集計」をクリックしてください
         </div>
       </div>
 
-      <!-- 外注費支払い履歴 -->
+      <!-- 外注費支払履歴 -->
       <div class="section-header">
-        <h2>外注費 支払い履歴</h2>
+        <h2>外注費 支払履歴</h2>
       </div>
 
       <div id="subHistoryTable">
@@ -697,7 +739,7 @@
     const SS_SUB_KEY = 'payouts_subcontractor_data';
     const SS_SUB_UNPAID_KEY = 'payouts_sub_unpaid_data';
     const SS_SUB_HISTORY_KEY = 'payouts_sub_history_data';
-    const CACHE_TTL = 5 * 60 * 1000; // 5分（未払いデータ）
+    const CACHE_TTL = 5 * 60 * 1000; // 5分（未払データ）
     const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分（履歴）
 
     function saveToSession(data) {
@@ -727,7 +769,7 @@
       sessionStorage.removeItem(SS_KEY);
     }
 
-    // 外注費未払いキャッシュ
+    // 外注費未払キャッシュ
     function saveSubUnpaidToSession(data, endDate) {
       sessionStorage.setItem(SS_SUB_UNPAID_KEY, JSON.stringify({
         timestamp: Date.now(),
@@ -941,8 +983,8 @@
       summaryDiv.innerHTML = '<div class="loading">計算中...</div>';
 
       if (staffId) {
-        // 特定スタッフの未払い
-        showLoading('未払い計算中...');
+        // 特定スタッフの未払
+        showLoading('未払計算中...');
         google.script.run
           .withSuccessHandler(result => {
             hideLoading();
@@ -967,7 +1009,7 @@
           })
           .getUnpaidSummary(staffId, endDate);
       } else {
-        // 全スタッフの未払い一覧 + 確認済み一覧を並列取得
+        // 全スタッフの未払一覧 + 確認済み一覧を並列取得
         showLoading('データを読み込み中...');
 
         let unpaidResult = null;
@@ -995,7 +1037,7 @@
           });
         }
 
-        // 未払い一覧を取得
+        // 未払一覧を取得
         google.script.run
           .withSuccessHandler(result => { unpaidResult = result; checkAndRender(); })
           .withFailureHandler(err => { unpaidResult = { ok: false, error: err.message }; checkAndRender(); })
@@ -1016,7 +1058,7 @@
       const today = new Date().toISOString().split('T')[0];
 
       if (data.assignmentCount === 0) {
-        summaryDiv.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+        summaryDiv.innerHTML = '<div class="empty-state">未払の配置はありません</div>';
         return;
       }
 
@@ -1123,7 +1165,7 @@
       let html = `
         <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
           <div class="summary-item">
-            <div class="label">未払い</div>
+            <div class="label">未払</div>
             <div class="value">${unpaidCount}名</div>
           </div>
           <div class="summary-item">
@@ -1190,7 +1232,7 @@
             <input type="number" class="adjustment-input" data-staff-id="${s.staffId}" value="0" min="0" />
           </td>
           <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
-          <td><span class="status-badge draft">未払い</span></td>
+          <td><span class="status-badge draft">未払</span></td>
           <td>
             <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}')">詳細</button>
           </td>
@@ -1214,7 +1256,8 @@
           <td style="max-width: 150px; white-space: normal;">${p.notes}</td>
           <td><span class="status-badge confirmed">確認済み</span></td>
           <td style="white-space: nowrap;">
-            <button class="btn btn-primary" onclick="payConfirmed('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">振込済み</button>
+            <button class="btn btn-secondary" onclick="openPayoutModal('${p.staffId}', '${p.staffName}')">詳細</button>
+            <button class="btn btn-primary" onclick="payConfirmed('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">支払</button>
             <button class="btn btn-secondary" onclick="undoConfirm('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">取消</button>
           </td>
         </tr>
@@ -1302,7 +1345,7 @@
       const container = document.getElementById('historyTable');
 
       if (payouts.length === 0) {
-        container.innerHTML = '<div class="empty-state">支払い履歴がありません</div>';
+        container.innerHTML = '<div class="empty-state">支払履歴がありません</div>';
         return;
       }
 
@@ -1423,13 +1466,13 @@
         '支払済にする',
         'btn-primary',
         () => {
-          showLoading('支払い処理中...');
+          showLoading('支払処理中...');
           google.script.run
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
                 showToast('success', '支払済にしました');
-                // 差分リロード: 未払いサマリーをクリア + 履歴に追加
+                // 差分リロード: 未払サマリーをクリア + 履歴に追加
                 clearSingleUnpaidSummary();
                 if (result.data && result.data.payout) {
                   prependHistoryRow(result.data.payout);
@@ -1458,7 +1501,7 @@
       const endDate = document.getElementById('endDateFilter').value;
 
       if (staffIds.length === 0) {
-        showToast('error', '未払いスタッフを選択してください');
+        showToast('error', '未払スタッフを選択してください');
         return;
       }
 
@@ -1536,10 +1579,10 @@
 
       showConfirmModal(
         '一括振込完了',
-        `<p><strong>${payoutIds.length}件</strong> を振込済みにします。</p>
+        `<p><strong>${payoutIds.length}件</strong> を支払済にします。</p>
          <p>支払日: ${paidDate}</p>
          <p>よろしいですか？</p>`,
-        '振込済みにする',
+        '支払済にする',
         'btn-primary',
         () => {
           showLoading(`${payoutIds.length}件の振込処理中...`);
@@ -1547,7 +1590,7 @@
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', `${result.data.success}件を振込済みにしました`);
+                showToast('success', `${result.data.success}件を支払済にしました`);
                 const data = result.data || {};
                 const payouts = data.payouts || [];
                 const results = data.results || [];
@@ -1586,9 +1629,9 @@
 
       showConfirmModal(
         '振込完了確認',
-        `<p><strong>${staffName}</strong> を振込済みにします。</p>
+        `<p><strong>${staffName}</strong> を支払済にします。</p>
          <p>支払日: ${paidDate}</p>`,
-        '振込済みにする',
+        '支払済にする',
         'btn-primary',
         () => {
           showLoading('振込処理中...');
@@ -1596,7 +1639,7 @@
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', '振込済みにしました');
+                showToast('success', '支払済にしました');
                 // 確認済み行を削除し、履歴に追加
                 removeConfirmedRow(payoutId);
                 if (result.data && result.data.payout) {
@@ -1625,7 +1668,7 @@
       showConfirmModal(
         '確認取消',
         `<p><strong>${staffName}</strong> の確認を取り消しますか？</p>
-         <p>取り消すと未払い状態に戻ります。</p>`,
+         <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
         () => {
@@ -1635,7 +1678,7 @@
               hideLoading();
               if (result.ok) {
                 showToast('success', '確認を取り消しました');
-                // 確認済み行を未払い行に変換
+                // 確認済み行を未払行に変換
                 const undone = result.data?.undone;
                 if (undone) {
                   convertConfirmedToUnpaid(payoutId, undone);
@@ -1659,7 +1702,7 @@
     }
 
     /**
-     * 確認済み行を未払い行に変換
+     * 確認済み行を未払行に変換
      * @param {string} payoutId - 支払ID
      * @param {Object} undone - 取り消されたpayoutデータ
      */
@@ -1686,9 +1729,9 @@
     // Undo payout (cancel payment from history)
     function undoPayoutConfirm(payoutId, updatedAt, staffName) {
       showConfirmModal(
-        '支払い取消確認',
-        `<p><strong>${staffName}</strong> の支払いを取り消しますか？</p>
-         <p>取り消すと未払い状態に戻ります。</p>`,
+        '支払取消確認',
+        `<p><strong>${staffName}</strong> の支払を取り消しますか？</p>
+         <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
         () => {
@@ -1697,10 +1740,10 @@
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', '支払いを取り消しました');
+                showToast('success', '支払を取り消しました');
                 // 差分リロード: 履歴から行を削除
                 removeHistoryRow(payoutId);
-                // 未払いリストは次回の集計時に自動反映されるため、再読込しない
+                // 未払リストは次回の集計時に自動反映されるため、再読込しない
               } else {
                 showToast('error', result.error);
               }
@@ -1721,7 +1764,7 @@
       // ボタン・input要素クリック時は除外
       if (event.target.closest('button, input')) return;
 
-      // 未払い行と確認済み行の両方に対応
+      // 未払行と確認済み行の両方に対応
       const checkbox = row.querySelector('.staff-check, .payout-check');
       if (checkbox) {
         checkbox.checked = !checkbox.checked;
@@ -1730,7 +1773,7 @@
     }
 
     function toggleSelectAll(checkbox) {
-      // 未払いと確認済み両方のチェックボックスを選択
+      // 未払と確認済み両方のチェックボックスを選択
       document.querySelectorAll('.staff-check, .payout-check').forEach(cb => {
         cb.checked = checkbox.checked;
       });
@@ -1740,7 +1783,7 @@
     function toggleSelectAllFromBar() {
       const bulkSelectAll = document.getElementById('bulkSelectAll');
       const selectAll = document.getElementById('selectAll');
-      // 未払いと確認済み両方のチェックボックスを選択
+      // 未払と確認済み両方のチェックボックスを選択
       document.querySelectorAll('.staff-check, .payout-check').forEach(cb => {
         cb.checked = bulkSelectAll.checked;
       });
@@ -1762,7 +1805,7 @@
 
       const endDate = document.getElementById('endDateFilter').value;
 
-      // 未払いサマリーと支払履歴を並行取得
+      // 未払サマリーと支払履歴を並行取得
       let unpaidResult = null;
       let historyResult = null;
       let completed = 0;
@@ -1797,7 +1840,7 @@
       const body = document.getElementById('payoutModalBody');
 
       if (data.assignmentCount === 0) {
-        body.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+        body.innerHTML = '<div class="empty-state">未払の配置はありません</div>';
         document.getElementById('modalPayBtn').style.display = 'none';
         return;
       }
@@ -1815,6 +1858,30 @@
         `).join('');
       } else {
         historyHtml = '<li class="empty">履歴なし</li>';
+      }
+
+      // 出勤現場一覧HTML
+      let assignmentListHtml = '';
+      if (data.assignments && data.assignments.length > 0) {
+        const rows = data.assignments.map(a => {
+          // 日付を MM/DD 形式に変換（年不要）
+          const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
+          const siteName = a.site_name || '(現場名なし)';
+          return `<tr><td>${dateStr}</td><td>${siteName}</td></tr>`;
+        }).join('');
+        assignmentListHtml = `
+          <div class="assignment-list-section">
+            <details>
+              <summary style="cursor: pointer; font-weight: 500; margin-bottom: 8px;">出勤現場一覧（${data.assignmentCount}件）</summary>
+              <div class="assignment-list-wrapper">
+                <table class="assignment-list-table">
+                  <thead><tr><th>日付</th><th>現場名</th></tr></thead>
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </details>
+          </div>
+        `;
       }
 
       body.innerHTML = `
@@ -1842,6 +1909,7 @@
                 <div class="value amount" id="modalTotalAmount">${formatCurrency(data.totalAmount)}</div>
               </div>
             </div>
+            ${assignmentListHtml}
             <div style="display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center;">
               <div class="filter-group">
                 <label>支払日:</label>
@@ -1915,14 +1983,14 @@
         '支払済にする',
         'btn-primary',
         () => {
-          showLoading('支払い処理中...');
+          showLoading('支払処理中...');
           google.script.run
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
                 showToast('success', '支払済にしました');
                 closePayoutModal();
-                // 未払いリストから該当行を削除
+                // 未払リストから該当行を削除
                 removeUnpaidStaffRow(staffId);
                 // 履歴に追加
                 if (result.data && result.data.payout) {
@@ -1978,6 +2046,16 @@
       }).format(amount || 0);
     }
 
+    /**
+     * 日付をMM/DD形式に変換（年は不要）
+     */
+    function formatDateShort(dateStr) {
+      if (!dateStr) return '-';
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      return (d.getMonth() + 1) + '/' + d.getDate();
+    }
+
     function formatNumber(num) {
       return new Intl.NumberFormat('ja-JP').format(num || 0);
     }
@@ -2000,7 +2078,7 @@
     // ========== 差分リロード用ヘルパー関数 ==========
 
     /**
-     * 未払いリストから特定スタッフの行を削除
+     * 未払リストから特定スタッフの行を削除
      * @param {string} staffId - スタッフID
      */
     function removeUnpaidStaffRow(staffId) {
@@ -2012,7 +2090,7 @@
     }
 
     /**
-     * 未払いリストのサマリー（対象人数・合計金額）を再計算
+     * 未払リストのサマリー（対象人数・合計金額）を再計算
      */
     function updateUnpaidListSummary() {
       const rows = document.querySelectorAll('#unpaidSummary tbody tr[data-staff-id]');
@@ -2035,17 +2113,17 @@
         summaryItems[1].textContent = formatCurrency(totalAmount);
       }
 
-      // 全員支払い済みの場合
+      // 全員支払済の場合
       if (totalCount === 0) {
         const summaryDiv = document.getElementById('unpaidSummary');
-        summaryDiv.innerHTML = '<div class="empty-state">未払いのスタッフはいません</div>';
+        summaryDiv.innerHTML = '<div class="empty-state">未払のスタッフはいません</div>';
         clearSession();
       }
     }
 
     /**
      * 履歴テーブルの先頭に行を追加
-     * @param {Object} payout - 支払いデータ
+     * @param {Object} payout - 支払データ
      */
     function prependHistoryRow(payout) {
       const container = document.getElementById('historyTable');
@@ -2115,7 +2193,7 @@
       const tbody = document.querySelector('#historyTable tbody');
       if (tbody && tbody.children.length === 0) {
         document.getElementById('historyTable').innerHTML =
-          '<div class="empty-state">支払い履歴がありません</div>';
+          '<div class="empty-state">支払履歴がありません</div>';
       }
 
       // Update cache
@@ -2123,19 +2201,19 @@
     }
 
     /**
-     * 単一スタッフの未払いサマリーをクリア
+     * 単一スタッフの未払サマリーをクリア
      */
     function clearSingleUnpaidSummary() {
       const summaryDiv = document.getElementById('unpaidSummary');
-      summaryDiv.innerHTML = '<div class="empty-state">未払いの配置はありません</div>';
+      summaryDiv.innerHTML = '<div class="empty-state">未払の配置はありません</div>';
       currentUnpaid = null;
       clearSession();
     }
 
     /**
-     * 未払い行を確認済み行に更新
+     * 未払行を確認済み行に更新
      * @param {string} staffId - スタッフID
-     * @param {Object} payout - 確認済みの支払いデータ
+     * @param {Object} payout - 確認済みの支払データ
      */
     function updateRowToConfirmed(staffId, payout) {
       const row = document.querySelector(`tr[data-staff-id="${staffId}"][data-status="unpaid"]`);
@@ -2174,7 +2252,7 @@
     }
 
     /**
-     * サマリー（未払い/確認済み/合計金額）を再計算
+     * サマリー（未払/確認済み/合計金額）を再計算
      */
     function updatePayoutSummary() {
       const unpaidRows = document.querySelectorAll('#payoutTable tbody tr[data-status="unpaid"]');
@@ -2260,11 +2338,11 @@
         const paidOption = statusSelect.querySelector('option[value="paid"]');
         const unpaidOption = statusSelect.querySelector('option[value="unpaid"]');
 
-        // 未払い選択時のみ「確認済みにする」を有効化
+        // 未払選択時のみ「確認済みにする」を有効化
         if (confirmedOption) confirmedOption.disabled = unpaidCount === 0;
-        // 確認済み選択時のみ「振込済みにする」を有効化
+        // 確認済み選択時のみ「支払済にする」を有効化
         if (paidOption) paidOption.disabled = confirmedCount === 0;
-        // 確認済み選択時のみ「未払いに戻す」を有効化
+        // 確認済み選択時のみ「未払に戻す」を有効化
         if (unpaidOption) unpaidOption.disabled = confirmedCount === 0;
       }
     }
@@ -2330,7 +2408,7 @@
       showConfirmModal(
         '一括取消',
         `<p><strong>${rows.length}件</strong> の確認を取り消しますか？</p>
-         <p>取り消すと未払い状態に戻ります。</p>`,
+         <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
         () => {
@@ -2652,7 +2730,7 @@
       });
     }
 
-    // 末締め集計: 当月末日を設定して集計
+    // 末締集計: 当月末日を設定して集計
     function loadMonthEndSummary() {
       const today = new Date();
       // 当月末日を計算（翌月1日の前日）
@@ -2707,7 +2785,7 @@
           })
           .getUnpaidSummaryForSubcontractor(subId, endDate);
       } else {
-        // 全外注先の未払い一覧を取得
+        // 全外注先の未払一覧を取得
         google.script.run
           .withSuccessHandler(function(response) {
             hideLoading();
@@ -2731,7 +2809,7 @@
       const container = document.getElementById('subUnpaidSummary');
 
       if (!data.subcontractorList || data.subcontractorList.length === 0) {
-        container.innerHTML = '<div class="empty-state">未払いの外注費はありません</div>';
+        container.innerHTML = '<div class="empty-state">未払の外注費はありません</div>';
         return;
       }
 
@@ -2775,7 +2853,7 @@
             <td class="amount"><strong>¥${formatNumber(sub.estimatedAmount)}</strong></td>
             <td>
               <button class="btn btn-secondary" onclick="showSubcontractorDetail('${sub.subcontractorId}')">詳細</button>
-              <button class="btn btn-success" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払済</button>
+              <button class="btn btn-success" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払</button>
             </td>
           </tr>
         `;
@@ -2790,7 +2868,7 @@
 
       if (!data.assignments || data.assignments.length === 0) {
         container.innerHTML = `
-          <p><strong>${escapeHtml(data.companyName)}</strong> の未払い配置はありません</p>
+          <p><strong>${escapeHtml(data.companyName)}</strong> の未払配置はありません</p>
         `;
         return;
       }
@@ -2872,7 +2950,7 @@
       const endDate = document.getElementById('subEndDateFilter').value;
 
       showConfirmModal(
-        '外注費支払い確認',
+        '外注費支払確認',
         `<p><strong>${escapeHtml(companyName)}</strong> を支払済にします。</p>
          <p>締め日: ${endDate}</p>
          <p>金額: <strong>¥${formatNumber(amount)}</strong></p>`,
@@ -2884,7 +2962,7 @@
             .withSuccessHandler(function(response) {
               hideLoading();
               if (response.ok) {
-                showToast('success', '支払いを記録しました');
+                showToast('success', '支払を記録しました');
                 clearSubUnpaidSession(); // キャッシュクリア
                 loadSubcontractorUnpaidList(true); // 強制リフレッシュ
                 loadSubcontractorHistory();
@@ -2911,7 +2989,7 @@
       const assignmentCount = currentSubUnpaid.assignmentCount;
 
       showConfirmModal(
-        '外注費支払い確認',
+        '外注費支払確認',
         `<p><strong>${escapeHtml(companyName)}</strong> を支払済にします。</p>
          <p>配置数: ${assignmentCount}件</p>
          <p>締め日: ${endDate}</p>
@@ -2924,7 +3002,7 @@
             .withSuccessHandler(function(response) {
               hideLoading();
               if (response.ok) {
-                showToast('success', '支払いを記録しました');
+                showToast('success', '支払を記録しました');
                 currentSubUnpaid = null;
                 document.getElementById('subUnpaidSummary').innerHTML = '外注先を選択して「集計」をクリックしてください';
                 clearSubUnpaidSession(); // キャッシュクリア
@@ -2945,9 +3023,9 @@
 
     function undoSubcontractorPayoutConfirm(payoutId, updatedAt, companyName) {
       showConfirmModal(
-        '外注費支払い取消確認',
-        `<p><strong>${escapeHtml(companyName)}</strong> の支払いを取り消しますか？</p>
-         <p>取り消すと未払い状態に戻ります。</p>`,
+        '外注費支払取消確認',
+        `<p><strong>${escapeHtml(companyName)}</strong> の支払を取り消しますか？</p>
+         <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
         () => {
@@ -2956,10 +3034,10 @@
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', '支払いを取り消しました');
+                showToast('success', '支払を取り消しました');
                 // 差分リロード: 履歴から行を削除
                 removeSubcontractorHistoryRow(payoutId);
-                // キャッシュクリアして未払い一覧を再読込
+                // キャッシュクリアして未払一覧を再読込
                 clearSubUnpaidSession();
                 loadSubcontractorUnpaidList(true);
               } else {
@@ -2985,7 +3063,7 @@
       const tbody = document.querySelector('#subHistoryTable tbody');
       if (tbody && tbody.children.length === 0) {
         document.getElementById('subHistoryTable').innerHTML =
-          '<div class="empty-state">支払い履歴はありません</div>';
+          '<div class="empty-state">支払履歴はありません</div>';
       }
     }
 
@@ -3011,7 +3089,7 @@
       const container = document.getElementById('subHistoryTable');
 
       if (!payouts || payouts.length === 0) {
-        container.innerHTML = '<div class="empty-state">支払い履歴はありません</div>';
+        container.innerHTML = '<div class="empty-state">支払履歴はありません</div>';
         return;
       }
 
