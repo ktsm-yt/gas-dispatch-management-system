@@ -7,7 +7,9 @@
     "render:docs": "node tools/render-docs.js",
     "hooks:install": "bash scripts/install-hooks.sh",
     "e2e:chrome": "open -na 'Google Chrome' --args --remote-debugging-port=9222 --user-data-dir=\"$HOME/Dev/DevProject/gas-dispatch-system/e2e/auth/chrome-debug-profile\"",
-    "e2e:connect": "npx tsx e2e/scripts/screenshot-connect.ts"
+    "e2e:connect": "npx tsx e2e/scripts/screenshot-connect.ts",
+    "gas:push": "cd app/gas && npx clasp push",
+    "gas:deploy": "bash scripts/deploy-prod.sh"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
