@@ -304,35 +304,30 @@ function bulkUpdateInvoiceStatus(updates, status) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
     }
 
-    let updated = 0;
-    let failed = 0;
-    const errors = [];
-    const updatedItems = [];
+    // 入力形式を変換 (updatedAt → expectedUpdatedAt)
+    const bulkUpdates = updates.map(item => ({
+      invoiceId: item.invoiceId,
+      expectedUpdatedAt: item.updatedAt
+    }));
 
-    // 各請求書を更新
-    for (const item of updates) {
-      try {
-        const result = InvoiceService.updateStatus(item.invoiceId, status, item.updatedAt);
-        if (result.success) {
-          updated++;
-          updatedItems.push({
-            invoiceId: item.invoiceId,
-            updatedAt: result.invoice?.updated_at || result.invoice?.updatedAt || ''
-          });
-        } else {
-          failed++;
-          errors.push({ invoiceId: item.invoiceId, error: result.error });
-        }
-      } catch (e) {
-        failed++;
-        errors.push({ invoiceId: item.invoiceId, error: e.message });
-      }
-    }
+    // バルク更新実行（シートI/O 1回）
+    const result = InvoiceRepository.bulkUpdateStatus(bulkUpdates, status);
+
+    // 成功した請求書のupdatedAtを取得
+    const updatedItems = result.invoices.map(inv => ({
+      invoiceId: inv.invoice_id,
+      updatedAt: inv.updated_at
+    }));
+
+    // エラー情報を抽出
+    const errors = result.results
+      .filter(r => !r.success)
+      .map(r => ({ invoiceId: r.invoiceId, error: r.error }));
 
     return buildSuccessResponse({
       success: true,
-      updated: updated,
-      failed: failed,
+      updated: result.success,
+      failed: result.failed,
       updatedItems: updatedItems,
       errors: errors.length > 0 ? errors : undefined
     }, requestId);

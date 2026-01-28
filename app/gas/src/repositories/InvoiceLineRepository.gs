@@ -208,7 +208,7 @@ const InvoiceLineRepository = {
   },
 
   /**
-   * 複数明細を一括更新
+   * 複数明細を一括更新（バルク処理版）
    * @param {Object[]} lines - 更新データ配列（各要素にline_id必須）
    * @returns {Object} 更新結果 { success: boolean, updated: number, errors: string[] }
    */
@@ -217,16 +217,91 @@ const InvoiceLineRepository = {
       return { success: true, updated: 0, errors: [] };
     }
 
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: false,
+        updated: 0,
+        errors: lines.map(l => `${l.line_id}: NOT_FOUND`)
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    const updatedAtIndex = headers.indexOf('updated_at');
+
+    // 更新可能フィールドのインデックスマップ
+    const updatableFields = [
+      'line_number', 'work_date', 'site_name', 'item_name', 'time_note',
+      'quantity', 'unit', 'unit_price', 'amount',
+      'order_number', 'branch_office', 'construction_div',
+      'supervisor_name', 'property_code', 'tax_amount'
+    ];
+    const fieldIndexMap = {};
+    for (const field of updatableFields) {
+      const idx = headers.indexOf(field);
+      if (idx !== -1) {
+        fieldIndexMap[field] = idx;
+      }
+    }
+
+    // 3. 更新対象のMapを作成 (line_id -> line data)
+    const updateMap = new Map(lines.map(l => [l.line_id, l]));
+
+    const now = getCurrentTimestamp();
     const errors = [];
     let updated = 0;
+    let hasChanges = false;
 
-    for (const line of lines) {
-      const result = this.update(line);
-      if (result.success) {
-        updated++;
-      } else {
-        errors.push(`${line.line_id}: ${result.error}`);
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const lineId = row[idIndex];
+
+      if (!updateMap.has(lineId)) continue;
+
+      const lineData = updateMap.get(lineId);
+
+      // 論理削除済みチェック
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        errors.push(`${lineId}: DELETED`);
+        updateMap.delete(lineId);
+        continue;
       }
+
+      // フィールドを更新
+      for (const field of updatableFields) {
+        if (lineData[field] !== undefined && fieldIndexMap[field] !== undefined) {
+          row[fieldIndexMap[field]] = lineData[field];
+        }
+      }
+
+      // updated_atを更新
+      if (updatedAtIndex !== -1) {
+        row[updatedAtIndex] = now;
+      }
+
+      hasChanges = true;
+      updated++;
+      updateMap.delete(lineId);
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const [lineId] of updateMap) {
+      errors.push(`${lineId}: NOT_FOUND`);
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
     }
 
     return {
@@ -238,38 +313,12 @@ const InvoiceLineRepository = {
 
   /**
    * 請求IDに紐づく明細を全て論理削除
+   * 内部でbulkDeleteByInvoiceIdsを使用して一括処理
    * @param {string} invoiceId - 請求ID
    * @returns {Object} 削除結果 { success: boolean, deleted: number }
    */
   deleteByInvoiceId: function(invoiceId) {
-    const lines = this.findByInvoiceId(invoiceId);
-
-    if (lines.length === 0) {
-      return { success: true, deleted: 0 };
-    }
-
-    const sheet = getSheet(this.TABLE_NAME);
-    const headers = getHeaders(sheet);
-    const now = getCurrentTimestamp();
-
-    let deleted = 0;
-
-    for (const line of lines) {
-      const rowNum = findRowById(sheet, this.ID_COLUMN, line.line_id);
-      if (rowNum) {
-        const currentRow = sheet.getRange(rowNum, 1, 1, headers.length).getValues()[0];
-        const currentLine = rowToObject(headers, currentRow);
-
-        currentLine.is_deleted = true;
-        currentLine.updated_at = now;
-
-        const newRow = objectToRow(headers, currentLine);
-        sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
-        deleted++;
-      }
-    }
-
-    return { success: true, deleted };
+    return this.bulkDeleteByInvoiceIds([invoiceId]);
   },
 
   /**
@@ -319,7 +368,7 @@ const InvoiceLineRepository = {
   },
 
   /**
-   * 明細の行番号を再採番
+   * 明細の行番号を再採番（バルク処理版）
    * @param {string} invoiceId - 請求ID
    * @returns {Object} 結果 { success: boolean, reordered: number }
    */
@@ -342,28 +391,59 @@ const InvoiceLineRepository = {
       return siteA.localeCompare(siteB);
     });
 
-    const sheet = getSheet(this.TABLE_NAME);
-    const headers = getHeaders(sheet);
-    const now = getCurrentTimestamp();
-
-    let reordered = 0;
-
+    // 新しい行番号のマップを作成 (line_id -> newLineNumber)
+    const lineNumberMap = new Map();
     for (let i = 0; i < lines.length; i++) {
       const newLineNumber = i + 1;
       if (lines[i].line_number !== newLineNumber) {
-        const rowNum = findRowById(sheet, this.ID_COLUMN, lines[i].line_id);
-        if (rowNum) {
-          const currentRow = sheet.getRange(rowNum, 1, 1, headers.length).getValues()[0];
-          const currentLine = rowToObject(headers, currentRow);
-
-          currentLine.line_number = newLineNumber;
-          currentLine.updated_at = now;
-
-          const newRow = objectToRow(headers, currentLine);
-          sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
-          reordered++;
-        }
+        lineNumberMap.set(lines[i].line_id, newLineNumber);
       }
+    }
+
+    // 変更が必要な行がなければ早期リターン
+    if (lineNumberMap.size === 0) {
+      return { success: true, reordered: 0 };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { success: true, reordered: 0 };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const lineNumberIndex = headers.indexOf('line_number');
+    const updatedAtIndex = headers.indexOf('updated_at');
+
+    const now = getCurrentTimestamp();
+    let reordered = 0;
+    let hasChanges = false;
+
+    // 3. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const lineId = row[idIndex];
+
+      if (lineNumberMap.has(lineId)) {
+        row[lineNumberIndex] = lineNumberMap.get(lineId);
+        if (updatedAtIndex !== -1) {
+          row[updatedAtIndex] = now;
+        }
+        hasChanges = true;
+        reordered++;
+      }
+    }
+
+    // 4. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
     }
 
     return { success: true, reordered };

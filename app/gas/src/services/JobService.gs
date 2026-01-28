@@ -65,13 +65,12 @@ const JobService = {
     // 配置データを取得
     const allAssignments = AssignmentRepository.findByDate(date);
 
-    // スタッフマスターを取得してマップ作成
-    const allStaff = getAllRecords('M_Staff');
+    // スタッフマスターを取得（MasterCacheでキャッシュ）
+    const staffMapFull = MasterCache.getStaffMap();
+    // staff_id -> name のマップに変換
     const staffMap = {};
-    for (const staff of allStaff) {
-      if (staff.staff_id && !staff.is_deleted) {
-        staffMap[staff.staff_id] = staff.name;
-      }
+    for (const staffId in staffMapFull) {
+      staffMap[staffId] = staffMapFull[staffId].name;
     }
 
     // 案件ごとの配置をグループ化
