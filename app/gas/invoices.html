@@ -43,6 +43,7 @@
 
     <?!= include('nav_styles'); ?>
     <?!= include('modal_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -527,8 +528,17 @@
 
 <body>
   <?!= include('nav_bar'); ?>
+  <?!= include('confirmation_modal'); ?>
 
   <div class="toolbar">
+    <!-- 生成アクション（優先） -->
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
+      <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
+      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
+    </div>
+    <!-- 検索フィルター（補助） -->
     <div class="filter-group">
       <label>年月:</label>
       <select id="filterYear"></select>
@@ -552,12 +562,6 @@
         <span>過去年度を含む</span>
       </label>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
-    </div>
-    <div class="toolbar-actions">
-      <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
-      <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
-      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
-      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
     </div>
   </div>
 
@@ -642,11 +646,11 @@
       <!-- 進捗表示画面 -->
       <div id="bulkExportProgressView" style="display: none;">
         <div class="modal-body">
-          <div style="margin-bottom: 16px;">
-            <span id="bulkExportProgressText">0 / 0 件完了</span>
+          <div class="progress-info">
+            <span id="bulkExportProgressText">処理を開始しています...</span>
           </div>
-          <div style="background: #eee; border-radius: 4px; height: 20px; overflow: hidden;">
-            <div id="bulkExportProgressBar" style="background: #4CAF50; height: 100%; width: 0%; transition: width 0.3s;"></div>
+          <div class="progress-bar-container">
+            <div id="bulkExportProgressBar" class="progress-bar"></div>
           </div>
           <div id="bulkExportErrorCount" style="margin-top: 12px; color: #d32f2f; display: none;">
             <span id="bulkExportErrorText">0 件のエラー</span>
@@ -890,6 +894,8 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    <?!= include('confirmation_modal_js'); ?>
+
     // State
     let invoices = [];
     let customers = [];
@@ -2137,6 +2143,11 @@
       document.getElementById('bulkExportSelectView').style.display = 'none';
       document.getElementById('bulkExportProgressView').style.display = 'block';
 
+      // プログレスバーをloadingアニメーション状態に
+      document.getElementById('bulkExportProgressBar').className = 'progress-bar loading';
+      document.getElementById('bulkExportProgressBar').style.width = '';
+      document.getElementById('bulkExportProgressText').textContent = '処理を開始しています...';
+
       // 進捗をリセット
       updateBulkExportProgress({
         processedCount: 0,
@@ -2216,9 +2227,20 @@
       const errors = progress.errorCount || 0;
       const percent = Math.round((processed / total) * 100);
 
-      document.getElementById('bulkExportProgressText').textContent =
-        processed + ' / ' + total + ' 件完了';
-      document.getElementById('bulkExportProgressBar').style.width = percent + '%';
+      const progressBar = document.getElementById('bulkExportProgressBar');
+
+      // 処理開始前はloadingアニメーションを維持
+      if (processed > 0) {
+        // loadingアニメーションを停止して実際の進捗表示に切り替え
+        progressBar.className = 'progress-bar';
+        progressBar.style.width = percent + '%';
+        document.getElementById('bulkExportProgressText').textContent =
+          processed + ' / ' + total + ' 件完了';
+      } else {
+        // まだ処理が始まっていない場合はloadingクラスを維持
+        document.getElementById('bulkExportProgressText').textContent =
+          '処理を開始しています...';
+      }
 
       // エラーがあれば表示
       if (errors > 0) {
@@ -2274,14 +2296,21 @@
         return;
       }
 
-      if (confirm('一括出力を中止しますか？')) {
-        google.script.run
-          .withSuccessHandler(function() {
-            showToast('一括出力を中止しました', 'info');
-            closeBulkExportModal();
-          })
-          .cancelBulkExport(bulkExportParams);
-      }
+      ConfirmationModal.show({
+        type: 'warning',
+        title: '一括出力の中止',
+        message: '一括出力を中止しますか？',
+        confirmText: 'OK',
+        cancelText: 'キャンセル',
+        onConfirm: function() {
+          google.script.run
+            .withSuccessHandler(function() {
+              showToast('一括出力を中止しました', 'info');
+              closeBulkExportModal();
+            })
+            .cancelBulkExport(bulkExportParams);
+        }
+      });
     }
 
     // Billing Export Modal
