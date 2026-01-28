@@ -326,6 +326,11 @@ function saveCustomer(customer, expectedUpdatedAt) {
     validateCustomer
   );
 
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateCustomers();
+  }
+
   // 新規作成成功時にフォルダを自動作成
   if (result.ok && isNew && !customer.folder_id) {
     try {
@@ -416,13 +421,18 @@ function searchCustomers(params) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteCustomer(customerId, expectedUpdatedAt) {
-  return deleteMasterRecord(
+  const result = deleteMasterRecord(
     SHEET_NAMES.CUSTOMERS,
     ID_COLUMNS.CUSTOMERS,
     'M_Customers',
     customerId,
     expectedUpdatedAt
   );
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateCustomers();
+  }
+  return result;
 }
 
 // ========================================
@@ -445,7 +455,7 @@ function validateStaff(data) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveStaff(staff, expectedUpdatedAt) {
-  return saveMasterRecord(
+  const result = saveMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
     'M_Staff',
@@ -453,6 +463,11 @@ function saveStaff(staff, expectedUpdatedAt) {
     expectedUpdatedAt,
     validateStaff
   );
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateStaff();
+  }
+  return result;
 }
 
 /**
@@ -485,13 +500,18 @@ function listStaff(options = {}) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteStaff(staffId, expectedUpdatedAt) {
-  return deleteMasterRecord(
+  const result = deleteMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
     'M_Staff',
     staffId,
     expectedUpdatedAt
   );
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateStaff();
+  }
+  return result;
 }
 
 /**
@@ -552,7 +572,7 @@ function validateSubcontractor(data) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveSubcontractor(subcontractor, expectedUpdatedAt) {
-  return saveMasterRecord(
+  const result = saveMasterRecord(
     SHEET_NAMES.SUBCONTRACTORS,
     ID_COLUMNS.SUBCONTRACTORS,
     'M_Subcontractors',
@@ -560,6 +580,11 @@ function saveSubcontractor(subcontractor, expectedUpdatedAt) {
     expectedUpdatedAt,
     validateSubcontractor
   );
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateSubcontractors();
+  }
+  return result;
 }
 
 /**
@@ -584,13 +609,18 @@ function listSubcontractors(options = {}) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteSubcontractor(subcontractorId, expectedUpdatedAt) {
-  return deleteMasterRecord(
+  const result = deleteMasterRecord(
     SHEET_NAMES.SUBCONTRACTORS,
     ID_COLUMNS.SUBCONTRACTORS,
     'M_Subcontractors',
     subcontractorId,
     expectedUpdatedAt
   );
+  // キャッシュをクリア（CacheService + メモリ）
+  if (result.ok) {
+    MasterCache.invalidateSubcontractors();
+  }
+  return result;
 }
 
 // ========================================
@@ -645,6 +675,9 @@ function saveTransportFee(transportFee) {
         insertRow(sheet, transportFee);
         logCreate('M_TransportFee', transportFee.area_code, transportFee);
       }
+
+      // キャッシュをクリア（CacheService + メモリ）
+      MasterCache.invalidateTransportFees();
 
       return successResponse(transportFee, requestId);
 
@@ -717,6 +750,9 @@ function deleteTransportFee(areaCode) {
       sheet.deleteRow(existing._rowIndex);
       logDelete('M_TransportFee', areaCode, existing);
 
+      // キャッシュをクリア（CacheService + メモリ）
+      MasterCache.invalidateTransportFees();
+
       return successResponse({ deleted: true, areaCode: areaCode }, requestId);
 
     } finally {
@@ -767,6 +803,7 @@ function saveCompany(company) {
       const rows = getAllRows(sheet, { includeDeleted: true });
       const now = getCurrentTimestamp();
 
+      let result;
       if (rows.length > 0) {
         // 既存レコードを更新（最初の1件）
         const existing = rows[0];
@@ -777,7 +814,7 @@ function saveCompany(company) {
         };
         updateRow(sheet, existing._rowIndex, updatedData);
         logUpdate('M_Company', updatedData.company_id, existing, updatedData);
-        return successResponse(updatedData, requestId);
+        result = updatedData;
       } else {
         // 新規作成
         const newData = {
@@ -787,8 +824,13 @@ function saveCompany(company) {
         };
         insertRow(sheet, newData);
         logCreate('M_Company', newData.company_id, newData);
-        return successResponse(newData, requestId);
+        result = newData;
       }
+
+      // キャッシュをクリア（CacheService + メモリ）
+      MasterCache.invalidateCompany();
+
+      return successResponse(result, requestId);
 
     } finally {
       lock.releaseLock();
