@@ -388,6 +388,112 @@ const PayoutRepository = {
   },
 
   /**
+   * 複数レコードのステータスを一括更新（バルク処理）
+   * シートI/Oを1回に集約してパフォーマンスを最適化
+   * @param {string[]} payoutIds - 支払ID配列
+   * @param {string} status - 新ステータス（confirmed/paid）
+   * @param {Object} options - オプション
+   * @param {string} options.paid_date - 支払日（paidの場合に使用）
+   * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
+   */
+  bulkUpdateStatus: function(payoutIds, status, options = {}) {
+    if (!payoutIds || payoutIds.length === 0) {
+      return { success: 0, failed: 0, results: [], payouts: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. payout_idカラムのインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const statusIndex = headers.indexOf('status');
+    const paidDateIndex = headers.indexOf('paid_date');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const isDeletedIndex = headers.indexOf('is_deleted');
+
+    if (idIndex === -1 || statusIndex === -1) {
+      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+    }
+
+    // 3. 対象IDのセットを作成
+    const targetIdSet = new Set(payoutIds);
+    const now = getCurrentTimestamp();
+    const paidDate = options.paid_date || now.split('T')[0];
+
+    const results = [];
+    const updatedPayouts = [];
+    let success = 0;
+    let failed = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const payoutId = row[idIndex];
+
+      if (!targetIdSet.has(payoutId)) continue;
+
+      // 論理削除済みチェック
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        results.push({ payoutId, success: false, error: 'DELETED' });
+        failed++;
+        continue;
+      }
+
+      // confirmedステータスからのみpaidに変更可能
+      const currentStatus = row[statusIndex];
+      if (status === 'paid' && currentStatus !== 'confirmed') {
+        results.push({
+          payoutId,
+          success: false,
+          error: 'INVALID_STATUS',
+          message: `confirmed状態のみ振込完了にできます（現在: ${currentStatus}）`
+        });
+        failed++;
+        continue;
+      }
+
+      // ステータス更新
+      row[statusIndex] = status;
+      if (status === 'paid' && paidDateIndex !== -1) {
+        row[paidDateIndex] = paidDate;
+      }
+      if (updatedAtIndex !== -1) {
+        row[updatedAtIndex] = now;
+      }
+
+      hasChanges = true;
+      success++;
+      results.push({ payoutId, success: true });
+
+      // 更新後のレコードを構築
+      const updatedRecord = rowToObject(headers, row);
+      updatedPayouts.push(this._normalizeRecord(updatedRecord));
+    }
+
+    // 5. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success,
+      failed,
+      results,
+      payouts: updatedPayouts
+    };
+  },
+
+  /**
    * 一括挿入
    * @param {Object[]} payouts - 支払いデータ配列
    * @returns {Object[]} 作成した支払い配列
