@@ -2,7 +2,68 @@
 <!-- Usage: <?!= include('job_modal_styles'); ?> -->
 
 <style>
-  /* Slots Section */
+  /* =================================================================
+     Autocomplete Dropdown
+     ================================================================= */
+  .autocomplete-wrapper {
+    position: relative;
+  }
+
+  .autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-top: none;
+    border-radius: 0 0 var(--radius-sm, 4px) var(--radius-sm, 4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    display: none;
+  }
+
+  .autocomplete-dropdown[style*="display: block"] {
+    display: block;
+  }
+
+  .autocomplete-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary, #1f2937);
+    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    transition: background 0.1s ease;
+  }
+
+  .autocomplete-item:last-child {
+    border-bottom: none;
+  }
+
+  .autocomplete-item:hover {
+    background: var(--bg-hover, #f3f4f6);
+  }
+
+  .autocomplete-item.highlighted {
+    background: var(--color-primary, #172D90);
+    color: white;
+  }
+
+  .autocomplete-item.no-result {
+    color: var(--text-muted, #6b7280);
+    cursor: default;
+    font-style: italic;
+  }
+
+  .autocomplete-item.no-result:hover {
+    background: transparent;
+  }
+
+  /* =================================================================
+     Slots Section
+     ================================================================= */
   .slots-section {
     margin: var(--spacing-md) 0;
     padding: var(--spacing-md);
