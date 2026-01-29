@@ -116,6 +116,12 @@
   </style>
 </head>
 <body>
+  <?!= include('cache_utils'); ?>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
 
   <main class="main-content" id="content">
@@ -144,6 +150,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    const COMPANY_CACHE_KEY = 'master_company';
     let companyData = null;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -152,10 +159,28 @@
     });
 
     function loadData() {
+      // 1. キャッシュ確認
+      const cached = PageCache.get(COMPANY_CACHE_KEY);
+      if (cached) {
+        companyData = cached.data || {};
+        renderForm();
+
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshDataInBackground();
+        }
+        return;
+      }
+
+      // 2. キャッシュなし → API呼び出し
+      fetchDataFromServer();
+    }
+
+    function fetchDataFromServer() {
       google.script.run
         .withSuccessHandler((response) => {
           if (response.ok) {
             companyData = response.data || {};
+            PageCache.set(COMPANY_CACHE_KEY, companyData);
             renderForm();
           } else {
             showToast(response.error?.message || 'データの取得に失敗', 'error');
@@ -165,6 +190,20 @@
         .withFailureHandler((e) => {
           showToast(e.message, 'error');
           renderForm();
+        })
+        .getCompany();
+    }
+
+    function refreshDataInBackground() {
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (!response || !response.ok) return;
+          const newData = response.data || {};
+          if (JSON.stringify(newData) !== JSON.stringify(companyData)) {
+            companyData = newData;
+            PageCache.set(COMPANY_CACHE_KEY, companyData);
+            renderForm();
+          }
         })
         .getCompany();
     }
@@ -310,6 +349,7 @@
           saveBtn.textContent = '保存';
           if (response.ok) {
             companyData = response.data;
+            PageCache.set(COMPANY_CACHE_KEY, companyData);
             document.getElementById('company-id').value = response.data.company_id || '';
             document.getElementById('updated-at').value = response.data.updated_at || '';
             showToast('保存しました', 'success');

@@ -104,8 +104,17 @@ function initNavBar(currentPage, pageTitle) {
 }
 
 function navigateTo(page) {
+  // sessionStorageにキャッシュされたURLがあれば即時遷移（RPC不要）
+  const cachedUrl = sessionStorage.getItem('__SCRIPT_URL__');
+  if (cachedUrl) {
+    window.open(cachedUrl + '?page=' + page, '_top');
+    return;
+  }
+
+  // 初回のみRPCでURLを取得してキャッシュ
   google.script.run
     .withSuccessHandler(function(url) {
+      sessionStorage.setItem('__SCRIPT_URL__', url);
       window.open(url + '?page=' + page, '_top');
     })
     .getScriptUrl();

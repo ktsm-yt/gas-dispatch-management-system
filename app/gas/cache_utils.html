@@ -1,0 +1,145 @@
+<script>
+/**
+ * PageCache - クライアントサイドキャッシュユーティリティ
+ *
+ * sessionStorageベースのキャッシュ（ページ遷移間で保持、ブラウザ閉じると消える）
+ * Phase 4: Client-Side Data Caching
+ *
+ * Stale-While-Revalidate パターン:
+ * - キャッシュがあれば常に即座に表示（TTL関係なく）
+ * - TTL超過ならバックグラウンドで更新
+ */
+const PageCache = {
+  // デフォルトTTL（ミリ秒）- バックグラウンド更新のトリガー
+  DEFAULT_TTL: 2 * 60 * 60 * 1000,  // 2時間（日付ベース・マスター共通）
+  MASTER_TTL: 2 * 60 * 60 * 1000,   // 2時間（マスターデータ用）
+  ANALYTICS_TTL: 60 * 60 * 1000,    // 1時間（売上分析用）
+
+  /**
+   * キャッシュからデータを取得
+   * @param {string} key - キャッシュキー
+   * @returns {Object|null} - { data, timestamp, age } または null
+   */
+  get(key) {
+    try {
+      const item = sessionStorage.getItem('cache_' + key);
+      if (!item) return null;
+      const { data, timestamp } = JSON.parse(item);
+      return { data, timestamp, age: Date.now() - timestamp };
+    } catch (e) {
+      console.warn('PageCache.get error:', e);
+      return null;
+    }
+  },
+
+  /**
+   * キャッシュにデータを保存
+   * @param {string} key - キャッシュキー
+   * @param {*} data - 保存するデータ
+   */
+  set(key, data) {
+    try {
+      sessionStorage.setItem('cache_' + key, JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      // sessionStorageがフルの場合は古いキャッシュをクリア
+      console.warn('PageCache.set error, clearing old cache:', e);
+      this.clearOldest();
+      try {
+        sessionStorage.setItem('cache_' + key, JSON.stringify({
+          data,
+          timestamp: Date.now()
+        }));
+      } catch (e2) {
+        console.error('PageCache.set failed after cleanup:', e2);
+      }
+    }
+  },
+
+  /**
+   * 特定のキャッシュを削除
+   * @param {string} key - キャッシュキー
+   */
+  clear(key) {
+    sessionStorage.removeItem('cache_' + key);
+  },
+
+  /**
+   * プレフィックスに一致するすべてのキャッシュを削除
+   * @param {string} prefix - キープレフィックス
+   */
+  clearByPrefix(prefix) {
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith('cache_' + prefix)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => sessionStorage.removeItem(key));
+  },
+
+  /**
+   * 最も古いキャッシュエントリを削除
+   */
+  clearOldest() {
+    let oldestKey = null;
+    let oldestTime = Infinity;
+
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && key.startsWith('cache_')) {
+        try {
+          const item = JSON.parse(sessionStorage.getItem(key));
+          if (item.timestamp < oldestTime) {
+            oldestTime = item.timestamp;
+            oldestKey = key;
+          }
+        } catch (e) {
+          // パースエラーのエントリは削除
+          sessionStorage.removeItem(key);
+        }
+      }
+    }
+
+    if (oldestKey) {
+      sessionStorage.removeItem(oldestKey);
+    }
+  },
+
+  /**
+   * キャッシュキー生成（日付やフィルター条件を含む）
+   * @param {string} prefix - キープレフィックス
+   * @param {...*} parts - キーの構成要素
+   * @returns {string} - 生成されたキー
+   */
+  makeKey(prefix, ...parts) {
+    return prefix + '_' + parts.map(p => {
+      if (typeof p === 'object') return JSON.stringify(p);
+      return String(p);
+    }).join('_');
+  },
+
+  /**
+   * キャッシュが有効かどうかをチェック
+   * @param {Object} cached - get()の戻り値
+   * @param {number} ttl - TTL（ミリ秒）
+   * @returns {boolean}
+   */
+  isValid(cached, ttl) {
+    return cached && cached.age < ttl;
+  },
+
+  /**
+   * キャッシュが古いがバックグラウンド更新で使用可能かチェック
+   * @param {Object} cached - get()の戻り値
+   * @param {number} maxAge - 最大許容年齢（ミリ秒）
+   * @returns {boolean}
+   */
+  isStale(cached, maxAge) {
+    return cached && cached.age >= maxAge;
+  }
+};
+</script>

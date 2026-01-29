@@ -247,29 +247,66 @@ function safeJsonParse(jsonStr, defaultValue) {
 /**
  * マスターデータキャッシュ
  *
- * リクエストスコープ内でM_Staff/M_Customersの重複読み込みを防ぐ。
- * GASはリクエストごとに新しいスクリプトインスタンスが生成されるため、
- * このキャッシュは自然にリクエスト終了時にクリアされる。
+ * 2層キャッシュ構造:
+ * 1. リクエストスコープ内メモリキャッシュ（同一リクエスト内での重複読み込み防止）
+ * 2. CacheService（リクエスト間でのキャッシュ、TTL: 6時間）
  *
  * 使い方:
- *   const staff = MasterCache.getStaff();      // 初回: シートから読込、以降: キャッシュ
+ *   const staff = MasterCache.getStaff();      // CacheService → シート → メモリ
  *   const customers = MasterCache.getCustomers();
- *   MasterCache.invalidate();                   // 更新後にキャッシュをクリア
+ *   MasterCache.invalidateStaff();              // 更新後にキャッシュをクリア
+ *
+ * ウォームアップ:
+ *   MasterCache.warmup();  // 全マスターデータをCacheServiceに事前読み込み
  */
 const MasterCache = {
+  CACHE_TTL: 21600,  // 6時間（秒）- 朝6時のウォームアップから夕方まで持続
+  CACHE_KEY_STAFF: 'MasterCache_M_Staff',
+  CACHE_KEY_CUSTOMERS: 'MasterCache_M_Customers',
+  CACHE_KEY_SUBCONTRACTORS: 'MasterCache_M_Subcontractors',
+  CACHE_KEY_TRANSPORT_FEES: 'MasterCache_M_TransportFees',
+  CACHE_KEY_COMPANY: 'MasterCache_M_Company',
+
   _staffCache: null,
   _staffMap: null,
   _customerCache: null,
   _customerMap: null,
+  _subcontractorCache: null,
+  _transportFeeCache: null,
+  _companyCache: null,
 
   /**
-   * M_Staffの全レコードを取得（キャッシュ付き）
+   * M_Staffの全レコードを取得（2層キャッシュ付き）
    * @returns {Object[]} スタッフ配列
    */
   getStaff: function() {
-    if (this._staffCache === null) {
-      this._staffCache = getAllRecords('M_Staff').filter(s => !s.is_deleted);
+    if (this._staffCache !== null) {
+      return this._staffCache;
     }
+
+    // CacheServiceから取得を試行
+    try {
+      const cache = CacheService.getScriptCache();
+      const cached = cache.get(this.CACHE_KEY_STAFF);
+      if (cached) {
+        this._staffCache = JSON.parse(cached);
+        return this._staffCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for staff:', e);
+    }
+
+    // シートから読み込み
+    this._staffCache = getAllRecords('M_Staff').filter(s => !s.is_deleted);
+
+    // CacheServiceに保存
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_STAFF, JSON.stringify(this._staffCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for staff:', e);
+    }
+
     return this._staffCache;
   },
 
@@ -291,13 +328,37 @@ const MasterCache = {
   },
 
   /**
-   * M_Customersの全レコードを取得（キャッシュ付き）
+   * M_Customersの全レコードを取得（2層キャッシュ付き）
    * @returns {Object[]} 顧客配列
    */
   getCustomers: function() {
-    if (this._customerCache === null) {
-      this._customerCache = getAllRecords('M_Customers').filter(c => !c.is_deleted);
+    if (this._customerCache !== null) {
+      return this._customerCache;
     }
+
+    // CacheServiceから取得を試行
+    try {
+      const cache = CacheService.getScriptCache();
+      const cached = cache.get(this.CACHE_KEY_CUSTOMERS);
+      if (cached) {
+        this._customerCache = JSON.parse(cached);
+        return this._customerCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for customers:', e);
+    }
+
+    // シートから読み込み
+    this._customerCache = getAllRecords('M_Customers').filter(c => !c.is_deleted);
+
+    // CacheServiceに保存
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_CUSTOMERS, JSON.stringify(this._customerCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for customers:', e);
+    }
+
     return this._customerCache;
   },
 
@@ -319,7 +380,7 @@ const MasterCache = {
   },
 
   /**
-   * キャッシュをクリア
+   * 全キャッシュをクリア
    * マスターデータ更新後に呼び出す
    */
   invalidate: function() {
@@ -327,6 +388,21 @@ const MasterCache = {
     this._staffMap = null;
     this._customerCache = null;
     this._customerMap = null;
+    this._subcontractorCache = null;
+    this._transportFeeCache = null;
+    this._companyCache = null;
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.removeAll([
+        this.CACHE_KEY_STAFF,
+        this.CACHE_KEY_CUSTOMERS,
+        this.CACHE_KEY_SUBCONTRACTORS,
+        this.CACHE_KEY_TRANSPORT_FEES,
+        this.CACHE_KEY_COMPANY
+      ]);
+    } catch (e) {
+      console.warn('CacheService.removeAll failed:', e);
+    }
   },
 
   /**
@@ -335,6 +411,11 @@ const MasterCache = {
   invalidateStaff: function() {
     this._staffCache = null;
     this._staffMap = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_STAFF);
+    } catch (e) {
+      console.warn('CacheService.remove failed for staff:', e);
+    }
   },
 
   /**
@@ -343,5 +424,199 @@ const MasterCache = {
   invalidateCustomers: function() {
     this._customerCache = null;
     this._customerMap = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_CUSTOMERS);
+    } catch (e) {
+      console.warn('CacheService.remove failed for customers:', e);
+    }
+  },
+
+  /**
+   * M_Subcontractorsの全レコードを取得（2層キャッシュ付き）
+   * @returns {Object[]} 外注先配列
+   */
+  getSubcontractors: function() {
+    if (this._subcontractorCache !== null) {
+      return this._subcontractorCache;
+    }
+
+    try {
+      const cache = CacheService.getScriptCache();
+      const cached = cache.get(this.CACHE_KEY_SUBCONTRACTORS);
+      if (cached) {
+        this._subcontractorCache = JSON.parse(cached);
+        return this._subcontractorCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for subcontractors:', e);
+    }
+
+    this._subcontractorCache = getAllRecords('M_Subcontractors').filter(s => !s.is_deleted);
+
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_SUBCONTRACTORS, JSON.stringify(this._subcontractorCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for subcontractors:', e);
+    }
+
+    return this._subcontractorCache;
+  },
+
+  /**
+   * 交通費の全レコードを取得（2層キャッシュ付き）
+   * @returns {Object[]} 交通費配列
+   */
+  getTransportFees: function() {
+    if (this._transportFeeCache !== null) {
+      return this._transportFeeCache;
+    }
+
+    try {
+      const cache = CacheService.getScriptCache();
+      const cached = cache.get(this.CACHE_KEY_TRANSPORT_FEES);
+      if (cached) {
+        this._transportFeeCache = JSON.parse(cached);
+        return this._transportFeeCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for transportFees:', e);
+    }
+
+    this._transportFeeCache = getAllRecords('M_TransportFee');
+
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_TRANSPORT_FEES, JSON.stringify(this._transportFeeCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for transportFees:', e);
+    }
+
+    return this._transportFeeCache;
+  },
+
+  /**
+   * 自社情報の全レコードを取得（2層キャッシュ付き）
+   * @returns {Object} 会社情報
+   */
+  getCompany: function() {
+    if (this._companyCache !== null) {
+      return this._companyCache;
+    }
+
+    try {
+      const cache = CacheService.getScriptCache();
+      const cached = cache.get(this.CACHE_KEY_COMPANY);
+      if (cached) {
+        this._companyCache = JSON.parse(cached);
+        return this._companyCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for company:', e);
+    }
+
+    const records = getAllRecords('M_Company');
+    this._companyCache = records.length > 0 ? records[0] : {};
+
+    try {
+      const cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_COMPANY, JSON.stringify(this._companyCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for company:', e);
+    }
+
+    return this._companyCache;
+  },
+
+  /**
+   * 外注先キャッシュをクリア
+   */
+  invalidateSubcontractors: function() {
+    this._subcontractorCache = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_SUBCONTRACTORS);
+    } catch (e) {
+      console.warn('CacheService.remove failed for subcontractors:', e);
+    }
+  },
+
+  /**
+   * 交通費キャッシュをクリア
+   */
+  invalidateTransportFees: function() {
+    this._transportFeeCache = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_TRANSPORT_FEES);
+    } catch (e) {
+      console.warn('CacheService.remove failed for transportFees:', e);
+    }
+  },
+
+  /**
+   * 会社情報キャッシュをクリア
+   */
+  invalidateCompany: function() {
+    this._companyCache = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_COMPANY);
+    } catch (e) {
+      console.warn('CacheService.remove failed for company:', e);
+    }
+  },
+
+  /**
+   * 全マスターデータをCacheServiceに事前読み込み（ウォームアップ）
+   * 毎朝6時のトリガーから呼び出す
+   * @returns {Object} ウォームアップ結果
+   */
+  warmup: function() {
+    const startTime = Date.now();
+    const results = {};
+
+    try {
+      // メモリキャッシュをクリア（強制的にシートから読み込む）
+      this._staffCache = null;
+      this._customerCache = null;
+      this._subcontractorCache = null;
+      this._transportFeeCache = null;
+      this._companyCache = null;
+
+      // CacheServiceもクリア
+      const cache = CacheService.getScriptCache();
+      cache.removeAll([
+        this.CACHE_KEY_STAFF,
+        this.CACHE_KEY_CUSTOMERS,
+        this.CACHE_KEY_SUBCONTRACTORS,
+        this.CACHE_KEY_TRANSPORT_FEES,
+        this.CACHE_KEY_COMPANY
+      ]);
+
+      // 各マスターをロード（CacheServiceに自動保存される）
+      const staff = this.getStaff();
+      results.staff = staff.length;
+
+      const customers = this.getCustomers();
+      results.customers = customers.length;
+
+      const subcontractors = this.getSubcontractors();
+      results.subcontractors = subcontractors.length;
+
+      const transportFees = this.getTransportFees();
+      results.transportFees = transportFees.length;
+
+      const company = this.getCompany();
+      results.company = company.company_id ? 1 : 0;
+
+      results.duration = Date.now() - startTime;
+      results.success = true;
+
+      console.log('MasterCache warmup completed:', results);
+    } catch (e) {
+      results.success = false;
+      results.error = e.message;
+      console.error('MasterCache warmup failed:', e);
+    }
+
+    return results;
   }
 };
