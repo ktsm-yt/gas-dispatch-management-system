@@ -503,3 +503,30 @@ color: var(--danger);
 #form-slot-id option[data-status="filled"] {
 color: var(--success);
 }
+
+/* Conflict Warning Styles */
+.staff-list-item.has-conflict {
+background: #FEF3C7;
+border-left: 3px solid #F59E0B;
+}
+
+.staff-list-item.has-conflict:hover {
+background: #FDE68A;
+}
+
+.staff-list-item.has-conflict.selected {
+background: #FDE68A;
+box-shadow: inset 0 0 0 2px #3B82F6;
+}
+
+.conflict-badge {
+font-size: 14px;
+margin-left: var(--spacing-xs);
+cursor: help;
+}
+
+/* Start Time Badge in Header */
+.start-time-badge {
+  font-weight: 600;
+  color: var(--color-primary);
+}
