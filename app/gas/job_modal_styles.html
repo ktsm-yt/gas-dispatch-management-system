@@ -62,6 +62,25 @@
   }
 
   /* =================================================================
+     Time Slot Hint (soft validation warning)
+     ================================================================= */
+  .time-slot-hint {
+    display: block;
+    font-size: 11px;
+    color: #B45309;
+    margin-top: 4px;
+    padding: 2px 6px;
+    background: #FEF3C7;
+    border-radius: 3px;
+    line-height: 1.4;
+  }
+
+  .time-slot-hint::before {
+    content: '⚠️ ';
+    font-size: 10px;
+  }
+
+  /* =================================================================
      Slots Section
      ================================================================= */
   .slots-section {
