@@ -103,6 +103,41 @@ function initNavBar(currentPage, pageTitle) {
     e.preventDefault();
     navigateTo('company');
   });
+
+  // 右クリック→新しいタブ対応: 各リンクにhref属性を設定
+  const cachedUrl = sessionStorage.getItem('__SCRIPT_URL__');
+  if (cachedUrl) {
+    setNavHrefs(cachedUrl);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        sessionStorage.setItem('__SCRIPT_URL__', url);
+        setNavHrefs(url);
+      })
+      .getScriptUrl();
+  }
+}
+
+// 各ナビリンクにhref属性を設定（右クリック・Cmd+クリック対応）
+function setNavHrefs(baseUrl) {
+  const links = {
+    'nav-dashboard': 'dashboard',
+    'nav-jobs': 'jobs',
+    // 'nav-assignments': 'assignments', // コメントアウト中
+    'nav-invoices': 'invoices',
+    'nav-payouts': 'payouts',
+    'nav-sales-analytics': 'sales_analytics',
+    'nav-customers': 'customers',
+    'nav-staff': 'staff',
+    'nav-subcontractors': 'subcontractors',
+    'nav-transport': 'transportFees',
+    'nav-company': 'company'
+  };
+
+  for (const [id, page] of Object.entries(links)) {
+    const el = document.getElementById(id);
+    if (el) el.href = baseUrl + '?page=' + page;
+  }
 }
 
 function navigateTo(page) {
