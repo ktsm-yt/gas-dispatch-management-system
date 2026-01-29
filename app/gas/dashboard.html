@@ -54,14 +54,26 @@
       border-bottom: 1px solid var(--border-color);
       padding: 6px var(--spacing-md);
       display: flex;
-      justify-content: space-between;
       align-items: center;
+      gap: 16px;
     }
 
-    .date-nav-center {
+    .date-nav-left {
       display: flex;
       align-items: center;
       gap: 6px;
+    }
+
+    .date-nav-center {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+    }
+
+    .date-nav-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
 
     .date-btn {
@@ -77,27 +89,51 @@
       background: var(--bg-hover);
     }
 
-    .date-picker-input {
-      border: 1px solid var(--border-color);
+    .date-btn-icon {
       padding: 4px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      cursor: pointer;
-      width: 36px;
-      height: 32px;
-      background: white;
+      font-weight: 600;
     }
 
-    .date-picker-input::-webkit-calendar-picker-indicator {
-      cursor: pointer;
-      margin: 0;
-      width: 18px;
-      height: 18px;
+
+    .current-date-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
     }
 
     .current-date {
       font-size: 16px;
       font-weight: 600;
+      cursor: pointer;
+    }
+
+    .current-date:hover {
+      color: var(--color-primary);
+    }
+
+    .date-picker-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    /* カレンダーアイコンを非表示にして全体をクリック可能に */
+    .date-picker-overlay::-webkit-calendar-picker-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      cursor: pointer;
     }
 
     .date-stats {
@@ -431,6 +467,50 @@
       height: 14px;
     }
 
+    /* Filter Controls */
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .filter-select {
+      padding: 4px 24px 4px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      background: white;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 6px center;
+    }
+
+    .filter-select:hover {
+      border-color: var(--color-secondary);
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: var(--color-primary);
+    }
+
+    /* List Filter Bar */
+    .list-filter-bar {
+      padding: 10px 12px;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      gap: 16px;
+    }
+
     /* List View Container */
     .dashboard-list {
       display: none;
@@ -560,8 +640,18 @@
       font-size: 11px;
     }
 
+    .job-list-table .staff-cell {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
     .job-list-table .assignment-cell {
       white-space: nowrap;
+      text-align: center;
     }
 
     .job-list-table .assignment-cell .fraction {
@@ -571,6 +661,25 @@
 
     .job-list-table .assignment-cell .fraction.shortage {
       color: var(--color-danger);
+    }
+
+    .job-list-table .shortage-cell {
+      white-space: nowrap;
+      text-align: center;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    .job-list-table .shortage-cell.shortage-negative {
+      color: var(--color-danger);
+    }
+
+    .job-list-table .shortage-cell.shortage-positive {
+      color: var(--color-success);
+    }
+
+    .job-list-table .shortage-cell.shortage-neutral {
+      color: var(--text-muted);
     }
 
     .job-list-table .actions-cell {
@@ -708,40 +817,60 @@
 
   <!-- Date Navigation -->
   <div class="date-nav">
-    <!-- View Toggle -->
-    <div class="view-toggle" id="view-toggle">
-      <button class="view-toggle-btn active" data-view="card" title="カード表示">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" rx="1"/>
-          <rect x="14" y="3" width="7" height="7" rx="1"/>
-          <rect x="3" y="14" width="7" height="7" rx="1"/>
-          <rect x="14" y="14" width="7" height="7" rx="1"/>
-        </svg>
-        カード
-      </button>
-      <button class="view-toggle-btn" data-view="list" title="リスト表示">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="8" y1="6" x2="21" y2="6"/>
-          <line x1="8" y1="12" x2="21" y2="12"/>
-          <line x1="8" y1="18" x2="21" y2="18"/>
-          <line x1="3" y1="6" x2="3.01" y2="6"/>
-          <line x1="3" y1="12" x2="3.01" y2="12"/>
-          <line x1="3" y1="18" x2="3.01" y2="18"/>
-        </svg>
-        リスト
-      </button>
-    </div>
-    <div class="date-nav-center">
-      <button class="date-btn" id="prev-day">&lt; 前日</button>
-      <span class="current-date" id="current-date">-</span>
-      <input type="date" id="date-picker" class="date-picker-input">
-      <button class="date-btn" id="next-day">翌日 &gt;</button>
+    <!-- Left: Date Navigation -->
+    <div class="date-nav-left">
+      <button class="date-btn date-btn-icon" id="prev-day" title="前日">&lt;</button>
+      <div class="current-date-wrapper">
+        <span class="current-date" id="current-date">-</span>
+        <input type="date" id="date-picker" class="date-picker-overlay">
+      </div>
+      <button class="date-btn date-btn-icon" id="next-day" title="翌日">&gt;</button>
       <button class="date-btn" id="today-btn">今日</button>
     </div>
-    <div class="date-stats">
-      <span>総件数: <span class="count" id="stats-total">-</span></span>
-      <span>配置済: <span class="count" id="stats-assigned">-</span></span>
-      <span>未配置: <span class="count" id="stats-pending">-</span></span>
+    <!-- Center: View Toggle -->
+    <div class="date-nav-center">
+      <div class="view-toggle" id="view-toggle">
+        <button class="view-toggle-btn active" data-view="card" title="カード表示">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"/>
+            <rect x="14" y="3" width="7" height="7" rx="1"/>
+            <rect x="3" y="14" width="7" height="7" rx="1"/>
+            <rect x="14" y="14" width="7" height="7" rx="1"/>
+          </svg>
+          カード
+        </button>
+        <button class="view-toggle-btn" data-view="list" title="リスト表示">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="8" y1="6" x2="21" y2="6"/>
+            <line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/>
+            <line x1="3" y1="12" x2="3.01" y2="12"/>
+            <line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          リスト
+        </button>
+      </div>
+    </div>
+    <!-- Right: Filter + Stats -->
+    <div class="date-nav-right">
+      <div class="filter-group">
+        <label class="filter-label">ステータス</label>
+        <select id="status-filter" class="filter-select">
+          <option value="all">すべて</option>
+          <option value="pending">未配置</option>
+          <option value="assigned">配置済</option>
+          <option value="hold">保留</option>
+          <option value="completed">完了</option>
+          <option value="cancelled">キャンセル</option>
+          <option value="problem">問題あり</option>
+        </select>
+      </div>
+      <div class="date-stats">
+        <span>総件数: <span class="count" id="stats-total">-</span></span>
+        <span>配置済: <span class="count" id="stats-assigned">-</span></span>
+        <span>未配置: <span class="count" id="stats-pending">-</span></span>
+      </div>
     </div>
   </div>
 
@@ -754,15 +883,31 @@
 
     <!-- List View -->
     <div class="dashboard-list" id="dashboard-list">
+      <!-- Time Slot Filter (リスト専用) -->
+      <div class="list-filter-bar">
+        <div class="filter-group">
+          <label class="filter-label">時間区分</label>
+          <select id="time-slot-filter" class="filter-select">
+            <option value="all">すべて</option>
+            <option value="jotou">上棟</option>
+            <option value="shuujitsu">終日</option>
+            <option value="am">AM</option>
+            <option value="pm">PM</option>
+            <option value="yakin">夜勤</option>
+            <option value="mitei">未定</option>
+          </select>
+        </div>
+      </div>
       <table class="job-list-table">
         <thead>
           <tr>
             <th class="sortable" data-sort="time_slot">時間区分</th>
             <th class="sortable" data-sort="customer_name">顧客名</th>
             <th class="sortable" data-sort="site_name">現場</th>
-            <th class="sortable" data-sort="work_category">作業区分</th>
-            <th class="sortable" data-sort="assignment">配置状況</th>
-            <th>操作</th>
+            <th>配置スタッフ</th>
+            <th class="sortable" data-sort="assignment">配置</th>
+            <th class="sortable" data-sort="shortage">過不足</th>
+            <th>案件編集</th>
           </tr>
         </thead>
         <tbody id="job-list-body">
@@ -827,6 +972,10 @@
     let currentViewMode = 'card';  // 'card' | 'list'
     let listSortKey = 'time_slot';
     let listSortOrder = 'asc';  // 'asc' | 'desc'
+
+    // フィルター状態
+    let statusFilter = 'all';    // 共通：ステータスフィルター
+    let timeSlotFilter = 'all';  // リスト専用：時間区分フィルター
 
     // 時間区分のソート順（カスタム順序）
     const TIME_SLOT_SORT_ORDER = {
@@ -936,6 +1085,29 @@
       }
     }
 
+    // フィルター適用（両モード共通）
+    function applyFilters() {
+      if (!dashboardData) return;
+
+      if (currentViewMode === 'list') {
+        renderListView();
+      } else {
+        renderDashboard();
+      }
+    }
+
+    // ステータスでフィルタリング
+    function filterByStatus(jobs) {
+      if (statusFilter === 'all') return jobs;
+      return jobs.filter(job => job.status === statusFilter);
+    }
+
+    // 時間区分でフィルタリング（リスト専用）
+    function filterByTimeSlot(jobs) {
+      if (timeSlotFilter === 'all') return jobs;
+      return jobs.filter(job => job.time_slot === timeSlotFilter);
+    }
+
     function initializeWithServerDate() {
       // URLパラメータ → 埋め込み日付 → フォールバック の優先順位で日付を取得（RPC不要）
       const urlParams = new URLSearchParams(window.location.search);
@@ -962,6 +1134,18 @@
         btn.addEventListener('click', () => {
           switchViewMode(btn.dataset.view);
         });
+      });
+
+      // Status filter (共通)
+      document.getElementById('status-filter').addEventListener('change', (e) => {
+        statusFilter = e.target.value;
+        applyFilters();
+      });
+
+      // Time slot filter (リスト専用)
+      document.getElementById('time-slot-filter').addEventListener('change', (e) => {
+        timeSlotFilter = e.target.value;
+        renderListView();
       });
 
       // List view sort headers
@@ -1244,8 +1428,9 @@
           shortageEl.className = 'shortage neutral';
         }
 
-        // Render cards
-        const jobs = dashboardData.jobs.filter(j => j.time_slot === slot);
+        // Render cards (ステータスフィルター適用)
+        const allJobs = dashboardData.jobs.filter(j => j.time_slot === slot);
+        const jobs = filterByStatus(allJobs);
         renderCards(slot, jobs);
       });
 
@@ -1262,36 +1447,60 @@
       if (!dashboardData || dashboardData.jobs.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" class="list-empty-state">案件がありません</td>
+            <td colspan="7" class="list-empty-state">案件がありません</td>
+          </tr>
+        `;
+        return;
+      }
+
+      // フィルター適用（ステータス + 時間区分）
+      let filteredJobs = filterByStatus(dashboardData.jobs);
+      filteredJobs = filterByTimeSlot(filteredJobs);
+
+      if (filteredJobs.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="list-empty-state">条件に一致する案件がありません</td>
           </tr>
         `;
         return;
       }
 
       // ソート
-      const sortedJobs = sortJobs([...dashboardData.jobs], listSortKey, listSortOrder);
+      const sortedJobs = sortJobs([...filteredJobs], listSortKey, listSortOrder);
 
       // 描画
       tbody.innerHTML = sortedJobs.map(job => {
-        const hasShortage = job.assigned_count < job.required_count;
-        const tagClass = WORK_CATEGORY_TAG[job.work_category] || '';
-        const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '-';
+        const shortage = job.required_count - job.assigned_count;
+        const hasShortage = shortage > 0;
+        const staffNames = (job.staff_names || []).filter(n => n).join(', ') || '-';
+
+        // 過不足の表示
+        let shortageText, shortageClass;
+        if (shortage > 0) {
+          shortageText = `${shortage}名不足`;
+          shortageClass = 'shortage-negative';
+        } else if (shortage < 0) {
+          shortageText = `+${Math.abs(shortage)}名`;
+          shortageClass = 'shortage-positive';
+        } else {
+          shortageText = '±0';
+          shortageClass = 'shortage-neutral';
+        }
 
         return `
           <tr class="${hasShortage ? 'has-shortage' : ''}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
             <td class="time-slot-cell">${TIME_SLOT_LABELS[job.time_slot] || job.time_slot}${job.start_time ? ` (${job.start_time})` : ''}</td>
-            <td class="customer-cell">${escapeHtml(job.customer_name) || '-'}</td>
+            <td class="customer-cell">${escapeHtml(job.customer_name) || '-'}${job.status === 'hold' ? ' <span class="status-badge status-hold">保留</span>' : ''}</td>
             <td class="site-cell">
               <div class="site-name">${escapeHtml(job.site_name) || '-'}</div>
               ${job.site_address ? `<div class="site-address">${escapeHtml(job.site_address)}</div>` : ''}
             </td>
-            <td class="work-type-cell">
-              ${workCategoryLabel !== '-' ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : '-'}
-              ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
-            </td>
+            <td class="staff-cell">${escapeHtml(staffNames)}</td>
             <td class="assignment-cell">
               <span class="fraction ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
             </td>
+            <td class="shortage-cell ${shortageClass}">${shortageText}</td>
             <td class="actions-cell">
               <button class="list-edit-btn" onclick="event.stopPropagation(); openJobModalForDashboard('${job.job_id}')" title="案件編集">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1326,11 +1535,12 @@
             aVal = (a.site_name || '').toLowerCase();
             bVal = (b.site_name || '').toLowerCase();
             break;
-          case 'work_category':
-            aVal = a.work_category || '';
-            bVal = b.work_category || '';
-            break;
           case 'assignment':
+            // 配置人数でソート
+            aVal = a.assigned_count || 0;
+            bVal = b.assigned_count || 0;
+            break;
+          case 'shortage':
             // 不足数でソート（不足が多いものを上に）
             aVal = a.required_count - a.assigned_count;
             bVal = b.required_count - b.assigned_count;
