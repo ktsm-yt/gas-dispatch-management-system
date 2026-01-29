@@ -169,29 +169,51 @@
       background: var(--bg-hover);
     }
 
+    .date-btn-icon {
+      padding: 4px 8px;
+      font-weight: 600;
+    }
+
+    .current-date-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
     .current-date {
       font-size: 14px;
       font-weight: 600;
       min-width: 140px;
       text-align: center;
+      cursor: pointer;
     }
 
-    .date-picker-input {
-      border: 1px solid var(--border-color);
-      padding: 4px 8px;
-      border-radius: var(--radius-sm);
-      font-size: 14px;
-      cursor: pointer;
-      width: 36px;
-      height: 32px;
-      background: white;
+    .current-date:hover {
+      color: var(--color-primary);
     }
 
-    .date-picker-input::-webkit-calendar-picker-indicator {
+    .date-picker-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
       cursor: pointer;
+      z-index: 1;
+    }
+
+    .date-picker-overlay::-webkit-calendar-picker-indicator {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       margin: 0;
-      width: 18px;
-      height: 18px;
+      padding: 0;
+      cursor: pointer;
     }
 
     .stats-bar .count {
@@ -464,10 +486,12 @@
   <div class="toolbar">
     <div class="toolbar-filters">
       <div class="date-nav-group">
-        <button class="date-btn" id="prev-day">&lt; 前日</button>
-        <span class="current-date" id="current-date">-</span>
-        <input type="date" id="date-picker" class="date-picker-input">
-        <button class="date-btn" id="next-day">翌日 &gt;</button>
+        <button class="date-btn date-btn-icon" id="prev-day">&lt;</button>
+        <div class="current-date-wrapper">
+          <span class="current-date" id="current-date">-</span>
+          <input type="date" id="date-picker" class="date-picker-overlay">
+        </div>
+        <button class="date-btn date-btn-icon" id="next-day">&gt;</button>
         <button class="date-btn" id="today-btn">今日</button>
       </div>
       <div class="filter-group">

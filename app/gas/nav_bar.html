@@ -4,7 +4,8 @@
   <nav class="header-nav">
     <a href="#" id="nav-dashboard">ダッシュボード</a>
     <a href="#" id="nav-jobs">案件一覧</a>
-    <a href="#" id="nav-assignments">配置管理</a>
+    <!-- 配置管理はダッシュボードのリスト表示で代替。要望があれば復活 -->
+    <!-- <a href="#" id="nav-assignments">配置管理</a> -->
     <a href="#" id="nav-invoices">請求</a>
     <a href="#" id="nav-payouts">支払</a>
     <a href="#" id="nav-sales-analytics">売上分析</a>
@@ -30,7 +31,7 @@ function initNavBar(currentPage, pageTitle) {
   const navMap = {
     'dashboard': 'nav-dashboard',
     'jobs': 'nav-jobs',
-    'assignments': 'nav-assignments',
+    // assignments は非公開化のためマッピング削除
     'invoices': 'nav-invoices',
     'payouts': 'nav-payouts',
     'sales_analytics': 'nav-sales-analytics',
@@ -55,10 +56,11 @@ function initNavBar(currentPage, pageTitle) {
     e.preventDefault();
     navigateTo('jobs');
   });
-  document.getElementById('nav-assignments').addEventListener('click', (e) => {
-    e.preventDefault();
-    navigateTo('assignments');
-  });
+  // 配置管理はダッシュボードのリスト表示で代替
+  // document.getElementById('nav-assignments').addEventListener('click', (e) => {
+  //   e.preventDefault();
+  //   navigateTo('assignments');
+  // });
   document.getElementById('nav-invoices').addEventListener('click', (e) => {
     e.preventDefault();
     navigateTo('invoices');
@@ -101,6 +103,41 @@ function initNavBar(currentPage, pageTitle) {
     e.preventDefault();
     navigateTo('company');
   });
+
+  // 右クリック→新しいタブ対応: 各リンクにhref属性を設定
+  const cachedUrl = sessionStorage.getItem('__SCRIPT_URL__');
+  if (cachedUrl) {
+    setNavHrefs(cachedUrl);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        sessionStorage.setItem('__SCRIPT_URL__', url);
+        setNavHrefs(url);
+      })
+      .getScriptUrl();
+  }
+}
+
+// 各ナビリンクにhref属性を設定（右クリック・Cmd+クリック対応）
+function setNavHrefs(baseUrl) {
+  const links = {
+    'nav-dashboard': 'dashboard',
+    'nav-jobs': 'jobs',
+    // 'nav-assignments': 'assignments', // コメントアウト中
+    'nav-invoices': 'invoices',
+    'nav-payouts': 'payouts',
+    'nav-sales-analytics': 'sales_analytics',
+    'nav-customers': 'customers',
+    'nav-staff': 'staff',
+    'nav-subcontractors': 'subcontractors',
+    'nav-transport': 'transportFees',
+    'nav-company': 'company'
+  };
+
+  for (const [id, page] of Object.entries(links)) {
+    const el = document.getElementById(id);
+    if (el) el.href = baseUrl + '?page=' + page;
+  }
 }
 
 function navigateTo(page) {
