@@ -744,8 +744,8 @@
     const SS_SUB_KEY = 'payouts_subcontractor_data';
     const SS_SUB_UNPAID_KEY = 'payouts_sub_unpaid_data';
     const SS_SUB_HISTORY_KEY = 'payouts_sub_history_data';
-    const CACHE_TTL = 5 * 60 * 1000; // 5分（未払データ）
-    const HISTORY_CACHE_TTL = 30 * 60 * 1000; // 30分（履歴）
+    const CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間（未払データ、他ページと統一）
+    const HISTORY_CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間（履歴）
 
     function saveToSession(data) {
       sessionStorage.setItem(SS_KEY, JSON.stringify({
@@ -772,6 +772,57 @@
 
     function clearSession() {
       sessionStorage.removeItem(SS_KEY);
+    }
+
+    /**
+     * キャッシュから日付フィルターを復元（init時に呼び出し）
+     * @returns {boolean} 復元できたかどうか
+     */
+    function tryRestoreFromCache() {
+      const saved = sessionStorage.getItem(SS_KEY);
+      if (!saved) return false;
+      try {
+        const data = JSON.parse(saved);
+        // TTL check
+        if (Date.now() - data.timestamp > CACHE_TTL) {
+          sessionStorage.removeItem(SS_KEY);
+          return false;
+        }
+        // 日付フィルターを復元
+        if (data.endDate) {
+          document.getElementById('endDateFilter').value = data.endDate;
+        }
+        if (data.staffId) {
+          // スタッフフィルターは後でpopulateStaffFilterで設定される
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    /**
+     * 外注キャッシュから日付フィルターを復元（init時に呼び出し）
+     * @returns {boolean} 復元できたかどうか
+     */
+    function tryRestoreSubFromCache() {
+      const saved = sessionStorage.getItem(SS_SUB_UNPAID_KEY);
+      if (!saved) return false;
+      try {
+        const cache = JSON.parse(saved);
+        // TTL check
+        if (Date.now() - cache.timestamp > CACHE_TTL) {
+          sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
+          return false;
+        }
+        // 日付フィルターを復元
+        if (cache.endDate) {
+          document.getElementById('subEndDateFilter').value = cache.endDate;
+        }
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
 
     // 外注費未払キャッシュ
@@ -849,10 +900,19 @@
       // Initialize navigation bar with breadcrumb
       initNavBar('payouts', '支払管理');
 
-      // Set default date to today
-      const today = new Date().toISOString().split('T')[0];
-      document.getElementById('endDateFilter').value = today;
-      document.getElementById('subEndDateFilter').value = today;
+      // キャッシュから復元を試みる（日付フィルターも含む）
+      const hasRestoredStaff = tryRestoreFromCache();
+      const hasRestoredSub = tryRestoreSubFromCache();
+
+      // キャッシュがない場合のみデフォルト日付を設定
+      if (!hasRestoredStaff) {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('endDateFilter').value = today;
+      }
+      if (!hasRestoredSub) {
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('subEndDateFilter').value = today;
+      }
 
       loadStaffList();
       loadHistory();
@@ -861,7 +921,7 @@
       // Load subcontractor list for second tab
       loadSubcontractorList();
 
-      // Restore from SessionStorage after staff list is loaded
+      // スタッフリストがロードされた後にデータを復元（UIに反映）
       restoreFromSession();
 
       // Event delegation for subcontractor payout undo buttons
@@ -2716,12 +2776,27 @@
             subcontractorList = response.data.subcontractors;
             renderSubcontractorFilter(subcontractorList);
             loadSubcontractorHistory();
+            // 外注リストがロードされた後にキャッシュから復元
+            restoreSubFromSession();
           }
         })
         .withFailureHandler(function(error) {
           console.error('loadSubcontractorList error:', error);
         })
         .getSubcontractorsForPayouts();
+    }
+
+    /**
+     * 外注タブのデータをキャッシュから復元
+     */
+    function restoreSubFromSession() {
+      const endDate = document.getElementById('subEndDateFilter').value;
+      if (!endDate) return;
+
+      const cached = loadSubUnpaidFromSession(endDate);
+      if (cached) {
+        renderSubcontractorUnpaidList(cached);
+      }
     }
 
     function renderSubcontractorFilter(list) {
