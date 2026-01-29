@@ -546,8 +546,10 @@
         const uniqueStaffIds = new Set(validAssignments.map(a => a.staff_id));
         dashboardData.jobs[idx].assigned_count = uniqueStaffIds.size;
         dashboardData.jobs[idx].staff_names = validAssignments.map(a => a.staff_name || '');
+        // 配置データも更新（競合チェック用キャッシュに反映）
+        dashboardData.jobs[idx].assignments = assignments || [];
 
-        // 統計を再計算して再描画
+        // 統計を再計算して再描画（日次キャッシュも更新される）
         recalculateStats();
         renderDashboard();
 
@@ -772,7 +774,13 @@
       if (JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs)) {
         dashboardData = newData;
         saveToCachedDate(newData.date, newData);
+        // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
+        buildDayAssignmentsCache();
         renderDashboard();
+      } else if (!window.dashboardDayAssignmentsCache || window.dashboardDayAssignmentsCache.date !== newData.date) {
+        // データは同じだがキャッシュがない場合は構築
+        dashboardData = newData;
+        buildDayAssignmentsCache();
       }
     }
 
@@ -817,6 +825,10 @@
 
       dashboardData = newData;
       lastMaxUpdatedAt = null; // Reset for polling
+
+      // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
+      buildDayAssignmentsCache();
+
       renderDashboard();
     }
 
@@ -983,6 +995,47 @@
 
       // キャッシュも更新
       saveToCachedDate(dashboardData.date, dashboardData);
+    }
+
+    /**
+     * 日次配置キャッシュを構築（配置モーダルの競合チェック用）
+     * dashboardData.jobs から競合チェックに必要な形式でキャッシュを作成し、
+     * window オブジェクトに保存してモーダルからアクセス可能にする
+     */
+    function buildDayAssignmentsCache() {
+      if (!dashboardData || !dashboardData.jobs) {
+        return;
+      }
+
+      const dayAssignments = [];
+      let jobsWithAssignments = 0;
+      for (const job of dashboardData.jobs) {
+        if (job.status === 'cancelled') continue;
+        if (!job.assignments) continue;
+        jobsWithAssignments++;
+
+        for (const a of job.assignments) {
+          if (a.status === 'CANCELLED') continue;
+
+          dayAssignments.push({
+            assignment_id: a.assignment_id,
+            job_id: job.job_id,
+            staff_id: a.staff_id,
+            status: a.status,
+            work_date: dashboardData.date,
+            time_slot: job.time_slot,
+            start_time: job.start_time || '',
+            site_name: job.site_name || ''
+          });
+        }
+      }
+
+      // グローバルにキャッシュを公開（配置モーダルから参照）
+      window.dashboardDayAssignmentsCache = {
+        date: dashboardData.date,
+        assignments: dayAssignments,
+        timestamp: Date.now()
+      };
     }
 
     /**
