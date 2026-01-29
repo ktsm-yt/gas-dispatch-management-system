@@ -45,6 +45,114 @@ function saveGlobalStaffCache(staff) {
   globalStaffCache.timestamp = Date.now();
 }
 
+// ========== Dashboard Cache Access ==========
+/**
+ * ダッシュボードのキャッシュから案件データを取得
+ * @param {string} jobId
+ * @returns {Object|null} { job, assignments, slots, slotStatus } または null
+ */
+function getJobFromDashboardCache(jobId) {
+  // window.dashboardData はダッシュボードページから公開されるグローバル変数
+  const cache = window.dashboardData;
+  if (!cache || !cache.jobs) {
+    return null;
+  }
+
+  // hasFullAssignments フラグで新しいキャッシュかどうか判定
+  // 古いキャッシュ（デプロイ前のセッション）では assignments が不完全
+  if (!cache.hasFullAssignments) {
+    return null;  // 古いキャッシュ → RPCにフォールバック
+  }
+
+  const job = cache.jobs.find(j => j.job_id === jobId);
+  if (!job) {
+    return null;
+  }
+
+  // assignments が配列であることを確認
+  if (!Array.isArray(job.assignments)) {
+    return null;
+  }
+
+  // slotStatusをフロントエンドで計算
+  const slotStatus = calculateSlotStatus(job.slots || [], job.assignments);
+
+  return {
+    job: {
+      job_id: job.job_id,
+      customer_id: job.customer_id,
+      customer_name: job.customer_name,
+      site_name: job.site_name,
+      site_address: job.site_address || '',
+      time_slot: job.time_slot,
+      start_time: job.start_time || '',
+      work_category: job.work_category,
+      work_detail: job.work_detail || '',
+      required_count: job.required_count,
+      status: job.status,
+      supervisor_name: job.supervisor_name || '',
+      supervisor_phone: job.supervisor_phone || '',
+      notes: job.notes || '',
+      work_date: cache.date,  // ダッシュボードの日付
+      updated_at: job.updated_at
+    },
+    assignments: job.assignments,
+    slots: job.slots || [],
+    slotStatus: slotStatus
+  };
+}
+
+/**
+ * スロットステータスをフロントエンドで計算
+ * @param {Array} slots - スロット配列
+ * @param {Array} assignments - 配置配列
+ * @returns {Object} { slotStatuses: Array, total: Object }
+ */
+function calculateSlotStatus(slots, assignments) {
+  if (!slots || slots.length === 0) {
+    return null;
+  }
+
+  // アクティブな配置のみ
+  const activeAssignments = assignments.filter(a => a.status !== 'CANCELLED');
+
+  // スロットごとの配置数をカウント
+  const assignmentsBySlot = {};
+  for (const a of activeAssignments) {
+    if (a.slot_id) {
+      assignmentsBySlot[a.slot_id] = (assignmentsBySlot[a.slot_id] || 0) + 1;
+    }
+  }
+
+  let totalRequired = 0;
+  let totalAssigned = 0;
+
+  const slotStatuses = slots.map(slot => {
+    const required = slot.slot_count || 0;
+    const assigned = assignmentsBySlot[slot.slot_id] || 0;
+    totalRequired += required;
+    totalAssigned += assigned;
+
+    return {
+      slot_id: slot.slot_id,
+      slot_name: slot.slot_name,
+      slot_count: required,
+      slot_pay_unit: slot.slot_pay_unit,
+      assigned: assigned,
+      remaining: Math.max(0, required - assigned)
+    };
+  });
+
+  return {
+    slotStatuses: slotStatuses,
+    total: {
+      required: totalRequired,
+      assigned: totalAssigned,
+      remaining: Math.max(0, totalRequired - totalAssigned)
+    }
+  };
+}
+
 /**
  * キャッシュから案件データを取得
  * @param {string} jobId
@@ -315,13 +423,20 @@ function loadAssignmentModalData(jobId, hasCache = false) {
     document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
   }
 
-  // Load job, assignments, and slots (getJobはslots/slotStatusも返す)
-  google.script.run
-    .withSuccessHandler(function(response) {
-      handleAssignmentData(response, currentJobId);
-    })
-    .withFailureHandler(handleAssignmentModalError)
-    .getJob(jobId);
+  // ★ダッシュボードキャッシュから案件データを取得（RPC削減）
+  const dashboardJobData = getJobFromDashboardCache(jobId);
+  if (dashboardJobData) {
+    // ダッシュボードキャッシュから即座に表示（getJob RPC不要）
+    handleAssignmentData({ ok: true, data: dashboardJobData }, currentJobId);
+  } else {
+    // ダッシュボードキャッシュがない場合はRPCで取得
+    google.script.run
+      .withSuccessHandler(function(response) {
+        handleAssignmentData(response, currentJobId);
+      })
+      .withFailureHandler(handleAssignmentModalError)
+      .getJob(jobId);
+  }
 
   // Load available staff（バックグラウンドで最新データを取得、NG顧客フィルタ適用）
   google.script.run

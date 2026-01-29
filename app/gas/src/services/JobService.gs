@@ -89,11 +89,43 @@ const JobService = {
     // 顧客名と配置情報をJOIN
     const jobsWithCustomer = jobs.map(job => {
       const jobAssignments = assignmentsByJob[job.job_id] || [];
-      const activeAssignments = jobAssignments.filter(a => a.status !== 'CANCELLED');
 
-      // 一意なスタッフIDでカウント（重複レコードがあっても正しくカウント）
+      // 配置データをenrich（staff_name, staff_phone付加、モーダル互換の全フィールド）
+      const enrichedAssignments = jobAssignments.map(a => {
+        const staff = staffMapFull[a.staff_id];
+        return {
+          assignment_id: a.assignment_id,
+          job_id: a.job_id,
+          staff_id: a.staff_id,
+          staff_name: staff ? staff.name : '（削除済み）',
+          staff_phone: staff ? staff.phone : '',
+          worker_type: a.worker_type || 'STAFF',
+          subcontractor_id: a.subcontractor_id || null,
+          slot_id: a.slot_id || null,
+          display_time_slot: a.display_time_slot || job.time_slot,
+          pay_unit: a.pay_unit,
+          invoice_unit: a.invoice_unit,
+          wage_rate: a.wage_rate || 0,
+          invoice_rate: a.invoice_rate || 0,
+          transport_area: a.transport_area || '',
+          transport_amount: a.transport_amount || 0,
+          transport_is_manual: a.transport_is_manual || false,
+          transport_station: a.transport_station || '',
+          transport_has_bus: a.transport_has_bus || false,
+          site_role: a.site_role || null,
+          assignment_role: a.assignment_role || null,
+          is_leader: a.is_leader || false,
+          entry_date: a.entry_date || null,
+          safety_training_date: a.safety_training_date || null,
+          status: a.status,
+          created_at: a.created_at,
+          updated_at: a.updated_at
+        };
+      });
+
+      // アクティブな配置でカウント
+      const activeAssignments = enrichedAssignments.filter(a => a.status !== 'CANCELLED');
       const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
-      const staffNames = Array.from(uniqueStaffIds).map(id => staffMap[id] || '（削除済み）');
 
       // スロットデータを含める
       const jobSlots = slotsByJob[job.job_id] || [];
@@ -107,12 +139,14 @@ const JobService = {
         time_slot: job.time_slot,
         start_time: job.start_time,
         work_category: job.work_category,
+        work_detail: job.work_detail || '',
         required_count: job.required_count,
         assigned_count: uniqueStaffIds.size,
         status: job.status,
         supervisor_name: job.supervisor_name || '',
+        supervisor_phone: job.supervisor_phone || '',
         notes: job.notes || '',
-        staff_names: staffNames,
+        assignments: enrichedAssignments,
         updated_at: job.updated_at,
         slots: jobSlots
       };
@@ -124,7 +158,8 @@ const JobService = {
     return {
       date: date,
       jobs: jobsWithCustomer,
-      stats: stats
+      stats: stats,
+      hasFullAssignments: true  // キャッシュ互換性フラグ（古いキャッシュには存在しない）
     };
   },
 
