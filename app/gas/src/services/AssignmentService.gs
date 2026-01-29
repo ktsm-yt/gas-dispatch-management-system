@@ -572,8 +572,9 @@ const AssignmentService = {
   },
 
   /**
-   * 時間帯の重複チェック
+   * 時間帯の重複チェック（旧版 - 後方互換用）
    * @private
+   * @deprecated _isTimeSlotConflictWithStartTime を使用してください
    */
   _isTimeSlotConflict: function(slot1, slot2) {
     // 終日・上棟は他の全てと重複
@@ -594,5 +595,101 @@ const AssignmentService = {
     }
 
     return false;
+  },
+
+  /**
+   * 時間帯の重複チェック（start_time考慮版）
+   * @param {Object} job1 - 案件1 {time_slot, start_time}
+   * @param {Object} job2 - 案件2 {time_slot, start_time}
+   * @returns {boolean} 競合する場合true
+   *
+   * ルール:
+   * - jotou/shuujitsu vs 任意 → 競合
+   * - yakin vs yakin → 競合
+   * - yakin vs 日勤(am/pm/mitei) → 競合なし
+   * - 同じtime_slot + 同じstart_time → 競合
+   * - 同じtime_slot + 異なるstart_time → 競合なし
+   * - 同じtime_slot + start_time片方/両方空 → 競合（保守的判定）
+   */
+  _isTimeSlotConflictWithStartTime: function(job1, job2) {
+    const slot1 = job1.time_slot;
+    const slot2 = job2.time_slot;
+    const start1 = job1.start_time || '';
+    const start2 = job2.start_time || '';
+
+    // 終日・上棟は他の全てと重複
+    const fullDaySlots = ['shuujitsu', 'jotou'];
+    if (fullDaySlots.includes(slot1) || fullDaySlots.includes(slot2)) {
+      return true;
+    }
+
+    // 夜勤 vs 日勤 → 競合なし
+    const daySlots = ['am', 'pm', 'mitei'];
+    if ((slot1 === 'yakin' && daySlots.includes(slot2)) ||
+        (slot2 === 'yakin' && daySlots.includes(slot1))) {
+      return false;
+    }
+
+    // 夜勤 vs 夜勤 → 競合
+    if (slot1 === 'yakin' && slot2 === 'yakin') {
+      // start_time が両方あれば比較
+      if (start1 && start2) {
+        return start1 === start2;
+      }
+      // 片方でも空なら保守的に競合
+      return true;
+    }
+
+    // 同じ時間帯（am同士、pm同士、mitei同士）
+    if (slot1 === slot2) {
+      // start_time が両方設定されている場合のみ比較
+      if (start1 && start2) {
+        return start1 === start2;
+      }
+      // 片方でも空なら保守的に競合とみなす
+      return true;
+    }
+
+    // 異なる日勤時間帯（am vs pm など）→ 競合なし
+    return false;
+  },
+
+  /**
+   * 日付ごとの全配置を取得（競合チェック用）
+   * @param {string} date - 日付（YYYY-MM-DD形式）
+   * @returns {Object[]} 配置リスト（Job情報付き）
+   */
+  getDayAssignmentsForConflictCheck: function(date) {
+    // バルク処理：その日の全案件と全配置を一括取得
+    const jobs = JobRepository.findByDate(date);
+    const assignments = AssignmentRepository.findByDate(date);
+
+    // 案件IDをキーにした高速ルックアップ
+    const jobMap = {};
+    for (const job of jobs) {
+      jobMap[job.job_id] = job;
+    }
+
+    // 配置にJob情報を付加
+    const result = [];
+    for (const a of assignments) {
+      if (a.status === 'CANCELLED') continue;
+
+      const job = jobMap[a.job_id];
+      if (!job || job.status === 'cancelled') continue;
+
+      result.push({
+        assignment_id: a.assignment_id,
+        job_id: a.job_id,
+        staff_id: a.staff_id,
+        status: a.status,
+        work_date: job.work_date,
+        time_slot: job.time_slot,
+        start_time: job.start_time || '',
+        site_name: job.site_name || ''
+      });
+    }
+
+    return result;
   }
 };

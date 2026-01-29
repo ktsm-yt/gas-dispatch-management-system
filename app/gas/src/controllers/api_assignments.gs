@@ -612,6 +612,55 @@ function getSlotStatusByDate(date) {
 }
 
 /**
+ * 日付ごとの全配置を取得（競合チェック用）
+ *
+ * モーダル開時に呼び出し、その日の全配置をJob情報付きで一括取得。
+ * クライアント側でキャッシュし、スタッフ選択時の競合チェックに使用。
+ *
+ * @param {string} date - 日付（YYYY-MM-DD形式）
+ * @returns {Object} APIレスポンス { ok: true, data: { assignments: [] } }
+ */
+function getDayAssignmentsForConflictCheck(date) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+
+    // 日付のバリデーション
+    if (!date || !isValidDate(date)) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '有効な日付を指定してください（YYYY-MM-DD形式）',
+        { field: 'date' },
+        requestId
+      );
+    }
+
+    const assignments = AssignmentService.getDayAssignmentsForConflictCheck(date);
+
+    return buildSuccessResponse({ assignments: assignments }, requestId);
+
+  } catch (e) {
+    console.error('getDayAssignmentsForConflictCheck error:', e);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      'システムエラーが発生しました',
+      { message: e.message },
+      requestId
+    );
+  }
+}
+
+/**
  * ダッシュボード用の配置情報を取得（案件＋配置＋過不足）
  *
  * @param {string} date - 日付（YYYY-MM-DD形式）
