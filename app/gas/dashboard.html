@@ -712,6 +712,7 @@
       const memoryCached = dateMemoryCache.get(cacheKey);
       if (memoryCached) {
         dashboardData = memoryCached;
+        window.dashboardData = dashboardData;  // 配置モーダル用に公開
         lastMaxUpdatedAt = null;
         renderDashboard();
         // TTL超過ならバックグラウンド更新
@@ -727,6 +728,7 @@
       if (sessionCached) {
         dateMemoryCache.set(cacheKey, sessionCached.data);
         dashboardData = sessionCached.data;
+        window.dashboardData = dashboardData;  // 配置モーダル用に公開
         lastMaxUpdatedAt = null;
         renderDashboard();
         // TTL超過ならバックグラウンド更新
@@ -771,15 +773,22 @@
       }
 
       // キャッシュと比較して変更があれば更新
-      if (JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs)) {
+      // hasFullAssignments フラグが異なる場合も更新（キャッシュ互換性のため）
+      const jobsChanged = JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs);
+      const flagsChanged = dashboardData?.hasFullAssignments !== newData.hasFullAssignments;
+      if (jobsChanged || flagsChanged) {
         dashboardData = newData;
+        window.dashboardData = dashboardData;  // 配置モーダル用に公開
         saveToCachedDate(newData.date, newData);
         // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
         buildDayAssignmentsCache();
-        renderDashboard();
+        if (jobsChanged) {
+          renderDashboard();
+        }
       } else if (!window.dashboardDayAssignmentsCache || window.dashboardDayAssignmentsCache.date !== newData.date) {
         // データは同じだがキャッシュがない場合は構築
         dashboardData = newData;
+        window.dashboardData = dashboardData;  // 配置モーダル用に公開
         buildDayAssignmentsCache();
       }
     }
@@ -824,6 +833,7 @@
       }
 
       dashboardData = newData;
+      window.dashboardData = dashboardData;  // 配置モーダル用に公開
       lastMaxUpdatedAt = null; // Reset for polling
 
       // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
@@ -938,6 +948,8 @@
         supervisor_name: savedJob.supervisor_name || '',
         notes: savedJob.notes || '',
         staff_names: [],
+        assignments: [],  // 配置キャッシュ用（新規は空）
+        slots: [],        // 枠キャッシュ用（新規は空）
         updated_at: savedJob.updated_at
       };
 
@@ -952,9 +964,15 @@
         // 既存を更新
         const index = dashboardData.jobs.findIndex(j => j.job_id === savedJob.job_id);
         if (index >= 0) {
-          const oldSlot = dashboardData.jobs[index].time_slot;
+          const oldJob = dashboardData.jobs[index];
+          const oldSlot = oldJob.time_slot;
           slotsToRender.add(oldSlot);
           slotsToRender.add(updatedJob.time_slot);
+          // 配置データと枠データを保持（競合チェック用キャッシュに必要）
+          updatedJob.assignments = oldJob.assignments || [];
+          updatedJob.slots = oldJob.slots || [];
+          updatedJob.assigned_count = oldJob.assigned_count || 0;
+          updatedJob.staff_names = oldJob.staff_names || [];
           dashboardData.jobs[index] = updatedJob;
         }
       }
