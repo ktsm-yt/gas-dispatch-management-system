@@ -100,6 +100,10 @@ function openJobModal(jobId = null, options = {}) {
   document.getElementById('customer-id').value = '';
   document.getElementById('customer-search').value = '';
 
+  // Reset time slot hint
+  const startTimeHint = document.getElementById('start-time-hint');
+  if (startTimeHint) startTimeHint.style.display = 'none';
+
   // Reset slots UI
   resetSlotsUI();
 
@@ -170,6 +174,9 @@ function fillFormFromCache(job) {
   if (job.slots && job.slots.length > 0) {
     loadSlotsToUI(job.slots);
   }
+
+  // 時間区分と開始時間の整合性チェック
+  validateTimeSlotStartTime();
 }
 
 function closeJobModal() {
@@ -254,6 +261,9 @@ function loadJobData(jobId) {
         ...job,
         slots: slots || []
       });
+
+      // 時間区分と開始時間の整合性チェック
+      validateTimeSlotStartTime();
     })
     .withFailureHandler((error) => {
       // 古いリクエストのエラーを無視
@@ -835,6 +845,61 @@ function formatStartTimeForModal(startTime) {
   return startTime;
 }
 
+/**
+ * 時間区分と開始時間の整合性をチェック（ソフトバリデーション）
+ * 不整合があれば警告を表示、なければ非表示
+ */
+function validateTimeSlotStartTime() {
+  const timeSlot = document.getElementById('time-slot').value;
+  const startTime = document.getElementById('start-time').value;
+  const hint = document.getElementById('start-time-hint');
+
+  if (!hint) return;
+
+  // 開始時間が空なら警告不要
+  if (!startTime) {
+    hint.style.display = 'none';
+    return;
+  }
+
+  // HH:MM形式から時間を取得
+  const [hours] = startTime.split(':').map(Number);
+
+  // 時間帯ごとの範囲
+  const ranges = {
+    jotou:    { min: 7, max: 18, label: '上棟' },
+    shuujitsu:{ min: 7, max: 18, label: '終日' },
+    am:       { min: 7, max: 12, label: 'AM' },
+    pm:       { min: 12, max: 18, label: 'PM' },
+    yakin:    { min: 18, max: 7, label: '夜間', isNight: true },
+    mitei:    null  // 未定は任意
+  };
+
+  const range = ranges[timeSlot];
+
+  // 未定は検証スキップ
+  if (!range) {
+    hint.style.display = 'none';
+    return;
+  }
+
+  let isValid;
+  if (range.isNight) {
+    // 夜間: 18時以降 または 7時未満
+    isValid = hours >= 18 || hours < 7;
+  } else {
+    // 日中帯: min <= hours < max
+    isValid = hours >= range.min && hours < range.max;
+  }
+
+  if (isValid) {
+    hint.style.display = 'none';
+  } else {
+    hint.textContent = `${range.label}：開始時間を確認`;
+    hint.style.display = 'block';
+  }
+}
+
 // ========== Event Listeners Setup ==========
 
 function setupJobModalEventListeners() {
@@ -857,6 +922,17 @@ function setupJobModalEventListeners() {
 
   // Setup customer autocomplete
   setupCustomerAutocomplete();
+
+  // Setup time slot / start time validation
+  const timeSlotSelect = document.getElementById('time-slot');
+  const startTimeInput = document.getElementById('start-time');
+  if (timeSlotSelect) {
+    timeSlotSelect.addEventListener('change', validateTimeSlotStartTime);
+  }
+  if (startTimeInput) {
+    startTimeInput.addEventListener('change', validateTimeSlotStartTime);
+    startTimeInput.addEventListener('input', validateTimeSlotStartTime);
+  }
 }
 
 // Auto-setup when DOM is ready
