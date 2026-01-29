@@ -502,13 +502,20 @@
       border-color: var(--color-primary);
     }
 
-    /* List Filter Bar */
-    .list-filter-bar {
-      padding: 10px 12px;
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border-color);
-      display: flex;
-      gap: 16px;
+    /* Header Filter (時間区分ヘッダー内フィルター) */
+    .header-filter-select {
+      font-size: 11px;
+      padding: 2px 4px;
+      border: 1px solid var(--border-color);
+      border-radius: 3px;
+      background: white;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+
+    .header-filter-select:focus {
+      outline: none;
+      border-color: var(--color-primary);
     }
 
     /* List View Container */
@@ -883,25 +890,20 @@
 
     <!-- List View -->
     <div class="dashboard-list" id="dashboard-list">
-      <!-- Time Slot Filter (リスト専用) -->
-      <div class="list-filter-bar">
-        <div class="filter-group">
-          <label class="filter-label">時間区分</label>
-          <select id="time-slot-filter" class="filter-select">
-            <option value="all">すべて</option>
-            <option value="jotou">上棟</option>
-            <option value="shuujitsu">終日</option>
-            <option value="am">AM</option>
-            <option value="pm">PM</option>
-            <option value="yakin">夜勤</option>
-            <option value="mitei">未定</option>
-          </select>
-        </div>
-      </div>
       <table class="job-list-table">
         <thead>
           <tr>
-            <th class="sortable" data-sort="time_slot">時間区分</th>
+            <th>時間区分
+              <select id="time-slot-filter" class="header-filter-select">
+                <option value="all">すべて</option>
+                <option value="jotou">上棟</option>
+                <option value="shuujitsu">終日</option>
+                <option value="am">AM</option>
+                <option value="pm">PM</option>
+                <option value="yakin">夜勤</option>
+                <option value="mitei">未定</option>
+              </select>
+            </th>
             <th class="sortable" data-sort="customer_name">顧客名</th>
             <th class="sortable" data-sort="site_name">現場</th>
             <th>配置スタッフ</th>
@@ -970,7 +972,7 @@
 
     // 表示モード状態
     let currentViewMode = 'card';  // 'card' | 'list'
-    let listSortKey = 'time_slot';
+    let listSortKey = 'start_time';
     let listSortOrder = 'asc';  // 'asc' | 'desc'
 
     // フィルター状態
@@ -1523,9 +1525,10 @@
         let aVal, bVal;
 
         switch (sortKey) {
-          case 'time_slot':
-            aVal = TIME_SLOT_SORT_ORDER[a.time_slot] || 99;
-            bVal = TIME_SLOT_SORT_ORDER[b.time_slot] || 99;
+          case 'start_time':
+            // 開始時間でソート（空は最後に）
+            aVal = a.start_time || 'ZZ:ZZ';
+            bVal = b.start_time || 'ZZ:ZZ';
             break;
           case 'customer_name':
             aVal = (a.customer_name || '').toLowerCase();
