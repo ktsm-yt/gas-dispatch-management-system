@@ -451,6 +451,12 @@
   </style>
 </head>
 <body>
+  <!-- サーバー日付とスクリプトURLをテンプレートで埋め込み（RPC削減） -->
+  <script>
+    window.__SERVER_DATE__ = '<?= getServerDate() ?>';
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -566,6 +572,7 @@
   </style>
 
   <?!= include('skeleton_helpers'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
@@ -627,21 +634,23 @@
     });
 
     function initializeDateFilters() {
-      // サーバー時間（Asia/Tokyo）を取得して日付フィルターを初期化
-      google.script.run
-        .withSuccessHandler(function(serverDate) {
-          currentDate = new Date(serverDate + 'T00:00:00');
-          updateDateDisplay();
-          loadJobs(1);
-        })
-        .withFailureHandler(function(error) {
-          // フォールバック: クライアント時間を使用
-          console.error('getServerDate failed:', error);
-          currentDate = new Date();
-          updateDateDisplay();
-          loadJobs(1);
-        })
-        .getServerDate();
+      // URLパラメータ → 埋め込み日付 → フォールバック の優先順位で日付を取得（RPC不要）
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        // URLパラメータから日付を取得
+        currentDate = new Date(dateParam + 'T00:00:00');
+      } else if (window.__SERVER_DATE__) {
+        // テンプレート埋め込みの日付を使用
+        currentDate = new Date(window.__SERVER_DATE__ + 'T00:00:00');
+      } else {
+        // フォールバック: クライアント時間
+        console.warn('Server date not available, using client time');
+        currentDate = new Date();
+      }
+      updateDateDisplay();
+      loadJobs(1);
     }
 
     function updateDateDisplay() {
@@ -671,18 +680,11 @@
         }
       });
       document.getElementById('today-btn').addEventListener('click', () => {
-        google.script.run
-          .withSuccessHandler(function(serverDate) {
-            currentDate = new Date(serverDate + 'T00:00:00');
-            updateDateDisplay();
-            loadJobs(1);
-          })
-          .withFailureHandler(function(error) {
-            currentDate = new Date();
-            updateDateDisplay();
-            loadJobs(1);
-          })
-          .getServerDate();
+        // クライアント側でAsia/Tokyo日付を取得（深夜跨ぎ対応、RPC不要）
+        const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        currentDate = new Date(todayStr + 'T00:00:00');
+        updateDateDisplay();
+        loadJobs(1);
       });
 
       // フィルター変更時に自動検索
@@ -730,6 +732,7 @@
     }
 
     let allJobs = []; // 全件保持用
+    const jobsMemoryCache = new Map();  // メモリキャッシュ（同一ページ内での高速切り替え）
 
     function toggleSortOrder() {
       sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
@@ -748,10 +751,7 @@
       });
     }
 
-    function loadJobs(page = 1) {
-      showTableLoading();
-      currentPage = page;
-
+    function buildJobsQuery() {
       const dateFrom = formatDate(currentDate);
       const query = {
         work_date_from: dateFrom,
@@ -759,7 +759,6 @@
         limit: 1000
       };
 
-      // Optional filters
       const status = document.getElementById('status-filter').value;
       const timeSlot = document.getElementById('time-slot-filter').value;
       const searchTerm = document.getElementById('search-input').value;
@@ -767,18 +766,98 @@
 
       if (status) query.status = status;
       if (timeSlot) query.time_slot = timeSlot;
-      if (searchTerm) query.search_term = searchTerm; // 顧客名・現場名の両方を検索
+      if (searchTerm) query.search_term = searchTerm;
       if (includeArchive) query.includeArchive = true;
 
+      return query;
+    }
+
+    function getJobsCacheKey() {
+      const dateFrom = formatDate(currentDate);
+      const status = document.getElementById('status-filter').value;
+      const timeSlot = document.getElementById('time-slot-filter').value;
+      const searchTerm = document.getElementById('search-input').value;
+      const includeArchive = document.getElementById('include-archive').checked;
+      return PageCache.makeKey('jobs', dateFrom, sortOrder, status, timeSlot, searchTerm, includeArchive);
+    }
+
+    function loadJobs(page = 1) {
+      currentPage = page;
+      const cacheKey = getJobsCacheKey();
+
+      // 1. メモリキャッシュ確認（同一ページ内での高速切り替え）
+      if (jobsMemoryCache.has(cacheKey)) {
+        const cachedData = jobsMemoryCache.get(cacheKey);
+        handleJobsDataFromCache(cachedData);
+        // TTL超過ならバックグラウンド更新
+        const cached = PageCache.get(cacheKey);
+        if (!cached || cached.age > PageCache.DEFAULT_TTL) {
+          refreshJobsInBackground(cacheKey);
+        }
+        return;
+      }
+
+      // 2. sessionStorageキャッシュ確認（Stale-While-Revalidate: 常に即表示）
+      const cached = PageCache.get(cacheKey);
+      if (cached) {
+        jobsMemoryCache.set(cacheKey, cached.data);
+        handleJobsDataFromCache(cached.data);
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.DEFAULT_TTL) {
+          refreshJobsInBackground(cacheKey);
+        }
+        return;
+      }
+
+      // 3. キャッシュなし → スケルトン表示してAPI呼び出し（初回のみ）
+      showTableLoading();
+      fetchJobsFromServer(cacheKey);
+    }
+
+    function fetchJobsFromServer(cacheKey) {
+      const query = buildJobsQuery();
       console.log('loadJobs query:', query);
 
       google.script.run
-        .withSuccessHandler(handleJobsData)
+        .withSuccessHandler(function(response) {
+          if (response && response.ok) {
+            // キャッシュに保存
+            jobsMemoryCache.set(cacheKey, response);
+            PageCache.set(cacheKey, response);
+          }
+          handleJobsData(response);
+        })
         .withFailureHandler(function(error) {
           console.error('withFailureHandler:', error);
           handleError(error);
         })
         .searchJobs(query);
+    }
+
+    function refreshJobsInBackground(cacheKey) {
+      const query = buildJobsQuery();
+
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (!response || !response.ok) return;
+
+          const oldData = jobsMemoryCache.get(cacheKey);
+          const newJobs = response.data?.jobs || [];
+          const oldJobs = oldData?.data?.jobs || [];
+
+          // 差分があれば更新
+          if (JSON.stringify(newJobs) !== JSON.stringify(oldJobs)) {
+            jobsMemoryCache.set(cacheKey, response);
+            PageCache.set(cacheKey, response);
+            handleJobsData(response);
+          }
+        })
+        .searchJobs(query);
+    }
+
+    function handleJobsDataFromCache(response) {
+      // キャッシュからのデータ表示（handleJobsDataと同じ処理）
+      handleJobsData(response);
     }
 
     function handleJobsData(response) {
@@ -973,7 +1052,17 @@
      * Called when a job is saved successfully
      */
     function onJobModalSave(job, slots, isNew) {
+      // キャッシュを無効化（フィルター条件が異なるキャッシュに古いデータが残るのを防ぐ）
+      invalidateJobsCache();
       updateJobInTable(job, isNew);
+    }
+
+    /**
+     * ジョブ関連のすべてのキャッシュを無効化
+     */
+    function invalidateJobsCache() {
+      jobsMemoryCache.clear();
+      PageCache.clearByPrefix('jobs');
     }
 
     /**
@@ -991,6 +1080,8 @@
         totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
         renderTable();
         updatePagination();
+        // キャッシュも無効化（他の日付やフィルター条件のキャッシュに古いデータが残るのを防ぐ）
+        invalidateJobsCache();
       }
     }
 

@@ -480,6 +480,12 @@
   </style>
 </head>
 <body>
+  <!-- サーバー日付とスクリプトURLをテンプレートで埋め込み（RPC削減） -->
+  <script>
+    window.__SERVER_DATE__ = '<?= getServerDate() ?>';
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -521,6 +527,7 @@
   <?!= include('job_modal_js'); ?>
 
   <?!= include('assignment_modal_js'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
@@ -554,9 +561,14 @@
     let dashboardData = null;
     let lastMaxUpdatedAt = null;
 
-    // 日付別キャッシュ（最大5日分）
-    const dateCache = new Map();
-    const MAX_CACHE_SIZE = 5;
+    // 日付別メモリキャッシュ（最大5日分、高速アクセス用）
+    const dateMemoryCache = new Map();
+    const MAX_MEMORY_CACHE_SIZE = 5;
+
+    // キャッシュキー生成
+    function getDashboardCacheKey(dateStr) {
+      return PageCache.makeKey('dashboard', dateStr);
+    }
 
     // Time slot labels
     const TIME_SLOT_LABELS = {
@@ -594,21 +606,23 @@
     });
 
     function initializeWithServerDate() {
-      // サーバー時間（Asia/Tokyo）を取得して初期化
-      google.script.run
-        .withSuccessHandler(function(serverDate) {
-          currentDate = new Date(serverDate + 'T00:00:00');
-          loadDashboard();
-          startPolling();
-        })
-        .withFailureHandler(function(error) {
-          // フォールバック: クライアント時間を使用
-          console.error('getServerDate failed:', error);
-          currentDate = new Date();
-          loadDashboard();
-          startPolling();
-        })
-        .getServerDate();
+      // URLパラメータ → 埋め込み日付 → フォールバック の優先順位で日付を取得（RPC不要）
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date');
+
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        // URLパラメータから日付を取得
+        currentDate = new Date(dateParam + 'T00:00:00');
+      } else if (window.__SERVER_DATE__) {
+        // テンプレート埋め込みの日付を使用
+        currentDate = new Date(window.__SERVER_DATE__ + 'T00:00:00');
+      } else {
+        // フォールバック: クライアント時間
+        console.warn('Server date not available, using client time');
+        currentDate = new Date();
+      }
+      loadDashboard();
+      startPolling();
     }
 
     function setupEventListeners() {
@@ -622,17 +636,10 @@
       });
 
       document.getElementById('today-btn').addEventListener('click', () => {
-        // サーバー時間で「今日」に移動
-        google.script.run
-          .withSuccessHandler(function(serverDate) {
-            currentDate = new Date(serverDate + 'T00:00:00');
-            loadDashboard();
-          })
-          .withFailureHandler(function(error) {
-            currentDate = new Date();
-            loadDashboard();
-          })
-          .getServerDate();
+        // クライアント側でAsia/Tokyo日付を取得（深夜跨ぎ対応、RPC不要）
+        const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' });
+        currentDate = new Date(todayStr + 'T00:00:00');
+        loadDashboard();
       });
 
       // カレンダー日付選択
@@ -696,23 +703,38 @@
 
     function loadDashboard() {
       const dateStr = formatDate(currentDate);
+      const cacheKey = getDashboardCacheKey(dateStr);
       document.getElementById('current-date').textContent = formatDisplayDate(currentDate);
 
-      // キャッシュがあれば即座に表示
-      const cached = dateCache.get(dateStr);
-      if (cached) {
-        dashboardData = cached;
+      // 1. メモリキャッシュ確認（最速）
+      const memoryCached = dateMemoryCache.get(cacheKey);
+      if (memoryCached) {
+        dashboardData = memoryCached;
         lastMaxUpdatedAt = null;
         renderDashboard();
-        // バックグラウンドで最新データを取得
-        google.script.run
-          .withSuccessHandler(handleDashboardDataSilent)
-          .withFailureHandler(() => {})  // サイレント
-          .getDashboard(dateStr);
+        // TTL超過ならバックグラウンド更新
+        const sessionCached = PageCache.get(cacheKey);
+        if (!sessionCached || sessionCached.age > PageCache.DEFAULT_TTL) {
+          refreshDashboardInBackground(dateStr);
+        }
         return;
       }
 
-      // キャッシュなし: ローディング表示
+      // 2. sessionStorageキャッシュ確認（Stale-While-Revalidate: 常に即表示）
+      const sessionCached = PageCache.get(cacheKey);
+      if (sessionCached) {
+        dateMemoryCache.set(cacheKey, sessionCached.data);
+        dashboardData = sessionCached.data;
+        lastMaxUpdatedAt = null;
+        renderDashboard();
+        // TTL超過ならバックグラウンド更新
+        if (sessionCached.age > PageCache.DEFAULT_TTL) {
+          refreshDashboardInBackground(dateStr);
+        }
+        return;
+      }
+
+      // 3. キャッシュなし: ローディング表示してRPC
       TIME_SLOT_ORDER.forEach(slot => {
         document.getElementById(`col-cards-${slot}`).innerHTML =
           '<div class="loading"><div class="spinner"></div>読み込み中...</div>';
@@ -721,6 +743,14 @@
       google.script.run
         .withSuccessHandler(handleDashboardData)
         .withFailureHandler(handleError)
+        .getDashboard(dateStr);
+    }
+
+    // バックグラウンドでデータを更新
+    function refreshDashboardInBackground(dateStr) {
+      google.script.run
+        .withSuccessHandler(handleDashboardDataSilent)
+        .withFailureHandler(() => {})  // サイレント
         .getDashboard(dateStr);
     }
 
@@ -746,14 +776,26 @@
       }
     }
 
-    // キャッシュに保存（最大件数管理）
+    // キャッシュに保存（メモリ + sessionStorage）
     function saveToCachedDate(dateStr, data) {
-      dateCache.set(dateStr, data);
+      const cacheKey = getDashboardCacheKey(dateStr);
+
+      // メモリキャッシュに保存
+      dateMemoryCache.set(cacheKey, data);
       // 最大件数を超えたら古いものを削除
-      if (dateCache.size > MAX_CACHE_SIZE) {
-        const oldestKey = dateCache.keys().next().value;
-        dateCache.delete(oldestKey);
+      if (dateMemoryCache.size > MAX_MEMORY_CACHE_SIZE) {
+        const oldestKey = dateMemoryCache.keys().next().value;
+        dateMemoryCache.delete(oldestKey);
       }
+
+      // sessionStorageキャッシュに保存（ページ遷移間で保持）
+      PageCache.set(cacheKey, data);
+    }
+
+    // キャッシュを無効化
+    function invalidateDashboardCache() {
+      dateMemoryCache.clear();
+      PageCache.clearByPrefix('dashboard');
     }
 
     function handleDashboardData(response) {

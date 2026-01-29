@@ -125,6 +125,11 @@
   </style>
 </head>
 <body>
+  <!-- スクリプトURLをテンプレートで埋め込み（ナビゲーション高速化） -->
+  <script>
+    window.__SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    if (window.__SCRIPT_URL__) sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+  </script>
   <?!= include('nav_bar'); ?>
   <?!= include('confirmation_modal'); ?>
 
@@ -191,12 +196,15 @@
   </div>
 
   <?!= include('skeleton_helpers'); ?>
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
   </script>
 
   <script>
+    const TRANSPORT_FEE_CACHE_KEY = 'master_transportFees';
+
     const TRANSPORT_FEE_SKELETON_ROWS = [
       ['line-30', 'line-70', 'line-40'],
       ['line-40', 'line-60', 'line-30'],
@@ -221,11 +229,30 @@
     }
 
     function loadData() {
+      // 1. キャッシュ確認
+      const cached = PageCache.get(TRANSPORT_FEE_CACHE_KEY);
+      if (cached) {
+        dataList = cached.data || [];
+        updateStats();
+        filterData();
+
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshDataInBackground();
+        }
+        return;
+      }
+
+      // 2. キャッシュなし → スケルトン表示してAPI呼び出し
       setSkeletonTableBody('table-body', TRANSPORT_FEE_SKELETON_ROWS);
+      fetchDataFromServer();
+    }
+
+    function fetchDataFromServer() {
       google.script.run
         .withSuccessHandler((response) => {
           if (response.ok) {
             dataList = response.data.items || [];
+            PageCache.set(TRANSPORT_FEE_CACHE_KEY, dataList);
             updateStats();
             filterData();
           } else {
@@ -233,6 +260,21 @@
           }
         })
         .withFailureHandler((e) => showToast(e.message, 'error'))
+        .listTransportFees();
+    }
+
+    function refreshDataInBackground() {
+      google.script.run
+        .withSuccessHandler((response) => {
+          if (!response || !response.ok) return;
+          const newItems = response.data.items || [];
+          if (JSON.stringify(newItems) !== JSON.stringify(dataList)) {
+            dataList = newItems;
+            PageCache.set(TRANSPORT_FEE_CACHE_KEY, dataList);
+            updateStats();
+            filterData();
+          }
+        })
         .listTransportFees();
     }
 
@@ -334,6 +376,7 @@
               const idx = dataList.findIndex(d => d.area_code === response.data.area_code);
               if (idx !== -1) dataList[idx] = response.data;
             }
+            PageCache.set(TRANSPORT_FEE_CACHE_KEY, dataList);
             updateStats();
             filterData();
             showToast('保存しました', 'success');
@@ -370,6 +413,7 @@
               deleteBtn.textContent = '削除';
               if (response.ok) {
                 dataList = dataList.filter(d => d.area_code !== deleteCode);
+                PageCache.set(TRANSPORT_FEE_CACHE_KEY, dataList);
                 updateStats();
                 filterData();
                 showToast('削除しました', 'success');

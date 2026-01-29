@@ -11,6 +11,40 @@ let assignmentJobCache = {};
 const ASSIGNMENT_CACHE_MAX_SIZE = 10;  // 最大10件
 const ASSIGNMENT_CACHE_EXPIRE_MS = 5 * 60 * 1000;  // 5分
 
+// ========== Global Staff Cache ==========
+// スタッフマスタのグローバルキャッシュ（全案件で共有）
+let globalStaffCache = {
+  staff: [],
+  timestamp: 0
+};
+const GLOBAL_STAFF_CACHE_EXPIRE_MS = 10 * 60 * 1000;  // 10分
+
+/**
+ * グローバルスタッフキャッシュを取得
+ * @returns {Array|null} キャッシュされたスタッフ配列、または null
+ */
+function getGlobalStaffCache() {
+  if (globalStaffCache.staff.length === 0) return null;
+
+  const age = Date.now() - globalStaffCache.timestamp;
+  if (age > GLOBAL_STAFF_CACHE_EXPIRE_MS) {
+    globalStaffCache.staff = [];
+    globalStaffCache.timestamp = 0;
+    return null;
+  }
+
+  return globalStaffCache.staff;
+}
+
+/**
+ * グローバルスタッフキャッシュを保存
+ * @param {Array} staff - スタッフ配列
+ */
+function saveGlobalStaffCache(staff) {
+  globalStaffCache.staff = staff;
+  globalStaffCache.timestamp = Date.now();
+}
+
 /**
  * キャッシュから案件データを取得
  * @param {string} jobId
@@ -76,48 +110,35 @@ let assignmentModalState = {
   assignmentsLoaded: false  // 配置データがロード済みかどうか
 };
 
-// ========== Modal Functions ==========
-function openJobAssignments(jobId) {
-  assignmentModalState.jobId = jobId;
+// ========== Modal UI Reset ==========
+/**
+ * モーダルのUI要素を全てリセット（ローディング状態に）
+ * 新しいフィールド追加時はここに追記すること
+ */
+function resetAssignmentModalUI() {
+  // ヘッダー情報
+  document.getElementById('modal-customer-name').textContent = '';
+  document.getElementById('modal-job-name').textContent = '読み込み中...';
+  document.getElementById('modal-job-date').textContent = '-';
+  document.getElementById('modal-job-time').textContent = '-';
+  document.getElementById('modal-job-type').textContent = '-';
 
-  // 前の案件のデータを完全クリア
-  assignmentModalState.allStaff = [];
-  assignmentModalState.filteredStaff = [];
-  assignmentModalState.job = null;
-  assignmentModalState.assignments = [];
-  assignmentModalState.slots = [];
-  assignmentModalState.slotStatus = null;
-  assignmentModalState.jobUpdatedAt = null;
-  assignmentModalState.selectedStaffIds = [];
-  assignmentModalState.stagedDeletes = [];
-  assignmentModalState.isLoadingJob = false;
-  assignmentModalState.isLoadingStaff = false;
-  assignmentModalState.assignmentsLoaded = false;
+  // 統計バッジ
+  document.getElementById('modal-required').textContent = '0';
+  document.getElementById('modal-assigned').textContent = '0';
+  document.getElementById('modal-shortage-badge').style.display = 'none';
+  document.getElementById('modal-shortage').textContent = '0';
 
-  // Show modal
-  document.getElementById('assignment-modal').style.display = 'flex';
+  // 請求書警告バナー
+  hideInvoiceExistsBanner();
 
-  // キャッシュがあれば即座に表示（UX改善）
-  const cachedData = getAssignmentJobFromCache(jobId);
-  if (cachedData) {
-    fillAssignmentModalFromCache(cachedData);
-  } else {
-    // キャッシュがない場合は初期化（ローディング表示）
-    document.getElementById('modal-job-name').textContent = '読み込み中...';
-    document.getElementById('modal-job-date').textContent = '-';
-    document.getElementById('modal-job-time').textContent = '-';
-    document.getElementById('modal-job-type').textContent = '-';
-    document.getElementById('modal-required').textContent = '0';
-    document.getElementById('modal-assigned').textContent = '0';
-    document.getElementById('modal-shortage-badge').style.display = 'none';
-    document.getElementById('staff-list').innerHTML = '';
-  }
+  // スタッフリスト
+  document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  document.getElementById('selected-count').textContent = '';
 
-  // Hide slot select row (will be shown if slots exist)
+  // 枠選択
   const slotSelectRow = document.getElementById('slot-select-row');
   if (slotSelectRow) slotSelectRow.style.display = 'none';
-
-  // Reset slot select (clear options and reset to default)
   const slotSelect = document.getElementById('form-slot-id');
   if (slotSelect) {
     slotSelect.innerHTML = '<option value="">（枠を選択）</option>';
@@ -126,12 +147,12 @@ function openJobAssignments(jobId) {
   const slotHint = document.getElementById('slot-status-hint');
   if (slotHint) slotHint.textContent = '';
 
-  // Reset filters and search
+  // フィルター・検索
   document.getElementById('staff-search').value = '';
   document.getElementById('staff-skill-filter').value = '';
   document.getElementById('staff-type-filter').value = '';
 
-  // Reset form fields (prevent old values from previous job)
+  // 配置フォーム
   document.getElementById('form-invoice-unit').value = 'basic';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
@@ -139,17 +160,54 @@ function openJobAssignments(jobId) {
   document.getElementById('form-transport-has-bus').checked = false;
   document.getElementById('form-assignment-role').value = '';
   document.getElementById('form-is-leader').checked = false;
+}
 
-  // Reset selected count display
-  document.getElementById('selected-count').textContent = '';
+/**
+ * モーダルの状態を全てリセット
+ * @param {string} jobId - 新しく開く案件ID
+ */
+function resetAssignmentModalState(jobId) {
+  assignmentModalState.jobId = jobId;
+  assignmentModalState.job = null;
+  assignmentModalState.assignments = [];
+  assignmentModalState.slots = [];
+  assignmentModalState.slotStatus = null;
+  assignmentModalState.allStaff = [];
+  assignmentModalState.filteredStaff = [];
+  assignmentModalState.jobUpdatedAt = null;
+  assignmentModalState.selectedStaffIds = [];
+  assignmentModalState.stagedDeletes = [];
+  assignmentModalState.isSaving = false;
+  assignmentModalState.isLoadingJob = false;
+  assignmentModalState.isLoadingStaff = false;
+  assignmentModalState.assignmentsLoaded = false;
+  // transportAreas はキャッシュとして保持
+}
 
-  // Reset save button
+// ========== Modal Functions ==========
+function openJobAssignments(jobId) {
+  // 1. 状態を完全リセット
+  resetAssignmentModalState(jobId);
+
+  // 2. UIを完全リセット（ローディング表示）
+  resetAssignmentModalUI();
+
+  // 3. モーダル表示
+  document.getElementById('assignment-modal').style.display = 'flex';
+
+  // 4. キャッシュがあれば即座にUIを埋める
+  const cachedData = getAssignmentJobFromCache(jobId);
+  if (cachedData) {
+    fillAssignmentModalFromCache(cachedData);
+  }
+
+  // 5. 保存ボタン状態を更新
   updateSaveButton();
 
-  // Load data (pass cache status to avoid overwriting cached display)
+  // 6. データ読み込み（キャッシュがあっても最新データを取得）
   loadAssignmentModalData(jobId, !!cachedData);
 
-  // Load transport areas (cached)
+  // 7. 交通費エリアマスタ読み込み
   loadTransportAreas();
 }
 
@@ -229,8 +287,17 @@ function loadAssignmentModalData(jobId, hasCache = false) {
   assignmentModalState.isLoadingJob = true;
   assignmentModalState.isLoadingStaff = true;
 
-  // Show loading only if no cache (キャッシュがない場合のみローディング表示)
-  if (!hasCache) {
+  // グローバルスタッフキャッシュを先にチェック（即座に表示）
+  const cachedStaff = getGlobalStaffCache();
+  if (cachedStaff && cachedStaff.length > 0) {
+    assignmentModalState.allStaff = cachedStaff;
+    assignmentModalState.isLoadingStaff = false;  // キャッシュ済みなのでロード完了扱い
+    populateSkillFilter();
+    // 注: 案件データはまだないので描画は handleAssignmentData で行う
+  }
+
+  // Show loading only if no cache (案件キャッシュもスタッフキャッシュもない場合のみ)
+  if (!hasCache && !cachedStaff) {
     document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
   }
 
@@ -242,10 +309,10 @@ function loadAssignmentModalData(jobId, hasCache = false) {
     .withFailureHandler(handleAssignmentModalError)
     .getJob(jobId);
 
-  // Load available staff
+  // Load available staff（バックグラウンドで最新データを取得、NG顧客フィルタ適用）
   google.script.run
     .withSuccessHandler(function(response) {
-      handleStaffData(response, currentJobId);
+      handleStaffData(response, currentJobId, !!cachedStaff);
     })
     .withFailureHandler(handleAssignmentModalError)
     .getAvailableStaff({ jobId: jobId, excludeAssigned: false });
@@ -301,7 +368,7 @@ function handleAssignmentData(response, requestJobId) {
   }
 }
 
-function handleStaffData(response, requestJobId) {
+function handleStaffData(response, requestJobId, usedGlobalCache = false) {
   // 古いリクエストの結果を無視
   if (assignmentModalState.jobId !== requestJobId) {
     console.log('Ignoring stale getAvailableStaff response for:', requestJobId);
@@ -311,11 +378,22 @@ function handleStaffData(response, requestJobId) {
   assignmentModalState.isLoadingStaff = false;
 
   if (!response.ok) {
+    // キャッシュを使っていた場合はエラーを無視（キャッシュデータで継続）
+    if (usedGlobalCache && assignmentModalState.allStaff.length > 0) {
+      console.log('Staff refresh failed, using cached data');
+      return;
+    }
     document.getElementById('staff-list').innerHTML = '<div class="panel-empty">スタッフの取得に失敗しました</div>';
     return;
   }
 
-  assignmentModalState.allStaff = response.data.staff || [];
+  const freshStaff = response.data.staff || [];
+
+  // グローバルキャッシュを更新（次回のモーダル表示で使用）
+  saveGlobalStaffCache(freshStaff);
+
+  // 最新データで更新（NG顧客フィルタ済み）
+  assignmentModalState.allStaff = freshStaff;
 
   // スキルフィルターを動的生成
   populateSkillFilter();
@@ -325,7 +403,7 @@ function handleStaffData(response, requestJobId) {
     assignmentModalState.assignmentsLoaded = true;
     filterStaffList();
 
-    // キャッシュに保存（次回即座に表示するため）
+    // 案件キャッシュに保存（次回即座に表示するため）
     saveAssignmentJobToCache(requestJobId, {
       job: assignmentModalState.job,
       assignments: assignmentModalState.assignments,
@@ -333,6 +411,9 @@ function handleStaffData(response, requestJobId) {
       slotStatus: assignmentModalState.slotStatus,
       allStaff: assignmentModalState.allStaff
     });
+  } else if (usedGlobalCache) {
+    // キャッシュ使用後に最新データが来た場合、再描画
+    filterStaffList();
   }
 }
 
