@@ -960,7 +960,10 @@
         recalculateStats();
         renderDashboard();
 
-        // キャッシュも更新
+        // 競合チェック用キャッシュを再構築（配置変更を即座に反映）
+        buildDayAssignmentsCache();
+
+        // 日次キャッシュも更新
         saveToCachedDate(dashboardData.date, dashboardData);
       }
     }
@@ -1475,7 +1478,12 @@
       tbody.innerHTML = sortedJobs.map(job => {
         const shortage = job.required_count - job.assigned_count;
         const hasShortage = shortage > 0;
-        const staffNames = (job.staff_names || []).filter(n => n).join(', ') || '-';
+        // assignmentsからアクティブなスタッフ名を動的生成
+        const staffNames = (job.assignments || [])
+          .filter(a => a.status !== 'CANCELLED')
+          .map(a => a.staff_name)
+          .filter(n => n)
+          .join(', ') || '-';
 
         // 過不足の表示
         let shortageText, shortageClass;
@@ -1603,8 +1611,11 @@
 
     /**
      * 差分更新：案件を1件だけ更新してカラムを再描画
+     * @param {Object} savedJob - 保存された案件データ
+     * @param {Object[]} savedSlots - 保存された枠データ
+     * @param {boolean} isNew - 新規作成かどうか
      */
-    function updateJobInDashboard(savedJob, isNew) {
+    function updateJobInDashboard(savedJob, savedSlots, isNew) {
       if (!dashboardData) return;
 
       // 日付が異なる場合は全体リロード
@@ -1636,7 +1647,7 @@
         notes: savedJob.notes || '',
         staff_names: [],
         assignments: [],  // 配置キャッシュ用（新規は空）
-        slots: [],        // 枠キャッシュ用（新規は空）
+        slots: savedSlots || [],  // 保存された枠データを使用
         updated_at: savedJob.updated_at
       };
 
@@ -1655,9 +1666,9 @@
           const oldSlot = oldJob.time_slot;
           slotsToRender.add(oldSlot);
           slotsToRender.add(updatedJob.time_slot);
-          // 配置データと枠データを保持（競合チェック用キャッシュに必要）
+          // 配置データを保持（競合チェック用キャッシュに必要）、枠データは新しいものを使用
           updatedJob.assignments = oldJob.assignments || [];
-          updatedJob.slots = oldJob.slots || [];
+          updatedJob.slots = savedSlots || [];
           updatedJob.assigned_count = oldJob.assigned_count || 0;
           updatedJob.staff_names = oldJob.staff_names || [];
           dashboardData.jobs[index] = updatedJob;
@@ -1794,7 +1805,7 @@
      * @param {boolean} isNew - 新規作成かどうか
      */
     function onJobModalSave(job, slots, isNew) {
-      updateJobInDashboard(job, isNew);
+      updateJobInDashboard(job, slots, isNew);
     }
 
     /**

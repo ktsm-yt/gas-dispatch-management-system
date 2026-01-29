@@ -128,7 +128,7 @@ function calculateSlotStatus(slots, assignments) {
   let totalAssigned = 0;
 
   const slotStatuses = slots.map(slot => {
-    const required = slot.slot_count || 0;
+    const required = Number(slot.slot_count) || 0;
     const assigned = assignmentsBySlot[slot.slot_id] || 0;
     totalRequired += required;
     totalAssigned += assigned;
@@ -139,7 +139,8 @@ function calculateSlotStatus(slots, assignments) {
       slot_count: required,
       slot_pay_unit: slot.slot_pay_unit,
       assigned: assigned,
-      remaining: Math.max(0, required - assigned)
+      remaining: Math.max(0, required - assigned),
+      shortage: required - assigned  // 正:不足、負:超過、0:充足
     };
   });
 
@@ -869,7 +870,7 @@ function updateSlotSelect() {
     // 充足状況を取得
     const status = slotStatuses.find(s => s.slot_id === slot.slot_id);
     const assigned = status?.assigned || 0;
-    const required = slot.slot_count || 0;
+    const required = Number(slot.slot_count) || 0;
     const shortage = required - assigned;
 
     const timeLabel = timeSlotLabels[slot.slot_time_slot] || slot.slot_time_slot;
