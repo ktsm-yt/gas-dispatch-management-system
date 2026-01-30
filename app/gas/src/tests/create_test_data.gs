@@ -504,7 +504,7 @@ function checkAssignmentIntegrity() {
 
 /**
  * 案件ステータスを配置数に基づいて一括修正
- * pending/assigned のみ対象（completed, cancelled は変更しない）
+ * pending/assigned のみ対象（cancelled, hold, problem は変更しない）
  */
 function fixJobStatuses() {
   console.log('=== 案件ステータス修正開始 ===');
@@ -514,8 +514,8 @@ function fixJobStatuses() {
   let skippedCount = 0;
 
   for (const job of allJobs) {
-    // completed, cancelled, hold はスキップ
-    if (['completed', 'cancelled', 'hold'].includes(job.status)) {
+    // cancelled, hold, problem はスキップ
+    if (['cancelled', 'hold', 'problem'].includes(job.status)) {
       skippedCount++;
       continue;
     }
