@@ -8,16 +8,14 @@
 const JOB_STATUS_TRANSITIONS = {
   // 未配置 → 配置済/保留/キャンセル
   pending: ['assigned', 'hold', 'cancelled'],
-  // 配置済 → 完了/保留/キャンセル/未配置（配置解除時）/問題あり
-  assigned: ['completed', 'hold', 'cancelled', 'pending', 'problem'],
+  // 配置済 → 保留/キャンセル/未配置（配置解除時）/問題あり
+  assigned: ['hold', 'cancelled', 'pending', 'problem'],
   // 保留 → 未配置/配置済/キャンセル
   hold: ['pending', 'assigned', 'cancelled'],
-  // 完了 → 配置済（完了取消）/問題あり（問題発覚時）
-  completed: ['assigned', 'problem'],
   // キャンセル → 未配置（キャンセル取消）
   cancelled: ['pending'],
-  // 問題あり → 完了（解決時）/キャンセル（対応不能時）
-  problem: ['completed', 'cancelled']
+  // 問題あり → 配置済（解決時）/キャンセル（対応不能時）
+  problem: ['assigned', 'cancelled']
 };
 
 /**
@@ -153,7 +151,6 @@ function getJobStatusLabel_(status) {
     pending: '未配置',
     assigned: '配置済',
     hold: '保留',
-    completed: '完了',
     cancelled: 'キャンセル',
     problem: '問題あり'
   };
@@ -248,8 +245,8 @@ function getJobTypeLabel_(jobType) {
  * @returns {string} 更新後のステータス
  */
 function calculateJobStatus_(job, assignments) {
-  // キャンセル/完了/問題ありは手動変更のみ
-  if (job.status === 'cancelled' || job.status === 'completed' || job.status === 'problem') {
+  // キャンセル/問題ありは手動変更のみ
+  if (job.status === 'cancelled' || job.status === 'problem') {
     return job.status;
   }
 
@@ -301,8 +298,8 @@ function getAssignmentSummary_(assignedCount, requiredCount) {
  * @returns {boolean} 編集可能ならtrue
  */
 function isJobEditable_(status) {
-  // 完了・キャンセル以外は編集可能
-  return status !== 'completed' && status !== 'cancelled';
+  // キャンセル以外は編集可能
+  return status !== 'cancelled';
 }
 
 /**
@@ -332,8 +329,8 @@ function isInvoiceDeletable_(status) {
  * @returns {boolean} 編集可能ならtrue
  */
 function isAssignmentEditable_(assignmentStatus, jobStatus) {
-  // 案件が完了・キャンセルの場合は編集不可
-  if (jobStatus === 'completed' || jobStatus === 'cancelled') {
+  // 案件がキャンセルの場合は編集不可
+  if (jobStatus === 'cancelled') {
     return false;
   }
   // 配置がキャンセルの場合は編集不可
@@ -346,30 +343,6 @@ function isAssignmentEditable_(assignmentStatus, jobStatus) {
 // ============================================
 // 一括操作用
 // ============================================
-
-/**
- * 案件一括完了処理のチェック
- * @param {Object[]} jobs - 案件の配列
- * @returns {Object} { canComplete: Job[], cannotComplete: { job, reason }[] }
- */
-function checkBulkJobComplete_(jobs) {
-  const canComplete = [];
-  const cannotComplete = [];
-
-  jobs.forEach(job => {
-    if (job.status === 'completed') {
-      cannotComplete.push({ job, reason: '既に完了しています' });
-    } else if (job.status === 'cancelled') {
-      cannotComplete.push({ job, reason: 'キャンセル済みの案件は完了できません' });
-    } else if (job.status === 'pending') {
-      cannotComplete.push({ job, reason: '配置されていない案件は完了できません' });
-    } else {
-      canComplete.push(job);
-    }
-  });
-
-  return { canComplete, cannotComplete };
-}
 
 /**
  * 請求書一括発行処理のチェック

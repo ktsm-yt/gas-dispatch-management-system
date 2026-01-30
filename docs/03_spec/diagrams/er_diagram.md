@@ -1,8 +1,11 @@
 # ER図（データベース設計）
 
-> **Version**: 3.0  
-> **更新日**: 2025年12月18日  
+> **Version**: 3.1
+> **更新日**: 2026年1月30日
 > **基準**: システム仕様書 v1.3
+>
+> **変更履歴**
+> - v3.1 (2026-01-30): 案件ステータスから `completed` を削除、`problem` を追加
 
 ## 概要
 
@@ -183,7 +186,7 @@ erDiagram
         string branch_office "営業所"
         string property_code "物件コード"
         string construction_div "担当工事課"
-        string status "ステータス [必須] (pending/assigned/hold/completed/cancelled)"
+        string status "ステータス [必須] (pending/assigned/hold/cancelled/problem)"
         string notes "備考"
         datetime created_at "作成日時 [必須]"
         datetime updated_at "更新日時 [必須]"
@@ -403,8 +406,8 @@ erDiagram
 | pending | 未配置 | スタッフ未割当 |
 | assigned | 配置済 | スタッフ割当完了 |
 | hold | 保留 | 一時保留中 |
-| completed | 完了 | 作業完了 |
 | cancelled | キャンセル | 案件キャンセル |
+| problem | 問題あり | 問題発生 |
 
 ### invoice_format（請求書書式）の値
 

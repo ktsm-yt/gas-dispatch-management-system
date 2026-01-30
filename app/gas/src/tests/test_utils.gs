@@ -503,10 +503,9 @@ function testJobStatusTransitions() {
   // 有効な遷移（引数順序: transitions, fromStatus, toStatus）
   assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'pending', 'assigned'), 'pending -> assigned');
   assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'pending', 'hold'), 'pending -> hold');
-  assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'assigned', 'completed'), 'assigned -> completed');
+  assertTrue(isValidTransition_(JOB_STATUS_TRANSITIONS, 'assigned', 'problem'), 'assigned -> problem');
 
   // 無効な遷移
-  assertFalse(isValidTransition_(JOB_STATUS_TRANSITIONS, 'completed', 'pending'), 'completed -> pending');
   assertFalse(isValidTransition_(JOB_STATUS_TRANSITIONS, 'cancelled', 'assigned'), 'cancelled -> assigned');
 }
 
@@ -533,7 +532,7 @@ function testGetStatusLabels() {
   // Job status labels
   assertEqual(getJobStatusLabel_('pending'), '未配置', 'pending label');
   assertEqual(getJobStatusLabel_('assigned'), '配置済', 'assigned label');
-  assertEqual(getJobStatusLabel_('completed'), '完了', 'completed label');
+  assertEqual(getJobStatusLabel_('problem'), '問題あり', 'problem label');
 
   // Time slot labels
   assertEqual(getTimeSlotLabel_('jotou'), '上棟', 'jotou label');
@@ -545,7 +544,7 @@ function testIsEditable() {
   // Job editability
   assertTrue(isJobEditable_('pending'), 'pending job is editable');
   assertTrue(isJobEditable_('assigned'), 'assigned job is editable');
-  assertFalse(isJobEditable_('completed'), 'completed job is not editable');
+  assertTrue(isJobEditable_('problem'), 'problem job is editable');
   assertFalse(isJobEditable_('cancelled'), 'cancelled job is not editable');
 
   // Invoice editability
@@ -580,9 +579,9 @@ function testCalculateJobStatus() {
   const job4 = { status: 'cancelled', required_count: 3 };
   assertEqual(calculateJobStatus_(job4, fullAssignments), 'cancelled', 'cancelled stays cancelled');
 
-  // 完了済みは変更なし
-  const job5 = { status: 'completed', required_count: 3 };
-  assertEqual(calculateJobStatus_(job5, fullAssignments), 'completed', 'completed stays completed');
+  // 問題あり は変更なし
+  const job5 = { status: 'problem', required_count: 3 };
+  assertEqual(calculateJobStatus_(job5, fullAssignments), 'problem', 'problem stays problem');
 }
 
 // ============================================================

@@ -9,6 +9,76 @@ const InvoiceLineRepository = {
   ID_COLUMN: 'line_id',
 
   /**
+   * 明細データのバリデーション
+   * @param {Object} line - 明細データ
+   * @returns {Object} { valid: boolean, errors: string[] }
+   */
+  validateLine: function(line) {
+    const errors = [];
+
+    // 必須項目チェック
+    if (!line.invoice_id) {
+      errors.push('invoice_id は必須です');
+    }
+    if (!line.site_name && line.site_name !== '') {
+      // 空文字は許可（頭紙の場合など）
+    }
+    if (!line.item_name) {
+      errors.push('item_name（品目）は必須です');
+    }
+
+    // 数値チェック
+    const quantity = Number(line.quantity) || 0;
+    const unitPrice = Number(line.unit_price) || 0;
+    const amount = Number(line.amount) || 0;
+
+    if (quantity < 0) {
+      errors.push('quantity（数量）は0以上である必要があります');
+    }
+    if (unitPrice < 0) {
+      errors.push('unit_price（単価）は0以上である必要があります');
+    }
+
+    // 金額整合性チェック（quantity × unit_price = amount）
+    // 小数点以下の誤差を考慮して1円未満の差は許容
+    const expectedAmount = quantity * unitPrice;
+    if (Math.abs(expectedAmount - amount) >= 1) {
+      errors.push(
+        `金額の計算が一致しません: ${quantity} × ${unitPrice} = ${expectedAmount}（期待値）, ${amount}（実際）`
+      );
+    }
+
+    return {
+      valid: errors.length === 0,
+      errors: errors
+    };
+  },
+
+  /**
+   * 複数明細データのバリデーション
+   * @param {Object[]} lines - 明細データ配列
+   * @returns {Object} { valid: boolean, errors: { lineNumber: number, errors: string[] }[] }
+   */
+  validateLines: function(lines) {
+    const allErrors = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const result = this.validateLine(lines[i]);
+      if (!result.valid) {
+        allErrors.push({
+          lineNumber: lines[i].line_number || (i + 1),
+          errors: result.errors
+        });
+      }
+    }
+
+    return {
+      valid: allErrors.length === 0,
+      errors: allErrors
+    };
+  },
+
+  /**
    * IDで明細を取得
    * @param {string} lineId - 明細ID
    * @returns {Object|null} 明細レコードまたはnull
@@ -111,13 +181,26 @@ const InvoiceLineRepository = {
   },
 
   /**
-   * 複数明細を一括挿入
+   * 複数明細を一括挿入（バリデーション付き）
    * @param {Object[]} lines - 明細配列
-   * @returns {Object[]} 挿入した明細配列
+   * @param {Object} options - オプション { skipValidation: false }
+   * @returns {Object} { success: boolean, lines?: Object[], errors?: Object[] }
    */
-  bulkInsert: function(lines) {
+  bulkInsert: function(lines, options = {}) {
     if (!lines || lines.length === 0) {
-      return [];
+      return { success: true, lines: [] };
+    }
+
+    // バリデーション実行（skipValidation: true で省略可）
+    if (!options.skipValidation) {
+      const validation = this.validateLines(lines);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: 'VALIDATION_ERROR',
+          errors: validation.errors
+        };
+      }
     }
 
     const now = getCurrentTimestamp();
@@ -149,17 +232,31 @@ const InvoiceLineRepository = {
 
     insertRecords(this.TABLE_NAME, newLines);
 
-    return newLines;
+    return { success: true, lines: newLines };
   },
 
   /**
-   * 明細を更新
+   * 明細を更新（バリデーション付き）
    * @param {Object} line - 更新データ（line_id必須）
+   * @param {Object} options - オプション { skipValidation: false }
    * @returns {Object} 更新結果 { success: boolean, line?: Object, error?: string }
    */
-  update: function(line) {
+  update: function(line, options = {}) {
     if (!line.line_id) {
       return { success: false, error: 'line_id is required' };
+    }
+
+    // バリデーション実行（skipValidation: true で省略可）
+    // 更新時は部分更新の可能性があるため、金額整合性のみチェック
+    if (!options.skipValidation && line.quantity !== undefined && line.unit_price !== undefined && line.amount !== undefined) {
+      const validation = this.validateLine(line);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: 'VALIDATION_ERROR',
+          errors: validation.errors
+        };
+      }
     }
 
     const sheet = getSheet(this.TABLE_NAME);
