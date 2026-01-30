@@ -82,8 +82,8 @@ const InvoiceBulkExportService = {
       const preloadedData = this._preloadInvoiceData(progress.invoiceIds, progress.processedCount);
       Logger.log(`[BulkExport] 事前ロード完了: ${Object.keys(preloadedData.invoiceMap).length}件, ${Date.now() - preloadStart}ms`);
 
-      // 会社情報を1回だけ取得（MasterCache経由）
-      const company = MasterCache.getCompany();
+      // 会社情報を1回だけ取得（日本語ヘッダーマッピング対応）
+      const company = InvoiceExportService._getCompanyInfo();
 
       // バッチ処理（1件ずつ処理）
       while (progress.processedCount < progress.totalCount) {
@@ -176,12 +176,13 @@ const InvoiceBulkExportService = {
   _preloadInvoiceData: function(invoiceIds, processedCount) {
     // 未処理の請求書IDのみ対象
     const targetIds = invoiceIds.slice(processedCount);
-    const targetIdSet = new Set(targetIds);
+    // 型の正規化（スプレッドシートから読み込む値との比較で型ずれを防ぐ）
+    const targetIdSet = new Set(targetIds.map(id => String(id)));
 
     // 請求書データを取得（対象IDのみフィルタ）
     // search({}) で全件取得し、対象IDでフィルタ
     const allInvoices = InvoiceRepository.search({});
-    const targetInvoices = allInvoices.filter(inv => targetIdSet.has(inv.invoice_id));
+    const targetInvoices = allInvoices.filter(inv => targetIdSet.has(String(inv.invoice_id)));
 
     // 顧客IDを収集
     const customerIds = new Set(targetInvoices.map(inv => inv.customer_id));
@@ -195,18 +196,8 @@ const InvoiceBulkExportService = {
       }
     }
 
-    // 明細データを一括取得（全件読み込み → 対象invoiceIdでフィルタ）
-    const allLines = getAllRecords('T_InvoiceLines');
-    const linesByInvoiceId = {};
-    for (const line of allLines) {
-      if (line.is_deleted) continue;
-      if (!targetIdSet.has(line.invoice_id)) continue;
-
-      if (!linesByInvoiceId[line.invoice_id]) {
-        linesByInvoiceId[line.invoice_id] = [];
-      }
-      linesByInvoiceId[line.invoice_id].push(this._normalizeLineRecord(line));
-    }
+    // 明細データをチャンク読み込み（メモリ効率化: 全件読み込みを回避）
+    const linesByInvoiceId = this._loadLinesInChunks(targetIdSet);
 
     // 各明細をline_number順にソート
     for (const invoiceId of Object.keys(linesByInvoiceId)) {
@@ -253,6 +244,90 @@ const InvoiceBulkExportService = {
       return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy-MM-dd');
     }
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 明細データをチャンク読み込み（メモリ効率化）
+   * 全件読み込みを回避し、CHUNK_SIZE行ずつ読み込んでフィルタリング
+   *
+   * @private
+   * @param {Set<string>} targetIdSet - 対象請求書IDのSet
+   * @returns {Object} invoice_id -> lines[] のマップ
+   */
+  _loadLinesInChunks: function(targetIdSet) {
+    const CHUNK_SIZE = 3000;  // GAS制約を考慮した適切なチャンクサイズ
+    const config = TABLE_CONFIG.T_InvoiceLines;
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.sheetName);
+
+    if (!sheet) {
+      Logger.log('[BulkExport] T_InvoiceLines シートが見つかりません');
+      return {};
+    }
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+
+    // データがない場合
+    if (lastRow < 2) {
+      return {};
+    }
+
+    // ヘッダーを取得
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const invoiceIdColIdx = headers.indexOf('invoice_id');
+    const isDeletedColIdx = headers.indexOf('is_deleted');
+
+    if (invoiceIdColIdx < 0) {
+      Logger.log('[BulkExport] invoice_id カラムが見つかりません');
+      return {};
+    }
+
+    const linesByInvoiceId = {};
+    let processedRows = 0;
+
+    // チャンク単位で読み込み
+    for (let startRow = 2; startRow <= lastRow; startRow += CHUNK_SIZE) {
+      const numRows = Math.min(CHUNK_SIZE, lastRow - startRow + 1);
+      const chunkData = sheet.getRange(startRow, 1, numRows, lastCol).getValues();
+
+      // チャンク内をフィルタリング
+      for (const row of chunkData) {
+        // is_deleted チェック（様々な形式に対応）
+        const isDeleted = isDeletedColIdx >= 0 ? row[isDeletedColIdx] : false;
+        if (isDeleted === true || isDeleted === 'TRUE' || isDeleted === 1 || isDeleted === '1') {
+          continue;
+        }
+
+        // invoice_id チェック（型の正規化）
+        const invoiceId = String(row[invoiceIdColIdx] || '');
+        if (!invoiceId || !targetIdSet.has(invoiceId)) {
+          continue;
+        }
+
+        // 行データをオブジェクトに変換
+        const line = {};
+        for (let i = 0; i < headers.length; i++) {
+          line[headers[i]] = row[i];
+        }
+
+        // 明細を収集
+        if (!linesByInvoiceId[invoiceId]) {
+          linesByInvoiceId[invoiceId] = [];
+        }
+        linesByInvoiceId[invoiceId].push(this._normalizeLineRecord(line));
+      }
+
+      processedRows += numRows;
+    }
+
+    // 各明細をline_number順にソート
+    for (const invoiceId of Object.keys(linesByInvoiceId)) {
+      linesByInvoiceId[invoiceId].sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
+    }
+
+    Logger.log(`[BulkExport] 明細チャンク読み込み完了: ${processedRows}行スキャン, ${Object.keys(linesByInvoiceId).length}件の請求書分を抽出`);
+
+    return linesByInvoiceId;
   },
 
   /**
@@ -480,6 +555,7 @@ const InvoiceBulkExportService = {
 
       try {
         // Drive API v3 で権限を追加（DriveApp.setSharing より高速）
+        // supportsAllDrives: true で共有ドライブのファイルにも対応
         Drive.Permissions.create(
           {
             role: 'reader',
@@ -487,7 +563,8 @@ const InvoiceBulkExportService = {
           },
           result.fileId,
           {
-            sendNotificationEmail: false
+            sendNotificationEmail: false,
+            supportsAllDrives: true
           }
         );
         result.status = 'success';
