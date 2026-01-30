@@ -233,6 +233,56 @@ const InvoiceExportService = {
   },
 
   /**
+   * 事前ロード済みデータで請求書を出力（一括出力最適化用）
+   * InvoiceService.get() をスキップしてシートI/Oを削減
+   *
+   * @param {Object} invoiceData - InvoiceService.get()相当のデータ
+   * @param {string} mode - 出力モード（pdf/excel/edit）
+   * @param {Object} options - オプション
+   * @param {Object} options.company - 自社情報（省略時は内部で取得）
+   * @returns {Object} { success, fileId, url, error }
+   */
+  exportWithData: function(invoiceData, mode, options = {}) {
+    try {
+      if (!invoiceData) {
+        return { success: false, error: 'INVOICE_DATA_REQUIRED' };
+      }
+
+      const { invoice, lines, customer } = this._extractInvoiceData(invoiceData);
+
+      // テンプレートIDの事前検証
+      const templateValidation = this.validateTemplateConfig(invoice.invoice_format);
+      if (!templateValidation.valid) {
+        return {
+          success: false,
+          error: 'TEMPLATE_NOT_CONFIGURED',
+          details: templateValidation
+        };
+      }
+
+      // 自社情報（事前ロード済みなら使い回し）
+      const company = options.company || this._getCompanyInfo();
+
+      // フォーマットに応じた処理
+      switch (mode) {
+        case 'pdf':
+          return this.exportToPdf(invoice, lines, customer, company, options);
+        case 'excel':
+          return this.exportToExcel(invoice, lines, customer, company, options);
+        case 'cover':
+          return this.exportCoverOnly(invoice, lines, customer, company, options);
+        case 'edit':
+          return this.createEditSheet(invoice, lines, customer, company, options);
+        default:
+          return { success: false, error: 'INVALID_MODE' };
+      }
+    } catch (error) {
+      console.error('InvoiceExportService.exportWithData error:', error);
+      return { success: false, error: error.message || 'EXPORT_ERROR' };
+    }
+  },
+
+  /**
    * PDF出力
    * @param {Object} invoice - 請求書データ
    * @param {Object[]} lines - 明細データ
@@ -553,18 +603,17 @@ const InvoiceExportService = {
 
   /**
    * 自社情報を取得
+   * MasterCacheを使用してキャッシュ化（一括出力時の重複読み込みを削減）
    * 注意: M_Companyシートの列名が日本語の場合もマッピングする
    * @returns {Object} 自社情報
    */
   _getCompanyInfo: function() {
-    const records = getAllRecords('M_Company');
-    if (records.length === 0) {
+    // MasterCacheを使用（複数回の呼び出しでもシートI/Oは1回）
+    const raw = MasterCache.getCompany();
+    if (!raw || Object.keys(raw).length === 0) {
       console.warn('[InvoiceExportService] M_Company にレコードがありません');
       return {};
     }
-    const raw = records[0];
-    // デバッグ: 会社情報のキーを出力
-    console.log('[InvoiceExportService] M_Company keys:', Object.keys(raw).join(', '));
 
     // 日本語列名のマッピング（シートの列名が日本語の場合に対応）
     const company = {

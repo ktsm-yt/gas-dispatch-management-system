@@ -9,6 +9,11 @@
  * 【設計上の注意】
  * - UserPropertiesの9KB制限を考慮し、進捗データは軽量に保つ
  * - results/errorsは完了時のみ構築、保存時はカウントのみ
+ *
+ * 【高速化対応】
+ * - 対象請求書・明細・顧客を一括事前ロード（シートI/O削減）
+ * - 会社マスタをMasterCache経由でキャッシュ
+ * - exportWithData()で二重読み込みを解消
  */
 const InvoiceBulkExportService = {
   /** 5分タイムアウト（余裕を持って6分制限前に中断） */
@@ -26,7 +31,7 @@ const InvoiceBulkExportService = {
 
   /**
    * 一括出力を実行
-   * @param {Object} params - { invoiceIds: string[], exportMode: 'pdf'|'pdf_cover'|'excel' }
+   * @param {Object} params - { invoiceIds: string[], exportMode: 'pdf'|'pdf_cover'|'excel', enableUrlSharing?: boolean }
    * @returns {Object} 実行結果
    */
   executeBulkExport: function(params) {
@@ -59,7 +64,8 @@ const InvoiceBulkExportService = {
           successCount: 0,
           errorCount: 0,
           errorMessages: [],  // 軽量化: エラーのinvoiceIdとメッセージのみ
-          startedAt: new Date().toISOString()
+          startedAt: new Date().toISOString(),
+          currentInvoiceNumber: ''  // インジケーター用：現在処理中の請求書番号
         };
       }
 
@@ -69,23 +75,39 @@ const InvoiceBulkExportService = {
 
       Logger.log(`[BulkExport] 開始: ${progress.processedCount}/${progress.totalCount} 件処理済み`);
 
+      // ============================
+      // 高速化: 一括事前ロード
+      // ============================
+      const preloadStart = Date.now();
+      const preloadedData = this._preloadInvoiceData(progress.invoiceIds, progress.processedCount);
+      Logger.log(`[BulkExport] 事前ロード完了: ${Object.keys(preloadedData.invoiceMap).length}件, ${Date.now() - preloadStart}ms`);
+
+      // 会社情報を1回だけ取得（MasterCache経由）
+      const company = MasterCache.getCompany();
+
       // バッチ処理（1件ずつ処理）
       while (progress.processedCount < progress.totalCount) {
         // 5分経過チェック
         const elapsed = Date.now() - startTime;
         if (elapsed > this.TIMEOUT_MS) {
+          // タイムアウト前にURL共有の権限設定をバッチ適用
+          if (params.enableUrlSharing && results.length > 0) {
+            this._applyUrlSharingBatch(results);
+          }
           this.saveProgress(exportKey, progress);
-          Logger.log(`[BulkExport] タイムアウト: ${progress.processedCount}/${progress.totalCount} 件完了`);
+          Logger.log(`[BulkExport] タイムアウト: ${progress.processedCount}/${progress.totalCount} 件完了, ${results.length}件の部分結果を返却`);
           return {
             success: false,
             error: 'TIMEOUT_WILL_CONTINUE',
-            progress: this._getSummary(progress)
+            progress: this._getSummary(progress),
+            partialResults: results,  // 今回のバッチで処理した結果を返す
+            partialErrors: errors
           };
         }
 
         // 1件処理
         const invoiceId = progress.invoiceIds[progress.processedCount];
-        const exportResult = this._exportOne(invoiceId, progress);
+        const exportResult = this._exportOneWithPreload(invoiceId, progress, params, preloadedData, company);
 
         // 結果を記録（メモリ上のみ）
         if (exportResult.success) {
@@ -111,7 +133,11 @@ const InvoiceBulkExportService = {
         }
       }
 
-      // 完了
+      // 完了 - URL共有が有効な場合、まとめて権限設定（Drive API v3）
+      if (params.enableUrlSharing) {
+        this._applyUrlSharingBatch(results);
+      }
+
       this.clearProgress(exportKey);
       Logger.log(`[BulkExport] 完了: ${results.length} 件成功, ${errors.length} 件エラー`);
 
@@ -138,13 +164,206 @@ const InvoiceBulkExportService = {
   },
 
   /**
-   * 1件の請求書を出力
+   * 請求書データを一括事前ロード
+   * T_Invoices, T_InvoiceLines, M_Customers を1回ずつ読み込み、
+   * invoiceId → データ のマップを作成
+   *
+   * @private
+   * @param {string[]} invoiceIds - 全対象請求書ID
+   * @param {number} processedCount - 既に処理済みの件数（再開時用）
+   * @returns {Object} { invoiceMap, customerMap }
+   */
+  _preloadInvoiceData: function(invoiceIds, processedCount) {
+    // 未処理の請求書IDのみ対象
+    const targetIds = invoiceIds.slice(processedCount);
+    const targetIdSet = new Set(targetIds);
+
+    // 請求書データを取得（対象IDのみフィルタ）
+    // search({}) で全件取得し、対象IDでフィルタ
+    const allInvoices = InvoiceRepository.search({});
+    const targetInvoices = allInvoices.filter(inv => targetIdSet.has(inv.invoice_id));
+
+    // 顧客IDを収集
+    const customerIds = new Set(targetInvoices.map(inv => inv.customer_id));
+
+    // 顧客データをMasterCache経由で取得（キャッシュ済み）
+    const allCustomers = MasterCache.getCustomers();
+    const customerMap = {};
+    for (const customer of allCustomers) {
+      if (customerIds.has(customer.customer_id)) {
+        customerMap[customer.customer_id] = customer;
+      }
+    }
+
+    // 明細データを一括取得（全件読み込み → 対象invoiceIdでフィルタ）
+    const allLines = getAllRecords('T_InvoiceLines');
+    const linesByInvoiceId = {};
+    for (const line of allLines) {
+      if (line.is_deleted) continue;
+      if (!targetIdSet.has(line.invoice_id)) continue;
+
+      if (!linesByInvoiceId[line.invoice_id]) {
+        linesByInvoiceId[line.invoice_id] = [];
+      }
+      linesByInvoiceId[line.invoice_id].push(this._normalizeLineRecord(line));
+    }
+
+    // 各明細をline_number順にソート
+    for (const invoiceId of Object.keys(linesByInvoiceId)) {
+      linesByInvoiceId[invoiceId].sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
+    }
+
+    // invoiceId → { ...invoice, lines, customer } のマップを作成
+    const invoiceMap = {};
+    for (const invoice of targetInvoices) {
+      const customer = customerMap[invoice.customer_id] || {};
+      invoiceMap[invoice.invoice_id] = {
+        ...invoice,
+        lines: linesByInvoiceId[invoice.invoice_id] || [],
+        customer: customer
+      };
+    }
+
+    return { invoiceMap, customerMap };
+  },
+
+  /**
+   * 明細レコードを正規化（InvoiceLineRepositoryと同じ処理）
+   * @private
+   */
+  _normalizeLineRecord: function(record) {
+    return {
+      ...record,
+      work_date: this._normalizeDate(record.work_date),
+      line_number: Number(record.line_number) || 0,
+      quantity: Number(record.quantity) || 0,
+      unit_price: Number(record.unit_price) || 0,
+      amount: Number(record.amount) || 0,
+      tax_amount: Number(record.tax_amount) || 0
+    };
+  },
+
+  /**
+   * 日付を正規化
+   * @private
+   */
+  _normalizeDate: function(dateValue) {
+    if (!dateValue) return '';
+    if (dateValue instanceof Date) {
+      return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy-MM-dd');
+    }
+    return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 1件の請求書を出力（事前ロード済みデータを使用）
    * @private
    * @param {string} invoiceId - 請求書ID
    * @param {Object} progress - 進捗オブジェクト（exportModeを参照）
+   * @param {Object} params - 元のパラメータ（enableUrlSharing等を参照）
+   * @param {Object} preloadedData - 事前ロード済みデータ { invoiceMap }
+   * @param {Object} company - 会社情報
    * @returns {Object} { success: boolean, result?: {...}, error?: {...} }
    */
-  _exportOne: function(invoiceId, progress) {
+  _exportOneWithPreload: function(invoiceId, progress, params, preloadedData, company) {
+    const modeConfig = this.MODES[progress.exportMode];
+    if (!modeConfig) {
+      return {
+        success: false,
+        error: {
+          invoiceId,
+          error: 'INVALID_MODE',
+          message: `無効な出力モード: ${progress.exportMode}`
+        }
+      };
+    }
+
+    const exportOptions = Object.assign(
+      { action: 'overwrite', company: company },
+      modeConfig.options
+    );
+
+    try {
+      // 事前ロード済みデータを使用
+      const invoiceData = preloadedData.invoiceMap[invoiceId];
+      if (!invoiceData) {
+        return {
+          success: false,
+          error: {
+            invoiceId,
+            error: 'NOT_FOUND',
+            message: '請求書が見つかりません（事前ロードデータに存在しません）'
+          }
+        };
+      }
+
+      // インジケーター用: 現在処理中の請求書番号を更新
+      progress.currentInvoiceNumber = invoiceData.invoice_number || '';
+
+      // exportWithData を使用（InvoiceService.get() をスキップ）
+      const result = InvoiceExportService.exportWithData(invoiceData, modeConfig.mode, exportOptions);
+
+      if (result.success) {
+        // 顧客情報を抽出
+        const customer = invoiceData.customer || {};
+
+        // 注意: URL共有の権限設定は後でバッチ処理（_applyUrlSharingBatch）で行う
+        // ここでは fileId を記録するだけ
+        const needsSharing = params.enableUrlSharing && result.fileId;
+
+        return {
+          success: true,
+          result: {
+            invoiceId,
+            url: result.url,
+            fileId: result.fileId,
+            // pdfUrl は権限設定後に確定（暫定でDrive URLを設定）
+            pdfUrl: needsSharing
+              ? `https://drive.google.com/file/d/${result.fileId}/view`
+              : result.url,
+            // CSV出力用の追加情報
+            companyName: customer.company_name || '',
+            contactName: customer.contact_name || '',
+            honorific: customer.honorific || '',
+            email: customer.email || '',
+            invoiceNumber: invoiceData.invoice_number,
+            totalAmount: invoiceData.total_amount,
+            needsSharing: needsSharing,  // 後で権限設定が必要かどうか
+            sharingError: null,
+            status: 'pending_sharing'
+          }
+        };
+      } else {
+        return {
+          success: false,
+          error: {
+            invoiceId,
+            error: result.error,
+            message: result.message || result.error
+          }
+        };
+      }
+    } catch (e) {
+      return {
+        success: false,
+        error: {
+          invoiceId,
+          error: 'EXPORT_ERROR',
+          message: e.message
+        }
+      };
+    }
+  },
+
+  /**
+   * 1件の請求書を出力（後方互換用 - 非一括出力時）
+   * @private
+   * @param {string} invoiceId - 請求書ID
+   * @param {Object} progress - 進捗オブジェクト（exportModeを参照）
+   * @param {Object} params - 元のパラメータ（enableUrlSharing等を参照）
+   * @returns {Object} { success: boolean, result?: {...}, error?: {...} }
+   */
+  _exportOne: function(invoiceId, progress, params) {
     const modeConfig = this.MODES[progress.exportMode];
     if (!modeConfig) {
       return {
@@ -160,15 +379,47 @@ const InvoiceBulkExportService = {
     const exportOptions = Object.assign({ action: 'overwrite' }, modeConfig.options);
 
     try {
+      // 請求書データを取得（顧客情報を含む）
+      const invoiceData = InvoiceService.get(invoiceId);
+      if (!invoiceData) {
+        return {
+          success: false,
+          error: {
+            invoiceId,
+            error: 'NOT_FOUND',
+            message: '請求書が見つかりません'
+          }
+        };
+      }
+
       const result = InvoiceExportService.export(invoiceId, modeConfig.mode, exportOptions);
 
       if (result.success) {
+        // 顧客情報を抽出
+        const customer = invoiceData.customer || {};
+
+        // 注意: URL共有の権限設定は後でバッチ処理（_applyUrlSharingBatch）で行う
+        const needsSharing = params.enableUrlSharing && result.fileId;
+
         return {
           success: true,
           result: {
             invoiceId,
             url: result.url,
-            fileId: result.fileId
+            fileId: result.fileId,
+            pdfUrl: needsSharing
+              ? `https://drive.google.com/file/d/${result.fileId}/view`
+              : result.url,
+            // CSV出力用の追加情報
+            companyName: customer.company_name || '',
+            contactName: customer.contact_name || '',
+            honorific: customer.honorific || '',
+            email: customer.email || '',
+            invoiceNumber: invoiceData.invoice_number,
+            totalAmount: invoiceData.total_amount,
+            needsSharing: needsSharing,
+            sharingError: null,
+            status: 'pending_sharing'
           }
         };
       } else {
@@ -205,8 +456,55 @@ const InvoiceBulkExportService = {
       errorCount: progress.errorCount || 0,
       exportMode: progress.exportMode,
       startedAt: progress.startedAt,
-      lastUpdate: new Date().toISOString()
+      lastUpdate: new Date().toISOString(),
+      currentInvoiceNumber: progress.currentInvoiceNumber || ''  // インジケーター用
     };
+  },
+
+  /**
+   * URL共有の権限設定をバッチで適用（Drive API v3使用）
+   * DriveApp.setSharing() より高速
+   * @private
+   * @param {Array} results - 出力結果の配列（needsSharing=trueのものを処理）
+   */
+  _applyUrlSharingBatch: function(results) {
+    const startTime = Date.now();
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (!result.needsSharing || !result.fileId) {
+        continue;
+      }
+
+      try {
+        // Drive API v3 で権限を追加（DriveApp.setSharing より高速）
+        Drive.Permissions.create(
+          {
+            role: 'reader',
+            type: 'anyone'
+          },
+          result.fileId,
+          {
+            sendNotificationEmail: false
+          }
+        );
+        result.status = 'success';
+        result.sharingError = null;
+        successCount++;
+      } catch (e) {
+        // Workspaceポリシーで禁止されている場合など
+        result.sharingError = e.message;
+        result.status = 'sharing_failed';
+        result.pdfUrl = result.url;  // フォールバック
+        errorCount++;
+        Logger.log(`[BulkExport] 共有設定失敗 (${result.invoiceNumber}): ${e.message}`);
+      }
+    }
+
+    const elapsed = Date.now() - startTime;
+    Logger.log(`[BulkExport] URL共有バッチ完了: ${successCount}件成功, ${errorCount}件失敗, ${elapsed}ms`);
   },
 
   /**
@@ -234,7 +532,8 @@ const InvoiceBulkExportService = {
       processedCount: 0,
       successCount: 0,
       errorCount: 0,
-      errorMessages: []
+      errorMessages: [],
+      currentInvoiceNumber: ''
     };
   },
 
@@ -256,7 +555,8 @@ const InvoiceBulkExportService = {
       errorCount: progress.errorCount,
       errorMessages: progress.errorMessages,  // 最大20件に制限済み
       startedAt: progress.startedAt,
-      lastUpdate: new Date().toISOString()
+      lastUpdate: new Date().toISOString(),
+      currentInvoiceNumber: progress.currentInvoiceNumber || ''
     };
     props.setProperty(this.PROGRESS_KEY_PREFIX + key, JSON.stringify(saveData));
   },
