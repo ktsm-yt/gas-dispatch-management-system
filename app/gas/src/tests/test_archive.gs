@@ -129,7 +129,7 @@ function createTestJob(customerId, workDate, month) {
     time_slot: 'am',
     required_count: 2,
     pay_unit: 'day',
-    status: 'completed',
+    status: 'assigned',
     notes: `P2-5アーカイブテスト用データ (${workDate})`
   });
 

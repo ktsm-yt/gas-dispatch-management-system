@@ -34,22 +34,25 @@ const JobRepository = {
    */
   findByDate: function(date) {
     const records = getAllRecords(this.TABLE_NAME);
+    const result = [];
 
-    // 日付比較（DateオブジェクトまたはYYYY-MM-DD文字列に対応）
-    const filtered = records.filter(r => {
-      if (r.is_deleted) return false;
-      if (!r.work_date) return false;
+    // === 最適化: 1回のループでフィルタと正規化を同時実行 ===
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      if (r.is_deleted) continue;
+      if (!r.work_date) continue;
 
       const workDateStr = this._normalizeDate(r.work_date);
-      return workDateStr === date;
-    });
+      if (workDateStr !== date) continue;
 
-    // 日付・時刻を正規化して返す
-    return filtered.map(r => ({
-      ...r,
-      work_date: this._normalizeDate(r.work_date),
-      start_time: this._normalizeTime(r.start_time)
-    }));
+      result.push({
+        ...r,
+        work_date: workDateStr,
+        start_time: this._normalizeTime(r.start_time)
+      });
+    }
+
+    return result;
   },
 
   /**
@@ -74,60 +77,50 @@ const JobRepository = {
       records = records.concat(archiveRecords);
     }
 
-    // 論理削除除外
-    records = records.filter(r => !r.is_deleted);
+    // === 互換対応: date_from/date_to も work_date_from/work_date_to として扱う ===
+    // 検索条件の日付も正規化（Dateオブジェクト混入対策）
+    const dateFrom = this._normalizeDate(query.work_date_from || query.date_from);
+    const dateTo = this._normalizeDate(query.work_date_to || query.date_to);
 
-    // 顧客IDで絞り込み
-    if (query.customer_id) {
-      records = records.filter(r => r.customer_id === query.customer_id);
-    }
+    // === 最適化: フィルタを先に、正規化は通過後のみ ===
+    const normalizedRecords = [];
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      if (r.is_deleted) continue;
 
-    // 日付範囲で絞り込み（Date型対応）
-    if (query.work_date_from) {
-      records = records.filter(r => {
-        if (!r.work_date) return false;
-        const workDateStr = this._normalizeDate(r.work_date);
-        return workDateStr >= query.work_date_from;
+      // 日付は先に正規化（フィルタに必要）
+      const workDateStr = this._normalizeDate(r.work_date);
+
+      // 全フィルタ条件を1回のループで評価
+      if (query.customer_id && r.customer_id !== query.customer_id) continue;
+      if (dateFrom && (!workDateStr || workDateStr < dateFrom)) continue;
+      if (dateTo && (!workDateStr || workDateStr > dateTo)) continue;
+      if (query.status && r.status !== query.status) continue;
+      if (query.time_slot && r.time_slot !== query.time_slot) continue;
+      if (query.site_name) {
+        const searchTerm = query.site_name.toLowerCase();
+        if (!r.site_name || !r.site_name.toLowerCase().includes(searchTerm)) continue;
+      }
+
+      // フィルタ通過後にのみstart_timeを正規化（無駄計算削減）
+      normalizedRecords.push({
+        ...r,
+        work_date: workDateStr,
+        start_time: this._normalizeTime(r.start_time),
+        _sortDate: workDateStr || ''  // ソート用キャッシュ
       });
-    }
-    if (query.work_date_to) {
-      records = records.filter(r => {
-        if (!r.work_date) return false;
-        const workDateStr = this._normalizeDate(r.work_date);
-        return workDateStr <= query.work_date_to;
-      });
-    }
-
-    // ステータスで絞り込み
-    if (query.status) {
-      records = records.filter(r => r.status === query.status);
-    }
-
-    // 時間区分で絞り込み
-    if (query.time_slot) {
-      records = records.filter(r => r.time_slot === query.time_slot);
-    }
-
-    // 現場名で絞り込み（部分一致）
-    if (query.site_name) {
-      const searchTerm = query.site_name.toLowerCase();
-      records = records.filter(r =>
-        r.site_name && r.site_name.toLowerCase().includes(searchTerm)
-      );
     }
 
     // ソート（デフォルト: 昇順 = 近い日付が上）
     const sortOrder = query.sort_order || 'asc';
     const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
+    const timeOrder = { am: 0, pm: 1, night: 2 };
 
-    records.sort((a, b) => {
-      const dateA = this._normalizeDate(a.work_date) || '';
-      const dateB = this._normalizeDate(b.work_date) || '';
-      if (dateA !== dateB) {
-        return (dateA > dateB ? 1 : -1) * sortMultiplier;
+    normalizedRecords.sort((a, b) => {
+      if (a._sortDate !== b._sortDate) {
+        return (a._sortDate > b._sortDate ? 1 : -1) * sortMultiplier;
       }
       // 同日内は時間帯順（am→pm→night）
-      const timeOrder = { am: 0, pm: 1, night: 2 };
       const timeA = timeOrder[a.time_slot] ?? 9;
       const timeB = timeOrder[b.time_slot] ?? 9;
       if (timeA !== timeB) {
@@ -137,16 +130,16 @@ const JobRepository = {
     });
 
     // 件数制限
+    let result = normalizedRecords;
     if (query.limit && query.limit > 0) {
-      records = records.slice(0, query.limit);
+      result = normalizedRecords.slice(0, query.limit);
     }
 
-    // work_date, start_timeを正規化
-    return records.map(r => ({
-      ...r,
-      work_date: this._normalizeDate(r.work_date),
-      start_time: this._normalizeTime(r.start_time)
-    }));
+    // _sortDateを除去して返す
+    return result.map(r => {
+      const { _sortDate, ...rest } = r;
+      return rest;
+    });
   },
 
   /**

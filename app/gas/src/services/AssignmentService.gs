@@ -505,7 +505,7 @@ const AssignmentService = {
    */
   _updateJobStatus: function(jobId) {
     const job = JobRepository.findById(jobId);
-    if (!job || job.status === 'completed' || job.status === 'cancelled') {
+    if (!job || job.status === 'cancelled') {
       return;
     }
 

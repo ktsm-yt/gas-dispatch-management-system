@@ -141,8 +141,32 @@ function searchInvoices(query) {
       return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
     }
 
+    // 期限超過の請求書を自動的に「未回収」ステータスに更新
+    // （sent かつ due_date < 今日 → unpaid）
+    try {
+      const overdueResult = InvoiceRepository.autoMarkOverdue();
+      if (overdueResult.updated > 0) {
+        Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
+      }
+    } catch (overdueError) {
+      // 自動更新エラーは検索自体を妨げない
+      console.warn('autoMarkOverdue error:', overdueError.message);
+    }
+
     // Service呼び出し
     const invoices = InvoiceService.search(query || {});
+
+    // 入金情報を一括取得（パフォーマンス最適化）
+    if (invoices.length > 0) {
+      const invoiceIds = invoices.map(inv => inv.invoice_id);
+      const paidMap = PaymentRepository.sumByInvoiceIds(invoiceIds);
+
+      // 各請求書に入金情報を付加
+      for (const inv of invoices) {
+        inv.total_paid = paidMap.get(inv.invoice_id) || 0;
+        inv.outstanding = inv.total_amount - inv.total_paid;
+      }
+    }
 
     return buildSuccessResponse({ invoices: invoices }, requestId);
 
@@ -505,6 +529,7 @@ function regenerateInvoice(invoiceId) {
       const errorMessages = {
         'NOT_FOUND': '請求書が見つかりません',
         'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再生成できません',
+        'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再生成できません',
         'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません'
       };
       const message = errorMessages[result.error] || result.error;
@@ -900,5 +925,71 @@ function cancelBulkExport(params) {
       {},
       requestId
     );
+  }
+}
+
+/**
+ * 請求書の詳細を更新（テキスト項目のみ）
+ * @param {string} invoiceId - 請求ID
+ * @param {Object} headerData - ヘッダー更新データ { issue_date, due_date, notes }
+ * @param {Object[]} linesData - 明細更新データ [{ line_id, item_name, time_note, site_name }]
+ * @param {string} expectedUpdatedAt - 期待するupdated_at
+ * @returns {Object} APIレスポンス
+ */
+function updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!invoiceId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
+    }
+
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'expectedUpdatedAt is required', {}, requestId);
+    }
+
+    // 日付形式の検証（指定されている場合）
+    if (headerData) {
+      if (headerData.issue_date && !/^\d{4}-\d{2}-\d{2}$/.test(headerData.issue_date)) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'issue_date must be in YYYY-MM-DD format', {}, requestId);
+      }
+      if (headerData.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(headerData.due_date)) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'due_date must be in YYYY-MM-DD format', {}, requestId);
+      }
+    }
+
+    // Service呼び出し
+    const result = InvoiceService.updateDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
+
+    if (!result.success) {
+      const errorCode = result.error === 'CONFLICT_ERROR'
+        ? ERROR_CODES.CONFLICT_ERROR
+        : result.error === 'NOT_FOUND'
+        ? ERROR_CODES.NOT_FOUND
+        : result.error === 'CANNOT_EDIT_SENT_INVOICE'
+        ? ERROR_CODES.VALIDATION_ERROR
+        : ERROR_CODES.SYSTEM_ERROR;
+
+      const errorMessages = {
+        'NOT_FOUND': '請求書が見つかりません',
+        'CANNOT_EDIT_SENT_INVOICE': '送付済みの請求書は編集できません',
+        'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください'
+      };
+      const message = errorMessages[result.error] || result.error;
+      return buildErrorResponse(errorCode, message, {}, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    Logger.log(`updateInvoiceDetails error: ${error.message}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }

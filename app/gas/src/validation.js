@@ -22,7 +22,6 @@ const JOB_STATUSES = {
   PENDING: 'pending',     // 未配置
   ASSIGNED: 'assigned',   // 配置済
   HOLD: 'hold',           // 保留
-  COMPLETED: 'completed', // 完了
   CANCELLED: 'cancelled', // キャンセル
   PROBLEM: 'problem'      // 問題あり
 };
@@ -702,7 +701,6 @@ const JOB_STATUS_LABELS = {
   'pending': '未配置',
   'assigned': '配置済',
   'hold': '保留',
-  'completed': '完了',
   'cancelled': 'キャンセル',
   'problem': '問題あり'
 };
@@ -747,8 +745,8 @@ function getTimeSlotLabel_(slot) {
  * @returns {boolean} 編集可能ならtrue
  */
 function isJobEditable_(status) {
-  // 完了・キャンセル以外は編集可能
-  return status !== 'completed' && status !== 'cancelled';
+  // キャンセル以外は編集可能
+  return status !== 'cancelled';
 }
 
 /**
