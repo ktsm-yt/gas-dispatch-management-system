@@ -643,7 +643,7 @@
       </div>
       <div class="toolbar-actions">
         <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
-        <a id="payout-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
+        <a id="payout-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleFolderLinkClick(this)">📁 出力先</a>
       </div>
     </div>
 
@@ -957,13 +957,25 @@
     function loadPayoutFolderLink() {
       google.script.run
         .withSuccessHandler(function(response) {
+          const link = document.getElementById('payout-folder-link');
           if (response.ok && response.data.configured && response.data.url) {
-            const link = document.getElementById('payout-folder-link');
             link.href = response.data.url;
-            link.style.display = 'inline-flex';
+            link.dataset.configured = 'true';
+          } else {
+            link.dataset.configured = 'false';
           }
         })
         .getPayoutExportFolderUrl();
+    }
+
+    function handleFolderLinkClick(link) {
+      if (link.dataset.configured === 'true' && link.href && link.href !== '#') {
+        return true; // 通常のリンク動作
+      }
+      if (link.dataset.configured === 'false') {
+        showToast('エクスポート先フォルダが設定されていません。設定画面で設定してください。', 'warning');
+      }
+      return false; // リンク遷移を阻止
     }
 
     function restoreFromSession() {
