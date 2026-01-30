@@ -17,10 +17,10 @@
 
 const BULK_TEST_CONFIG = {
   // 生成数
-  CUSTOMER_COUNT: 50,
-  STAFF_COUNT: 70,
-  DAYS_TO_GENERATE: 10,      // 何日分の案件を作るか
-  JOBS_PER_DAY: 50,          // 1日あたりの案件数
+  CUSTOMER_COUNT: 100,       // 100社の顧客
+  STAFF_COUNT: 100,          // 100名のスタッフ
+  DAYS_TO_GENERATE: 30,      // 1ヶ月分の案件を作るか
+  JOBS_PER_DAY: 100,         // 1日あたりの案件数（合計3000件）
 
   // プレフィックス（削除時の識別用）
   PREFIX: 'bulk_',
@@ -586,13 +586,14 @@ function createBulkAssignments() {
   const transportFees = { '23ku_inner': 500, '23ku_outer': 1000, 'saitama': 1500, 'chiba': 1500, 'kanagawa': 1500 };
   const siteRoles = ['genba_dairi', 'sagyo_shunin', 'shokcho', 'anzen_sekinin', 'shunin_gijutsu', null, null, null];
 
-  // 案件の50%に配置を作成
-  const jobsToAssign = allJobs.filter((_, i) => i % 2 === 0);
+  // 案件の75%に配置を作成（より多くのデータを生成）
+  const jobsToAssign = allJobs.filter((_, i) => i % 4 !== 0);
   const toInsert = [];
   let assignmentCounter = 0;
 
   for (const job of jobsToAssign) {
-    const assignCount = Math.min(job.required_count || 1, 3);
+    // 配置数: 1-5名（平均2-3名）、required_countが大きい場合はより多く
+    const assignCount = Math.min(job.required_count || 1, 5);
     const customer = customerMap[job.customer_id] || {};
     const payUnit = job.pay_unit || 'basic';  // デフォルトは基本単価
 
@@ -668,7 +669,7 @@ function fixBulkJobStatuses() {
   // テスト顧客の案件を取得
   const allJobs = getAllRecords('T_Jobs').filter(j =>
     j.customer_id && j.customer_id.startsWith('cus_' + prefix) &&
-    !j.is_deleted && !['completed', 'cancelled', 'hold'].includes(j.status)
+    !j.is_deleted && !['cancelled', 'hold', 'problem'].includes(j.status)
   );
 
   // 配置を取得して案件ごとにカウント
@@ -916,8 +917,8 @@ function measurePerformance() {
     const endDate = new Date(today);
     endDate.setDate(endDate.getDate() + 10);
     return JobService.search({
-      date_from: formatDateForDb(today),
-      date_to: formatDateForDb(endDate)
+      work_date_from: formatDateForDb(today),
+      work_date_to: formatDateForDb(endDate)
     });
   }));
 
