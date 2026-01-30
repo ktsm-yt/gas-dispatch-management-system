@@ -3,6 +3,9 @@
 > **Note**: 細かな項目（カラム名/enum/帳票項目など）は先方データ到着後に確定する。
 > ただし運用上「保留（HOLD）」は必要になる想定のため、設計/画面/APIは保留を前提にする。
 
+> **更新履歴**
+> - 2026-01-30: 案件ステータスから未使用の `completed`（完了）を削除、`problem`（問題あり）を追加
+
 ## 5.0 スプレッドシート設計方針
 
 - 年度別にスプレッドシート（または案件系シート）を分割し、1年あたり{{ANNUAL_JOB_COUNT}}規模を想定
@@ -34,6 +37,7 @@
 | 9 | T_InvoiceLines | 請求明細トランザクション | 請求明細 |
 | 10 | T_Payouts | 支払トランザクション | 支払 |
 | 11 | T_AuditLog | 操作ログ | ログ |
+| 12 | T_Payments | 入金記録トランザクション | 入金記録 |
 
 ---
 
@@ -271,8 +275,8 @@ WebUI 請求書一覧
 - `pending`: 未配置
 - `assigned`: 配置済
 - `hold`: 保留
-- `completed`: 完了
 - `cancelled`: キャンセル
+- `problem`: 問題あり
 
 ---
 
@@ -350,7 +354,7 @@ WebUI 請求書一覧
 | pdf_file_id | STRING | - | 生成済みPDFのDriveファイルID |
 | excel_file_id | STRING | - | 生成済みExcelのDriveファイルID |
 | sheet_file_id | STRING | - | 編集用SpreadsheetのDriveファイルID（編集して出力用） |
-| status | STRING | ○ | ステータス（draft/issued/sent/paid） |
+| status | STRING | ○ | ステータス（unsent/sent/unpaid/paid） |
 | notes | STRING | - | 備考 |
 | created_at | DATETIME | ○ | 作成日時 |
 | updated_at | DATETIME | ○ | 更新日時 |
@@ -361,11 +365,19 @@ WebUI 請求書一覧
 - YY: 年の下2桁、MM: 月2桁
 - SEQ: 顧客ごとの連番（リセットしない）
 
-**status 値**
-- `draft`: 下書き（編集可）
-- `issued`: 発行済み（PDF生成済み）
+**status 値**（2026-01-30 実装に合わせて更新）
+- `unsent`: 未送付（編集可）
 - `sent`: 送付済み
+- `unpaid`: 未回収（期限超過時に自動遷移）
 - `paid`: 入金済み
+
+**ステータス遷移ルール**
+```
+unsent → sent（送付操作）
+sent → paid（全額入金）
+sent → unpaid（期限超過時に自動更新）
+unpaid → paid（全額入金）
+```
 
 ---
 
@@ -469,3 +481,41 @@ WebUI 請求書一覧
 | record_id | STRING | ○ | 対象レコードID |
 | before_data | STRING | - | 変更前データ（JSON） |
 | after_data | STRING | - | 変更後データ（JSON） |
+
+---
+
+## 5.13 T_Payments（入金記録）
+
+> **追加日**: 2026-01-30（P3: 未収管理機能）
+
+請求書に対する入金を記録し、売掛金を管理するためのテーブル。
+
+| カラム名 | 型 | 必須 | 説明 |
+|----------|-----|------|------|
+| payment_id | STRING | ○ | 入金ID（主キー・UUID） |
+| invoice_id | STRING | ○ | 請求ID（外部キー → T_Invoices） |
+| payment_date | DATE | ○ | 入金日 |
+| amount | NUMBER | ○ | 入金額 |
+| payment_method | STRING | ○ | 入金方法（bank_transfer/cash/other） |
+| bank_ref | STRING | - | 銀行参照番号（振込明細の照合用） |
+| notes | STRING | - | 備考 |
+| is_deleted | BOOLEAN | ○ | 論理削除フラグ |
+| created_at | DATETIME | ○ | 作成日時 |
+| created_by | STRING | ○ | 作成者 |
+| deleted_at | DATETIME | - | 削除日時 |
+| deleted_by | STRING | - | 削除者 |
+
+**payment_method 値**
+- `bank_transfer`: 銀行振込
+- `cash`: 現金
+- `other`: その他（小切手、相殺など）
+
+**運用想定**
+- 請求書1件に対して複数の入金記録を登録可能（分割入金対応）
+- 入金記録の合計が請求金額に達すると、請求書ステータスを自動で `paid` に更新
+- 入金記録を削除（論理削除）すると、請求書ステータスを `unpaid` に戻す
+
+**関連機能**
+- 請求書一覧での入金状況表示（入金額/残高）
+- 期限超過フィルタ（`due_date < 今日` かつ `status != 'paid'`）
+- 監査ログ連携（入金記録の作成/削除を T_AuditLog に記録）
