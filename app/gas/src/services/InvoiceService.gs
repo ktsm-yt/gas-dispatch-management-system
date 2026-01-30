@@ -71,14 +71,40 @@ const InvoiceService = {
         status: 'unsent'
       });
 
-      // 9. 明細行を作成
-      const createdLines = InvoiceLineRepository.bulkInsert(
+      // 9. 明細行を作成（バリデーション付き）
+      const lineResult = InvoiceLineRepository.bulkInsert(
         lines.map((line, index) => ({
           ...line,
           invoice_id: invoice.invoice_id,
           line_number: index + 1
         }))
       );
+
+      if (!lineResult.success) {
+        // 明細バリデーションエラー時は請求書も削除
+        InvoiceRepository.softDelete(invoice.invoice_id, invoice.updated_at);
+        return {
+          success: false,
+          error: 'LINE_VALIDATION_ERROR',
+          errors: lineResult.errors
+        };
+      }
+
+      const createdLines = lineResult.lines;
+
+      // 監査ログを記録
+      try {
+        logCreate('T_Invoices', invoice.invoice_id, {
+          invoice_number: invoice.invoice_number,
+          customer_id: customerId,
+          billing_year: year,
+          billing_month: month,
+          total_amount: totals.totalAmount,
+          status: 'unsent'
+        });
+      } catch (logError) {
+        console.warn('監査ログ記録エラー (generate):', logError.message);
+      }
 
       return {
         success: true,
@@ -197,12 +223,26 @@ const InvoiceService = {
           }
         }
 
-        // 適用
+        // 適用（バリデーション付き）
         if (toAdd.length > 0) {
-          InvoiceLineRepository.bulkInsert(toAdd);
+          const addResult = InvoiceLineRepository.bulkInsert(toAdd);
+          if (!addResult.success) {
+            return {
+              success: false,
+              error: 'LINE_VALIDATION_ERROR',
+              errors: addResult.errors
+            };
+          }
         }
         if (toUpdate.length > 0) {
-          InvoiceLineRepository.bulkUpdate(toUpdate);
+          const updateResult = InvoiceLineRepository.bulkUpdate(toUpdate);
+          if (!updateResult.success) {
+            return {
+              success: false,
+              error: 'LINE_UPDATE_ERROR',
+              errors: updateResult.errors
+            };
+          }
         }
         for (const lineId of toDelete) {
           InvoiceLineRepository.update({ line_id: lineId, is_deleted: true });
@@ -274,10 +314,24 @@ const InvoiceService = {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
     }
 
-    return InvoiceRepository.update(
+    const result = InvoiceRepository.update(
       { invoice_id: invoiceId, status: normalizedStatus },
       expectedUpdatedAt
     );
+
+    // 監査ログを記録（更新成功時のみ）
+    if (result.success) {
+      try {
+        logUpdate('T_Invoices', invoiceId,
+          { status: current.status },
+          { status: normalizedStatus }
+        );
+      } catch (logError) {
+        console.warn('監査ログ記録エラー (updateStatus):', logError.message);
+      }
+    }
+
+    return result;
   },
 
   /**
@@ -302,7 +356,25 @@ const InvoiceService = {
     InvoiceLineRepository.deleteByInvoiceId(invoiceId);
 
     // 請求書を削除
-    return InvoiceRepository.softDelete(invoiceId, expectedUpdatedAt);
+    const result = InvoiceRepository.softDelete(invoiceId, expectedUpdatedAt);
+
+    // 監査ログを記録（削除成功時のみ）
+    if (result.success) {
+      try {
+        logDelete('T_Invoices', invoiceId, {
+          invoice_number: invoice.invoice_number,
+          customer_id: invoice.customer_id,
+          billing_year: invoice.billing_year,
+          billing_month: invoice.billing_month,
+          total_amount: invoice.total_amount,
+          status: invoice.status
+        });
+      } catch (logError) {
+        console.warn('監査ログ記録エラー (delete):', logError.message);
+      }
+    }
+
+    return result;
   },
 
   /**
@@ -353,6 +425,19 @@ const InvoiceService = {
       const allJobs = getAllRecords('T_Jobs');
       const allAssignments = getAllRecords('T_JobAssignments');
       const allInvoices = getAllRecords('T_Invoices');
+
+      // 交通費マスタを事前読み込み（顧客ごとの呼び出しを削減）
+      let transportAreaMap = {};
+      try {
+        const transportFeesResult = listTransportFees();
+        if (transportFeesResult.ok && transportFeesResult.data?.items) {
+          transportFeesResult.data.items.forEach(fee => {
+            transportAreaMap[fee.area_code] = fee.area_name;
+          });
+        }
+      } catch (e) {
+        console.warn('交通費マスタの事前読み込みに失敗:', e.message);
+      }
 
       // インデックス構築: 顧客IDでグループ化
       const jobsByCustomer = this._groupBy(allJobs, 'customer_id');
@@ -426,8 +511,8 @@ const InvoiceService = {
             continue;
           }
 
-          // 明細行を生成
-          const lines = this._generateLines(assignments, customer);
+          // 明細行を生成（交通費マップを渡してI/O削減）
+          const lines = this._generateLines(assignments, customer, transportAreaMap);
 
           // 合計金額を計算
           const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
@@ -645,8 +730,9 @@ const InvoiceService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    if (invoice.status !== 'draft') {
-      return { success: false, error: 'CANNOT_REGENERATE_ISSUED_INVOICE' };
+    // 送付済み請求書は再生成不可（未送付のみ許可）
+    if (!isInvoiceEditable_(invoice.status)) {
+      return { success: false, error: 'CANNOT_REGENERATE_SENT_INVOICE' };
     }
 
     // 既存を削除
@@ -804,15 +890,17 @@ const InvoiceService = {
    * @param {Object} customer - 顧客情報
    * @returns {Object[]} 明細行
    */
-  _generateLines: function(assignments, customer) {
+  _generateLines: function(assignments, customer, preloadedTransportAreaMap) {
     const lines = [];
 
     // P2-8: 顧客の諸経費請求設定を確認
     const hasTransportFee = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
 
-    // P2-8: エリアコード→エリア名のマップを事前に作成（諸経費請求がONの場合のみ）
-    let transportAreaMap = {};
-    if (hasTransportFee) {
+    // P2-8: エリアコード→エリア名のマップ
+    // 事前読み込み済みの場合はそれを使用（bulkGenerate最適化）
+    // 渡されなかった場合は従来通りlistTransportFees()を呼ぶ（後方互換性）
+    let transportAreaMap = preloadedTransportAreaMap || {};
+    if (hasTransportFee && !preloadedTransportAreaMap) {
       try {
         const transportFees = listTransportFees();
         transportFees.forEach(fee => {
@@ -1125,5 +1213,109 @@ const InvoiceService = {
     const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
 
     return { issueDate, dueDate };
+  },
+
+  /**
+   * 請求書の詳細を更新（テキスト項目のみ）
+   * 未送付（unsent）の請求書のみ編集可能
+   * @param {string} invoiceId - 請求ID
+   * @param {Object} headerData - ヘッダー更新データ { issue_date, due_date, notes }
+   * @param {Object[]} linesData - 明細更新データ [{ line_id, item_name, time_note, site_name }]
+   * @param {string} expectedUpdatedAt - 期待するupdated_at
+   * @returns {Object} 更新結果 { success, invoice, lines, error }
+   */
+  updateDetails: function(invoiceId, headerData, linesData, expectedUpdatedAt) {
+    try {
+      // 1. 請求書を取得
+      const invoice = InvoiceRepository.findById(invoiceId);
+      if (!invoice) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      // 2. 編集可能なステータスかチェック（未送付のみ）
+      if (!isInvoiceEditable_(invoice.status)) {
+        return { success: false, error: 'CANNOT_EDIT_SENT_INVOICE' };
+      }
+
+      // 3. 楽観的ロックチェック
+      if (expectedUpdatedAt && invoice.updated_at !== expectedUpdatedAt) {
+        return { success: false, error: 'CONFLICT_ERROR' };
+      }
+
+      // 4. ヘッダー情報を更新（許可された項目のみ）
+      const allowedHeaderFields = ['issue_date', 'due_date', 'notes'];
+      const headerUpdate = { invoice_id: invoiceId };
+      for (const field of allowedHeaderFields) {
+        if (headerData && headerData[field] !== undefined) {
+          headerUpdate[field] = headerData[field];
+        }
+      }
+
+      const headerResult = InvoiceRepository.update(headerUpdate, expectedUpdatedAt);
+      if (!headerResult.success) {
+        return headerResult;
+      }
+
+      // 5. 明細を更新（テキスト項目のみ、bulkUpdateで効率化）
+      if (linesData && Array.isArray(linesData) && linesData.length > 0) {
+        const allowedLineFields = ['item_name', 'time_note', 'site_name'];
+
+        // 更新対象の明細を収集
+        const lineUpdates = [];
+        for (const lineData of linesData) {
+          if (!lineData.line_id) continue;
+
+          const lineUpdate = { line_id: lineData.line_id };
+          for (const field of allowedLineFields) {
+            if (lineData[field] !== undefined) {
+              lineUpdate[field] = lineData[field];
+            }
+          }
+
+          // 更新対象フィールドがあれば追加
+          if (Object.keys(lineUpdate).length > 1) {
+            lineUpdates.push(lineUpdate);
+          }
+        }
+
+        // 一括更新（シートI/O 1回）
+        if (lineUpdates.length > 0) {
+          const lineResult = InvoiceLineRepository.bulkUpdate(lineUpdates);
+          if (!lineResult.success) {
+            // 明細更新失敗（ヘッダーは既に更新済み - GASにトランザクションがないため）
+            console.error('updateDetails: 明細更新失敗', lineResult.errors);
+            return {
+              success: false,
+              error: 'LINE_UPDATE_ERROR',
+              errors: lineResult.errors,
+              partialUpdate: true // ヘッダーは更新済みであることを通知
+            };
+          }
+        }
+      }
+
+      // 6. 監査ログを記録
+      try {
+        logUpdate('T_Invoices', invoiceId,
+          { issue_date: invoice.issue_date, due_date: invoice.due_date, notes: invoice.notes },
+          headerUpdate
+        );
+      } catch (logError) {
+        console.warn('監査ログ記録エラー (updateDetails):', logError.message);
+      }
+
+      // 7. 更新後のデータを返す
+      const updatedInvoice = InvoiceRepository.findById(invoiceId);
+      const updatedLines = InvoiceLineRepository.findByInvoiceId(invoiceId);
+
+      return {
+        success: true,
+        invoice: updatedInvoice,
+        lines: updatedLines
+      };
+    } catch (error) {
+      console.error('InvoiceService.updateDetails error:', error);
+      return { success: false, error: error.message || 'UPDATE_DETAILS_ERROR' };
+    }
   }
 };
