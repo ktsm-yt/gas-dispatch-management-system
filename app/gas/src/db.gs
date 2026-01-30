@@ -20,6 +20,7 @@ const TABLE_SHEET_MAP = {
   'T_InvoiceLines': '請求明細',
   'T_Payouts': '支払',
   'T_MonthlyStats': '月次統計',  // P2-6: 売上分析ダッシュボード用
+  'T_Payments': '入金記録',  // P2: 入金管理機能
   'T_AuditLog': 'ログ'
 };
 
