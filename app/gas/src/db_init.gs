@@ -140,6 +140,15 @@ const TABLE_DEFINITIONS = {
       'before_data', 'after_data'
     ]
   },
+  // P3: 入金記録テーブル（売掛管理用）
+  T_Payments: {
+    sheetName: '入金記録',
+    headers: [
+      'payment_id', 'invoice_id', 'payment_date', 'amount', 'payment_method',
+      'bank_ref', 'notes', 'is_deleted', 'created_at', 'created_by',
+      'deleted_at', 'deleted_by'
+    ]
+  },
   // P2-6: 月次統計テーブル（売上分析ダッシュボード用）
   T_MonthlyStats: {
     sheetName: '月次統計',
@@ -1069,4 +1078,36 @@ function migrateCustomerTransportFeeColumn_(ss) {
   sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
 
   Logger.log('顧客設定で「諸経費請求」を有効にするには、該当行に TRUE を設定してください');
+}
+
+/**
+ * P3 マイグレーション: T_Payments シートを追加（入金記録用）
+ * GASエディタから実行: migrateAddPaymentsSheet()
+ */
+function migrateAddPaymentsSheet() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  // 入金記録シートが既にあるか確認
+  const existingSheet = ss.getSheetByName('入金記録');
+  if (existingSheet) {
+    Logger.log('✓ 入金記録シートは既に存在します');
+    return;
+  }
+
+  // T_Paymentsの定義
+  const definition = TABLE_DEFINITIONS.T_Payments;
+  createSheet(ss, 'T_Payments', definition);
+
+  Logger.log('\n=== P3 マイグレーション完了 ===');
+  Logger.log('✓ 入金記録シートを追加しました');
+  Logger.log('カラム: payment_id, invoice_id, payment_date, amount, payment_method, ...');
+  Logger.log('用途: 請求書に対する入金記録、売掛金管理');
 }
