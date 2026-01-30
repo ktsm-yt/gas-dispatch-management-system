@@ -616,16 +616,23 @@ const InvoiceExportService = {
     }
 
     // 日本語列名のマッピング（シートの列名が日本語の場合に対応）
+    // db_init.gs の M_Company 定義に準拠したフィールド名を使用
     const company = {
       ...raw,
-      // 英語キーがない場合、日本語キーからマッピング
+      // 基本情報
       company_name: raw.company_name || raw['会社名'] || raw['自社名'] || '',
       postal_code: raw.postal_code || raw['郵便番号'] || '',
       address: raw.address || raw['住所'] || raw['所在地'] || '',
-      tel: raw.tel || raw['電話番号'] || raw['TEL'] || '',
+      phone: raw.phone || raw['電話番号'] || raw['TEL'] || '',
       fax: raw.fax || raw['FAX'] || raw['ファックス'] || '',
-      bank_info: raw.bank_info || raw['振込先'] || raw['銀行情報'] || '',
-      invoice_number: raw.invoice_number || raw['登録番号'] || raw['インボイス番号'] || ''
+      // インボイス登録番号
+      invoice_registration_number: raw.invoice_registration_number || raw['登録番号'] || raw['インボイス番号'] || '',
+      // 銀行情報（個別フィールド）
+      bank_name: raw.bank_name || raw['銀行名'] || '',
+      bank_branch: raw.bank_branch || raw['支店名'] || '',
+      bank_account_type: raw.bank_account_type || raw['口座種別'] || '',
+      bank_account_number: raw.bank_account_number || raw['口座番号'] || '',
+      bank_account_name: raw.bank_account_name || raw['口座名義'] || ''
     };
 
     // 請求書に必要なフィールドの確認
