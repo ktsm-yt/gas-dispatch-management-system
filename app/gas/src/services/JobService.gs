@@ -59,11 +59,14 @@ const JobService = {
 
     const jobs = JobRepository.findByDate(date);
 
+    // 案件IDを抽出（後続処理で再利用）
+    const jobIds = jobs.map(j => j.job_id);
+
     // 顧客マスターを取得してマップ作成
     const customerMap = this._getCustomerMap();
 
-    // 配置データを取得
-    const allAssignments = AssignmentRepository.findByDate(date);
+    // 配置データを取得（jobIdsを渡して二重呼び出し防止）
+    const allAssignments = AssignmentRepository.findByDate(date, jobIds);
 
     // スタッフマスターを取得（MasterCacheでキャッシュ）
     const staffMapFull = MasterCache.getStaffMap();
@@ -82,8 +85,7 @@ const JobService = {
       assignmentsByJob[a.job_id].push(a);
     }
 
-    // スロットデータを一括取得
-    const jobIds = jobs.map(j => j.job_id);
+    // スロットデータを一括取得（jobIdsは上で既に取得済み）
     const slotsByJob = SlotRepository.findByJobIds(jobIds);
 
     // 顧客名と配置情報をJOIN
@@ -189,23 +191,28 @@ const JobService = {
   search: function(query) {
     const jobs = JobRepository.search(query);
 
+    // 対象ジョブIDを先に抽出（後続の処理で再利用）
+    const jobIds = jobs.map(j => j.job_id);
+    const jobIdSet = new Set(jobIds);
+
     // 顧客マスターを取得してマップ作成
     const customerMap = this._getCustomerMap();
 
-    // 全配置を取得して案件ごとに一意なスタッフIDをグループ化
+    // 全配置を取得して、対象ジョブIDのみフィルタリング（早期スキップで最適化）
     const allAssignments = getAllRecords('T_JobAssignments');
     const staffIdsByJob = {};
     for (const a of allAssignments) {
-      if (!a.is_deleted && a.status !== 'CANCELLED') {
-        if (!staffIdsByJob[a.job_id]) {
-          staffIdsByJob[a.job_id] = new Set();
-        }
-        staffIdsByJob[a.job_id].add(a.staff_id);
+      // 対象外のジョブIDは早期スキップ
+      if (!jobIdSet.has(a.job_id)) continue;
+      if (a.is_deleted || a.status === 'CANCELLED') continue;
+
+      if (!staffIdsByJob[a.job_id]) {
+        staffIdsByJob[a.job_id] = new Set();
       }
+      staffIdsByJob[a.job_id].add(a.staff_id);
     }
 
     // スロットデータを一括取得
-    const jobIds = jobs.map(j => j.job_id);
     const slotsByJob = SlotRepository.findByJobIds(jobIds);
 
     // 顧客名と配置数をJOIN（一意なスタッフ数）
@@ -429,7 +436,7 @@ const JobService = {
     for (const job of jobs) {
       total++;
 
-      if (job.status === 'assigned' || job.status === 'completed') {
+      if (job.status === 'assigned') {
         assigned++;
       } else if (job.status === 'pending') {
         pending++;

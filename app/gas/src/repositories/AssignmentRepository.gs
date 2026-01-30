@@ -49,12 +49,16 @@ const AssignmentRepository = {
    * 日付で配置を検索（ダッシュボード用）
    * 案件テーブルとJoinして、指定日の配置を取得
    * @param {string} date - 日付（YYYY-MM-DD形式）
+   * @param {string[]} [preloadedJobIds] - 案件ID配列（オプション、二重呼び出し防止）
    * @returns {Object[]} 配置配列
    */
-  findByDate: function(date) {
-    // まず指定日の案件IDを取得
-    const jobs = JobRepository.findByDate(date);
-    const jobIds = jobs.map(j => j.job_id);
+  findByDate: function(date, preloadedJobIds) {
+    // jobIdsが渡されなかった場合のみ案件を取得（二重呼び出し防止）
+    let jobIds = preloadedJobIds;
+    if (!jobIds) {
+      const jobs = JobRepository.findByDate(date);
+      jobIds = jobs.map(j => j.job_id);
+    }
 
     if (jobIds.length === 0) {
       return [];

@@ -299,10 +299,25 @@ const MasterCache = {
     // シートから読み込み
     this._staffCache = getAllRecords('M_Staff').filter(s => !s.is_deleted);
 
-    // CacheServiceに保存
+    // CacheServiceに保存（軽量化: 必要フィールドのみ保存してサイズ制限対策）
     try {
       const cache = CacheService.getScriptCache();
-      cache.put(this.CACHE_KEY_STAFF, JSON.stringify(this._staffCache), this.CACHE_TTL);
+      const lightStaff = this._staffCache.map(s => ({
+        staff_id: s.staff_id,
+        name: s.name,
+        name_kana: s.name_kana,
+        phone: s.phone,
+        staff_type: s.staff_type,
+        skills: s.skills,
+        ng_customers: s.ng_customers,
+        daily_rate_basic: s.daily_rate_basic,
+        daily_rate_tobi: s.daily_rate_tobi,
+        daily_rate_age: s.daily_rate_age,
+        daily_rate_tobiage: s.daily_rate_tobiage,
+        daily_rate_half: s.daily_rate_half,
+        is_active: s.is_active
+      }));
+      cache.put(this.CACHE_KEY_STAFF, JSON.stringify(lightStaff), this.CACHE_TTL);
     } catch (e) {
       console.warn('CacheService.put failed for staff:', e);
     }
