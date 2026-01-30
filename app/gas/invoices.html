@@ -2890,7 +2890,7 @@
       document.getElementById('bulkExportResultsContainer').style.display = 'block';
       tbody.innerHTML = lastBulkExportResults.map(function(r) {
         const contactDisplay = r.contactName ? (r.contactName + (r.honorific || '')) : '-';
-        const amountDisplay = r.totalAmount ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
+        const amountDisplay = r.totalAmount != null ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
         const pdfLink = r.pdfUrl
           ? '<a href="' + escapeHtml(r.pdfUrl) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">📄 開く</a>'
           : '-';
@@ -2936,7 +2936,7 @@
           r.companyName || '',
           contactDisplay,
           r.invoiceNumber || '',
-          r.totalAmount || '',
+          r.totalAmount != null ? r.totalAmount : '',  // 0円も正しく出力
           r.email || '',
           r.pdfUrl || ''
         ];
@@ -3238,7 +3238,7 @@
         document.getElementById('bulkExportResultsContainer').style.display = 'block';
         tbody.innerHTML = results.map(function(r) {
           const contactDisplay = r.contactName ? (r.contactName + (r.honorific || '')) : '-';
-          const amountDisplay = r.totalAmount ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
+          const amountDisplay = r.totalAmount != null ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
           const pdfLink = r.pdfUrl
             ? '<a href="' + escapeHtml(r.pdfUrl) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">📄 開く</a>'
             : '-';
@@ -3269,6 +3269,8 @@
         }).join('');
       } else {
         document.getElementById('bulkExportCompleteErrors').style.display = 'none';
+        // エラーリストをクリア（「前回の結果」表示時に古いエラーが残らないように）
+        document.getElementById('bulkExportErrorList').innerHTML = '';
       }
 
       // 成功メッセージ
