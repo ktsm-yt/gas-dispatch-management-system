@@ -196,6 +196,7 @@
       padding: var(--spacing-sm) var(--spacing-md);
       text-align: left;
       border-bottom: 1px solid var(--border-color);
+      vertical-align: middle;
     }
 
     .data-table th {
@@ -301,8 +302,12 @@
 
     /* Actions */
     .actions {
-      display: flex;
-      gap: var(--spacing-xs);
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .actions .action-btn {
+      display: inline-block;
     }
 
     .folder-cell {
@@ -352,6 +357,297 @@
     .action-btn.folder {
       color: #0D6EFD;
       border-color: #0D6EFD;
+    }
+
+    /* Payment button */
+    .action-btn.payment-btn {
+      color: var(--color-primary);
+      border-color: var(--color-primary);
+      font-size: 11px;
+      padding: 2px 6px;
+      margin-top: 4px;
+    }
+
+    .action-btn.payment-btn:hover {
+      background: var(--color-primary);
+      color: white;
+    }
+
+    /* Payment cell styles (compact) */
+    .payment-cell-compact {
+      font-size: 12px;
+      white-space: nowrap;
+      position: relative;
+      text-align: center;
+    }
+
+    .payment-cell-compact:hover .payment-hover-btn {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .payment-complete {
+      color: var(--color-success);
+      font-weight: 600;
+    }
+
+    .payment-partial {
+      color: var(--color-warning);
+    }
+
+    .payment-outstanding {
+      color: var(--color-danger);
+      font-weight: 500;
+    }
+
+    .payment-none {
+      color: var(--text-tertiary);
+    }
+
+    .payment-hover-btn {
+      margin-left: 8px;
+      padding: 2px 6px;
+      font-size: 11px;
+      background: var(--color-secondary);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease;
+    }
+
+    .payment-hover-btn:hover {
+      background: var(--color-secondary-dark, #0e7490);
+    }
+
+    /* Overdue days styles */
+    .overdue-cell {
+      text-align: center;
+      font-size: 12px;
+    }
+
+    .overdue-days {
+      color: var(--color-danger);
+      font-weight: 600;
+    }
+
+    .overdue-days.severe {
+      color: #B91C1C;
+      font-weight: 700;
+    }
+
+    .not-overdue {
+      color: var(--text-muted);
+    }
+
+    /* Payment Modal styles */
+    .invoice-summary {
+      background: var(--bg-card);
+      padding: var(--spacing-md);
+      border-radius: var(--radius-md);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .invoice-summary .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .invoice-summary .summary-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .invoice-summary .label {
+      color: var(--text-muted);
+    }
+
+    .invoice-summary .value {
+      font-weight: 600;
+    }
+
+    .invoice-summary .value.outstanding {
+      color: var(--color-danger);
+    }
+
+    .invoice-summary .value.paid {
+      color: var(--color-success);
+    }
+
+    .form-hint {
+      display: block;
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .payment-details {
+      margin: var(--spacing-md) 0;
+    }
+
+    .payment-details summary {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .payment-history {
+      margin-top: var(--spacing-lg);
+      border-top: 1px solid var(--border-color);
+      padding-top: var(--spacing-md);
+    }
+
+    .payment-history h4 {
+      font-size: 14px;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .payment-history-table {
+      width: 100%;
+      font-size: 12px;
+      border-collapse: collapse;
+    }
+
+    .payment-history-table th,
+    .payment-history-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .payment-history-table th {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .payment-history-table .undo-btn {
+      color: var(--text-secondary);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 4px;
+    }
+
+    .payment-history-table .undo-btn:hover {
+      color: var(--color-warning);
+    }
+
+    /* Invoice Edit Modal styles */
+    .edit-section {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .edit-section h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+      color: var(--text-primary);
+    }
+
+    .edit-header-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-md);
+    }
+
+    .edit-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .edit-lines-container {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+    }
+
+    .edit-lines-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .edit-lines-table th,
+    .edit-lines-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .edit-lines-table th {
+      background: var(--bg-card);
+      font-weight: 500;
+      color: var(--text-muted);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .edit-lines-table input[type="text"] {
+      width: 100%;
+      padding: 4px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+    }
+
+    .edit-lines-table input[type="text"]:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .edit-lines-table .readonly-cell {
+      color: var(--text-muted);
+      background: var(--bg-card);
+      text-align: right;
+      font-family: 'Menlo', 'Monaco', monospace;
+    }
+
+    .edit-lines-table .quantity-cell {
+      text-align: center;
+    }
+
+    #editNotes {
+      padding: var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    #editNotes:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    /* Edit button style */
+    /* 確認ボタン（未送付・編集可能） */
+    .action-btn.confirm {
+      color: var(--color-accent);
+      border-color: var(--color-accent);
+    }
+
+    .action-btn.confirm:hover {
+      background: var(--color-accent);
+      color: white;
+    }
+
+    /* 出力ボタン（送付済・出力のみ） */
+    .action-btn.export-only {
+      color: var(--text-secondary);
+      border-color: var(--border-color);
+    }
+
+    .action-btn.export-only:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
     }
 
     /* Page-specific modal overrides */
@@ -582,7 +878,6 @@
       <option value="unsent">未送付</option>
       <option value="sent">送付済</option>
       <option value="unpaid">未回収</option>
-      <option value="paid">入金済</option>
     </select>
     <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
@@ -692,7 +987,7 @@
   <div class="main-content">
     <div class="table-container">
       <table class="data-table">
-        <thead>
+        <thead id="invoiceTableHead">
           <tr>
             <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
             <th style="width: 20px;"></th>
@@ -700,9 +995,11 @@
             <th>顧客名</th>
             <th>請求年月</th>
             <th>発行日</th>
+            <th>支払期限</th>
             <th class="amount">合計金額</th>
             <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス <span
                 id="statusSortIcon">⇅</span></th>
+            <th class="amount">入金状況</th>
             <th>帳票出力</th>
             <th class="folder-col">顧客フォルダ</th>
           </tr>
@@ -712,6 +1009,141 @@
       </table>
       <div id="emptyState" class="empty-state" style="display: none;">
         請求書がありません
+      </div>
+    </div>
+  </div>
+
+  <!-- Payment Modal -->
+  <div class="modal-overlay" id="paymentModal" onclick="handleModalOverlayClick(event, 'paymentModal')">
+    <div class="modal" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>入金記録</h2>
+        <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="invoice-summary" id="paymentInvoiceSummary">
+          <!-- 請求書情報がここに表示される -->
+        </div>
+        <form id="paymentForm" onsubmit="return false;" onkeydown="if(event.key==='Enter'){event.preventDefault();}">
+          <input type="hidden" id="paymentInvoiceId">
+          <input type="hidden" id="paymentInvoiceUpdatedAt">
+          <div class="form-group">
+            <label>入金日 *</label>
+            <input type="date" id="paymentDate" required>
+          </div>
+          <div class="form-group">
+            <label>入金額 *</label>
+            <input type="number" id="paymentAmount" min="1" required placeholder="入金額を入力">
+            <small class="form-hint" id="paymentHint">残高以下の金額を入力してください</small>
+          </div>
+          <div class="form-group">
+            <label>入金方法</label>
+            <select id="paymentMethod">
+              <option value="bank_transfer">銀行振込</option>
+              <option value="cash">現金</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+          <details class="payment-details">
+            <summary>詳細オプション</summary>
+            <div class="form-group">
+              <label>銀行参照番号</label>
+              <input type="text" id="paymentBankRef" placeholder="任意">
+            </div>
+            <div class="form-group">
+              <label>備考</label>
+              <textarea id="paymentNotes" rows="2" placeholder="任意"></textarea>
+            </div>
+          </details>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" onclick="closePaymentModal()">キャンセル</button>
+            <button type="button" class="btn btn-primary" id="paymentSubmitBtn" onclick="submitPayment(event)">記録する</button>
+          </div>
+        </form>
+
+        <div class="payment-history" id="paymentHistorySection" style="display: none;">
+          <h4>入金履歴</h4>
+          <table class="payment-history-table">
+            <thead>
+              <tr>
+                <th>入金日</th>
+                <th>金額</th>
+                <th>方法</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="paymentHistoryBody">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoice Edit Modal -->
+  <div class="modal-overlay" id="editModal" onclick="handleModalOverlayClick(event, 'editModal')">
+    <div class="modal" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2 id="editModalTitle">請求書編集</h2>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- ヘッダー情報 -->
+        <div class="edit-section">
+          <h4>■ ヘッダー情報</h4>
+          <div class="edit-header-grid">
+            <div class="form-group">
+              <label>発行日</label>
+              <input type="date" id="editIssueDate" />
+            </div>
+            <div class="form-group">
+              <label>支払期限</label>
+              <input type="date" id="editDueDate" />
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+              <label>社内メモ</label>
+              <input type="text" id="editNotes" placeholder="請求確認事項や作業メモなど（出力には含まれません）" style="width: 100%;">
+            </div>
+          </div>
+        </div>
+
+        <!-- 明細テーブル -->
+        <div class="edit-section">
+          <h4>■ 明細（テキストのみ編集可）</h4>
+          <p class="edit-hint">※金額・数量・単価は編集できません。変更が必要な場合は配置データを修正して請求書を再生成してください。</p>
+          <div class="edit-lines-container">
+            <table class="edit-lines-table">
+              <thead>
+                <tr>
+                  <th style="width: 90px;">日付</th>
+                  <th style="width: 150px;">現場名</th>
+                  <th style="width: 140px;">品目名</th>
+                  <th style="width: 100px;">時間/備考</th>
+                  <th style="width: 50px;">数量</th>
+                  <th style="width: 90px;">金額(税抜)</th>
+                </tr>
+              </thead>
+              <tbody id="editLinesBody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 隠しフィールド -->
+        <input type="hidden" id="editInvoiceId" />
+        <input type="hidden" id="editUpdatedAt" />
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <div class="export-actions" style="display: flex; gap: 8px;">
+          <button class="action-btn pdf" onclick="exportFromModal('pdf')" title="PDF出力（詳細のみ）">PDF</button>
+          <button class="action-btn pdf-cover" onclick="exportFromModal('pdf-cover')" title="PDF出力（頭紙付き）">PDF+頭紙</button>
+          <button class="action-btn excel" onclick="exportFromModal('excel')" title="Excel出力">Excel</button>
+          <button class="action-btn excel-cover" onclick="exportFromModal('cover')" title="頭紙のみ出力">頭紙</button>
+        </div>
+        <div class="form-actions" style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="closeEditModal()">閉じる</button>
+          <button class="btn btn-primary" id="editSaveBtn" onclick="saveInvoiceDetails()">保存</button>
+        </div>
       </div>
     </div>
   </div>
@@ -817,11 +1249,13 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeBulkGenerateModal()">キャンセル</button>
+        <button class="btn btn-secondary" id="bulkCancelBtn" onclick="closeBulkGenerateModal()">キャンセル</button>
         <button class="btn btn-danger" id="bulkStopBtn" onclick="stopBulkGenerate()" style="display: none;">停止</button>
         <button class="btn btn-primary" id="bulkGenerateBtn" onclick="bulkGenerateInvoices()">開始</button>
         <button class="btn btn-success" id="bulkContinueBtn" onclick="bulkGenerateContinue()"
-          style="display: none;">次の10社</button>
+          style="display: none;">次の50社</button>
+        <button class="btn btn-primary" id="bulkCompleteBtn" onclick="completeBulkGenerate()"
+          style="display: none;">完了</button>
       </div>
     </div>
   </div>
@@ -1222,7 +1656,32 @@
 
     function renderInvoices() {
       const tbody = document.getElementById('invoiceTableBody');
+      const thead = document.getElementById('invoiceTableHead');
       const emptyState = document.getElementById('emptyState');
+
+      // 未回収フィルタ時のみ滞留日数列を表示
+      const currentStatus = document.getElementById('filterStatus').value;
+      const showOverdueDays = currentStatus === 'unpaid';
+
+      // テーブルヘッダを動的に生成
+      let headerHtml = '<tr>';
+      headerHtml += '<th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>';
+      headerHtml += '<th style="width: 20px;"></th>';
+      headerHtml += '<th>請求番号</th>';
+      headerHtml += '<th>顧客名</th>';
+      headerHtml += '<th>請求年月</th>';
+      headerHtml += '<th>発行日</th>';
+      headerHtml += '<th>支払期限</th>';
+      headerHtml += '<th class="amount">合計金額</th>';
+      headerHtml += '<th style="text-align: center;">入金状況</th>';
+      headerHtml += '<th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス <span id="statusSortIcon">⇅</span></th>';
+      if (showOverdueDays) {
+        headerHtml += '<th style="width: 70px;">滞留日数</th>';
+      }
+      headerHtml += '<th>帳票出力</th>';
+      headerHtml += '<th class="folder-col">顧客フォルダ</th>';
+      headerHtml += '</tr>';
+      thead.innerHTML = headerHtml;
 
       if (invoices.length === 0) {
         tbody.innerHTML = '';
@@ -1257,13 +1716,40 @@
         rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
         rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
         rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
+        rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
         rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
+        // 入金状況カラム（コンパクト表示 + ホバーボタン）
+        const totalPaid = inv.total_paid || 0;
+        const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
+        const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
+        rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
+        if (outstanding === 0 && inv.total_amount > 0) {
+          rowHtml += '<span class="payment-complete">✓ 完済</span>';
+        } else if (totalPaid > 0) {
+          rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
+        } else if (outstanding > 0) {
+          rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
+        } else {
+          rowHtml += '<span class="payment-none">-</span>';
+        }
+        if (isPayable) {
+          rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
+            (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
+        }
+        rowHtml += '</td>';
+        // ステータス
         rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
+        // 滞留日数列（未回収フィルタ時のみ）
+        if (showOverdueDays) {
+          rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
+        }
+        // 帳票出力ボタン（常に表示、編集可否はモーダル内で制御）
+        const isEditable = inv.status === 'unsent' || inv.status === 'draft' || inv.status === 'issued';
+        const btnLabel = isEditable ? '確認' : '出力';
+        const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
+        const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
         rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
-          '<button class="action-btn pdf" onclick="exportPdf(\'' + inv.invoice_id + '\')" title="PDF出力（詳細のみ）">PDF</button>' +
-          '<button class="action-btn pdf-cover" onclick="exportPdfWithCover(\'' + inv.invoice_id + '\')" title="PDF出力（頭紙付き）">PDF+頭紙</button>' +
-          '<button class="action-btn excel" onclick="exportExcel(\'' + inv.invoice_id + '\')" title="Excel出力（詳細のみ）">Excel</button>' +
-          '<button class="action-btn excel-cover" onclick="exportCoverOnly(\'' + inv.invoice_id + '\')" title="頭紙のみ出力">頭紙</button>' +
+          '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
           '</td>';
         rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
           '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()"></td>';
@@ -1288,6 +1774,88 @@
         issued: '未送付'
       };
       return labels[status] || status;
+    }
+
+    /**
+     * ローカルの請求書データを更新し、該当行を再描画
+     * @param {Object} updatedInvoice - 更新された請求書データ
+     */
+    function updateInvoiceRow(updatedInvoice) {
+      const invoiceId = updatedInvoice.invoice_id;
+
+      // ローカル配列を更新
+      const index = invoices.findIndex(inv => inv.invoice_id === invoiceId);
+      if (index === -1) return false;
+
+      // 既存データとマージ（customer情報などを保持）
+      invoices[index] = { ...invoices[index], ...updatedInvoice };
+      const inv = invoices[index];
+
+      // セッションキャッシュも更新
+      try {
+        const cacheKey = sessionStorage.getItem(SS_INVOICES_KEY);
+        if (cacheKey) {
+          const cacheData = JSON.parse(cacheKey);
+          const cacheIndex = cacheData.data.findIndex(i => i.invoice_id === invoiceId);
+          if (cacheIndex !== -1) {
+            cacheData.data[cacheIndex] = inv;
+            sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify(cacheData));
+          }
+        }
+      } catch (e) { /* キャッシュ更新失敗は無視 */ }
+
+      // DOMの該当行を探して更新
+      const tbody = document.getElementById('invoiceTableBody');
+      const row = tbody.querySelector(`tr[data-invoice-id="${invoiceId}"]`);
+      if (!row) return false;
+
+      // 行の中身を更新（発行日、支払期限のみ - 他は変わらない）
+      const cells = row.querySelectorAll('td');
+      // cells[5] = 発行日, cells[6] = 支払期限
+      if (cells[5]) cells[5].textContent = inv.issue_date || '-';
+      if (cells[6]) cells[6].textContent = inv.due_date || '-';
+
+      return true;
+    }
+
+    /**
+     * 滞留日数を計算して表示用HTMLを返す
+     * @param {Object} inv - 請求書オブジェクト
+     * @returns {string} 表示用HTML
+     */
+    function renderOverdueDays(inv) {
+      // 入金済みの場合は表示しない
+      if (inv.status === 'paid') {
+        return '<span class="not-overdue">-</span>';
+      }
+
+      // 支払期限がない場合
+      if (!inv.due_date) {
+        return '<span class="not-overdue">-</span>';
+      }
+
+      // 支払期限を解析
+      const dueDate = new Date(inv.due_date.replace(/-/g, '/'));
+      if (isNaN(dueDate.getTime())) {
+        return '<span class="not-overdue">-</span>';
+      }
+
+      // 今日との差分を計算
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+
+      const diffTime = today.getTime() - dueDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 0) {
+        // 期限内または期限当日
+        return '<span class="not-overdue">-</span>';
+      }
+
+      // 期限超過
+      const severeClass = diffDays >= 30 ? ' severe' : '';
+      return '<span class="overdue-days' + severeClass + '">' + diffDays + '日</span>';
     }
 
     function viewInvoice(invoiceId) {
@@ -1714,7 +2282,17 @@
       document.getElementById('bulkContinueBtn').style.display = 'none';
       document.getElementById('bulkStopBtn').style.display = 'none';
       document.getElementById('bulkAutoGenerateGroup').style.display = '';
+      document.getElementById('bulkCancelBtn').style.display = '';
+      document.getElementById('bulkCompleteBtn').style.display = 'none';
       document.getElementById('bulkGenerateModal').classList.add('active');
+    }
+
+    function completeBulkGenerate() {
+      document.getElementById('bulkGenerateModal').classList.remove('active');
+      // 生成が実行された場合のみリロード
+      if (bulkState.totalSuccess > 0) {
+        loadInvoices(true);  // Skip cache after data change
+      }
     }
 
     function closeBulkGenerateModal() {
@@ -1801,7 +2379,7 @@
           document.getElementById('bulkAutoGenerateGroup').style.display = '';
           bulkState.isRunning = false;
         })
-        .bulkGenerateInvoices(ym, { overwrite, offset, limit: 10 });
+        .bulkGenerateInvoices(ym, { overwrite, offset, limit: 50 });
     }
 
     function showBulkGenerateResult(result) {
@@ -1870,10 +2448,12 @@
       } else {
         // 完了
         bulkState.isRunning = false;
-        document.getElementById('bulkProgressDetail').textContent = '処理完了';
+        document.getElementById('bulkProgressDetail').textContent = '✓ 処理完了';
         document.getElementById('bulkStopBtn').style.display = 'none';
-        document.getElementById('bulkAutoGenerateGroup').style.display = '';
+        document.getElementById('bulkAutoGenerateGroup').style.display = 'none';
         document.getElementById('bulkContinueBtn').style.display = 'none';
+        document.getElementById('bulkCancelBtn').style.display = 'none';
+        document.getElementById('bulkCompleteBtn').style.display = '';
         showToast('完了: ' + bulkState.totalSuccess + '件生成', 'success');
       }
     }
@@ -1895,6 +2475,32 @@
 
     function exportCoverOnly(invoiceId) {
       exportInvoice(invoiceId, 'cover');
+    }
+
+    /**
+     * 編集モーダルからエクスポート
+     * @param {string} type - 出力タイプ ('pdf', 'pdf-cover', 'excel', 'cover')
+     */
+    function exportFromModal(type) {
+      if (!currentEditInvoice || !currentEditInvoice.invoice_id) {
+        showToast('請求書が選択されていません', 'error');
+        return;
+      }
+      const invoiceId = currentEditInvoice.invoice_id;
+      switch (type) {
+        case 'pdf':
+          exportPdf(invoiceId);
+          break;
+        case 'pdf-cover':
+          exportPdfWithCover(invoiceId);
+          break;
+        case 'excel':
+          exportExcel(invoiceId);
+          break;
+        case 'cover':
+          exportCoverOnly(invoiceId);
+          break;
+      }
     }
 
     /**
@@ -2570,6 +3176,476 @@
       if (typeof SS_INVOICES_KEY !== 'undefined') {
         sessionStorage.removeItem(SS_INVOICES_KEY);
       }
+    }
+
+    // ========== 入金管理機能 ==========
+
+    // 現在の請求書情報（楽観ロック用）
+    let currentPaymentInvoice = null;
+
+    /**
+     * 入金モーダルを表示
+     * @param {string} invoiceId - 請求書ID
+     * @param {string} updatedAt - 請求書のupdated_at（楽観ロック用）
+     */
+    function showPaymentModal(invoiceId, updatedAt) {
+      // フォームリセット
+      document.getElementById('paymentForm').reset();
+      document.getElementById('paymentInvoiceId').value = invoiceId;
+      document.getElementById('paymentInvoiceUpdatedAt').value = updatedAt;
+
+      // 今日の日付をデフォルト設定
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('paymentDate').value = today;
+
+      // 請求書情報を取得
+      const invoice = invoices.find(inv => inv.invoice_id === invoiceId);
+      if (invoice) {
+        currentPaymentInvoice = invoice;
+        updatePaymentSummary(invoice);
+      }
+
+      // 入金履歴を読み込み
+      loadPaymentHistory(invoiceId);
+
+      // モーダル表示
+      document.getElementById('paymentModal').classList.add('active');
+    }
+
+    /**
+     * 入金モーダルを閉じる
+     */
+    function closePaymentModal() {
+      document.getElementById('paymentModal').classList.remove('active');
+      currentPaymentInvoice = null;
+    }
+
+    // ========================================
+    // 請求書編集モーダル
+    // ========================================
+
+    let currentEditInvoice = null;
+
+    /**
+     * 編集モーダルを開く
+     * @param {string} invoiceId - 請求書ID
+     */
+    function openEditModal(invoiceId) {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (!result.ok) {
+            showToast(result.message || '請求書の取得に失敗しました', 'error');
+            return;
+          }
+
+          const invoice = result.data;
+          currentEditInvoice = invoice;
+
+          // 編集可能なステータスかチェック
+          const editableStatuses = ['unsent', 'draft', 'issued'];
+          const isEditable = editableStatuses.includes(invoice.status);
+
+          // モーダルタイトルを設定
+          document.getElementById('editModalTitle').textContent = isEditable ? '請求書編集' : '請求書出力';
+
+          // ヘッダー情報をセット
+          document.getElementById('editIssueDate').value = invoice.issue_date || '';
+          document.getElementById('editDueDate').value = invoice.due_date || '';
+          document.getElementById('editNotes').value = invoice.notes || '';
+          document.getElementById('editInvoiceId').value = invoice.invoice_id;
+          document.getElementById('editUpdatedAt').value = invoice.updated_at || '';
+
+          // 編集可否に応じて入力フィールドを制御
+          document.getElementById('editIssueDate').disabled = !isEditable;
+          document.getElementById('editDueDate').disabled = !isEditable;
+          document.getElementById('editNotes').disabled = !isEditable;
+
+          // 保存ボタンの表示/非表示
+          document.getElementById('editSaveBtn').style.display = isEditable ? '' : 'none';
+
+          // 明細をレンダリング（編集可否を渡す）
+          renderEditLines(invoice.lines || [], isEditable);
+
+          // モーダルを表示
+          document.getElementById('editModal').classList.add('active');
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showToast('請求書の取得に失敗しました: ' + error.message, 'error');
+        })
+        .getInvoice(invoiceId);
+    }
+
+    /**
+     * 編集モーダルを閉じる
+     */
+    function closeEditModal() {
+      document.getElementById('editModal').classList.remove('active');
+      currentEditInvoice = null;
+    }
+
+    /**
+     * 出力ボタンを一時的にハイライト（保存後の視覚的誘導）
+     */
+    function highlightExportButtons() {
+      const exportArea = document.querySelector('#editModal .export-actions');
+      if (!exportArea) return;
+      exportArea.style.transition = 'background-color 0.3s ease';
+      exportArea.style.backgroundColor = 'rgba(76, 175, 80, 0.15)';
+      exportArea.style.borderRadius = '4px';
+      exportArea.style.padding = '4px';
+      setTimeout(() => {
+        exportArea.style.backgroundColor = '';
+        exportArea.style.padding = '';
+      }, 2000);
+    }
+
+    /**
+     * 明細をレンダリング
+     * @param {Object[]} lines - 明細配列
+     * @param {boolean} isEditable - 編集可能かどうか
+     */
+    function renderEditLines(lines, isEditable = true) {
+      const tbody = document.getElementById('editLinesBody');
+      const disabledAttr = isEditable ? '' : 'disabled';
+
+      if (!lines || lines.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">明細がありません</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = lines.map((line, index) => {
+        return `
+          <tr data-line-id="${escapeHtml(line.line_id || '')}">
+            <td>${escapeHtml(line.work_date || '')}</td>
+            <td>
+              <input type="text" name="site_name_${index}" value="${escapeHtml(line.site_name || '')}" ${disabledAttr} />
+            </td>
+            <td>
+              <input type="text" name="item_name_${index}" value="${escapeHtml(line.item_name || '')}" ${disabledAttr} />
+            </td>
+            <td>
+              <input type="text" name="time_note_${index}" value="${escapeHtml(line.time_note || '')}" ${disabledAttr} />
+            </td>
+            <td class="quantity-cell">${line.quantity || ''}</td>
+            <td class="readonly-cell">${formatCurrency(line.amount)}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    /**
+     * 請求書の詳細を保存
+     */
+    function saveInvoiceDetails() {
+      const invoiceId = document.getElementById('editInvoiceId').value;
+      const expectedUpdatedAt = document.getElementById('editUpdatedAt').value;
+
+      if (!invoiceId) {
+        showToast('請求書IDが取得できません', 'error');
+        return;
+      }
+
+      // ヘッダーデータを収集
+      const headerData = {
+        issue_date: document.getElementById('editIssueDate').value,
+        due_date: document.getElementById('editDueDate').value,
+        notes: document.getElementById('editNotes').value
+      };
+
+      // 明細データを収集
+      const tbody = document.getElementById('editLinesBody');
+      const rows = tbody.querySelectorAll('tr[data-line-id]');
+      const linesData = [];
+
+      rows.forEach((row, index) => {
+        const lineId = row.getAttribute('data-line-id');
+        if (!lineId) return;
+
+        linesData.push({
+          line_id: lineId,
+          site_name: row.querySelector('input[name="site_name_' + index + '"]')?.value || '',
+          item_name: row.querySelector('input[name="item_name_' + index + '"]')?.value || '',
+          time_note: row.querySelector('input[name="time_note_' + index + '"]')?.value || ''
+        });
+      });
+
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (!result.ok) {
+            if (result.code === 'CONFLICT_ERROR') {
+              showToast('他のユーザーが変更しました。画面を更新してください', 'warning');
+            } else if (result.data && result.data.partialUpdate) {
+              // ヘッダーは更新済みだが明細更新に失敗
+              showToast('ヘッダーは保存されましたが、一部の明細更新に失敗しました。画面を更新してください', 'warning');
+              closeEditModal();
+              loadInvoices(true);
+            } else {
+              showToast(result.message || '保存に失敗しました', 'error');
+            }
+            return;
+          }
+
+          // 差分更新: 該当行のみ更新（全件リロードを回避）
+          if (result.data && result.data.invoice) {
+            updateInvoiceRow(result.data.invoice);
+            // 楽観ロック用の updated_at を更新（次回保存用）
+            document.getElementById('editUpdatedAt').value = result.data.invoice.updated_at || '';
+          }
+          // モーダルは閉じず、出力を促す
+          showToast('保存しました。帳票を出力して確認できます', 'success');
+          // 出力ボタンを軽くハイライト
+          highlightExportButtons();
+        })
+        .withFailureHandler(function(error) {
+          hideLoading();
+          showToast('保存に失敗しました: ' + error.message, 'error');
+        })
+        .updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
+    }
+
+    /**
+     * 請求書サマリーを更新
+     * @param {Object} invoice - 請求書オブジェクト
+     */
+    function updatePaymentSummary(invoice) {
+      const totalPaid = invoice.total_paid || 0;
+      const outstanding = invoice.outstanding || (invoice.total_amount - totalPaid);
+
+      const html = `
+        <div class="summary-row">
+          <span class="label">顧客</span>
+          <span class="value">${escapeHtml(invoice.customer?.company_name || '')}</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">請求年月</span>
+          <span class="value">${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">請求額</span>
+          <span class="value">${formatCurrency(invoice.total_amount)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">入金済</span>
+          <span class="value paid">${formatCurrency(totalPaid)}</span>
+        </div>
+        <div class="summary-row">
+          <span class="label">残高</span>
+          <span class="value ${outstanding > 0 ? 'outstanding' : 'paid'}">${formatCurrency(outstanding)}</span>
+        </div>
+      `;
+      document.getElementById('paymentInvoiceSummary').innerHTML = html;
+
+      // ヒント更新
+      document.getElementById('paymentHint').textContent =
+        `残高: ${formatCurrency(outstanding)} 以下の金額を入力してください`;
+    }
+
+    /**
+     * 入金履歴を読み込み
+     * @param {string} invoiceId - 請求書ID
+     */
+    function loadPaymentHistory(invoiceId) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.ok && result.data.payments) {
+            renderPaymentHistory(result.data.payments);
+            // updatedAtを更新
+            document.getElementById('paymentInvoiceUpdatedAt').value = result.data.updatedAt;
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('loadPaymentHistory error:', error);
+        })
+        .getPaymentsByInvoice(invoiceId);
+    }
+
+    /**
+     * 入金履歴をレンダリング
+     * @param {Object[]} payments - 入金記録配列
+     */
+    function renderPaymentHistory(payments) {
+      const section = document.getElementById('paymentHistorySection');
+      const tbody = document.getElementById('paymentHistoryBody');
+
+      if (!payments || payments.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+
+      const methodLabels = {
+        bank_transfer: '振込',
+        cash: '現金',
+        other: 'その他'
+      };
+
+      tbody.innerHTML = payments.map(p => `
+        <tr>
+          <td>${escapeHtml(p.payment_date)}</td>
+          <td>${formatCurrency(p.amount)}</td>
+          <td>${methodLabels[p.payment_method] || p.payment_method}</td>
+          <td>
+            <button class="undo-btn" onclick="confirmDeletePayment('${p.payment_id}')" title="この入金を取り消し">↩️</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    /**
+     * 入金を送信
+     * @param {Event} event - フォームイベント
+     */
+    function submitPayment(event) {
+      event.preventDefault();
+
+      const invoiceId = document.getElementById('paymentInvoiceId').value;
+      const expectedUpdatedAt = document.getElementById('paymentInvoiceUpdatedAt').value;
+
+      const paymentData = {
+        payment_date: document.getElementById('paymentDate').value,
+        amount: Number(document.getElementById('paymentAmount').value),
+        payment_method: document.getElementById('paymentMethod').value,
+        bank_ref: document.getElementById('paymentBankRef').value,
+        notes: document.getElementById('paymentNotes').value
+      };
+
+      // フロントバリデーション
+      if (!paymentData.amount || paymentData.amount <= 0) {
+        showToast('入金額は0より大きい値を入力してください', 'error');
+        return;
+      }
+
+      // 残高チェック
+      if (currentPaymentInvoice) {
+        const outstanding = currentPaymentInvoice.outstanding ||
+          (currentPaymentInvoice.total_amount - (currentPaymentInvoice.total_paid || 0));
+        if (paymentData.amount > outstanding) {
+          showToast(`残高（${formatCurrency(outstanding)}）を超える入金はできません`, 'error');
+          return;
+        }
+      }
+
+      // 送信ボタン無効化
+      const submitBtn = document.getElementById('paymentSubmitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '処理中...';
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '記録する';
+
+          if (result.ok) {
+            showToast('入金を記録しました', 'success');
+
+            // 請求書リストを更新
+            const inv = invoices.find(i => i.invoice_id === invoiceId);
+            if (inv) {
+              inv.total_paid = result.data.totalPaid;
+              inv.outstanding = result.data.outstanding;
+              inv.updated_at = result.data.newUpdatedAt;
+
+              // ステータスが変わった場合
+              if (result.data.statusUpdated) {
+                inv.status = 'paid';
+              }
+            }
+
+            // 現在の請求書情報を更新
+            if (currentPaymentInvoice) {
+              currentPaymentInvoice.total_paid = result.data.totalPaid;
+              currentPaymentInvoice.outstanding = result.data.outstanding;
+              currentPaymentInvoice.updated_at = result.data.newUpdatedAt;
+              updatePaymentSummary(currentPaymentInvoice);
+            }
+
+            // updatedAt更新
+            document.getElementById('paymentInvoiceUpdatedAt').value = result.data.newUpdatedAt;
+
+            // 履歴再読み込み
+            loadPaymentHistory(invoiceId);
+
+            // フォームリセット
+            document.getElementById('paymentAmount').value = '';
+            document.getElementById('paymentBankRef').value = '';
+            document.getElementById('paymentNotes').value = '';
+
+            // テーブル再描画
+            renderInvoices();
+          } else {
+            showToast(result.error?.message || result.error || '入金記録に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '記録する';
+          console.error('recordPayment error:', error);
+          showToast('入金記録に失敗しました: ' + error.message, 'error');
+        })
+        .recordPayment(invoiceId, paymentData, expectedUpdatedAt);
+    }
+
+    /**
+     * 入金削除の確認
+     * @param {string} paymentId - 入金ID
+     */
+    function confirmDeletePayment(paymentId) {
+      if (!confirm('この入金を取り消しますか？\n（残高が復元されます）')) {
+        return;
+      }
+
+      const invoiceId = document.getElementById('paymentInvoiceId').value;
+      const expectedUpdatedAt = document.getElementById('paymentInvoiceUpdatedAt').value;
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.ok) {
+            showToast('入金記録を削除しました', 'success');
+
+            // 請求書リストを更新
+            const inv = invoices.find(i => i.invoice_id === invoiceId);
+            if (inv) {
+              inv.total_paid = result.data.totalPaid;
+              inv.outstanding = result.data.outstanding;
+              inv.updated_at = result.data.newUpdatedAt;
+
+              // ステータスが変わった場合
+              if (result.data.statusUpdated) {
+                inv.status = 'unpaid';
+              }
+            }
+
+            // 現在の請求書情報を更新
+            if (currentPaymentInvoice) {
+              currentPaymentInvoice.total_paid = result.data.totalPaid;
+              currentPaymentInvoice.outstanding = result.data.outstanding;
+              currentPaymentInvoice.updated_at = result.data.newUpdatedAt;
+              updatePaymentSummary(currentPaymentInvoice);
+            }
+
+            // updatedAt更新
+            document.getElementById('paymentInvoiceUpdatedAt').value = result.data.newUpdatedAt;
+
+            // 履歴再読み込み
+            loadPaymentHistory(invoiceId);
+
+            // テーブル再描画
+            renderInvoices();
+          } else {
+            showToast(result.error?.message || result.error || '削除に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(error) {
+          console.error('deletePayment error:', error);
+          showToast('削除に失敗しました: ' + error.message, 'error');
+        })
+        .deletePayment(paymentId, expectedUpdatedAt);
     }
   </script>
 </body>
