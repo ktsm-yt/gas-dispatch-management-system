@@ -592,6 +592,75 @@ const InvoiceRepository = {
   },
 
   /**
+   * 期限超過の請求書を自動的に「未回収」ステータスに更新
+   * 対象: status === 'sent' かつ due_date < 今日
+   * @returns {Object} { updated: number, invoiceIds: string[] }
+   */
+  autoMarkOverdue: function() {
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { updated: 0, invoiceIds: [] };
+    }
+
+    const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const now = getCurrentTimestamp();
+
+    // 全データを一度に取得
+    const allData = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+
+    const invoiceIdCol = headers.indexOf('invoice_id');
+    const statusCol = headers.indexOf('status');
+    const dueDateCol = headers.indexOf('due_date');
+    const isDeletedCol = headers.indexOf('is_deleted');
+    const updatedAtCol = headers.indexOf('updated_at');
+
+    const updatedIds = [];
+
+    // 対象行を更新（メモリ上）
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+
+      // 論理削除済みはスキップ
+      if (row[isDeletedCol] === true) continue;
+
+      // sentステータスのみ対象
+      if (row[statusCol] !== 'sent') continue;
+
+      // due_dateを正規化して比較
+      const dueDate = this._normalizeDate(row[dueDateCol]);
+      if (!dueDate || dueDate >= today) continue;
+
+      // 期限超過 → unpaidに更新
+      row[statusCol] = 'unpaid';
+      row[updatedAtCol] = now;
+      updatedIds.push(row[invoiceIdCol]);
+    }
+
+    // 一括で書き戻し
+    if (updatedIds.length > 0) {
+      sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+
+      // 監査ログを記録
+      try {
+        for (const invoiceId of updatedIds) {
+          logUpdate('T_Invoices', invoiceId, {
+            status: 'unpaid',
+            reason: 'auto_overdue',
+            due_date_exceeded: today
+          });
+        }
+      } catch (logError) {
+        console.warn('監査ログ記録エラー (autoMarkOverdue):', logError.message);
+      }
+    }
+
+    return { updated: updatedIds.length, invoiceIds: updatedIds };
+  },
+
+  /**
    * ステータスで請求書を検索
    * @param {string} status - ステータス（draft/issued/sent/paid）
    * @returns {Object[]} 請求書配列
