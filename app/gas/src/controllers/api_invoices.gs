@@ -872,40 +872,6 @@ function startBulkExport(params) {
 }
 
 /**
- * 一括出力の進捗を取得
- * @param {Object} params - { invoiceIds: string[], exportMode: string }
- * @returns {Object} APIレスポンス
- */
-function getBulkExportProgress(params) {
-  const requestId = generateRequestId();
-
-  try {
-    // 認可チェック（viewer以上）
-    const authResult = checkPermission(ROLES.VIEWER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
-
-    const progress = InvoiceBulkExportService.getProgressForApi(params);
-    return buildSuccessResponse(progress, requestId);
-
-  } catch (error) {
-    console.error('getBulkExportProgress error:', error);
-    return buildErrorResponse(
-      ERROR_CODES.SYSTEM_ERROR,
-      error.message,
-      {},
-      requestId
-    );
-  }
-}
-
-/**
  * 一括出力をキャンセル
  * @param {Object} params - { invoiceIds: string[], exportMode: string }
  * @returns {Object} APIレスポンス

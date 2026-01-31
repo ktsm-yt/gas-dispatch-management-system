@@ -679,21 +679,6 @@ const InvoiceBulkExportService = {
   },
 
   /**
-   * 進捗を取得（APIから呼び出し用）
-   * @param {Object} params - { invoiceIds: string[], exportMode: string }
-   * @returns {Object} 進捗データ
-   */
-  getProgressForApi: function(params) {
-    const key = this._generateKey(params);
-    const progress = this.getProgress(key);
-    return {
-      hasProgress: progress.invoiceIds.length > 0,
-      ...this._getSummary(progress),
-      errors: progress.errorMessages || []  // 軽量化されたエラーリスト
-    };
-  },
-
-  /**
    * 進捗をキャンセル（APIから呼び出し用）
    * @param {Object} params - { invoiceIds: string[], exportMode: string }
    * @returns {Object} 結果
