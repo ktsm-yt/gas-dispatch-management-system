@@ -128,7 +128,7 @@ const PaymentService = {
 
     } catch (error) {
       Logger.log(`PaymentService.recordPayment error: ${error.message}`);
-      return { success: false, error: 'UNEXPECTED_ERROR', message: error.message };
+      return { success: false, error: 'UNEXPECTED_ERROR', message: '予期しないエラーが発生しました。' };
     } finally {
       lock.releaseLock();
     }
@@ -217,7 +217,7 @@ const PaymentService = {
 
     } catch (error) {
       Logger.log(`PaymentService.deletePayment error: ${error.message}`);
-      return { success: false, error: 'UNEXPECTED_ERROR', message: error.message };
+      return { success: false, error: 'UNEXPECTED_ERROR', message: '予期しないエラーが発生しました。' };
     } finally {
       lock.releaseLock();
     }
