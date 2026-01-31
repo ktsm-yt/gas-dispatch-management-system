@@ -51,7 +51,6 @@
       border-bottom: 1px solid var(--border-color);
       padding: var(--spacing-md) var(--spacing-lg);
       display: flex;
-      justify-content: space-between;
       align-items: center;
       gap: var(--spacing-md);
       flex-wrap: wrap;
@@ -59,6 +58,7 @@
 
     .filter-group {
       display: flex;
+      flex: 1;
       gap: var(--spacing-sm);
       align-items: center;
     }
@@ -836,8 +836,6 @@
     <div class="toolbar-actions">
       <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
       <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
-      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
-      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-outline" style="display: none;" title="エクスポートフォルダを開く">📁</a>
     </div>
     <!-- 検索フィルター（補助） -->
     <div class="filter-group">
@@ -863,6 +861,9 @@
         <span>過去年度を含む</span>
       </label>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
+      <span style="flex: 1;"></span>
+      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleBillingFolderLinkClick(this)">📁 出力先</a>
     </div>
   </div>
 
@@ -883,6 +884,7 @@
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
     <span style="border-left: 1px solid #ddd; margin: 0 8px;"></span>
     <button class="btn" style="background: #2196F3; color: white;" onclick="openBulkExportModal()">帳票一括出力</button>
+    <button id="showLastExportResultBtn" class="btn btn-secondary" style="display: none; margin-left: 4px;" onclick="showLastBulkExportResult()">前回の結果</button>
   </div>
 
   <!-- ステータス変更確認モーダル -->
@@ -903,7 +905,7 @@
 
   <!-- 一括出力モーダル -->
   <div class="modal-overlay" id="bulkExportModal">
-    <div class="modal" style="max-width: 420px;">
+    <div class="modal" id="bulkExportModalContent" style="max-width: 420px;">
       <div class="modal-header">
         <h2>帳票一括出力</h2>
         <button class="close-btn" onclick="closeBulkExportModal()">&times;</button>
@@ -932,6 +934,20 @@
               <span style="color: #666; font-size: 0.9em;">（編集可能）</span>
             </label>
           </div>
+
+          <!-- URL共有オプション -->
+          <div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 8px;">
+            <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+              <input type="checkbox" id="enableUrlSharing" checked style="margin-top: 3px;">
+              <div>
+                <span style="font-weight: 500;">URL共有を有効にする</span>
+                <p style="color: #666; font-size: 0.85em; margin-top: 4px;">
+                  ⚠️ リンクを知っている全員が閲覧可能になります
+                </p>
+              </div>
+            </label>
+          </div>
+
           <p style="margin-top: 16px; color: #666; font-size: 0.85em;">
             ※ 出力ファイルは各顧客の「請求書」フォルダに保存されます。<br>
             ※ 既存ファイルがある場合は上書きされます。
@@ -946,8 +962,9 @@
       <!-- 進捗表示画面 -->
       <div id="bulkExportProgressView" style="display: none;">
         <div class="modal-body">
-          <div class="progress-info">
+          <div class="progress-info" style="display: flex; justify-content: space-between; align-items: center;">
             <span id="bulkExportProgressText">処理を開始しています...</span>
+            <span id="bulkExportElapsedTime" style="font-size: 13px; color: #666;">経過: 0秒</span>
           </div>
           <div class="progress-bar-container">
             <div id="bulkExportProgressBar" class="progress-bar"></div>
@@ -964,20 +981,40 @@
       <!-- 完了画面 -->
       <div id="bulkExportCompleteView" style="display: none;">
         <div class="modal-body">
-          <div style="text-align: center; padding: 20px;">
-            <span style="font-size: 48px;">✅</span>
-            <h3 style="margin-top: 16px;">出力完了</h3>
+          <div style="text-align: center; padding: 16px 0;">
+            <span style="font-size: 36px;">✅</span>
+            <h3 style="margin-top: 8px;">出力完了</h3>
             <p id="bulkExportCompleteText">0 件の帳票を出力しました</p>
-            <div id="bulkExportCompleteErrors" style="margin-top: 16px; display: none;">
-              <p style="color: #d32f2f;">⚠️ <span id="bulkExportCompleteErrorCount">0</span> 件のエラー</p>
-              <details style="text-align: left; margin-top: 8px;">
-                <summary style="cursor: pointer;">エラー詳細を表示</summary>
-                <ul id="bulkExportErrorList" style="max-height: 200px; overflow-y: auto; font-size: 0.85em; margin-top: 8px;"></ul>
-              </details>
-            </div>
+          </div>
+
+          <!-- 結果一覧テーブル -->
+          <div id="bulkExportResultsContainer" style="margin-top: 16px; max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px;">
+            <table id="bulkExportResultsTable" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+              <thead style="position: sticky; top: 0; background: #f5f5f5;">
+                <tr>
+                  <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0;">顧客名</th>
+                  <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0;">請求書番号</th>
+                  <th style="padding: 10px 12px; text-align: right; border-bottom: 1px solid #e0e0e0;">金額</th>
+                  <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0;">メール</th>
+                  <th style="padding: 10px 12px; text-align: center; border-bottom: 1px solid #e0e0e0;">PDF</th>
+                </tr>
+              </thead>
+              <tbody id="bulkExportResultsBody">
+                <!-- 動的に生成 -->
+              </tbody>
+            </table>
+          </div>
+
+          <div id="bulkExportCompleteErrors" style="margin-top: 16px; display: none;">
+            <p style="color: #d32f2f;">⚠️ <span id="bulkExportCompleteErrorCount">0</span> 件のエラー</p>
+            <details style="text-align: left; margin-top: 8px;">
+              <summary style="cursor: pointer;">エラー詳細を表示</summary>
+              <ul id="bulkExportErrorList" style="max-height: 150px; overflow-y: auto; font-size: 0.85em; margin-top: 8px;"></ul>
+            </details>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn btn-secondary" onclick="downloadBulkExportCsv()">📥 送信用一覧CSVダウンロード</button>
           <button class="btn btn-primary" onclick="closeBulkExportModal()">閉じる</button>
         </div>
       </div>
@@ -1422,19 +1459,32 @@
       initCustomersFromCache();
       initModalHandlers();
       loadBillingFolderLink();
+      loadLastExportFromStorage();  // 前回の出力結果を復元
     });
 
     // エクスポートフォルダリンクを読み込み
     function loadBillingFolderLink() {
       google.script.run
         .withSuccessHandler(function(response) {
+          const link = document.getElementById('billing-folder-link');
           if (response.ok && response.data.configured && response.data.url) {
-            const link = document.getElementById('billing-folder-link');
             link.href = response.data.url;
-            link.style.display = 'inline-flex';
+            link.dataset.configured = 'true';
+          } else {
+            link.dataset.configured = 'false';
           }
         })
         .getBillingExportFolderUrl();
+    }
+
+    function handleBillingFolderLinkClick(link) {
+      if (link.dataset.configured === 'true' && link.href && link.href !== '#') {
+        return true; // 通常のリンク動作
+      }
+      if (link.dataset.configured === 'false') {
+        showToast('エクスポート先フォルダが設定されていません。設定画面で設定してください。', 'warning');
+      }
+      return false; // リンク遷移を阻止
     }
 
     // Modal ESC key and click-outside handlers
@@ -1697,7 +1747,6 @@
         const masterCustomer = customerById.get(customerId);
         const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
 
-        // フォルダセルは空にして、後でJavaScriptで生成する
         let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
           '" data-status="' + inv.status + '" style="cursor: pointer;">';
         rowHtml += '<td onclick="event.stopPropagation()">' +
@@ -1752,15 +1801,14 @@
           '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
           '</td>';
         rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
-          '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()"></td>';
+          '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()">' +
+          renderFolderCellHtml(customerId, folderId) + '</td>';
         rowHtml += '</tr>';
         return rowHtml;
       }).join('');
       // チェックボックス状態をリセット
       document.getElementById('selectAll').checked = false;
       updateBulkActionBar();
-      // フォルダリンクのhrefを設定
-      setFolderLinksHref();
     }
 
     function getStatusLabel(status) {
@@ -1864,50 +1912,49 @@
 
     // ========== 顧客フォルダ機能 ==========
 
-    function setFolderLinksHref() {
-      // 全てのフォルダセルに対して、完全にJavaScriptで要素を作成（innerHTML回避）
-      document.querySelectorAll('td.folder-cell').forEach(cell => {
-        const folderId = cell.getAttribute('data-folder-id')?.trim();
-        const customerId = cell.getAttribute('data-customer-id');
+    // フォルダセルのHTMLを生成（行描画時に使用）
+    function renderFolderCellHtml(customerId, folderId) {
+      if (folderId) {
+        return '<a class="btn btn-secondary" href="https://drive.google.com/drive/folders/' + escapeHtml(folderId) +
+          '" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-size:12px;padding:4px 8px;">' +
+          '<i class="fas fa-folder"></i> フォルダ</a>';
+      } else if (customerId) {
+        return '<button class="action-btn folder" type="button" onclick="event.stopPropagation();createCustomerFolderFromInvoice(\'' +
+          escapeHtml(customerId) + '\', this)">作成</button>';
+      } else {
+        return '<span style="color:#9CA3AF;font-size:12px;">-</span>';
+      }
+    }
 
-        // 既存の内容をクリア
-        cell.innerHTML = '';
-
-        if (folderId) {
-          // createElement()で要素を作成
-          const link = document.createElement('a');
-          link.className = 'btn btn-secondary';
-          link.innerHTML = '<i class="fas fa-folder"></i> フォルダ';
-          link.style.display = 'inline-flex';
-          link.style.alignItems = 'center';
-          link.style.gap = '4px';
-          link.style.textDecoration = 'none';
-          link.style.fontSize = '12px';
-          link.style.padding = '4px 8px';
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          // href を直接設定（顧客モーダルと同じ方法）
-          link.href = 'https://drive.google.com/drive/folders/' + folderId;
-          link.onclick = (e) => e.stopPropagation();
-          cell.appendChild(link);
-        } else if (customerId) {
-          const btn = document.createElement('button');
-          btn.className = 'action-btn folder';
-          btn.type = 'button';
-          btn.textContent = '作成';
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            createCustomerFolderFromInvoice(customerId, btn);
-          };
-          cell.appendChild(btn);
-        } else {
-          const span = document.createElement('span');
-          span.style.color = '#9CA3AF';
-          span.style.fontSize = '12px';
-          span.textContent = '-';
-          cell.appendChild(span);
-        }
-      });
+    // フォルダ作成後の更新用（DOM操作で該当セルのみ更新）
+    function updateFolderCell(cell, customerId, folderId) {
+      cell.innerHTML = '';
+      if (folderId) {
+        const link = document.createElement('a');
+        link.className = 'btn btn-secondary';
+        link.innerHTML = '<i class="fas fa-folder"></i> フォルダ';
+        link.style.cssText = 'display:inline-flex;align-items:center;gap:4px;text-decoration:none;font-size:12px;padding:4px 8px;';
+        link.href = 'https://drive.google.com/drive/folders/' + folderId;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.onclick = (e) => e.stopPropagation();
+        cell.appendChild(link);
+      } else if (customerId) {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn folder';
+        btn.type = 'button';
+        btn.textContent = '作成';
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          createCustomerFolderFromInvoice(customerId, btn);
+        };
+        cell.appendChild(btn);
+      } else {
+        const span = document.createElement('span');
+        span.style.cssText = 'color:#9CA3AF;font-size:12px;';
+        span.textContent = '-';
+        cell.appendChild(span);
+      }
     }
 
     function updateCustomerFolderLink(customerId, folderId) {
@@ -1924,15 +1971,14 @@
         saveCustomersToCache(customers);
       }
       sessionStorage.removeItem(SS_INVOICES_KEY);
-      // data-folder-id属性を更新
+      // 該当セルのみ更新
       document.querySelectorAll('#invoiceTableBody tr').forEach(row => {
         const cell = row.querySelector('td.folder-cell');
         if (cell && cell.dataset.customerId === customerId) {
           cell.dataset.folderId = folderId;
+          updateFolderCell(cell, customerId, folderId);
         }
       });
-      // 全てのフォルダセルを再生成
-      setFolderLinksHref();
     }
 
     function createCustomerFolderFromInvoice(customerId, buttonEl) {
@@ -2689,6 +2735,49 @@
 
     let bulkExportParams = null;
     let bulkExportPollInterval = null;
+    let bulkExportResults = null;  // CSV出力用に結果を保持
+    let bulkExportAccumulatedResults = [];  // タイムアウト時の部分結果を蓄積
+    let bulkExportAccumulatedErrors = [];   // タイムアウト時のエラーを蓄積
+
+    // 前回の一括出力結果を保持（localStorage で永続化）
+    let lastBulkExportResults = null;
+    let lastBulkExportErrors = null;
+
+    // localStorageキー
+    const LAST_EXPORT_STORAGE_KEY = 'lastBulkExportResult';
+
+    /**
+     * 前回の出力結果をlocalStorageから読み込み
+     */
+    function loadLastExportFromStorage() {
+      try {
+        const stored = localStorage.getItem(LAST_EXPORT_STORAGE_KEY);
+        if (stored) {
+          const data = JSON.parse(stored);
+          lastBulkExportResults = data.results || null;
+          lastBulkExportErrors = data.errors || '';
+          updateLastResultButton();
+        }
+      } catch (e) {
+        console.warn('前回の出力結果の読み込みに失敗:', e);
+      }
+    }
+
+    /**
+     * 前回の出力結果をlocalStorageに保存
+     */
+    function saveLastExportToStorage() {
+      try {
+        const data = {
+          results: lastBulkExportResults,
+          errors: lastBulkExportErrors,
+          savedAt: new Date().toISOString()
+        };
+        localStorage.setItem(LAST_EXPORT_STORAGE_KEY, JSON.stringify(data));
+      } catch (e) {
+        console.warn('前回の出力結果の保存に失敗:', e);
+      }
+    }
 
     /**
      * 選択された請求書IDを取得
@@ -2729,14 +2818,167 @@
     function closeBulkExportModal() {
       document.getElementById('bulkExportModal').classList.remove('active');
 
-      // ポーリングを停止
+      // タイマーを停止（ポーリング + 経過時間）
+      stopProgressPolling();
+      stopElapsedTimeUpdate();
       if (bulkExportPollInterval) {
         clearInterval(bulkExportPollInterval);
         bulkExportPollInterval = null;
       }
 
+      // 開始時刻をリセット
+      bulkExportStartTime = null;
+
+      // モーダル幅をリセット
+      document.getElementById('bulkExportModalContent').style.maxWidth = '420px';
+
+      // 結果があれば退避（前回の結果として保持 + localStorage に永続化）
+      if (bulkExportResults && bulkExportResults.length > 0) {
+        lastBulkExportResults = bulkExportResults;
+        // エラー情報も保持
+        const errorList = document.getElementById('bulkExportErrorList');
+        lastBulkExportErrors = errorList && errorList.innerHTML ? errorList.innerHTML : '';
+        // localStorage に保存
+        saveLastExportToStorage();
+        // 「前回の結果」ボタンを表示
+        updateLastResultButton();
+      }
+
       bulkExportParams = null;
+      bulkExportResults = null;
     }
+
+    /**
+     * 「前回の結果」ボタンの表示/非表示を更新
+     */
+    function updateLastResultButton() {
+      const btn = document.getElementById('showLastExportResultBtn');
+      if (btn) {
+        btn.style.display = lastBulkExportResults && lastBulkExportResults.length > 0 ? 'inline-block' : 'none';
+      }
+    }
+
+    /**
+     * 前回の一括出力結果を再表示
+     */
+    function showLastBulkExportResult() {
+      if (!lastBulkExportResults || lastBulkExportResults.length === 0) {
+        showToast('前回の出力結果がありません', 'info');
+        return;
+      }
+
+      // 結果を復元
+      bulkExportResults = lastBulkExportResults;
+
+      // モーダルを開く
+      document.getElementById('bulkExportModal').classList.add('active');
+
+      // 完了画面のみ表示
+      document.getElementById('bulkExportSelectView').style.display = 'none';
+      document.getElementById('bulkExportProgressView').style.display = 'none';
+      document.getElementById('bulkExportCompleteView').style.display = 'block';
+
+      // モーダル幅を広げる
+      document.getElementById('bulkExportModalContent').style.maxWidth = '700px';
+
+      // 件数を表示
+      document.getElementById('bulkExportCompleteText').textContent =
+        lastBulkExportResults.length + ' 件の帳票を出力しました';
+
+      // 結果テーブルを生成
+      const tbody = document.getElementById('bulkExportResultsBody');
+      document.getElementById('bulkExportResultsContainer').style.display = 'block';
+      tbody.innerHTML = lastBulkExportResults.map(function(r) {
+        const contactDisplay = r.contactName ? (r.contactName + (r.honorific || '')) : '-';
+        const amountDisplay = r.totalAmount != null ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
+        const pdfLink = r.pdfUrl
+          ? '<a href="' + escapeHtml(r.pdfUrl) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">📄 開く</a>'
+          : '-';
+        const emailDisplay = r.email ? escapeHtml(r.email) : '-';
+
+        return '<tr style="border-bottom: 1px solid #f0f0f0;">' +
+          '<td style="padding: 8px 12px;">' + escapeHtml(r.companyName || '-') + '</td>' +
+          '<td style="padding: 8px 12px;">' + escapeHtml(r.invoiceNumber || '-') + '</td>' +
+          '<td style="padding: 8px 12px; text-align: right;">' + amountDisplay + '</td>' +
+          '<td style="padding: 8px 12px; font-size: 12px;">' + emailDisplay + '</td>' +
+          '<td style="padding: 8px 12px; text-align: center;">' + pdfLink + '</td>' +
+          '</tr>';
+      }).join('');
+
+      // エラー情報を復元
+      if (lastBulkExportErrors) {
+        document.getElementById('bulkExportCompleteErrors').style.display = 'block';
+        document.getElementById('bulkExportErrorList').innerHTML = lastBulkExportErrors;
+        // エラー件数をカウント
+        const errorCount = (lastBulkExportErrors.match(/<li>/g) || []).length;
+        document.getElementById('bulkExportCompleteErrorCount').textContent = errorCount;
+      } else {
+        document.getElementById('bulkExportCompleteErrors').style.display = 'none';
+      }
+    }
+
+    /**
+     * 一括出力結果をCSVダウンロード
+     */
+    function downloadBulkExportCsv() {
+      if (!bulkExportResults || bulkExportResults.length === 0) {
+        showToast('ダウンロードするデータがありません', 'warning');
+        return;
+      }
+
+      // CSVヘッダー
+      const headers = ['顧客名', '担当者', '請求書番号', '請求金額', 'メールアドレス', 'PDF URL'];
+
+      // CSV行を生成
+      const rows = bulkExportResults.map(function(r) {
+        const contactDisplay = r.contactName ? (r.contactName + (r.honorific || '')) : '';
+        return [
+          r.companyName || '',
+          contactDisplay,
+          r.invoiceNumber || '',
+          r.totalAmount != null ? r.totalAmount : '',  // 0円も正しく出力
+          r.email || '',
+          r.pdfUrl || ''
+        ];
+      });
+
+      // CSVを構築（ダブルクォートでエスケープ）
+      const csvContent = [headers].concat(rows).map(function(row) {
+        return row.map(function(cell) {
+          const str = String(cell);
+          // カンマ、改行、ダブルクォートを含む場合はエスケープ
+          if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }).join(',');
+      }).join('\n');
+
+      // BOM付きUTF-8でBlob作成
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8' });
+
+      // ファイル名を生成（年月）
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const fileName = '請求書一覧_' + year + '年' + month + '月.csv';
+
+      // ダウンロード
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showToast('CSVをダウンロードしました', 'success');
+    }
+
+    let bulkExportStartTime = null;  // 開始時刻
+    let bulkExportElapsedTimerId = null;  // 経過時間タイマーID
 
     /**
      * 一括出力を開始
@@ -2744,11 +2986,20 @@
     function startBulkExport() {
       const selectedIds = getSelectedInvoiceIds();
       const exportMode = document.querySelector('input[name="bulkExportMode"]:checked').value;
+      const enableUrlSharing = document.getElementById('enableUrlSharing').checked;
 
       bulkExportParams = {
         invoiceIds: selectedIds,
-        exportMode: exportMode
+        exportMode: exportMode,
+        enableUrlSharing: enableUrlSharing
       };
+
+      // 開始時刻を記録
+      bulkExportStartTime = Date.now();
+
+      // 蓄積結果をリセット（タイムアウト分割対応）
+      bulkExportAccumulatedResults = [];
+      bulkExportAccumulatedErrors = [];
 
       // 進捗画面に切り替え
       document.getElementById('bulkExportSelectView').style.display = 'none';
@@ -2766,11 +3017,79 @@
         errorCount: 0
       });
 
+      // 経過時間の更新を開始（1秒ごと）
+      startElapsedTimeUpdate();
+
       // 出力を実行（ポーリングは実行完了後に開始）
       executeBulkExportRequest();
     }
 
+    /**
+     * 経過時間の表示を更新（1秒ごと）
+     */
+    function startElapsedTimeUpdate() {
+      stopElapsedTimeUpdate();
+      bulkExportElapsedTimerId = setInterval(updateElapsedTimeDisplay, 1000);
+    }
+
+    function stopElapsedTimeUpdate() {
+      if (bulkExportElapsedTimerId) {
+        clearInterval(bulkExportElapsedTimerId);
+        bulkExportElapsedTimerId = null;
+      }
+    }
+
+    function updateElapsedTimeDisplay() {
+      if (!bulkExportStartTime) return;
+      const elapsed = Math.floor((Date.now() - bulkExportStartTime) / 1000);
+      const minutes = Math.floor(elapsed / 60);
+      const seconds = elapsed % 60;
+      const timeStr = minutes > 0
+        ? minutes + '分' + seconds + '秒'
+        : seconds + '秒';
+      const elapsedEl = document.getElementById('bulkExportElapsedTime');
+      if (elapsedEl) {
+        elapsedEl.textContent = '経過: ' + timeStr;
+      }
+    }
+
     let bulkExportInFlight = false;  // リクエスト実行中フラグ
+    let bulkExportPollingId = null;  // ポーリングタイマーID
+
+    /**
+     * 進捗ポーリングを開始
+     * TODO: タイミング計測中は一時的に無効化
+     */
+    function startProgressPolling() {
+      // 一時的に無効化（ログ汚染防止）
+      console.log('[DEBUG] Progress polling disabled for timing analysis');
+      return;
+
+      if (bulkExportPollingId) return;  // 既にポーリング中
+
+      bulkExportPollingId = setInterval(function() {
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (result.ok && result.data) {
+              updateBulkExportProgress(result.data);
+            }
+          })
+          .withFailureHandler(function(error) {
+            console.log('進捗取得エラー:', error);
+          })
+          .getBulkExportProgress(bulkExportParams);
+      }, 5000);  // 5秒ごとにポーリング
+    }
+
+    /**
+     * 進捗ポーリングを停止
+     */
+    function stopProgressPolling() {
+      if (bulkExportPollingId) {
+        clearInterval(bulkExportPollingId);
+        bulkExportPollingId = null;
+      }
+    }
 
     /**
      * 一括出力リクエストを実行
@@ -2782,6 +3101,9 @@
       }
       bulkExportInFlight = true;
 
+      // ポーリング開始（実行中の進捗を表示）
+      startProgressPolling();
+
       google.script.run
         .withSuccessHandler(function(result) {
           bulkExportInFlight = false;
@@ -2789,6 +3111,7 @@
         })
         .withFailureHandler(function(error) {
           bulkExportInFlight = false;
+          stopProgressPolling();
           showToast('一括出力でエラーが発生しました: ' + error.message, 'error');
           closeBulkExportModal();
         })
@@ -2800,6 +3123,7 @@
      */
     function handleBulkExportResult(result) {
       if (!result.ok) {
+        stopProgressPolling();
         showToast(result.error?.message || '一括出力に失敗しました', 'error');
         closeBulkExportModal();
         return;
@@ -2809,15 +3133,25 @@
 
       // タイムアウトで中断した場合は自動継続
       if (data.error === 'TIMEOUT_WILL_CONTINUE') {
+        // 部分結果を蓄積
+        if (data.partialResults && data.partialResults.length > 0) {
+          bulkExportAccumulatedResults = bulkExportAccumulatedResults.concat(data.partialResults);
+          console.log('一括出力: 部分結果を蓄積 (' + bulkExportAccumulatedResults.length + '件)');
+        }
+        if (data.partialErrors && data.partialErrors.length > 0) {
+          bulkExportAccumulatedErrors = bulkExportAccumulatedErrors.concat(data.partialErrors);
+        }
         console.log('一括出力: タイムアウトで中断、自動継続...');
+        stopProgressPolling();  // 再開前に一旦停止
         updateBulkExportProgress(data.progress);
-        // 2秒待ってから再実行
+        // 2秒待ってから再実行（再開時にポーリングも再開）
         setTimeout(executeBulkExportRequest, 2000);
         return;
       }
 
       // 排他制御エラー
       if (data.error === 'ALREADY_RUNNING') {
+        stopProgressPolling();
         showToast(data.message || '別の一括出力が実行中です', 'warning');
         closeBulkExportModal();
         return;
@@ -2825,6 +3159,7 @@
 
       // 完了
       if (data.success) {
+        stopProgressPolling();
         showBulkExportComplete(data);
       }
     }
@@ -2837,21 +3172,32 @@
       const total = progress.totalCount || 1;
       const errors = progress.errorCount || 0;
       const percent = Math.round((processed / total) * 100);
+      const currentInvoice = progress.currentInvoiceNumber || '';
 
       const progressBar = document.getElementById('bulkExportProgressBar');
+      const progressText = document.getElementById('bulkExportProgressText');
 
       // 処理開始前はloadingアニメーションを維持
       if (processed > 0) {
         // loadingアニメーションを停止して実際の進捗表示に切り替え
         progressBar.className = 'progress-bar';
         progressBar.style.width = percent + '%';
-        document.getElementById('bulkExportProgressText').textContent =
-          processed + ' / ' + total + ' 件完了';
+        // 現在処理中の請求書番号を表示
+        let statusText = processed + ' / ' + total + ' 件完了';
+        if (currentInvoice && processed < total) {
+          statusText += ' (処理中: ' + currentInvoice + ')';
+        }
+        progressText.textContent = statusText;
       } else {
         // まだ処理が始まっていない場合はloadingクラスを維持
-        document.getElementById('bulkExportProgressText').textContent =
-          '処理を開始しています...';
+        progressText.textContent = 'データ読み込み中...';
       }
+
+      // 更新フラッシュ効果（テキストが更新されたことを視覚的に示す）
+      progressText.style.opacity = '0.5';
+      setTimeout(function() {
+        progressText.style.opacity = '1';
+      }, 150);
 
       // エラーがあれば表示
       if (errors > 0) {
@@ -2866,15 +3212,54 @@
      * 完了画面を表示
      */
     function showBulkExportComplete(data) {
-      const successCount = data.results ? data.results.length : 0;
-      const errors = data.errors || [];
+      // タイマーを停止
+      stopElapsedTimeUpdate();
+
+      // 蓄積した部分結果と最終バッチの結果をマージ
+      const finalResults = data.results || [];
+      const finalErrors = data.errors || [];
+      const results = bulkExportAccumulatedResults.concat(finalResults);
+      const errors = bulkExportAccumulatedErrors.concat(finalErrors);
+      const successCount = results.length;
+
+      console.log('一括出力完了: 蓄積=' + bulkExportAccumulatedResults.length + '件, 最終=' + finalResults.length + '件, 合計=' + results.length + '件');
+
+      // 結果を保持（CSV出力用）
+      bulkExportResults = results;
 
       // 画面を切り替え
       document.getElementById('bulkExportProgressView').style.display = 'none';
       document.getElementById('bulkExportCompleteView').style.display = 'block';
 
+      // モーダル幅を広げる
+      document.getElementById('bulkExportModalContent').style.maxWidth = '700px';
+
       document.getElementById('bulkExportCompleteText').textContent =
         successCount + ' 件の帳票を出力しました';
+
+      // 結果テーブルを生成
+      const tbody = document.getElementById('bulkExportResultsBody');
+      if (results.length > 0) {
+        document.getElementById('bulkExportResultsContainer').style.display = 'block';
+        tbody.innerHTML = results.map(function(r) {
+          const contactDisplay = r.contactName ? (r.contactName + (r.honorific || '')) : '-';
+          const amountDisplay = r.totalAmount != null ? ('¥' + Number(r.totalAmount).toLocaleString()) : '-';
+          const pdfLink = r.pdfUrl
+            ? '<a href="' + escapeHtml(r.pdfUrl) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">📄 開く</a>'
+            : '-';
+          const emailDisplay = r.email ? escapeHtml(r.email) : '-';
+
+          return '<tr style="border-bottom: 1px solid #f0f0f0;">' +
+            '<td style="padding: 8px 12px;">' + escapeHtml(r.companyName || '-') + '</td>' +
+            '<td style="padding: 8px 12px;">' + escapeHtml(r.invoiceNumber || '-') + '</td>' +
+            '<td style="padding: 8px 12px; text-align: right;">' + amountDisplay + '</td>' +
+            '<td style="padding: 8px 12px; font-size: 12px;">' + emailDisplay + '</td>' +
+            '<td style="padding: 8px 12px; text-align: center;">' + pdfLink + '</td>' +
+            '</tr>';
+        }).join('');
+      } else {
+        document.getElementById('bulkExportResultsContainer').style.display = 'none';
+      }
 
       // エラーがあれば表示
       if (errors.length > 0) {
@@ -2889,6 +3274,8 @@
         }).join('');
       } else {
         document.getElementById('bulkExportCompleteErrors').style.display = 'none';
+        // エラーリストをクリア（「前回の結果」表示時に古いエラーが残らないように）
+        document.getElementById('bulkExportErrorList').innerHTML = '';
       }
 
       // 成功メッセージ
