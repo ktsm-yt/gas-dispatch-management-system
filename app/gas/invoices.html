@@ -888,10 +888,10 @@
   </div>
 
   <!-- ステータス変更確認モーダル -->
-  <div class="modal-overlay" id="statusConfirmModal">
+  <div class="modal-overlay" id="statusConfirmModal" role="dialog" aria-modal="true" aria-labelledby="statusConfirmTitle">
     <div class="modal" style="max-width: 360px;">
       <div class="modal-header">
-        <h2>確認</h2>
+        <h2 id="statusConfirmTitle">確認</h2>
       </div>
       <div class="modal-body" id="statusConfirmBody">
         <!-- 動的に設定 -->
@@ -904,10 +904,10 @@
   </div>
 
   <!-- 一括出力モーダル -->
-  <div class="modal-overlay" id="bulkExportModal">
+  <div class="modal-overlay" id="bulkExportModal" role="dialog" aria-modal="true" aria-labelledby="bulkExportTitle">
     <div class="modal" id="bulkExportModalContent" style="max-width: 420px;">
       <div class="modal-header">
-        <h2>帳票一括出力</h2>
+        <h2 id="bulkExportTitle">帳票一括出力</h2>
         <button class="close-btn" onclick="closeBulkExportModal()">&times;</button>
       </div>
 
@@ -1051,11 +1051,11 @@
   </div>
 
   <!-- Payment Modal -->
-  <div class="modal-overlay" id="paymentModal" onclick="handleModalOverlayClick(event, 'paymentModal')">
+  <div class="modal-overlay" id="paymentModal" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle" onclick="handleModalOverlayClick(event, 'paymentModal')">
     <div class="modal" style="max-width: 500px;">
       <div class="modal-header">
-        <h2>入金記録</h2>
-        <button class="modal-close" onclick="closePaymentModal()">&times;</button>
+        <h2 id="paymentModalTitle">入金記録</h2>
+        <button class="modal-close" onclick="closePaymentModal()" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
         <div class="invoice-summary" id="paymentInvoiceSummary">
@@ -1065,16 +1065,16 @@
           <input type="hidden" id="paymentInvoiceId">
           <input type="hidden" id="paymentInvoiceUpdatedAt">
           <div class="form-group">
-            <label>入金日 *</label>
+            <label for="paymentDate">入金日 *</label>
             <input type="date" id="paymentDate" required>
           </div>
           <div class="form-group">
-            <label>入金額 *</label>
+            <label for="paymentAmount">入金額 *</label>
             <input type="number" id="paymentAmount" min="1" required placeholder="入金額を入力">
             <small class="form-hint" id="paymentHint">残高以下の金額を入力してください</small>
           </div>
           <div class="form-group">
-            <label>入金方法</label>
+            <label for="paymentMethod">入金方法</label>
             <select id="paymentMethod">
               <option value="bank_transfer">銀行振込</option>
               <option value="cash">現金</option>
@@ -1084,11 +1084,11 @@
           <details class="payment-details">
             <summary>詳細オプション</summary>
             <div class="form-group">
-              <label>銀行参照番号</label>
+              <label for="paymentBankRef">銀行参照番号</label>
               <input type="text" id="paymentBankRef" placeholder="任意">
             </div>
             <div class="form-group">
-              <label>備考</label>
+              <label for="paymentNotes">備考</label>
               <textarea id="paymentNotes" rows="2" placeholder="任意"></textarea>
             </div>
           </details>
@@ -1118,11 +1118,11 @@
   </div>
 
   <!-- Invoice Edit Modal -->
-  <div class="modal-overlay" id="editModal" onclick="handleModalOverlayClick(event, 'editModal')">
+  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" onclick="handleModalOverlayClick(event, 'editModal')">
     <div class="modal" style="max-width: 800px;">
       <div class="modal-header">
         <h2 id="editModalTitle">請求書編集</h2>
-        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        <button class="modal-close" onclick="closeEditModal()" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
         <!-- ヘッダー情報 -->
@@ -1130,15 +1130,15 @@
           <h4>■ ヘッダー情報</h4>
           <div class="edit-header-grid">
             <div class="form-group">
-              <label>発行日</label>
+              <label for="editIssueDate">発行日</label>
               <input type="date" id="editIssueDate" />
             </div>
             <div class="form-group">
-              <label>支払期限</label>
+              <label for="editDueDate">支払期限</label>
               <input type="date" id="editDueDate" />
             </div>
             <div class="form-group" style="grid-column: span 2;">
-              <label>社内メモ</label>
+              <label for="editNotes">社内メモ</label>
               <input type="text" id="editNotes" placeholder="請求確認事項や作業メモなど（出力には含まれません）" style="width: 100%;">
             </div>
           </div>
@@ -1186,21 +1186,21 @@
   </div>
 
   <!-- Generate Invoice Modal -->
-  <div class="modal-overlay" id="generateModal" onclick="handleModalOverlayClick(event, 'generateModal')">
+  <div class="modal-overlay" id="generateModal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle" onclick="handleModalOverlayClick(event, 'generateModal')">
     <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
-        <h2>請求書生成</h2>
-        <button class="modal-close" onclick="closeGenerateModal()">&times;</button>
+        <h2 id="generateModalTitle">請求書生成</h2>
+        <button class="modal-close" onclick="closeGenerateModal()" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>顧客 *</label>
+          <label for="generateCustomer">顧客 *</label>
           <select id="generateCustomer" required>
             <option value="">選択してください</option>
           </select>
         </div>
         <div class="form-group">
-          <label>対象年月 *</label>
+          <label for="generateYear">対象年月 *</label>
           <div class="year-month-row">
             <select id="generateYear" required></select>
             <span class="unit-label">年</span>
@@ -2005,7 +2005,8 @@
             buttonEl.disabled = false;
             buttonEl.textContent = 'フォルダ作成';
           }
-          showToast('顧客フォルダ作成に失敗しました: ' + error.message, 'error');
+          console.error('createCustomerFolder error:', error);
+          showToast('顧客フォルダ作成に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .createCustomerFolder(customerId);
     }
@@ -2207,7 +2208,7 @@
         .withFailureHandler(function (error) {
           closeStatusConfirm();
           console.error('bulkUpdateStatus failure:', error);
-          showToast('更新に失敗しました: ' + error.message, 'error');
+          showToast('更新に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .bulkUpdateInvoiceStatus(updates, status);
     }
@@ -3072,7 +3073,9 @@
         })
         .withFailureHandler(function(error) {
           bulkExportInFlight = false;
-          showToast('一括出力でエラーが発生しました: ' + error.message, 'error');
+          stopElapsedTimeUpdate();  // 防御的にタイマー停止（closeBulkExportModalの前に確実に停止）
+          console.error('一括出力エラー:', error);
+          showToast('一括出力でエラーが発生しました。しばらくしてから再度お試しください。', 'error');
           closeBulkExportModal();
         })
         .startBulkExport(bulkExportParams);
@@ -3083,6 +3086,7 @@
      */
     function handleBulkExportResult(result) {
       if (!result.ok) {
+        stopElapsedTimeUpdate();  // 防御的にタイマー停止
         showToast(result.error?.message || '一括出力に失敗しました', 'error');
         closeBulkExportModal();
         return;
@@ -3423,7 +3427,7 @@
 
     function handleError(error) {
       console.error('Error:', error);
-      showToast('エラーが発生しました: ' + (error.message || error), 'error');
+      showToast('エラーが発生しました。しばらくしてから再度お試しください。', 'error');
     }
 
     // ========== 請求書再生成機能 ==========
@@ -3497,7 +3501,7 @@
           hideLoading();
           closeRegenerateConfirm();
           console.error('regenerateInvoice failure:', error);
-          showToast('再生成に失敗しました: ' + error.message, 'error');
+          showToast('再生成に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .regenerateInvoice(invoiceId);
     }
@@ -3616,7 +3620,8 @@
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showToast('請求書の取得に失敗しました: ' + error.message, 'error');
+          console.error('getInvoice error:', error);
+          showToast('請求書の取得に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .getInvoice(invoiceId);
     }
@@ -3746,7 +3751,8 @@
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showToast('保存に失敗しました: ' + error.message, 'error');
+          console.error('updateInvoiceDetails error:', error);
+          showToast('保存に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
     }
@@ -3929,7 +3935,7 @@
           submitBtn.disabled = false;
           submitBtn.textContent = '記録する';
           console.error('recordPayment error:', error);
-          showToast('入金記録に失敗しました: ' + error.message, 'error');
+          showToast('入金記録に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .recordPayment(invoiceId, paymentData, expectedUpdatedAt);
     }
@@ -3986,7 +3992,7 @@
         })
         .withFailureHandler(function(error) {
           console.error('deletePayment error:', error);
-          showToast('削除に失敗しました: ' + error.message, 'error');
+          showToast('削除に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .deletePayment(paymentId, expectedUpdatedAt);
     }

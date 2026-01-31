@@ -51,8 +51,8 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
       );
     }
 
-    const amount = Number(paymentData.amount);
-    if (!amount || amount <= 0) {
+    const amount = parseFloat(paymentData.amount);
+    if (isNaN(amount) || amount <= 0) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '入金額は0より大きい値を入力してください',
@@ -94,7 +94,7 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
 
   } catch (error) {
     Logger.log(`recordPayment error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
 
@@ -139,7 +139,7 @@ function getPaymentsByInvoice(invoiceId) {
 
   } catch (error) {
     Logger.log(`getPaymentsByInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
 
@@ -186,6 +186,6 @@ function deletePayment(paymentId, invoiceExpectedUpdatedAt) {
 
   } catch (error) {
     Logger.log(`deletePayment error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
