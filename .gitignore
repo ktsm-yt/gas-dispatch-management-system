@@ -27,6 +27,8 @@ _rendered/
 # Customer-specific materials (not for public)
 docs/references/
 docs/02_meetings/
+docs/customer_manual*.md
+docs/*_draft.md
 
 # Logs
 npm-debug.log*
