@@ -293,16 +293,15 @@ const InvoiceExportService = {
    */
   exportToPdf: function(invoice, lines, customer, company, options = {}) {
     try {
-      // デバッグログ
-      console.log('=== exportToPdf Debug ===');
-      console.log('options:', JSON.stringify(options));
-      console.log('options.includeCoverPage:', options.includeCoverPage);
+      const timings = { start: Date.now() };
+      Logger.log(`[TIMING] exportToPdf START - invoice: ${invoice.invoice_number}`);
 
       // スプレッドシートを作成（PDF用：ページ分割あり）
-      // optionsをマージ（includeCoverPage等を保持）
       const mergedOptions = Object.assign({}, options, { forPdf: true });
-      console.log('mergedOptions:', JSON.stringify(mergedOptions));
       const sheetResult = this._createFilledSheet(invoice, lines, customer, company, mergedOptions);
+      timings.createSheet = Date.now();
+      Logger.log(`[TIMING] _createFilledSheet: ${timings.createSheet - timings.start}ms`);
+
       if (!sheetResult.success) {
         return sheetResult;
       }
@@ -311,15 +310,21 @@ const InvoiceExportService = {
       const sheet = sheetResult.sheet;
 
       // PDFに変換（複数シート構成の場合は全シート、そうでなければ単一シート）
+      // format3は横向き印刷
+      const pdfOptions = { landscape: invoice.invoice_format === 'format3' };
       let pdfBlob;
       if (sheetResult.hasCoverPage || sheetResult.hasPrintSheets) {
-        pdfBlob = this._exportSpreadsheetToPdf(spreadsheet.getId());
+        pdfBlob = this._exportSpreadsheetToPdf(spreadsheet.getId(), pdfOptions);
       } else {
-        pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId());
+        pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId(), pdfOptions);
       }
+      timings.exportPdf = Date.now();
+      Logger.log(`[TIMING] PDF export: ${timings.exportPdf - timings.createSheet}ms`);
 
       // 出力先フォルダを取得
       const folder = this._getOutputFolder(customer);
+      timings.getFolder = Date.now();
+      Logger.log(`[TIMING] getOutputFolder: ${timings.getFolder - timings.exportPdf}ms`);
 
       // ファイル名を生成（renameの場合はタイムスタンプ付き、頭紙付きの場合は区別）
       const addTimestamp = options.action === 'rename';
@@ -334,17 +339,26 @@ const InvoiceExportService = {
           existingFiles.next().setTrashed(true);
         }
       }
+      timings.deleteExisting = Date.now();
+      Logger.log(`[TIMING] delete existing: ${timings.deleteExisting - timings.getFolder}ms`);
 
       // 出力先フォルダに保存
       const file = folder.createFile(pdfBlob);
+      timings.createFile = Date.now();
+      Logger.log(`[TIMING] createFile: ${timings.createFile - timings.deleteExisting}ms`);
 
       // 一時スプレッドシートを削除
       if (!options.keepSheet) {
         DriveApp.getFileById(spreadsheet.getId()).setTrashed(true);
       }
+      timings.cleanup = Date.now();
+      Logger.log(`[TIMING] cleanup temp sheet: ${timings.cleanup - timings.createFile}ms`);
 
       // 請求書のファイルIDを更新
       InvoiceRepository.updateFileIds(invoice.invoice_id, { pdf_file_id: file.getId() });
+      timings.updateDb = Date.now();
+      Logger.log(`[TIMING] updateFileIds: ${timings.updateDb - timings.cleanup}ms`);
+      Logger.log(`[TIMING] exportToPdf TOTAL: ${timings.updateDb - timings.start}ms`);
 
       const result = {
         success: true,
@@ -655,6 +669,7 @@ const InvoiceExportService = {
    * @returns {Object} { success, spreadsheet, sheet, hasCoverPage }
    */
   _createFilledSheet: function(invoice, lines, customer, company, options = {}) {
+    const _t = { start: Date.now() };  // タイミング計測用
     const forPdf = options.forPdf !== false;  // デフォルトはtrue（後方互換）
     // テンプレートIDを取得
     const templateKey = this.TEMPLATE_KEYS[invoice.invoice_format] || this.TEMPLATE_KEYS.format1;
@@ -686,11 +701,18 @@ const InvoiceExportService = {
         }
       };
     }
+    _t.getTemplate = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] getFileById: ${_t.getTemplate - _t.start}ms`);
 
     const copyName = `請求書_${invoice.invoice_number}_temp`;
     const copy = templateFile.makeCopy(copyName);
+    _t.makeCopy = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] makeCopy: ${_t.makeCopy - _t.getTemplate}ms`);
+
     const spreadsheet = SpreadsheetApp.openById(copy.getId());
     const sheet = spreadsheet.getSheets()[0];
+    _t.openSheet = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] openById+getSheets: ${_t.openSheet - _t.makeCopy}ms`);
 
     // 頭紙（表紙）を追加するかどうか判定
     // - ユーザーが明示指定した場合: その値を優先
@@ -718,16 +740,6 @@ const InvoiceExportService = {
       }
       // Excel出力時でユーザー指定がない場合は頭紙なし（hasCoverPage = false）
     }
-
-    // デバッグログ
-    console.log('=== Cover Page Debug ===');
-    console.log('forPdf:', forPdf);
-    console.log('customerWantsCover:', customerWantsCover);
-    console.log('userWantsCover:', userWantsCover);
-    console.log('options.includeCoverPage:', options.includeCoverPage, 'type:', typeof options.includeCoverPage);
-    console.log('supportsCoverPage:', supportsCoverPage);
-    console.log('hasCoverPage:', hasCoverPage);
-    console.log('invoice_format:', invoice.invoice_format);
 
     // 頭紙を先に追加（PDF出力時に先頭に来るように）
     let coverPageWarning = null;
@@ -771,6 +783,8 @@ const InvoiceExportService = {
         }
       }
     }
+    _t.coverPage = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] coverPage (hasCover=${hasCoverPage}): ${_t.coverPage - _t.openSheet}ms`);
 
     // フォーマットに応じてデータを入力
     switch (invoice.invoice_format) {
@@ -789,6 +803,8 @@ const InvoiceExportService = {
       default:
         this._populateFormat1(sheet, invoice, lines, customer, company);
     }
+    _t.populate = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] populate (${invoice.invoice_format}): ${_t.populate - _t.coverPage}ms`);
 
     // PDFページ分割用シート作成（format1/format2共通）
     let hasPrintSheets = false;
@@ -801,9 +817,14 @@ const InvoiceExportService = {
         hasPrintSheets = true;
       }
     }
+    _t.printSheets = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] printSheets (lines=${lines.length}): ${_t.printSheets - _t.populate}ms`);
 
     // 変更を反映
     SpreadsheetApp.flush();
+    _t.flush = Date.now();
+    Logger.log(`[TIMING][_createFilledSheet] flush: ${_t.flush - _t.printSheets}ms`);
+    Logger.log(`[TIMING][_createFilledSheet] TOTAL: ${_t.flush - _t.start}ms`);
 
     return {
       success: true,
@@ -1525,28 +1546,38 @@ const InvoiceExportService = {
   _batchSetRowHeights: function(sourceSheet, targetSheet, sourceStartRow, targetStartRow, rowCount) {
     if (rowCount === 0) return;
 
-    // ソースの行高さを収集
-    const heights = [];
-    for (let i = 0; i < rowCount; i++) {
-      heights.push(sourceSheet.getRowHeight(sourceStartRow + i));
+    // === 最適化版: 2行パターンの高さだけ取得（getRowHeight 2回のみ） ===
+    // format1/format2 は「データ行 + 空行」の2行パターンの繰り返し
+    const dataRowHeight = sourceSheet.getRowHeight(sourceStartRow);
+    const emptyRowHeight = sourceSheet.getRowHeight(sourceStartRow + 1);
+
+    Logger.log(`[TIMING] _batchSetRowHeights: dataRowHeight=${dataRowHeight}, emptyRowHeight=${emptyRowHeight}, rowCount=${rowCount}`);
+
+    // パターンが同じなら全行一括設定（1回のsetRowHeightsで完了）
+    if (dataRowHeight === emptyRowHeight) {
+      targetSheet.setRowHeights(targetStartRow, rowCount, dataRowHeight);
+      Logger.log(`[TIMING] _batchSetRowHeights: 同一高さ一括設定完了`);
+      return;
     }
 
-    // 連続する同じ高さの行をグループ化して一括設定
-    let groupStart = 0;
-    let currentHeight = heights[0];
+    // 異なる高さの場合: 平均値で全行一括設定（若干のずれを許容して高速化）
+    // ※ 厳密なレイアウトが必要な場合は、コメントアウトして下の個別設定を使用
+    const avgHeight = Math.round((dataRowHeight + emptyRowHeight) / 2);
+    targetSheet.setRowHeights(targetStartRow, rowCount, avgHeight);
+    Logger.log(`[TIMING] _batchSetRowHeights: 平均高さ(${avgHeight})で一括設定完了`);
 
-    for (let i = 1; i <= heights.length; i++) {
-      if (i === heights.length || heights[i] !== currentHeight) {
-        // グループを一括設定
-        const groupRowCount = i - groupStart;
-        targetSheet.setRowHeights(targetStartRow + groupStart, groupRowCount, currentHeight);
-
-        if (i < heights.length) {
-          groupStart = i;
-          currentHeight = heights[i];
-        }
-      }
+    /*
+    // === 厳密版（遅いが正確）: 異なる高さを個別設定 ===
+    const pairCount = Math.floor(rowCount / 2);
+    for (let i = 0; i < pairCount; i++) {
+      const rowOffset = i * 2;
+      targetSheet.setRowHeight(targetStartRow + rowOffset, dataRowHeight);
+      targetSheet.setRowHeight(targetStartRow + rowOffset + 1, emptyRowHeight);
     }
+    if (rowCount % 2 === 1) {
+      targetSheet.setRowHeight(targetStartRow + rowCount - 1, dataRowHeight);
+    }
+    */
   },
 
   /**
@@ -1787,13 +1818,16 @@ const InvoiceExportService = {
    * シートをPDFに変換
    * @param {string} spreadsheetId - スプレッドシートID
    * @param {number} sheetId - シートID
+   * @param {Object} options - オプション
+   * @param {boolean} options.landscape - 横向き印刷（デフォルト: false）
    * @returns {GoogleAppsScript.Base.Blob} PDFブロブ
    */
-  _exportSheetToPdf: function(spreadsheetId, sheetId) {
+  _exportSheetToPdf: function(spreadsheetId, sheetId, options = {}) {
+    const isLandscape = options.landscape === true;
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
       `format=pdf` +
       `&gid=${sheetId}` +
-      `&portrait=true` +
+      `&portrait=${!isLandscape}` +
       `&size=A4` +
       `&scale=3` + // 複数ページ対応（フォントサイズ維持）
       `&top_margin=0` +
@@ -1818,15 +1852,18 @@ const InvoiceExportService = {
   /**
    * スプレッドシート全体をPDFに変換（複数シート対応）
    * @param {string} spreadsheetId - スプレッドシートID
+   * @param {Object} options - オプション
+   * @param {boolean} options.landscape - 横向き印刷（デフォルト: false）
    * @returns {GoogleAppsScript.Base.Blob} PDFブロブ
    */
-  _exportSpreadsheetToPdf: function(spreadsheetId) {
+  _exportSpreadsheetToPdf: function(spreadsheetId, options = {}) {
+    const isLandscape = options.landscape === true;
     // gidパラメータを省略して全シートを出力
     // fitw=trueで幅を1ページに収め、fzr=trueで凍結行繰り返し
     // horizontal_alignment=CENTERで水平方向中央揃え
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
       `format=pdf` +
-      `&portrait=true` +
+      `&portrait=${!isLandscape}` +
       `&size=A4` +
       `&fitw=true` +  // 幅を1ページに収める
       `&fith=false` + // 高さは複数ページ可
