@@ -35,6 +35,9 @@ const InvoiceBulkExportService = {
    * @returns {Object} 実行結果
    */
   executeBulkExport: function(params) {
+    Logger.log(`[TIMING][executeBulkExport] START - ${params.invoiceIds.length}件, mode=${params.exportMode}`);
+    const _execStart = Date.now();
+
     // ユーザーロックを使用（ユーザーごとに独立）
     const lock = LockService.getUserLock();
     let lockAcquired = false;
@@ -174,6 +177,9 @@ const InvoiceBulkExportService = {
    * @returns {Object} { invoiceMap, customerMap }
    */
   _preloadInvoiceData: function(invoiceIds, processedCount) {
+    const _t = { start: Date.now() };
+    Logger.log(`[TIMING][preload] START - ${invoiceIds.length}件, 処理済み=${processedCount}`);
+
     // 未処理の請求書IDのみ対象
     const targetIds = invoiceIds.slice(processedCount);
     // 型の正規化（スプレッドシートから読み込む値との比較で型ずれを防ぐ）
@@ -182,13 +188,21 @@ const InvoiceBulkExportService = {
     // 請求書データを取得（対象IDのみフィルタ）
     // search({}) で全件取得し、対象IDでフィルタ
     const allInvoices = InvoiceRepository.search({});
+    _t.invoiceSearch = Date.now();
+    Logger.log(`[TIMING][preload] InvoiceRepository.search: ${_t.invoiceSearch - _t.start}ms (${allInvoices.length}件)`);
+
     const targetInvoices = allInvoices.filter(inv => targetIdSet.has(String(inv.invoice_id)));
+    _t.invoiceFilter = Date.now();
+    Logger.log(`[TIMING][preload] filter: ${_t.invoiceFilter - _t.invoiceSearch}ms (${targetInvoices.length}件)`);
 
     // 顧客IDを収集
     const customerIds = new Set(targetInvoices.map(inv => inv.customer_id));
 
     // 顧客データをMasterCache経由で取得（キャッシュ済み）
     const allCustomers = MasterCache.getCustomers();
+    _t.customers = Date.now();
+    Logger.log(`[TIMING][preload] MasterCache.getCustomers: ${_t.customers - _t.invoiceFilter}ms (${allCustomers.length}件)`);
+
     const customerMap = {};
     for (const customer of allCustomers) {
       if (customerIds.has(customer.customer_id)) {
@@ -198,6 +212,9 @@ const InvoiceBulkExportService = {
 
     // 明細データをチャンク読み込み（メモリ効率化: 全件読み込みを回避）
     const linesByInvoiceId = this._loadLinesInChunks(targetIdSet);
+    _t.lines = Date.now();
+    Logger.log(`[TIMING][preload] _loadLinesInChunks: ${_t.lines - _t.customers}ms`);
+    Logger.log(`[TIMING][preload] TOTAL: ${_t.lines - _t.start}ms`);
 
     // 各明細をline_number順にソート
     for (const invoiceId of Object.keys(linesByInvoiceId)) {
@@ -256,11 +273,11 @@ const InvoiceBulkExportService = {
    */
   _loadLinesInChunks: function(targetIdSet) {
     const CHUNK_SIZE = 3000;  // GAS制約を考慮した適切なチャンクサイズ
-    const config = TABLE_CONFIG.T_InvoiceLines;
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.sheetName);
+    const sheetName = TABLE_SHEET_MAP['T_InvoiceLines'];  // '請求明細'
+    const sheet = getDb().getSheetByName(sheetName);
 
     if (!sheet) {
-      Logger.log('[BulkExport] T_InvoiceLines シートが見つかりません');
+      Logger.log('[BulkExport] ' + sheetName + ' シートが見つかりません');
       return {};
     }
 
