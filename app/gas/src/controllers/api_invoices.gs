@@ -847,6 +847,17 @@ function startBulkExport(params) {
 
     // 一括出力を実行
     const result = InvoiceBulkExportService.executeBulkExport(params);
+
+    // サービス層でエラーが発生した場合はエラーレスポンスを返す
+    if (!result.success && result.error !== 'TIMEOUT_WILL_CONTINUE') {
+      return buildErrorResponse(
+        result.error || ERROR_CODES.SYSTEM_ERROR,
+        result.message || '一括出力に失敗しました',
+        {},
+        requestId
+      );
+    }
+
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
