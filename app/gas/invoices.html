@@ -3073,6 +3073,7 @@
         })
         .withFailureHandler(function(error) {
           bulkExportInFlight = false;
+          stopElapsedTimeUpdate();  // 防御的にタイマー停止（closeBulkExportModalの前に確実に停止）
           console.error('一括出力エラー:', error);
           showToast('一括出力でエラーが発生しました。しばらくしてから再度お試しください。', 'error');
           closeBulkExportModal();
@@ -3085,6 +3086,7 @@
      */
     function handleBulkExportResult(result) {
       if (!result.ok) {
+        stopElapsedTimeUpdate();  // 防御的にタイマー停止
         showToast(result.error?.message || '一括出力に失敗しました', 'error');
         closeBulkExportModal();
         return;
