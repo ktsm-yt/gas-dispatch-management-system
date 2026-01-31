@@ -1594,10 +1594,19 @@ const InvoiceExportService = {
     if (targetRowCount <= 0) return;
 
     const sourceRange = sheet.getRange(sourceRow, 1, 2, columnsCount);
-    const targetRange = sheet.getRange(targetStartRow, 1, targetRowCount, columnsCount);
 
-    // 書式を一括コピー（copyToは範囲全体に適用される）
-    sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    // copyToはソース範囲のサイズ分しかコピーしないため、
+    // 2行パターンを繰り返しコピーしてターゲット範囲全体に適用
+    for (let i = 0; i < targetRowCount; i += 2) {
+      const targetRow = targetStartRow + i;
+      const rowsToCopy = Math.min(2, targetRowCount - i);
+      const targetRange = sheet.getRange(targetRow, 1, rowsToCopy, columnsCount);
+      sourceRange.copyTo(targetRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+    }
+
+    // 内部の横罫線を削除（外枠の縦線は維持）
+    const fullRange = sheet.getRange(targetStartRow, 1, targetRowCount, columnsCount);
+    fullRange.setBorder(null, null, null, null, null, false);
 
     console.log(`書式を一括拡張: 行${targetStartRow} から ${targetRowCount}行`);
   },
