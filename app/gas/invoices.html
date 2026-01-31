@@ -3058,8 +3058,13 @@
 
     /**
      * 進捗ポーリングを開始
+     * TODO: タイミング計測中は一時的に無効化
      */
     function startProgressPolling() {
+      // 一時的に無効化（ログ汚染防止）
+      console.log('[DEBUG] Progress polling disabled for timing analysis');
+      return;
+
       if (bulkExportPollingId) return;  // 既にポーリング中
 
       bulkExportPollingId = setInterval(function() {
