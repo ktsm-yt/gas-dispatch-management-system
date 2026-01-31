@@ -55,8 +55,8 @@ const PaymentService = {
       }
 
       // 4. バリデーション
-      const amount = Number(paymentData.amount);
-      if (!amount || amount <= 0) {
+      const amount = parseFloat(paymentData.amount);
+      if (isNaN(amount) || amount <= 0) {
         return { success: false, error: 'INVALID_AMOUNT', message: '入金額は0より大きい値を入力してください。' };
       }
 
