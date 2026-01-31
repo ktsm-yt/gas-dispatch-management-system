@@ -2005,7 +2005,8 @@
             buttonEl.disabled = false;
             buttonEl.textContent = 'フォルダ作成';
           }
-          showToast('顧客フォルダ作成に失敗しました: ' + error.message, 'error');
+          console.error('createCustomerFolder error:', error);
+          showToast('顧客フォルダ作成に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .createCustomerFolder(customerId);
     }
@@ -2207,7 +2208,7 @@
         .withFailureHandler(function (error) {
           closeStatusConfirm();
           console.error('bulkUpdateStatus failure:', error);
-          showToast('更新に失敗しました: ' + error.message, 'error');
+          showToast('更新に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .bulkUpdateInvoiceStatus(updates, status);
     }
@@ -3072,7 +3073,8 @@
         })
         .withFailureHandler(function(error) {
           bulkExportInFlight = false;
-          showToast('一括出力でエラーが発生しました: ' + error.message, 'error');
+          console.error('一括出力エラー:', error);
+          showToast('一括出力でエラーが発生しました。しばらくしてから再度お試しください。', 'error');
           closeBulkExportModal();
         })
         .startBulkExport(bulkExportParams);
@@ -3423,7 +3425,7 @@
 
     function handleError(error) {
       console.error('Error:', error);
-      showToast('エラーが発生しました: ' + (error.message || error), 'error');
+      showToast('エラーが発生しました。しばらくしてから再度お試しください。', 'error');
     }
 
     // ========== 請求書再生成機能 ==========
@@ -3497,7 +3499,7 @@
           hideLoading();
           closeRegenerateConfirm();
           console.error('regenerateInvoice failure:', error);
-          showToast('再生成に失敗しました: ' + error.message, 'error');
+          showToast('再生成に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .regenerateInvoice(invoiceId);
     }
@@ -3616,7 +3618,8 @@
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showToast('請求書の取得に失敗しました: ' + error.message, 'error');
+          console.error('getInvoice error:', error);
+          showToast('請求書の取得に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .getInvoice(invoiceId);
     }
@@ -3746,7 +3749,8 @@
         })
         .withFailureHandler(function(error) {
           hideLoading();
-          showToast('保存に失敗しました: ' + error.message, 'error');
+          console.error('updateInvoiceDetails error:', error);
+          showToast('保存に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
     }
@@ -3929,7 +3933,7 @@
           submitBtn.disabled = false;
           submitBtn.textContent = '記録する';
           console.error('recordPayment error:', error);
-          showToast('入金記録に失敗しました: ' + error.message, 'error');
+          showToast('入金記録に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .recordPayment(invoiceId, paymentData, expectedUpdatedAt);
     }
@@ -3986,7 +3990,7 @@
         })
         .withFailureHandler(function(error) {
           console.error('deletePayment error:', error);
-          showToast('削除に失敗しました: ' + error.message, 'error');
+          showToast('削除に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .deletePayment(paymentId, expectedUpdatedAt);
     }
