@@ -2818,8 +2818,7 @@
     function closeBulkExportModal() {
       document.getElementById('bulkExportModal').classList.remove('active');
 
-      // タイマーを停止（ポーリング + 経過時間）
-      stopProgressPolling();
+      // タイマーを停止
       stopElapsedTimeUpdate();
       if (bulkExportPollInterval) {
         clearInterval(bulkExportPollInterval);
@@ -3054,42 +3053,6 @@
     }
 
     let bulkExportInFlight = false;  // リクエスト実行中フラグ
-    let bulkExportPollingId = null;  // ポーリングタイマーID
-
-    /**
-     * 進捗ポーリングを開始
-     * TODO: タイミング計測中は一時的に無効化
-     */
-    function startProgressPolling() {
-      // 一時的に無効化（ログ汚染防止）
-      console.log('[DEBUG] Progress polling disabled for timing analysis');
-      return;
-
-      if (bulkExportPollingId) return;  // 既にポーリング中
-
-      bulkExportPollingId = setInterval(function() {
-        google.script.run
-          .withSuccessHandler(function(result) {
-            if (result.ok && result.data) {
-              updateBulkExportProgress(result.data);
-            }
-          })
-          .withFailureHandler(function(error) {
-            console.log('進捗取得エラー:', error);
-          })
-          .getBulkExportProgress(bulkExportParams);
-      }, 5000);  // 5秒ごとにポーリング
-    }
-
-    /**
-     * 進捗ポーリングを停止
-     */
-    function stopProgressPolling() {
-      if (bulkExportPollingId) {
-        clearInterval(bulkExportPollingId);
-        bulkExportPollingId = null;
-      }
-    }
 
     /**
      * 一括出力リクエストを実行
@@ -3101,8 +3064,6 @@
       }
       bulkExportInFlight = true;
 
-      // ポーリング開始（実行中の進捗を表示）
-      startProgressPolling();
 
       google.script.run
         .withSuccessHandler(function(result) {
@@ -3111,7 +3072,6 @@
         })
         .withFailureHandler(function(error) {
           bulkExportInFlight = false;
-          stopProgressPolling();
           showToast('一括出力でエラーが発生しました: ' + error.message, 'error');
           closeBulkExportModal();
         })
@@ -3123,7 +3083,6 @@
      */
     function handleBulkExportResult(result) {
       if (!result.ok) {
-        stopProgressPolling();
         showToast(result.error?.message || '一括出力に失敗しました', 'error');
         closeBulkExportModal();
         return;
@@ -3142,7 +3101,6 @@
           bulkExportAccumulatedErrors = bulkExportAccumulatedErrors.concat(data.partialErrors);
         }
         console.log('一括出力: タイムアウトで中断、自動継続...');
-        stopProgressPolling();  // 再開前に一旦停止
         updateBulkExportProgress(data.progress);
         // 2秒待ってから再実行（再開時にポーリングも再開）
         setTimeout(executeBulkExportRequest, 2000);
@@ -3151,7 +3109,6 @@
 
       // 排他制御エラー
       if (data.error === 'ALREADY_RUNNING') {
-        stopProgressPolling();
         showToast(data.message || '別の一括出力が実行中です', 'warning');
         closeBulkExportModal();
         return;
@@ -3159,7 +3116,6 @@
 
       // 完了
       if (data.success) {
-        stopProgressPolling();
         showBulkExportComplete(data);
       }
     }
