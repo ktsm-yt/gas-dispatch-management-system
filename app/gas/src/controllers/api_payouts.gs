@@ -36,7 +36,7 @@ function getStaffForPayouts() {
  * @param {string} endDate - 集計終了日（YYYY-MM-DD）
  * @returns {Object} APIレスポンス
  */
-function getUnpaidSummary(staffId, endDate) {
+function getUnpaidSummary(staffId, endDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -56,7 +56,7 @@ function getUnpaidSummary(staffId, endDate) {
     }
 
     // Service呼び出し
-    const result = PayoutService.calculatePayout(staffId, endDate);
+    const result = PayoutService.calculatePayout(staffId, endDate, options);
 
     // スタッフ名を付与
     const staff = StaffRepository.findById(staffId);
@@ -66,6 +66,41 @@ function getUnpaidSummary(staffId, endDate) {
 
   } catch (error) {
     console.error('getUnpaidSummary error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 未払い配置一覧を取得（詳細表示用）
+ * @param {string} staffId - スタッフID
+ * @param {string} endDate - 集計終了日（YYYY-MM-DD）
+ * @returns {Object} APIレスポンス
+ */
+function getUnpaidAssignments(staffId, endDate) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 入力検証
+    if (!staffId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const assignments = PayoutService.getUnpaidAssignments(staffId, endDate);
+
+    return buildSuccessResponse({ assignments: assignments, count: assignments.length }, requestId);
+
+  } catch (error) {
+    console.error('getUnpaidAssignments error:', error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }

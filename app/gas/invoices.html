@@ -996,6 +996,7 @@
                   <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0;">請求書番号</th>
                   <th style="padding: 10px 12px; text-align: right; border-bottom: 1px solid #e0e0e0;">金額</th>
                   <th style="padding: 10px 12px; text-align: left; border-bottom: 1px solid #e0e0e0;">メール</th>
+                  <th style="padding: 10px 12px; text-align: center; border-bottom: 1px solid #e0e0e0;">共有</th>
                   <th style="padding: 10px 12px; text-align: center; border-bottom: 1px solid #e0e0e0;">PDF</th>
                 </tr>
               </thead>
@@ -2879,7 +2880,7 @@
       document.getElementById('bulkExportCompleteView').style.display = 'block';
 
       // モーダル幅を広げる
-      document.getElementById('bulkExportModalContent').style.maxWidth = '700px';
+      document.getElementById('bulkExportModalContent').style.maxWidth = '850px';
 
       // 件数を表示
       document.getElementById('bulkExportCompleteText').textContent =
@@ -3192,7 +3193,7 @@
       document.getElementById('bulkExportCompleteView').style.display = 'block';
 
       // モーダル幅を広げる
-      document.getElementById('bulkExportModalContent').style.maxWidth = '700px';
+      document.getElementById('bulkExportModalContent').style.maxWidth = '850px';
 
       document.getElementById('bulkExportCompleteText').textContent =
         successCount + ' 件の帳票を出力しました';
@@ -3207,13 +3208,19 @@
           const pdfLink = r.pdfUrl
             ? '<a href="' + escapeHtml(r.pdfUrl) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">📄 開く</a>'
             : '-';
-          const emailDisplay = r.email ? escapeHtml(r.email) : '-';
+          const emailDisplay = r.email
+            ? '<a href="https://mail.google.com/mail/?view=cm&to=' + encodeURIComponent(r.email) + '" target="_blank" style="color: #1a73e8; text-decoration: none;">' + escapeHtml(r.email) + '</a>'
+            : '-';
+          const copyBtn = r.pdfUrl
+            ? '<button onclick="copyShareLink(this, \'' + escapeHtml(r.pdfUrl) + '\')" style="padding: 4px 8px; font-size: 12px; border: 1px solid #ddd; border-radius: 4px; background: #fff; cursor: pointer;">コピー</button>'
+            : '-';
 
           return '<tr style="border-bottom: 1px solid #f0f0f0;">' +
             '<td style="padding: 8px 12px;">' + escapeHtml(r.companyName || '-') + '</td>' +
             '<td style="padding: 8px 12px;">' + escapeHtml(r.invoiceNumber || '-') + '</td>' +
             '<td style="padding: 8px 12px; text-align: right;">' + amountDisplay + '</td>' +
             '<td style="padding: 8px 12px; font-size: 12px;">' + emailDisplay + '</td>' +
+            '<td style="padding: 8px 12px; text-align: center;">' + copyBtn + '</td>' +
             '<td style="padding: 8px 12px; text-align: center;">' + pdfLink + '</td>' +
             '</tr>';
         }).join('');
@@ -3243,6 +3250,24 @@
 
       // 選択を解除
       clearSelection();
+    }
+
+    /**
+     * 共有リンクを1件コピー
+     */
+    function copyShareLink(btn, url) {
+      navigator.clipboard.writeText(url).then(function() {
+        const originalText = btn.textContent;
+        btn.textContent = '✓';
+        btn.style.color = '#34a853';
+        setTimeout(function() {
+          btn.textContent = originalText;
+          btn.style.color = '';
+        }, 1500);
+      }).catch(function(err) {
+        console.error('Copy failed:', err);
+        showToast('コピーに失敗しました', 'error');
+      });
     }
 
     /**
