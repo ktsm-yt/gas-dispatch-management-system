@@ -1015,7 +1015,6 @@
           </div>
         </div>
         <div class="modal-footer" style="display: flex; gap: 8px; justify-content: flex-end;">
-          <button class="btn btn-secondary" id="copyAllShareLinksBtn" onclick="copyAllShareLinks()">📋 全件リンクコピー</button>
           <button class="btn btn-secondary" onclick="downloadBulkExportCsv()">📥 送信用一覧CSVダウンロード</button>
           <button class="btn btn-primary" onclick="closeBulkExportModal()">閉じる</button>
         </div>
@@ -3265,35 +3264,6 @@
           btn.textContent = originalText;
           btn.style.color = '';
         }, 1500);
-      }).catch(function(err) {
-        console.error('Copy failed:', err);
-        showToast('コピーに失敗しました', 'error');
-      });
-    }
-
-    /**
-     * 全件の共有リンクを一括コピー
-     */
-    function copyAllShareLinks() {
-      if (!lastBulkExportResults || !lastBulkExportResults.results) {
-        showToast('コピーするリンクがありません', 'error');
-        return;
-      }
-      const links = lastBulkExportResults.results
-        .filter(function(r) { return r.pdfUrl; })
-        .map(function(r) { return r.pdfUrl; });
-      if (links.length === 0) {
-        showToast('コピーするリンクがありません', 'error');
-        return;
-      }
-      navigator.clipboard.writeText(links.join('\n')).then(function() {
-        const btn = document.getElementById('copyAllShareLinksBtn');
-        const originalText = btn.textContent;
-        btn.textContent = '✓ コピーしました';
-        setTimeout(function() {
-          btn.textContent = originalText;
-        }, 2000);
-        showToast(links.length + '件のリンクをコピーしました', 'success');
       }).catch(function(err) {
         console.error('Copy failed:', err);
         showToast('コピーに失敗しました', 'error');
