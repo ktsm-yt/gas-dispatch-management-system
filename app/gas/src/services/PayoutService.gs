@@ -75,12 +75,13 @@ const PayoutService = {
    * @param {string} endDate - 集計終了日
    * @returns {Object} { assignments, baseAmount, transportAmount, totalAmount, periodStart, periodEnd }
    */
-  calculatePayout: function(staffId, endDate) {
+  calculatePayout: function(staffId, endDate, options = {}) {
     const assignments = this.getUnpaidAssignments(staffId, endDate);
+    const includeAssignments = options.include_assignments !== false;
 
     if (assignments.length === 0) {
       return {
-        assignments: [],
+        assignments: includeAssignments ? [] : null,
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
@@ -106,7 +107,7 @@ const PayoutService = {
     const periodEnd = endDate;
 
     return {
-      assignments: assignments,
+      assignments: includeAssignments ? assignments : null,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
