@@ -317,6 +317,10 @@ const AssignmentRepository = {
    *
    * Note: payout_idはメタデータであり、配置の実質的な内容変更ではないため
    *       updated_at/updated_by は更新しない（請求変更検知の誤検知防止）
+   *
+   * ★ パフォーマンス改善: 全行setValuesではなく対象セルのみsetValue
+   *   - 読み込み: 全行（対象行を特定するため）
+   *   - 書き込み: 対象セルのみ（数万行の書き戻しを回避）
    */
   bulkUpdatePayoutId: function(updates) {
     if (!updates || updates.length === 0) {
@@ -325,8 +329,7 @@ const AssignmentRepository = {
 
     const sheet = getSheet(this.TABLE_NAME);
     const headers = getHeaders(sheet);
-    const dataRange = sheet.getDataRange();
-    const allRows = dataRange.getValues();
+    const allRows = sheet.getDataRange().getValues();
 
     // assignment_idをキーにしたMapを作成
     const updateMap = new Map(updates.map(u => [u.assignment_id, u.payout_id]));
@@ -335,23 +338,36 @@ const AssignmentRepository = {
     const idColIdx = headers.indexOf(this.ID_COLUMN);
     const payoutIdColIdx = headers.indexOf('payout_id');
 
+    // デバッグ: カラムが見つからない場合
+    if (payoutIdColIdx === -1) {
+      Logger.log(`[bulkUpdatePayoutId] ERROR: payout_id column not found. headers=${JSON.stringify(headers)}`);
+      throw new Error('payout_id column not found in T_JobAssignments');
+    }
+
+    const payoutIdColNum = payoutIdColIdx + 1;  // 1-indexed for getRange
+    Logger.log(`[bulkUpdatePayoutId] Starting: ${updates.length} updates, payoutIdColNum=${payoutIdColNum}`);
+
     let successCount = 0;
-    let failedCount = 0;
 
     // ヘッダー行をスキップして処理
     // payout_idのみ更新（updated_at/updated_byは更新しない）
     for (let i = 1; i < allRows.length; i++) {
       const assignmentId = allRows[i][idColIdx];
       if (updateMap.has(assignmentId)) {
-        allRows[i][payoutIdColIdx] = updateMap.get(assignmentId);
+        const rowNum = i + 1;  // 1-indexed for getRange
+        // ★ 対象セルのみ更新（全行setValuesを回避）
+        sheet.getRange(rowNum, payoutIdColNum).setValue(updateMap.get(assignmentId));
         successCount++;
+
+        // 全件更新したら早期終了
+        if (successCount >= updates.length) {
+          break;
+        }
       }
     }
 
-    // 一括書き込み
-    dataRange.setValues(allRows);
-
-    return { success: successCount, failed: failedCount };
+    Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated`);
+    return { success: successCount, failed: updates.length - successCount };
   },
 
   /**
