@@ -309,26 +309,97 @@ const PayoutService = {
    * @param {string} endDate - 集計終了日
    * @param {Object} options - オプション
    * @param {Object} options.adjustments - スタッフIDをキーとした調整額・備考
+   * @param {Object} options.preCalculatedData - UIから送信された事前計算済みデータ（軽量モード）
    * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
    */
   bulkConfirmPayouts: function(staffIds, endDate, options = {}) {
     Logger.log(`[bulkConfirmPayouts] Starting bulk confirm for ${staffIds.length} staff`);
 
     const adjustments = options.adjustments || {};
+    const preCalculatedData = options.preCalculatedData || null;
     const results = [];
     const payoutsToInsert = [];
     const assignmentUpdates = [];
     let success = 0;
     let failed = 0;
 
-    // 1. 全スタッフの未払い計算を一括で行う
-    const staffCalcMap = new Map();
-    for (const staffId of staffIds) {
-      const calc = this.calculatePayout(staffId, endDate);
-      staffCalcMap.set(staffId, calc);
+    // ★ 軽量モード: UIから事前計算済みデータが渡された場合、再計算をスキップ
+    const useLightMode = preCalculatedData !== null;
+    Logger.log(`[bulkConfirmPayouts] Mode: ${useLightMode ? 'LIGHT (skip recalculation)' : 'FULL (recalculate)'}`);
+
+    let staffCalcMap = new Map();
+
+    if (useLightMode) {
+      // ★ 軽量モード: preCalculatedDataをそのまま使用（シートI/Oなし）
+      for (const staffId of staffIds) {
+        const preCalc = preCalculatedData[staffId];
+        if (preCalc && preCalc.assignmentIds && preCalc.assignmentIds.length > 0) {
+          staffCalcMap.set(staffId, {
+            assignments: preCalc.assignmentIds.map(id => ({ assignment_id: id })),
+            assignmentCount: preCalc.assignmentIds.length,
+            baseAmount: preCalc.baseAmount || 0,
+            transportAmount: preCalc.transportAmount || 0,
+            taxAmount: preCalc.taxAmount || 0,
+            totalAmount: preCalc.estimatedAmount + (preCalc.taxAmount || 0),  // 税引き前に戻す
+            periodStart: preCalc.periodStart,
+            periodEnd: preCalc.periodEnd || endDate
+          });
+        } else {
+          staffCalcMap.set(staffId, { assignmentCount: 0 });
+        }
+      }
+    } else {
+      // ★ フルモード: 従来通り再計算（後方互換性のため残す）
+
+      // 1. Jobデータを事前ロード
+      const jobs = JobRepository.search({ work_date_to: endDate, sort_order: 'asc' });
+      const jobMap = new Map(jobs.map(j => [j.job_id, j]));
+      const jobIdSet = new Set(jobs.map(j => j.job_id));
+      Logger.log(`[bulkConfirmPayouts] Preloaded ${jobs.length} jobs`);
+
+      // 2. Payoutデータを事前ロード
+      const allPayouts = PayoutRepository.search({
+        payout_type: 'STAFF',
+        status_in: ['confirmed', 'paid']
+      });
+      const lastPayoutMap = new Map();
+      for (const p of allPayouts) {
+        if (!p.staff_id) continue;
+        const existing = lastPayoutMap.get(p.staff_id);
+        if (!existing) {
+          lastPayoutMap.set(p.staff_id, p);
+        } else {
+          const existingDate = existing.paid_date || existing.period_end;
+          const newDate = p.paid_date || p.period_end;
+          if (newDate > existingDate) {
+            lastPayoutMap.set(p.staff_id, p);
+          }
+        }
+      }
+      Logger.log(`[bulkConfirmPayouts] Preloaded ${allPayouts.length} payouts`);
+
+      // 3. Assignmentデータを事前ロード
+      const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' })
+        .filter(a => !a.is_deleted && !a.payout_id);
+      const assignmentsByStaff = new Map();
+      for (const a of allAssignments) {
+        if (!assignmentsByStaff.has(a.staff_id)) {
+          assignmentsByStaff.set(a.staff_id, []);
+        }
+        assignmentsByStaff.get(a.staff_id).push(a);
+      }
+      Logger.log(`[bulkConfirmPayouts] Preloaded ${allAssignments.length} assignments`);
+
+      const bulkCache = { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff };
+
+      // 4. 全スタッフの未払い計算
+      for (const staffId of staffIds) {
+        const calc = this._calculatePayoutWithBulkCache(staffId, endDate, bulkCache);
+        staffCalcMap.set(staffId, calc);
+      }
     }
 
-    // 2. 支払いレコードを準備
+    // 支払いレコードを準備
     for (const staffId of staffIds) {
       const calc = staffCalcMap.get(staffId);
 
@@ -767,10 +838,14 @@ const PayoutService = {
         staffId: staffId,
         staffName: staff.name,
         unpaidCount: staffAssignments.length,
+        baseAmount: calcResult.baseAmount,
+        transportAmount: calcResult.transportAmount,
         estimatedAmount: calcResult.totalAmount - taxAmount,
         taxAmount: taxAmount,
         periodStart: periodStart,
-        periodEnd: endDate
+        periodEnd: endDate,
+        // ★ bulkConfirmPayoutsで再計算をスキップするためのデータ
+        assignmentIds: staffAssignments.map(a => a.assignment_id)
       });
     }
 
@@ -779,6 +854,103 @@ const PayoutService = {
   },
 
   // ========== Private Methods ==========
+
+  /**
+   * 未払い金額を計算（フルキャッシュ使用版 - bulkConfirmPayouts用）
+   * @param {string} staffId - スタッフID
+   * @param {string} endDate - 集計終了日
+   * @param {Object} bulkCache - { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff }
+   * @returns {Object} { assignments, baseAmount, transportAmount, totalAmount, periodStart, periodEnd }
+   */
+  _calculatePayoutWithBulkCache: function(staffId, endDate, bulkCache) {
+    const assignments = this._getUnpaidAssignmentsWithBulkCache(staffId, endDate, bulkCache);
+
+    if (assignments.length === 0) {
+      return {
+        assignments: [],
+        assignmentCount: 0,
+        baseAmount: 0,
+        transportAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        periodStart: null,
+        periodEnd: endDate
+      };
+    }
+
+    // スタッフ情報を取得（MasterCacheを使用）
+    const allStaff = MasterCache.getStaff();
+    const staff = allStaff.find(s => s.staff_id === staffId);
+
+    // 金額計算
+    const result = calculateMonthlyPayout_(assignments, staff);
+
+    // 源泉徴収税を計算（STAFFで withholding_tax_applicable の場合のみ）
+    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount);
+
+    // 期間を算出
+    const dates = assignments.map(a => a.work_date).filter(d => d);
+    const periodStart = dates.length > 0 ? dates[0] : endDate;
+    const periodEnd = endDate;
+
+    return {
+      assignments: assignments,
+      assignmentCount: assignments.length,
+      baseAmount: result.baseAmount,
+      transportAmount: result.transportAmount,
+      taxAmount: taxAmount,
+      totalAmount: result.totalAmount - taxAmount,  // 税引き後
+      periodStart: periodStart,
+      periodEnd: periodEnd
+    };
+  },
+
+  /**
+   * スタッフの未払い配置を取得（フルキャッシュ使用版 - bulkConfirmPayouts用）
+   * ★ シートI/Oゼロ: 全データは事前ロード済み
+   * @param {string} staffId - スタッフID
+   * @param {string} endDate - 集計終了日
+   * @param {Object} bulkCache - { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff }
+   * @returns {Object[]} 未払い配置リスト（Job情報含む）
+   */
+  _getUnpaidAssignmentsWithBulkCache: function(staffId, endDate, bulkCache) {
+    const { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff } = bulkCache;
+
+    // 1. 最後の支払いをキャッシュから取得（シートI/Oなし）
+    const lastPayout = lastPayoutMap.get(staffId);
+    const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
+
+    // 2. 期間フィルタ用のJobIdSetを作成
+    let filteredJobIdSet = jobIdSet;
+    if (startDate) {
+      filteredJobIdSet = new Set(
+        jobs.filter(j => j.work_date >= startDate).map(j => j.job_id)
+      );
+    }
+
+    if (filteredJobIdSet.size === 0) {
+      return [];
+    }
+
+    // 3. スタッフの配置をキャッシュから取得（シートI/Oなし）
+    const staffAssignments = assignmentsByStaff.get(staffId) || [];
+
+    // 4. 該当Job内の配置をフィルタリング（Set.has()でO(1)）
+    const unpaidAssignments = staffAssignments.filter(a =>
+      filteredJobIdSet.has(a.job_id)
+    );
+
+    // 5. Job情報を付与して返す
+    return unpaidAssignments.map(a => {
+      const job = jobMap.get(a.job_id);
+      return {
+        ...a,
+        work_date: job ? job.work_date : '',
+        site_name: job ? job.site_name : '',
+        customer_id: job ? job.customer_id : ''
+      };
+    }).sort((a, b) => (a.work_date || '').localeCompare(b.work_date || ''));
+  },
 
   /**
    * 対象AssignmentsにPayoutIDを紐付け（二重計上防止）

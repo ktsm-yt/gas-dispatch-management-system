@@ -455,7 +455,7 @@
 
     /* ========== Bulk Action Bar ========== */
     .bulk-action-bar {
-      display: none;
+      display: flex;
       position: sticky;
       top: 0;
       z-index: 50;
@@ -1596,6 +1596,27 @@
         };
       });
 
+      // ★ 軽量モード: SessionStorageから事前計算済みデータを取得
+      const cached = loadFromSession(endDate);
+      let preCalculatedData = null;
+      if (cached && cached.data && cached.data.staffList) {
+        preCalculatedData = {};
+        cached.data.staffList.forEach(staff => {
+          if (staffIds.includes(staff.staffId)) {
+            preCalculatedData[staff.staffId] = {
+              assignmentIds: staff.assignmentIds || [],
+              baseAmount: staff.baseAmount || 0,
+              transportAmount: staff.transportAmount || 0,
+              taxAmount: staff.taxAmount || 0,
+              estimatedAmount: staff.estimatedAmount || 0,
+              periodStart: staff.periodStart,
+              periodEnd: staff.periodEnd
+            };
+          }
+        });
+        console.log('[bulkConfirm] Using light mode with preCalculatedData for', Object.keys(preCalculatedData).length, 'staff');
+      }
+
       showConfirmModal(
         '一括確認',
         `<p><strong>${staffIds.length}名</strong> のスタッフを確認済みにします。</p>
@@ -1636,7 +1657,8 @@
               showToast('error', err.message);
             })
             .bulkConfirmPayouts(staffIds, endDate, {
-              adjustments: adjustments
+              adjustments: adjustments,
+              preCalculatedData: preCalculatedData  // ★ 軽量モード用データ
             });
         }
       );
