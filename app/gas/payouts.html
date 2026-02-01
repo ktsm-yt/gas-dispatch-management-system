@@ -455,7 +455,7 @@
 
     /* ========== Bulk Action Bar ========== */
     .bulk-action-bar {
-      display: none;
+      display: flex;
       position: sticky;
       top: 0;
       z-index: 50;
@@ -850,6 +850,12 @@
       return cache.data;
     }
 
+    function getCachedSubcontractorPreview(subcontractorId, endDate) {
+      const cache = loadSubUnpaidFromSession(endDate);
+      if (!cache || !cache.subcontractorList) return null;
+      return cache.subcontractorList.find(s => s.subcontractorId === subcontractorId) || null;
+    }
+
     function clearSubUnpaidSession() {
       sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
     }
@@ -881,6 +887,41 @@
       data.payouts = updater(data.payouts);
       data.timestamp = Date.now(); // refresh TTL
       sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify(data));
+    }
+
+    function getCachedUnpaidPreview(staffId, endDate) {
+      const cached = loadFromSession(endDate);
+      if (!cached || !staffId) return null;
+
+      if (cached.mode === 'single' && cached.staffId === staffId && cached.data) {
+        return { data: cached.data, isComplete: true };
+      }
+
+      if (cached.mode === 'list' && cached.data && Array.isArray(cached.data.staffList)) {
+        const row = cached.data.staffList.find(s => s.staffId === staffId);
+        if (!row) return null;
+        return {
+          data: {
+            staffName: row.staffName,
+            assignmentCount: row.unpaidCount,
+            baseAmount: row.baseAmount,
+            transportAmount: row.transportAmount,
+            taxAmount: row.taxAmount,
+            totalAmount: row.estimatedAmount,
+            periodStart: row.periodStart,
+            periodEnd: row.periodEnd
+          },
+          isComplete: false
+        };
+      }
+
+      return null;
+    }
+
+    function getCachedHistoryForStaff(staffId) {
+      const cached = loadHistoryFromSession();
+      if (!cached || !staffId) return null;
+      return cached.filter(p => p.staff_id === staffId).slice(0, 10);
     }
 
     // Staff cache functions (no TTL - valid for session)
@@ -1084,7 +1125,7 @@
             summaryDiv.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
             clearSession();
           })
-          .getUnpaidSummary(staffId, endDate);
+          .getUnpaidSummary(staffId, endDate, { include_assignments: false });
       } else {
         // 全スタッフの未払一覧 + 確認済み一覧を並列取得
         showLoading('データを読み込み中...');
@@ -1596,6 +1637,27 @@
         };
       });
 
+      // ★ 軽量モード: SessionStorageから事前計算済みデータを取得
+      const cached = loadFromSession(endDate);
+      let preCalculatedData = null;
+      if (cached && cached.data && cached.data.staffList) {
+        preCalculatedData = {};
+        cached.data.staffList.forEach(staff => {
+          if (staffIds.includes(staff.staffId)) {
+            preCalculatedData[staff.staffId] = {
+              assignmentIds: staff.assignmentIds || [],
+              baseAmount: staff.baseAmount || 0,
+              transportAmount: staff.transportAmount || 0,
+              taxAmount: staff.taxAmount || 0,
+              estimatedAmount: staff.estimatedAmount || 0,
+              periodStart: staff.periodStart,
+              periodEnd: staff.periodEnd
+            };
+          }
+        });
+        console.log('[bulkConfirm] Using light mode with preCalculatedData for', Object.keys(preCalculatedData).length, 'staff');
+      }
+
       showConfirmModal(
         '一括確認',
         `<p><strong>${staffIds.length}名</strong> のスタッフを確認済みにします。</p>
@@ -1636,7 +1698,8 @@
               showToast('error', err.message);
             })
             .bulkConfirmPayouts(staffIds, endDate, {
-              adjustments: adjustments
+              adjustments: adjustments,
+              preCalculatedData: preCalculatedData  // ★ 軽量モード用データ
             });
         }
       );
@@ -1875,12 +1938,52 @@
     function openPayoutModal(staffId, staffName) {
       const modal = document.getElementById('payoutDetailModal');
       modal.dataset.staffId = staffId;
+      modal.dataset.assignmentsLoaded = 'false';
+      modal.dataset.assignmentsLoading = 'false';
       document.getElementById('modalStaffName').textContent = staffName || '';
-      document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      modalUnpaidData = null;
+      modalHistoryData = [];
+      const endDate = document.getElementById('endDateFilter').value;
+
+      const cachedSummary = getCachedUnpaidPreview(staffId, endDate);
+      const cachedHistory = getCachedHistoryForStaff(staffId);
+      const summaryComplete = cachedSummary && cachedSummary.isComplete;
+
+      if (cachedSummary) {
+        modalUnpaidData = cachedSummary.data;
+        modalHistoryData = cachedHistory || [];
+        renderPayoutModal(
+          cachedSummary.data,
+          cachedHistory ? cachedHistory : null,
+          { preview: !summaryComplete }
+        );
+      } else {
+        document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      }
 
       modal.classList.add('active');
 
-      const endDate = document.getElementById('endDateFilter').value;
+      if (summaryComplete) {
+        // サマリーが完備している場合は履歴のみ遅延取得
+        if (!cachedHistory) {
+          google.script.run
+            .withSuccessHandler(result => {
+              if (modal.dataset.staffId !== staffId) return;
+              if (result.ok) {
+                modalHistoryData = result.data.payouts || [];
+                updateModalHistory(modalHistoryData);
+              } else {
+                updateModalHistory([]);
+              }
+            })
+            .withFailureHandler(() => {
+              if (modal.dataset.staffId !== staffId) return;
+              updateModalHistory([]);
+            })
+            .searchPayouts({ staff_id: staffId, status: 'paid', limit: 10 });
+        }
+        return;
+      }
 
       // 未払サマリーと支払履歴を並行取得
       let unpaidResult = null;
@@ -1890,6 +1993,7 @@
       function checkAndRender() {
         completed++;
         if (completed === 2) {
+          if (modal.dataset.staffId !== staffId) return;
           if (unpaidResult && unpaidResult.ok) {
             modalUnpaidData = unpaidResult.data;
             modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
@@ -1904,7 +2008,7 @@
       google.script.run
         .withSuccessHandler(result => { unpaidResult = result; checkAndRender(); })
         .withFailureHandler(err => { unpaidResult = { ok: false, error: err.message }; checkAndRender(); })
-        .getUnpaidSummary(staffId, endDate);
+        .getUnpaidSummary(staffId, endDate, { include_assignments: false });
 
       google.script.run
         .withSuccessHandler(result => { historyResult = result; checkAndRender(); })
@@ -1912,49 +2016,135 @@
         .searchPayouts({ staff_id: staffId, status: 'paid', limit: 10 });
     }
 
-    function renderPayoutModal(data, history = []) {
-      const today = new Date().toISOString().split('T')[0];
-      const body = document.getElementById('payoutModalBody');
-
-      if (data.assignmentCount === 0) {
-        body.innerHTML = '<div class="empty-state">未払の配置はありません</div>';
-        document.getElementById('modalPayBtn').style.display = 'none';
-        return;
+    function buildHistoryListHtml(history) {
+      if (history === null) {
+        return '<li class="empty">読み込み中...</li>';
       }
-
-      document.getElementById('modalPayBtn').style.display = '';
-
-      // 支払履歴HTML
-      let historyHtml = '';
       if (history.length > 0) {
-        historyHtml = history.map(p => `
+        return history.map(p => `
           <li>
             <span class="history-date">${p.paid_date || '-'}</span>
             <span class="history-amount">${formatCurrency(p.total_amount)}</span>
           </li>
         `).join('');
-      } else {
-        historyHtml = '<li class="empty">履歴なし</li>';
+      }
+      return '<li class="empty">履歴なし</li>';
+    }
+
+    function updateModalHistory(history) {
+      const list = document.getElementById('modalHistoryList');
+      if (!list) return;
+      list.innerHTML = buildHistoryListHtml(history);
+    }
+
+    function buildAssignmentTableHtml(assignments) {
+      const rows = assignments.map(a => {
+        const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
+        const siteName = a.site_name || '(現場名なし)';
+        return `<tr><td>${dateStr}</td><td>${siteName}</td></tr>`;
+      }).join('');
+      return `
+        <table class="assignment-list-table">
+          <thead><tr><th>日付</th><th>現場名</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderModalAssignments(assignments) {
+      const wrapper = document.getElementById('modalAssignmentWrapper');
+      if (!wrapper) return;
+      if (!assignments || assignments.length === 0) {
+        wrapper.innerHTML = '<div class="empty-state">出勤現場がありません</div>';
+        return;
+      }
+      wrapper.innerHTML = buildAssignmentTableHtml(assignments);
+    }
+
+    function loadModalAssignments() {
+      const modal = document.getElementById('payoutDetailModal');
+      if (!modal) return;
+      if (modal.dataset.assignmentsLoaded === 'true' || modal.dataset.assignmentsLoading === 'true') return;
+
+      const staffId = modal.dataset.staffId;
+      const endDate = document.getElementById('endDateFilter').value;
+      const wrapper = document.getElementById('modalAssignmentWrapper');
+      if (!staffId || !wrapper) return;
+
+      modal.dataset.assignmentsLoading = 'true';
+      wrapper.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (modal.dataset.staffId !== staffId) return;
+          modal.dataset.assignmentsLoading = 'false';
+          if (result.ok) {
+            modal.dataset.assignmentsLoaded = 'true';
+            renderModalAssignments(result.data.assignments || []);
+          } else {
+            wrapper.innerHTML = `<div class="empty-state">${result.error || '取得に失敗しました'}</div>`;
+          }
+        })
+        .withFailureHandler(err => {
+          if (modal.dataset.staffId !== staffId) return;
+          modal.dataset.assignmentsLoading = 'false';
+          wrapper.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+        })
+        .getUnpaidAssignments(staffId, endDate);
+    }
+
+    function attachModalAssignmentLazyLoad(assignmentsLoaded) {
+      const details = document.getElementById('modalAssignmentDetails');
+      if (!details || assignmentsLoaded) return;
+      details.addEventListener('toggle', () => {
+        if (details.open) {
+          loadModalAssignments();
+        }
+      });
+    }
+
+    function renderPayoutModal(data, history = [], options = {}) {
+      const today = new Date().toISOString().split('T')[0];
+      const body = document.getElementById('payoutModalBody');
+      const preview = options.preview === true;
+      const disabledAttr = preview ? 'disabled' : '';
+      const baseText = (data.baseAmount === null || data.baseAmount === undefined) ? '-' : formatCurrency(data.baseAmount);
+      const transportText = (data.transportAmount === null || data.transportAmount === undefined) ? '-' : formatCurrency(data.transportAmount);
+      const totalText = (data.totalAmount === null || data.totalAmount === undefined) ? '-' : formatCurrency(data.totalAmount);
+
+      if (data.assignmentCount === 0) {
+        body.innerHTML = '<div class="empty-state">未払の配置はありません</div>';
+        const payBtn = document.getElementById('modalPayBtn');
+        payBtn.style.display = 'none';
+        payBtn.disabled = false;
+        return;
+      }
+
+      const payBtn = document.getElementById('modalPayBtn');
+      payBtn.style.display = '';
+      payBtn.disabled = preview;
+
+      const historyHtml = buildHistoryListHtml(history);
+
+      const assignmentsLoaded = Array.isArray(data.assignments);
+      const modal = document.getElementById('payoutDetailModal');
+      if (modal) {
+        modal.dataset.assignmentsLoaded = assignmentsLoaded ? 'true' : 'false';
+        modal.dataset.assignmentsLoading = 'false';
       }
 
       // 出勤現場一覧HTML
       let assignmentListHtml = '';
-      if (data.assignments && data.assignments.length > 0) {
-        const rows = data.assignments.map(a => {
-          // 日付を MM/DD 形式に変換（年不要）
-          const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
-          const siteName = a.site_name || '(現場名なし)';
-          return `<tr><td>${dateStr}</td><td>${siteName}</td></tr>`;
-        }).join('');
+      if (data.assignmentCount > 0) {
+        const listBody = assignmentsLoaded
+          ? buildAssignmentTableHtml(data.assignments || [])
+          : '<div class="empty-state">開いて読み込み</div>';
         assignmentListHtml = `
           <div class="assignment-list-section">
-            <details>
+            <details id="modalAssignmentDetails">
               <summary style="cursor: pointer; font-weight: 500; margin-bottom: 8px;">出勤現場一覧（${data.assignmentCount}件）</summary>
-              <div class="assignment-list-wrapper">
-                <table class="assignment-list-table">
-                  <thead><tr><th>日付</th><th>現場名</th></tr></thead>
-                  <tbody>${rows}</tbody>
-                </table>
+              <div class="assignment-list-wrapper" id="modalAssignmentWrapper">
+                ${listBody}
               </div>
             </details>
           </div>
@@ -1975,40 +2165,42 @@
               </div>
               <div class="summary-item">
                 <div class="label">基本給与</div>
-                <div class="value amount">${formatCurrency(data.baseAmount)}</div>
+                <div class="value amount">${baseText}</div>
               </div>
               <div class="summary-item">
                 <div class="label">交通費</div>
-                <div class="value amount">${formatCurrency(data.transportAmount)}</div>
+                <div class="value amount">${transportText}</div>
               </div>
               <div class="summary-item">
                 <div class="label">合計</div>
-                <div class="value amount" id="modalTotalAmount">${formatCurrency(data.totalAmount)}</div>
+                <div class="value amount" id="modalTotalAmount">${totalText}</div>
               </div>
             </div>
             ${assignmentListHtml}
             <div style="display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center;">
               <div class="filter-group">
                 <label>支払日:</label>
-                <input type="date" id="modalPaidDate" value="${today}" />
+                <input type="date" id="modalPaidDate" value="${today}" ${disabledAttr} />
               </div>
               <div class="filter-group">
                 <label>調整額:</label>
-                <button type="button" class="btn-sign positive" id="modalSignBtn" onclick="toggleModalSign()">+</button>
-                <input type="number" id="modalAdjustment" value="0" min="0" style="width: 80px;" onchange="updateModalTotal()" oninput="updateModalTotal()" />
+                <button type="button" class="btn-sign positive" id="modalSignBtn" onclick="toggleModalSign()" ${disabledAttr}>+</button>
+                <input type="number" id="modalAdjustment" value="0" min="0" style="width: 80px;" onchange="updateModalTotal()" oninput="updateModalTotal()" ${disabledAttr} />
               </div>
               <div class="filter-group" style="flex: 1;">
                 <label style="white-space: nowrap;">備考:</label>
-                <input type="text" id="modalNotes" placeholder="任意" style="flex: 1;" />
+                <input type="text" id="modalNotes" placeholder="任意" style="flex: 1;" ${disabledAttr} />
               </div>
             </div>
           </div>
           <div class="modal-history">
             <h4>支払履歴</h4>
-            <ul>${historyHtml}</ul>
+            <ul id="modalHistoryList">${historyHtml}</ul>
           </div>
         </div>
       `;
+
+      attachModalAssignmentLazyLoad(assignmentsLoaded);
     }
 
     function toggleModalSign() {
@@ -2857,26 +3049,36 @@
         }
       }
 
-      showLoading('集計中...');
-
       if (subId) {
+        const cachedPreview = !forceRefresh ? getCachedSubcontractorPreview(subId, endDate) : null;
+        let showedLoading = false;
+        if (cachedPreview) {
+          renderSubcontractorUnpaidDetail(cachedPreview, { preview: true });
+        } else {
+          showLoading('集計中...');
+          showedLoading = true;
+        }
+        const requestedSubId = subId;
         // 特定の外注先の詳細を取得
         google.script.run
           .withSuccessHandler(function(response) {
-            hideLoading();
+            if (showedLoading) hideLoading();
+            if (document.getElementById('subcontractorFilter').value !== requestedSubId) return;
             if (response.ok) {
               currentSubUnpaid = response.data;
-              renderSubcontractorUnpaidDetail(response.data);
+              renderSubcontractorUnpaidDetail(response.data, { preview: false });
             } else {
               showToast(response.error?.message || '取得に失敗しました', 'error');
             }
           })
           .withFailureHandler(function(error) {
-            hideLoading();
+            if (showedLoading) hideLoading();
+            if (document.getElementById('subcontractorFilter').value !== requestedSubId) return;
             showToast('エラー: ' + error.message, 'error');
           })
           .getUnpaidSummaryForSubcontractor(subId, endDate);
       } else {
+        showLoading('集計中...');
         // 全外注先の未払一覧を取得
         google.script.run
           .withSuccessHandler(function(response) {
@@ -2955,15 +3157,25 @@
       container.innerHTML = html;
     }
 
-    function renderSubcontractorUnpaidDetail(data) {
+    function renderSubcontractorUnpaidDetail(data, options = {}) {
       const container = document.getElementById('subUnpaidSummary');
+      const preview = options.preview === true;
+      const assignments = Array.isArray(data.assignments) ? data.assignments : null;
+      if (preview) {
+        currentSubUnpaid = null;
+      }
 
-      if (!data.assignments || data.assignments.length === 0) {
+      if (!preview && (!assignments || assignments.length === 0)) {
         container.innerHTML = `
           <p><strong>${escapeHtml(data.companyName)}</strong> の未払配置はありません</p>
         `;
         return;
       }
+
+      const baseText = data.baseAmount === null || data.baseAmount === undefined ? '-' : `¥${formatNumber(data.baseAmount)}`;
+      const transportText = data.transportAmount === null || data.transportAmount === undefined ? '-' : `¥${formatNumber(data.transportAmount)}`;
+      const totalText = data.totalAmount === null || data.totalAmount === undefined ? '-' : `¥${formatNumber(data.totalAmount)}`;
+      const payDisabledAttr = preview ? 'disabled' : '';
 
       let html = `
         <div class="summary-grid" style="margin-bottom: var(--spacing-md);">
@@ -2977,15 +3189,15 @@
           </div>
           <div class="summary-item">
             <div class="label">基本金額</div>
-            <div class="value amount">¥${formatNumber(data.baseAmount)}</div>
+            <div class="value amount">${baseText}</div>
           </div>
           <div class="summary-item">
             <div class="label">交通費</div>
-            <div class="value">¥${formatNumber(data.transportAmount)}</div>
+            <div class="value">${transportText}</div>
           </div>
           <div class="summary-item">
             <div class="label">合計</div>
-            <div class="value amount">¥${formatNumber(data.totalAmount)}</div>
+            <div class="value amount">${totalText}</div>
           </div>
         </div>
 
@@ -3002,23 +3214,31 @@
           <tbody>
       `;
 
-      data.assignments.forEach(function(asg) {
+      if (assignments && assignments.length > 0) {
+        assignments.forEach(function(asg) {
+          html += `
+            <tr>
+              <td>${formatDate(asg.work_date)}</td>
+              <td>${escapeHtml(asg.site_name || '-')}</td>
+              <td>${escapeHtml(asg.staff_name || '-')}</td>
+              <td class="amount">¥${formatNumber(asg.wage_rate || 0)}</td>
+              <td class="amount">¥${formatNumber(asg.transport_amount || 0)}</td>
+            </tr>
+          `;
+        });
+      } else {
         html += `
           <tr>
-            <td>${formatDate(asg.work_date)}</td>
-            <td>${escapeHtml(asg.site_name || '-')}</td>
-            <td>${escapeHtml(asg.staff_name || '-')}</td>
-            <td class="amount">¥${formatNumber(asg.wage_rate || 0)}</td>
-            <td class="amount">¥${formatNumber(asg.transport_amount || 0)}</td>
+            <td colspan="5" style="text-align: center; color: #6B7280;">読み込み中...</td>
           </tr>
         `;
-      });
+      }
 
       html += `
           </tbody>
         </table>
         <div style="margin-top: var(--spacing-md); text-align: right;">
-          <button class="btn btn-success" onclick="markCurrentSubcontractorPaid()">支払済にする</button>
+          <button class="btn btn-success" onclick="markCurrentSubcontractorPaid()" ${payDisabledAttr}>支払済にする</button>
         </div>
       `;
 
