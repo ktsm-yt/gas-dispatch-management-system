@@ -1503,7 +1503,7 @@
         }
 
         return `
-          <tr class="${hasShortage ? 'has-shortage' : ''}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
+          <tr class="${hasShortage ? 'has-shortage' : ''}" data-job-id="${job.job_id}" onclick="openJobAssignmentsForDashboard('${job.job_id}')">
             <td class="time-slot-cell">${TIME_SLOT_LABELS[job.time_slot] || job.time_slot}${job.start_time ? ` (${job.start_time})` : ''}</td>
             <td class="customer-cell">${escapeHtml(job.customer_name) || '-'}${job.status === 'hold' ? ' <span class="status-badge status-hold">保留</span>' : ''}</td>
             <td class="site-cell">
@@ -1590,7 +1590,7 @@
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
 
         return `
-          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
+          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignmentsForDashboard('${job.job_id}')">
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
@@ -1851,6 +1851,30 @@
         defaultDate: formatDate(currentDate),
         showSaveNext: !jobId,  // 新規作成時のみ「保存して次へ」を表示
         cachedJob: cachedJob   // キャッシュデータを渡す（スロット即座表示）
+      });
+    }
+
+    /**
+     * Dashboard用のopenJobAssignments wrapper
+     * キャッシュデータを渡して配置モーダルを即座表示
+     */
+    function openJobAssignmentsForDashboard(jobId) {
+      // キャッシュから案件データを取得（assignments, slots含む）
+      const jobData = jobId && dashboardData && dashboardData.jobs
+        ? dashboardData.jobs.find(j => j.job_id === jobId)
+        : null;
+
+      // fillAssignmentModalFromCacheが期待する構造に変換
+      const cachedJob = jobData ? {
+        job: jobData,
+        assignments: jobData.assignments || [],
+        slots: jobData.slots || [],
+        slotStatus: null,  // ダッシュボードにはslotStatusがないのでnull
+        allStaff: []       // スタッフ一覧はバックグラウンドで取得
+      } : null;
+
+      openJobAssignments(jobId, {
+        cachedJob: cachedJob  // キャッシュデータを渡す（即座表示）
       });
     }
 
