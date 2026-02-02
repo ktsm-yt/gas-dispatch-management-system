@@ -1370,6 +1370,8 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <?!= include('cache_utils'); ?>
+
   <script>
     <?!= include('confirmation_modal_js'); ?>
 
@@ -1378,46 +1380,14 @@
     let customers = [];
     let customersLoaded = false;
     let customersLoading = false;
+    let currentInvoiceQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
 
-    // SessionStorage keys and TTL
-    const SS_INVOICES_KEY = 'invoices_data';
-    const SS_CUSTOMERS_KEY = 'invoices_customers';
+    // キャッシュキー（PageCache統一）
+    const INVOICES_CUSTOMERS_KEY = 'invoices_customers';
+    const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分（請求書一覧用）
+
+    // Filter state用（localStorage維持）
     const SS_FILTER_KEY = 'invoices_filter';
-    const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分
-
-    // Cache functions - Invoices (with TTL)
-    function saveInvoicesToCache(data, query) {
-      sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        query: query,
-        invoices: data
-      }));
-    }
-
-    function loadInvoicesFromCache(currentQuery) {
-      const saved = sessionStorage.getItem(SS_INVOICES_KEY);
-      if (!saved) return null;
-
-      const data = JSON.parse(saved);
-      if (Date.now() - data.timestamp > INVOICES_CACHE_TTL) {
-        sessionStorage.removeItem(SS_INVOICES_KEY);
-        return null;
-      }
-      if (JSON.stringify(data.query) !== JSON.stringify(currentQuery)) {
-        return null;
-      }
-      return data.invoices;
-    }
-
-    // Cache functions - Customers (localStorage for persistence across navigation)
-    function saveCustomersToCache(data) {
-      localStorage.setItem(SS_CUSTOMERS_KEY, JSON.stringify(data));
-    }
-
-    function loadCustomersFromCache() {
-      const saved = localStorage.getItem(SS_CUSTOMERS_KEY);
-      return saved ? JSON.parse(saved) : null;
-    }
 
     // Cache functions - Filter state (localStorage for persistence across navigation)
     function saveFilterState() {
@@ -1490,11 +1460,16 @@
 
     // Modal ESC key and click-outside handlers
     function initCustomersFromCache() {
-      const cached = loadCustomersFromCache();
+      // PageCacheからキャッシュを確認（Stale-While-Revalidate）
+      const cached = PageCache.get(INVOICES_CUSTOMERS_KEY);
       if (cached) {
-        customers = cached;
+        customers = cached.data;
         customersLoaded = true;
         populateCustomerSelects();
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
       }
       // 顧客キャッシュの有無に関わらず、フィルター状態を復元して自動検索を試みる
       const restored = restoreFilterState();
@@ -1592,25 +1567,31 @@
 
     function loadCustomers() {
       if (customersLoaded || customersLoading) return;
-      customersLoading = true;
-      // Check cache first
-      const cached = loadCustomersFromCache();
+
+      // PageCacheから確認（Stale-While-Revalidate）
+      const cached = PageCache.get(INVOICES_CUSTOMERS_KEY);
       if (cached) {
-        customers = cached;
+        // キャッシュがあれば即座に表示
+        customers = cached.data;
         customersLoaded = true;
-        customersLoading = false;
         populateCustomerSelects();
         restoreFilterState();
+
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
         return;
       }
 
-      // Fetch from API
+      // キャッシュなし: APIから取得
+      customersLoading = true;
       google.script.run
         .withSuccessHandler(function (result) {
           customersLoading = false;
           if (result.ok) {
             customers = result.data.customers || [];
-            saveCustomersToCache(customers);
+            PageCache.set(INVOICES_CUSTOMERS_KEY, customers);
             customersLoaded = true;
             populateCustomerSelects();
             restoreFilterState();
@@ -1620,6 +1601,24 @@
           customersLoading = false;
           handleError(error);
         })
+        .getCustomers();
+    }
+
+    // 顧客マスターをバックグラウンドで更新
+    function refreshCustomersInBackground() {
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (result.ok) {
+            const newCustomers = result.data.customers || [];
+            PageCache.set(INVOICES_CUSTOMERS_KEY, newCustomers);
+            // 差分があればUIを更新
+            if (JSON.stringify(customers) !== JSON.stringify(newCustomers)) {
+              customers = newCustomers;
+              populateCustomerSelects();
+            }
+          }
+        })
+        .withFailureHandler(function () {}) // サイレント
         .getCustomers();
     }
 
@@ -1675,16 +1674,26 @@
       // Save filter state
       saveFilterState();
 
-      // Check cache (unless skipCache is true)
+      // 現在のクエリを保存（バックグラウンド更新時に使用）
+      currentInvoiceQuery = query;
+      const cacheKey = PageCache.makeKey('invoices_list', query);
+
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
       if (!skipCache) {
-        const cached = loadInvoicesFromCache(query);
+        const cached = PageCache.get(cacheKey);
         if (cached) {
-          invoices = cached;
+          invoices = cached.data;
           renderInvoices();
+
+          // TTL超過ならバックグラウンド更新
+          if (cached.age > INVOICES_CACHE_TTL) {
+            refreshInvoicesInBackground(cacheKey, query);
+          }
           return;
         }
       }
 
+      // キャッシュなし: ローディング表示してAPI取得
       showLoading();
 
       google.script.run
@@ -1692,7 +1701,7 @@
           hideLoading();
           if (result.ok) {
             invoices = result.data.invoices || [];
-            saveInvoicesToCache(invoices, query);
+            PageCache.set(cacheKey, invoices);
             renderInvoices();
           } else {
             showToast(result.error?.message || 'エラーが発生しました', 'error');
@@ -1702,6 +1711,29 @@
           hideLoading();
           handleError(error);
         })
+        .searchInvoices(query);
+    }
+
+    // 請求書一覧をバックグラウンドで更新
+    function refreshInvoicesInBackground(cacheKey, query) {
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (result.ok) {
+            const newInvoices = result.data.invoices || [];
+            PageCache.set(cacheKey, newInvoices);
+
+            // 現在の検索条件と一致する場合のみUIを更新
+            if (JSON.stringify(currentInvoiceQuery) === JSON.stringify(query)) {
+              // 差分があればUIを更新
+              if (JSON.stringify(invoices) !== JSON.stringify(newInvoices)) {
+                invoices = newInvoices;
+                renderInvoices();
+                showToast('データを更新しました', 'info');
+              }
+            }
+          }
+        })
+        .withFailureHandler(function () {}) // サイレント
         .searchInvoices(query);
     }
 
@@ -1969,9 +2001,9 @@
       const customer = customers.find(c => c.customer_id === customerId);
       if (customer) {
         customer.folder_id = folderId;
-        saveCustomersToCache(customers);
+        PageCache.set(INVOICES_CUSTOMERS_KEY, customers);
       }
-      sessionStorage.removeItem(SS_INVOICES_KEY);
+      PageCache.clearByPrefix('invoices_list');
       // 該当セルのみ更新
       document.querySelectorAll('#invoiceTableBody tr').forEach(row => {
         const cell = row.querySelector('td.folder-cell');
@@ -2197,7 +2229,7 @@
               }
             });
             // Clear cache since data changed
-            sessionStorage.removeItem(SS_INVOICES_KEY);
+            PageCache.clearByPrefix('invoices_list');
             clearSelection();
             document.getElementById('bulkStatusSelect').value = '';
           } else {
@@ -3535,19 +3567,7 @@
      * 請求書キャッシュをクリア
      */
     function clearInvoiceCache() {
-      const keysToRemove = [];
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && key.startsWith('invoices_')) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => sessionStorage.removeItem(k));
-
-      // 単一キーのキャッシュも削除
-      if (typeof SS_INVOICES_KEY !== 'undefined') {
-        sessionStorage.removeItem(SS_INVOICES_KEY);
-      }
+      PageCache.clearByPrefix('invoices');
     }
 
     // ========== 入金管理機能 ==========
@@ -3952,6 +3972,12 @@
 
             // テーブル再描画
             renderInvoices();
+
+            // キャッシュを更新（現在のデータで上書き）
+            if (currentInvoiceQuery) {
+              const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+              PageCache.set(cacheKey, invoices);
+            }
           } else {
             showToast(result.error?.message || result.error || '入金記録に失敗しました', 'error');
           }
@@ -4011,6 +4037,12 @@
 
             // テーブル再描画
             renderInvoices();
+
+            // キャッシュを更新（現在のデータで上書き）
+            if (currentInvoiceQuery) {
+              const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+              PageCache.set(cacheKey, invoices);
+            }
           } else {
             showToast(result.error?.message || result.error || '削除に失敗しました', 'error');
           }
