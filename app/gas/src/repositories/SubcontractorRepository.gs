@@ -20,6 +20,28 @@ const SubcontractorRepository = {
   },
 
   /**
+   * 複数IDで外注先を一括取得（バルク版）
+   * @param {string[]} subcontractorIds - 外注先ID配列
+   * @returns {Map<string, Object>} subcontractorId → 外注先データのMap
+   */
+  findByIds: function(subcontractorIds) {
+    if (!subcontractorIds || subcontractorIds.length === 0) {
+      return new Map();
+    }
+
+    const idSet = new Set(subcontractorIds);
+    const allSubs = this.search({});  // 1回のシートI/Oで全件取得
+
+    const result = new Map();
+    for (const sub of allSubs) {
+      if (idSet.has(sub.subcontractor_id)) {
+        result.set(sub.subcontractor_id, sub);
+      }
+    }
+    return result;
+  },
+
+  /**
    * 外注先を検索
    * @param {Object} query - 検索条件
    * @param {boolean} query.is_active - アクティブのみ
