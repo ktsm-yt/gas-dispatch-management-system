@@ -675,7 +675,7 @@
           : '<span class="no-assignments">-</span>';
 
         html += `
-          <tr class="job-row" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
+          <tr class="job-row" data-job-id="${job.job_id}" onclick="openJobAssignmentsWithCache('${job.job_id}')">
             <td><span class="job-time-slot">${formatTimeSlot(job.time_slot)}</span></td>
             <td><span class="job-customer">${escapeHtml(job.customer_name || '-')}</span></td>
             <td><div class="job-name">${escapeHtml(job.site_name)}</div></td>
@@ -729,6 +729,30 @@
           }
         </td>
       `;
+    }
+
+    /**
+     * 配置一覧用のopenJobAssignments wrapper
+     * キャッシュデータを渡して配置モーダルを即座表示
+     */
+    function openJobAssignmentsWithCache(jobId) {
+      // キャッシュから案件データを取得
+      const jobData = jobId && currentJobs
+        ? currentJobs.find(j => j.job_id === jobId)
+        : null;
+
+      // fillAssignmentModalFromCacheが期待する構造に変換
+      const cachedJob = jobData ? {
+        job: jobData,
+        assignments: jobData.assignments || [],
+        slots: jobData.slots || [],
+        slotStatus: null,
+        allStaff: []
+      } : null;
+
+      openJobAssignments(jobId, {
+        cachedJob: cachedJob  // キャッシュデータを渡す（即座表示）
+      });
     }
 
     // テーブルからサマリーを再計算
