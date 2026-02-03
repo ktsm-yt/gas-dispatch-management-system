@@ -178,9 +178,11 @@ function getPayoutDetails(payoutId, options = {}) {
 /**
  * 未払いスタッフ一覧を取得
  * @param {string} endDate - 集計終了日
+ * @param {Object} [options={}] - オプション
+ * @param {string} [options.staffId] - 特定スタッフのみ取得する場合に指定
  * @returns {Object} APIレスポンス
  */
-function getUnpaidStaffList(endDate) {
+function getUnpaidStaffList(endDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -195,13 +197,19 @@ function getUnpaidStaffList(endDate) {
       endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
     }
 
-    const result = PayoutService.getUnpaidStaffList(endDate);
+    const result = PayoutService.getUnpaidStaffList(endDate, options);
 
     // ★ 同じ期間の確認済みPayoutも取得（リロード後の状態復元用）
-    const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+    let confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+
+    // 特定スタッフ指定時は確認済みもフィルタ
+    if (options.staffId) {
+      confirmedPayouts = confirmedPayouts.filter(p => p.staff_id === options.staffId);
+    }
 
     return buildSuccessResponse({
       endDate: endDate,
+      staffId: options.staffId || null,  // 個人選択モードのフラグとして返す
       staffList: result,
       totalCount: result.length,
       totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0),
