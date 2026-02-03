@@ -91,6 +91,59 @@ const PayoutRepository = {
   },
 
   /**
+   * 指定スタッフ・期間の既存Payoutを検索（重複チェック用）
+   * @param {string} staffId - スタッフID
+   * @param {string} periodStart - 期間開始日
+   * @param {string} periodEnd - 期間終了日
+   * @param {Object} options - オプション
+   * @param {boolean} options.excludeDeleted - 削除済みを除外（デフォルト: true）
+   * @returns {Object[]} 該当するPayoutの配列（重複がある場合は複数返る）
+   */
+  findByStaffAndPeriod: function(staffId, periodStart, periodEnd, options = {}) {
+    const excludeDeleted = options.excludeDeleted !== false;
+    let records = getAllRecords(this.TABLE_NAME);
+
+    const normalizedStart = this._normalizeDate(periodStart);
+    const normalizedEnd = this._normalizeDate(periodEnd);
+
+    records = records.filter(r => {
+      if (excludeDeleted && r.is_deleted) return false;
+      return r.payout_type === 'STAFF' &&
+             r.staff_id === staffId &&
+             this._normalizeDate(r.period_start) === normalizedStart &&
+             this._normalizeDate(r.period_end) === normalizedEnd;
+    });
+
+    return records.map(r => this._normalizeRecord(r));
+  },
+
+  /**
+   * 指定外注先・期間の既存Payoutを検索（重複チェック用）
+   * @param {string} subcontractorId - 外注先ID
+   * @param {string} periodStart - 期間開始日
+   * @param {string} periodEnd - 期間終了日
+   * @param {Object} options - オプション
+   * @returns {Object[]} 該当するPayoutの配列
+   */
+  findBySubcontractorAndPeriod: function(subcontractorId, periodStart, periodEnd, options = {}) {
+    const excludeDeleted = options.excludeDeleted !== false;
+    let records = getAllRecords(this.TABLE_NAME);
+
+    const normalizedStart = this._normalizeDate(periodStart);
+    const normalizedEnd = this._normalizeDate(periodEnd);
+
+    records = records.filter(r => {
+      if (excludeDeleted && r.is_deleted) return false;
+      return r.payout_type === 'SUBCONTRACTOR' &&
+             r.subcontractor_id === subcontractorId &&
+             this._normalizeDate(r.period_start) === normalizedStart &&
+             this._normalizeDate(r.period_end) === normalizedEnd;
+    });
+
+    return records.map(r => this._normalizeRecord(r));
+  },
+
+  /**
    * 外注先の最新支払いを取得（period_end の最大値で決定）
    * 差分計算の起点として使用するため、paid_date ではなく period_end で判定
    * @param {string} subcontractorId - 外注先ID
@@ -394,6 +447,7 @@ const PayoutRepository = {
    * @param {string} status - 新ステータス（confirmed/paid）
    * @param {Object} options - オプション
    * @param {string} options.paid_date - 支払日（paidの場合に使用）
+   * @param {Object} options.expectedUpdatedAtMap - 楽観ロック用 { [payoutId]: expectedUpdatedAt }
    * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
    */
   bulkUpdateStatus: function(payoutIds, status, options = {}) {
@@ -406,7 +460,9 @@ const PayoutRepository = {
     const lastRow = sheet.getLastRow();
 
     if (lastRow <= 1) {
-      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+      // データがない場合、全てNOT_FOUNDとして記録
+      const results = payoutIds.map(id => ({ payoutId: id, success: false, error: 'NOT_FOUND' }));
+      return { success: 0, failed: payoutIds.length, results, payouts: [] };
     }
 
     // 1. 全データを一括読み込み
@@ -421,13 +477,16 @@ const PayoutRepository = {
     const isDeletedIndex = headers.indexOf('is_deleted');
 
     if (idIndex === -1 || statusIndex === -1) {
-      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+      const results = payoutIds.map(id => ({ payoutId: id, success: false, error: 'SCHEMA_ERROR' }));
+      return { success: 0, failed: payoutIds.length, results, payouts: [] };
     }
 
-    // 3. 対象IDのセットを作成
+    // 3. 対象IDのセットを作成 & 見つかったIDを追跡
     const targetIdSet = new Set(payoutIds);
+    const foundIdSet = new Set();
     const now = getCurrentTimestamp();
     const paidDate = options.paid_date || now.split('T')[0];
+    const expectedUpdatedAtMap = options.expectedUpdatedAtMap || {};
 
     const results = [];
     const updatedPayouts = [];
@@ -442,11 +501,30 @@ const PayoutRepository = {
 
       if (!targetIdSet.has(payoutId)) continue;
 
+      // このIDは見つかった
+      foundIdSet.add(payoutId);
+
       // 論理削除済みチェック
       if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
         results.push({ payoutId, success: false, error: 'DELETED' });
         failed++;
         continue;
+      }
+
+      // 楽観ロックチェック
+      const expectedUpdatedAt = expectedUpdatedAtMap[payoutId];
+      if (expectedUpdatedAt && updatedAtIndex !== -1) {
+        const currentUpdatedAt = row[updatedAtIndex];
+        if (currentUpdatedAt !== expectedUpdatedAt) {
+          results.push({
+            payoutId,
+            success: false,
+            error: 'CONFLICT_ERROR',
+            currentUpdatedAt: currentUpdatedAt
+          });
+          failed++;
+          continue;
+        }
       }
 
       // confirmedステータスからのみpaidに変更可能
@@ -480,7 +558,15 @@ const PayoutRepository = {
       updatedPayouts.push(this._normalizeRecord(updatedRecord));
     }
 
-    // 5. 変更があれば一括書き込み
+    // 5. 存在しなかったIDを失敗として記録
+    for (const payoutId of payoutIds) {
+      if (!foundIdSet.has(payoutId)) {
+        results.push({ payoutId, success: false, error: 'NOT_FOUND' });
+        failed++;
+      }
+    }
+
+    // 6. 変更があれば一括書き込み
     if (hasChanges) {
       dataRange.setValues(allData);
     }
