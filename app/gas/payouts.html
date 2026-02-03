@@ -1194,10 +1194,8 @@
         staffList = cached;
         populateStaffFilter();
 
-        // TTL超過ならバックグラウンド更新
-        if (isStaffCacheStale()) {
-          refreshStaffInBackground();
-        }
+        // 常にバックグラウンド更新を実行（新規スタッフの即時反映のため）
+        refreshStaffInBackground();
         return;
       }
 
@@ -1807,7 +1805,7 @@
 
       const query = {
         payout_type: 'STAFF',
-        status_in: ['confirmed', 'paid'],
+        status: 'paid',
         period_start_from: fromDate,
         period_end_to: toDate,
         limit: 200
@@ -1847,7 +1845,7 @@
 
       const query = {
         payout_type: 'SUBCONTRACTOR',
-        status_in: ['confirmed', 'paid'],
+        status: 'paid',
         period_start_from: fromDate,
         period_end_to: toDate,
         limit: 200
