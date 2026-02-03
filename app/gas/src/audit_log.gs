@@ -160,6 +160,46 @@ function logCreate(tableName, recordId, data) {
 }
 
 /**
+ * CREATE操作のログを一括記録（バルク版）
+ * @param {string} tableName - テーブル名
+ * @param {Object[]} records - レコード配列 [{ recordId, data }, ...]
+ * @returns {Object[]|null} 記録したログ情報の配列
+ */
+function logCreateBulk(tableName, records) {
+  if (!records || records.length === 0) {
+    return [];
+  }
+  const logs = records.map(r => ({
+    action: AUDIT_ACTIONS.CREATE,
+    table_name: tableName,
+    record_id: r.recordId,
+    before: null,
+    after: r.data
+  }));
+  return logBatch(logs);
+}
+
+/**
+ * UPDATE操作のログを一括記録（バルク版）
+ * @param {string} tableName - テーブル名
+ * @param {Object[]} records - レコード配列 [{ recordId, before, after }, ...]
+ * @returns {Object[]|null} 記録したログ情報の配列
+ */
+function logUpdateBulk(tableName, records) {
+  if (!records || records.length === 0) {
+    return [];
+  }
+  const logs = records.map(r => ({
+    action: AUDIT_ACTIONS.UPDATE,
+    table_name: tableName,
+    record_id: r.recordId,
+    before: r.before,
+    after: r.after
+  }));
+  return logBatch(logs);
+}
+
+/**
  * UPDATE操作のログを記録
  * @param {string} tableName - テーブル名
  * @param {string} recordId - レコードID

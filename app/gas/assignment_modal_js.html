@@ -304,7 +304,13 @@ function resetAssignmentModalState(jobId) {
 }
 
 // ========== Modal Functions ==========
-function openJobAssignments(jobId) {
+/**
+ * 配置モーダルを開く
+ * @param {string} jobId - 案件ID
+ * @param {Object} options - オプション
+ * @param {Object} options.cachedJob - キャッシュされた案件データ（assignments, slots含む）
+ */
+function openJobAssignments(jobId, options = {}) {
   // 1. 状態を完全リセット
   resetAssignmentModalState(jobId);
 
@@ -314,10 +320,14 @@ function openJobAssignments(jobId) {
   // 3. モーダル表示
   document.getElementById('assignment-modal').style.display = 'flex';
 
-  // 4. キャッシュがあれば即座にUIを埋める
-  const cachedData = getAssignmentJobFromCache(jobId);
+  // 4. キャッシュを優先チェック: options.cachedJob > assignmentJobCache
+  const cachedData = options.cachedJob || getAssignmentJobFromCache(jobId);
   if (cachedData) {
     fillAssignmentModalFromCache(cachedData);
+    // options.cachedJobがあればキャッシュにも保存（次回用）
+    if (options.cachedJob) {
+      saveAssignmentJobToCache(jobId, options.cachedJob);
+    }
   }
 
   // 5. 保存ボタン状態を更新

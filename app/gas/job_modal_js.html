@@ -135,10 +135,14 @@ function openJobModal(jobId = null, options = {}) {
 
   // Load job data if editing
   if (jobId) {
-    // キャッシュを自動チェックして即座に表示
-    const cachedData = getJobFromCache(jobId);
+    // キャッシュを優先チェック: options.cachedJob > jobCache
+    const cachedData = options.cachedJob || getJobFromCache(jobId);
     if (cachedData) {
       fillFormFromCache(cachedData);
+      // options.cachedJobがあればjobCacheにも保存（次回用）
+      if (options.cachedJob) {
+        saveJobToCache(jobId, options.cachedJob);
+      }
     }
     // 完全なデータをバックグラウンドで取得
     loadJobData(jobId);
