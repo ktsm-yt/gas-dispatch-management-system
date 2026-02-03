@@ -142,6 +142,20 @@ const PayoutService = {
       };
     }
 
+    // 1.5. 重複チェック（冪等性のためエラーではなくスキップ）
+    const existingPayouts = PayoutRepository.findByStaffAndPeriod(
+      staffId, calc.periodStart, calc.periodEnd
+    );
+    if (existingPayouts.length > 0) {
+      Logger.log(`[confirmPayout] SKIP duplicate: ${staffId}|${calc.periodStart}|${calc.periodEnd}`);
+      return {
+        success: true,  // 冪等性：既存があれば成功扱い
+        skipped: true,
+        existingPayout: this._enrichPayout(existingPayouts[0]),
+        message: `この期間（${calc.periodStart}〜${calc.periodEnd}）の支払いは既に存在します`
+      };
+    }
+
     // 2. 調整額を適用
     const adjustmentAmount = options.adjustment_amount || 0;
     const totalAmount = calc.totalAmount + adjustmentAmount;
@@ -252,6 +266,20 @@ const PayoutService = {
         success: false,
         error: 'NO_UNPAID_ASSIGNMENTS',
         message: '未払いの配置がありません'
+      };
+    }
+
+    // 1.5. 重複チェック（冪等性のためエラーではなくスキップ）
+    const existingPayouts = PayoutRepository.findByStaffAndPeriod(
+      staffId, calc.periodStart, calc.periodEnd
+    );
+    if (existingPayouts.length > 0) {
+      Logger.log(`[markAsPaid] SKIP duplicate: ${staffId}|${calc.periodStart}|${calc.periodEnd}`);
+      return {
+        success: true,  // 冪等性：既存があれば成功扱い
+        skipped: true,
+        existingPayout: this._enrichPayout(existingPayouts[0]),
+        message: `この期間（${calc.periodStart}〜${calc.periodEnd}）の支払いは既に存在します`
       };
     }
 
@@ -400,7 +428,27 @@ const PayoutService = {
       }
     }
 
+    // ========== Phase 2.5: 重複チェック用のSet構築 ==========
+    // 対象endDateの既存Payoutを取得（全件取得を避ける）
+    const existingPayouts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      period_end_to: endDate,
+      period_start_from: null,  // 全期間（開始日は不特定）
+      status_in: ['draft', 'confirmed', 'paid']
+    }).filter(p => p.period_end === endDate);  // endDate完全一致でフィルタ
+
+    // キーは (staff_id, period_start, period_end) の3要素
+    const existingPayoutKeys = new Set();
+    for (const p of existingPayouts) {
+      if (p.staff_id && p.period_start && p.period_end) {
+        existingPayoutKeys.add(`${p.staff_id}|${p.period_start}|${p.period_end}`);
+      }
+    }
+    Logger.log(`[bulkConfirmPayouts] Loaded ${existingPayouts.length} existing payouts for duplicate check`);
+
     // 支払いレコードを準備
+    let skipped = 0;
+
     for (const staffId of staffIds) {
       const calc = staffCalcMap.get(staffId);
 
@@ -414,6 +462,23 @@ const PayoutService = {
         failed++;
         continue;
       }
+
+      // ★ 重複チェック（冪等性のためエラーではなくスキップ）
+      const payoutKey = `${staffId}|${calc.periodStart}|${calc.periodEnd}`;
+      if (existingPayoutKeys.has(payoutKey)) {
+        Logger.log(`[bulkConfirmPayouts] SKIP duplicate: ${payoutKey}`);
+        results.push({
+          staffId: staffId,
+          success: true,  // エラーではなく成功扱い
+          skipped: true,
+          message: `この期間（${calc.periodStart}〜${calc.periodEnd}）の支払いは既に存在します`
+        });
+        skipped++;
+        continue;
+      }
+
+      // バッチ内重複防止（同じキーを追加）
+      existingPayoutKeys.add(payoutKey);
 
       const adjustmentAmount = adjustments[staffId]?.adjustment_amount || 0;
       const notes = adjustments[staffId]?.notes || '';
@@ -496,9 +561,13 @@ const PayoutService = {
     // 6. スタッフ名を付与して返す（1回のシートI/O）
     const enrichedPayouts = this._enrichPayoutsBulk(insertedPayouts);
 
+    // 7. データ同期を強制（読み取り競合防止）
+    SpreadsheetApp.flush();
+
     const result = {
       success: success,
       failed: failed,
+      skipped: skipped,  // ★ 重複スキップ数を追加
       results: results,
       payouts: enrichedPayouts
     };
@@ -508,6 +577,8 @@ const PayoutService = {
       result.warning = 'Assignment更新に失敗しました。再実行してください: ' + assignmentUpdateWarning;
     }
 
+    Logger.log(`[bulkConfirmPayouts] Completed: success=${success}, failed=${failed}, skipped=${skipped}`);
+
     return result;
   },
 
@@ -516,6 +587,7 @@ const PayoutService = {
    * @param {string[]} payoutIds - 支払ID配列
    * @param {Object} options - オプション
    * @param {string} options.paid_date - 支払日
+   * @param {Object} options.expectedUpdatedAtMap - 楽観ロック用 { [payoutId]: expectedUpdatedAt }
    * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
    */
   bulkPayConfirmed: function(payoutIds, options = {}) {
@@ -524,7 +596,10 @@ const PayoutService = {
     const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // バルク更新を使用（シートI/Oを1回に集約）
-    const result = PayoutRepository.bulkUpdateStatus(payoutIds, 'paid', { paid_date: paidDate });
+    const result = PayoutRepository.bulkUpdateStatus(payoutIds, 'paid', {
+      paid_date: paidDate,
+      expectedUpdatedAtMap: options.expectedUpdatedAtMap || {}
+    });
 
     Logger.log(`[bulkPayConfirmed] Completed: success=${result.success}, failed=${result.failed}`);
 
@@ -738,6 +813,20 @@ const PayoutService = {
   },
 
   /**
+   * 指定期間終了日の確認済みPayoutを取得（集計画面の状態復元用）
+   * @param {string} endDate - 期間終了日
+   * @returns {Object[]} 確認済みPayout一覧（スタッフ名付き）
+   */
+  getConfirmedPayoutsForPeriod: function(endDate) {
+    const payouts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      status: 'confirmed'
+    }).filter(p => p.period_end === endDate);
+
+    return this._enrichPayoutsBulk(payouts);
+  },
+
+  /**
    * 期間内の支払済みレコードを取得（エクスポート用）
    * @param {string} fromDate - 開始日（YYYY-MM-DD）
    * @param {string} toDate - 終了日（YYYY-MM-DD）
@@ -857,6 +946,66 @@ const PayoutService = {
 
     // 金額降順でソート
     return results.sort((a, b) => b.estimatedAmount - a.estimatedAmount);
+  },
+
+  /**
+   * 未払スタッフリストの差分を取得（SWR差分更新用）
+   * @param {string} endDate - 集計終了日
+   * @param {string} lastSyncTimestamp - 前回同期時刻（ISO形式）
+   * @returns {Object} { changedStaffIds, removedStaffIds, staffList }
+   */
+  getUnpaidStaffListDelta: function(endDate, lastSyncTimestamp) {
+    Logger.log(`[getUnpaidStaffListDelta] endDate=${endDate}, lastSync=${lastSyncTimestamp}`);
+
+    // 1. lastSyncTimestamp以降に更新されたAssignmentを取得
+    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+    const changedAssignments = allAssignments.filter(a =>
+      a.updated_at && a.updated_at > lastSyncTimestamp
+    );
+
+    // 2. 変更があったスタッフIDを抽出
+    const changedStaffIdSet = new Set(changedAssignments.map(a => a.staff_id).filter(Boolean));
+
+    // 3. lastSyncTimestamp以降に作成/更新されたPayoutも確認
+    const recentPayouts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      status_in: ['confirmed', 'paid', 'deleted']
+    }).filter(p => p.updated_at && p.updated_at > lastSyncTimestamp);
+
+    // PayoutのスタッフIDも追加
+    for (const p of recentPayouts) {
+      if (p.staff_id) changedStaffIdSet.add(p.staff_id);
+    }
+
+    const changedStaffIds = Array.from(changedStaffIdSet);
+    Logger.log(`[getUnpaidStaffListDelta] ${changedStaffIds.length} staff changed since ${lastSyncTimestamp}`);
+
+    // 4. 変更があったスタッフがいない場合は空の差分を返す
+    if (changedStaffIds.length === 0) {
+      return {
+        changedStaffIds: [],
+        removedStaffIds: [],
+        staffList: []
+      };
+    }
+
+    // 5. 変更があったスタッフの未払い情報を再計算
+    const fullList = this.getUnpaidStaffList(endDate);
+
+    // 変更があったスタッフのみフィルタ
+    const deltaStaffList = fullList.filter(s => changedStaffIdSet.has(s.staffId));
+
+    // 6. 削除されたスタッフを特定（変更があったが未払いリストにいない）
+    const unpaidStaffIdSet = new Set(fullList.map(s => s.staffId));
+    const removedStaffIds = changedStaffIds.filter(id => !unpaidStaffIdSet.has(id));
+
+    Logger.log(`[getUnpaidStaffListDelta] delta: ${deltaStaffList.length} updated, ${removedStaffIds.length} removed`);
+
+    return {
+      changedStaffIds: changedStaffIds,
+      removedStaffIds: removedStaffIds,
+      staffList: deltaStaffList
+    };
   },
 
   // ========== Private Methods ==========

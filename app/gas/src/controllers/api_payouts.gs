@@ -127,15 +127,74 @@ function getUnpaidStaffList(endDate) {
 
     const result = PayoutService.getUnpaidStaffList(endDate);
 
+    // ★ 同じ期間の確認済みPayoutも取得（リロード後の状態復元用）
+    const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+
     return buildSuccessResponse({
       endDate: endDate,
       staffList: result,
       totalCount: result.length,
-      totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0)
+      totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0),
+      // ★ 確認済みPayoutを追加
+      confirmedPayouts: confirmedPayouts,
+      confirmedCount: confirmedPayouts.length,
+      confirmedAmount: confirmedPayouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
     }, requestId);
 
   } catch (error) {
     console.error('getUnpaidStaffList error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 未払スタッフリストの差分を取得（SWR差分更新用）
+ * @param {string} endDate - 集計終了日（YYYY-MM-DD）
+ * @param {string} lastSyncTimestamp - 前回同期時刻（ISO形式）
+ * @returns {Object} APIレスポンス { changedStaffIds, staffList, confirmedPayouts, ... }
+ */
+function getUnpaidStaffListDelta(endDate, lastSyncTimestamp) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（staff以上）
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!endDate) {
+      endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    }
+
+    if (!lastSyncTimestamp) {
+      // lastSyncTimestampがない場合は全件取得にフォールバック
+      return getUnpaidStaffList(endDate);
+    }
+
+    // 差分取得
+    const deltaResult = PayoutService.getUnpaidStaffListDelta(endDate, lastSyncTimestamp);
+
+    // 確認済みPayoutも差分で取得
+    const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+
+    return buildSuccessResponse({
+      endDate: endDate,
+      lastSyncTimestamp: lastSyncTimestamp,
+      currentTimestamp: new Date().toISOString(),
+      isDelta: true,
+      changedStaffIds: deltaResult.changedStaffIds,
+      removedStaffIds: deltaResult.removedStaffIds,
+      staffList: deltaResult.staffList,
+      totalCount: deltaResult.staffList.length,
+      totalAmount: deltaResult.staffList.reduce((sum, s) => sum + s.estimatedAmount, 0),
+      confirmedPayouts: confirmedPayouts,
+      confirmedCount: confirmedPayouts.length,
+      confirmedAmount: confirmedPayouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
+    }, requestId);
+
+  } catch (error) {
+    console.error('getUnpaidStaffListDelta error:', error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -571,6 +630,11 @@ function payConfirmedPayout(payoutId, options = {}) {
   const requestId = generateRequestId();
 
   try {
+    // Backward compatibility for legacy snake_case option name.
+    if (!options.expectedUpdatedAt && options.expected_updated_at) {
+      options.expectedUpdatedAt = options.expected_updated_at;
+    }
+
     // 認可チェック（manager以上）
     const authResult = checkPermission(ROLES.MANAGER);
     if (!authResult.allowed) {
@@ -616,7 +680,9 @@ function payConfirmedPayout(payoutId, options = {}) {
 /**
  * 複数の確認済み支払いを一括振込完了にする
  * @param {string[]} payoutIds - 支払ID配列
- * @param {Object} options - オプション { paid_date }
+ * @param {Object} options - オプション { paid_date, expectedUpdatedAtMap }
+ * @param {string} options.paid_date - 支払日（YYYY-MM-DD形式）
+ * @param {Object} options.expectedUpdatedAtMap - 楽観ロック用 { [payoutId]: expectedUpdatedAt }
  * @returns {Object} APIレスポンス
  */
 function bulkPayConfirmed(payoutIds, options = {}) {
@@ -639,8 +705,34 @@ function bulkPayConfirmed(payoutIds, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    // Service呼び出し
-    const result = PayoutService.bulkPayConfirmed(payoutIds, options);
+    // paid_dateの業務整合性検証（各payoutに対して検証）
+    if (options.paid_date) {
+      const validationErrors = [];
+      for (const payoutId of payoutIds) {
+        const validationResult = _validatePaidDate(payoutId, options.paid_date);
+        if (!validationResult.valid) {
+          validationErrors.push({
+            payoutId: payoutId,
+            error: validationResult.error
+          });
+        }
+      }
+      // 検証エラーがあれば処理を中断
+      if (validationErrors.length > 0) {
+        return buildErrorResponse(
+          ERROR_CODES.VALIDATION_ERROR,
+          'paid_date validation failed for some payouts',
+          { validationErrors: validationErrors },
+          requestId
+        );
+      }
+    }
+
+    // Service呼び出し（楽観ロックを伝播）
+    const result = PayoutService.bulkPayConfirmed(payoutIds, {
+      paid_date: options.paid_date,
+      expectedUpdatedAtMap: options.expectedUpdatedAtMap || {}
+    });
 
     return buildSuccessResponse(result, requestId);
 
@@ -682,6 +774,27 @@ function getConfirmedPayouts(options = {}) {
 // ========== Validation Helpers ==========
 
 /**
+ * 日付文字列をローカルタイムゾーンでパース（UTC解釈回避）
+ * @param {string} dateStr - 日付文字列（YYYY-MM-DD形式）
+ * @returns {Date|null} パースされた日付またはnull
+ */
+function _parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+
+  const normalized = String(dateStr).replace(/\//g, '-');
+  const parts = normalized.split('-');
+  if (parts.length !== 3) return null; // 無効な形式はnullを返す
+
+  const [y, m, d] = parts.map(Number);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return null;
+
+  const date = new Date(y, m - 1, d); // ローカルタイムゾーンで作成
+  // Invalid Date check
+  if (isNaN(date.getTime())) return null;
+  return date;
+}
+
+/**
  * paid_dateの業務整合性を検証
  * @param {string} payoutId - 支払ID
  * @param {string} paidDate - 支払日
@@ -693,14 +806,18 @@ function _validatePaidDate(payoutId, paidDate) {
     return { valid: false, error: 'Payout not found' };
   }
 
-  const paidDateObj = new Date(paidDate);
+  const paidDateObj = _parseLocalDate(paidDate);
+  if (!paidDateObj) {
+    return { valid: false, error: 'Invalid paid_date format' };
+  }
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   // 1. period_end以降であること
   if (payout.period_end) {
-    const periodEndObj = new Date(payout.period_end);
-    if (paidDateObj < periodEndObj) {
+    const periodEndObj = _parseLocalDate(payout.period_end);
+    if (periodEndObj && paidDateObj < periodEndObj) {
       return {
         valid: false,
         error: `paid_date must be on or after period_end (${payout.period_end})`
