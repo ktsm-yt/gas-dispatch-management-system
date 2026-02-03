@@ -104,6 +104,9 @@ function openJobModal(jobId = null, options = {}) {
   const startTimeHint = document.getElementById('start-time-hint');
   if (startTimeHint) startTimeHint.style.display = 'none';
 
+  // Reset archive warning banner
+  hideArchiveWarningBanner();
+
   // Reset slots UI
   resetSlotsUI();
 
@@ -261,6 +264,14 @@ function loadJobData(jobId) {
         ...job,
         slots: slots || []
       });
+
+      // アーカイブデータの場合は警告バナーを表示
+      if (job._archived) {
+        const fiscalYear = job._archiveFiscalYear || '過去';
+        showArchiveWarningBanner(`このデータは${fiscalYear}年度のアーカイブです。編集内容はアーカイブDBに反映されます。`);
+      } else {
+        hideArchiveWarningBanner();
+      }
 
       // 時間区分と開始時間の整合性チェック
       validateTimeSlotStartTime();
@@ -832,6 +843,31 @@ function updateDropdownHighlight(items) {
       item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
   });
+}
+
+// ========== Archive Warning Banner ==========
+
+/**
+ * アーカイブ警告バナーを表示
+ * @param {string} message - 表示するメッセージ
+ */
+function showArchiveWarningBanner(message) {
+  const banner = document.getElementById('archive-warning-banner');
+  const messageEl = document.getElementById('archive-warning-message');
+  if (banner && messageEl) {
+    messageEl.textContent = message || 'このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。';
+    banner.style.display = 'flex';
+  }
+}
+
+/**
+ * アーカイブ警告バナーを非表示
+ */
+function hideArchiveWarningBanner() {
+  const banner = document.getElementById('archive-warning-banner');
+  if (banner) {
+    banner.style.display = 'none';
+  }
 }
 
 // ========== Utility Functions ==========
