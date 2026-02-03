@@ -525,6 +525,33 @@
     .tab-content.active {
       display: block;
     }
+
+    /* Archive Warning Banner */
+    .archive-warning-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #fef3c7;
+      border-radius: 4px;
+      color: #92400e;
+      font-size: 13px;
+    }
+    .archive-warning-banner .banner-icon {
+      font-size: 14px;
+    }
+    .archive-warning-banner .banner-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #92400e;
+      font-size: 16px;
+      padding: 0 4px;
+    }
+    .archive-warning-banner .banner-close:hover {
+      color: #78350f;
+    }
   </style>
 </head>
 <body>
@@ -571,6 +598,12 @@
       <div class="modal-header">
         <h2>未払詳細 - <span id="modalStaffName"></span></h2>
         <button class="modal-close" onclick="closePayoutModal()">&times;</button>
+      </div>
+      <!-- アーカイブデータ警告バナー -->
+      <div id="payout-archive-warning-banner" class="archive-warning-banner" style="display: none; margin: 0 16px 16px;">
+        <span class="banner-icon">⚠️</span>
+        <span id="payout-archive-warning-message">このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。</span>
+        <button class="banner-close" onclick="hidePayoutArchiveWarning()">&times;</button>
       </div>
       <div class="modal-body" id="payoutModalBody">
         <div class="loading">読み込み中...</div>
@@ -2287,6 +2320,29 @@
       const modal = document.getElementById('payoutDetailModal');
       modal.classList.remove('active');
       modalUnpaidData = null;
+      hidePayoutArchiveWarning();
+    }
+
+    /**
+     * 支払アーカイブ警告バナーを表示
+     */
+    function showPayoutArchiveWarning(message) {
+      const banner = document.getElementById('payout-archive-warning-banner');
+      const messageEl = document.getElementById('payout-archive-warning-message');
+      if (banner && messageEl) {
+        messageEl.textContent = message || 'このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。';
+        banner.style.display = 'flex';
+      }
+    }
+
+    /**
+     * 支払アーカイブ警告バナーを非表示
+     */
+    function hidePayoutArchiveWarning() {
+      const banner = document.getElementById('payout-archive-warning-banner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
     }
 
     function handlePayoutModalOverlayClick(event) {

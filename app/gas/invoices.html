@@ -819,6 +819,33 @@
       padding: var(--spacing-lg) * 2;
       color: var(--text-muted);
     }
+
+    /* Archive Warning Banner */
+    .archive-warning-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #fef3c7;
+      border-radius: 4px;
+      color: #92400e;
+      font-size: 13px;
+    }
+    .archive-warning-banner .banner-icon {
+      font-size: 14px;
+    }
+    .archive-warning-banner .banner-close {
+      margin-left: auto;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #92400e;
+      font-size: 16px;
+      padding: 0 4px;
+    }
+    .archive-warning-banner .banner-close:hover {
+      color: #78350f;
+    }
   </style>
 </head>
 
@@ -1124,6 +1151,12 @@
       <div class="modal-header">
         <h2 id="editModalTitle">請求書編集</h2>
         <button class="modal-close" onclick="closeEditModal()" aria-label="閉じる">&times;</button>
+      </div>
+      <!-- アーカイブデータ警告バナー -->
+      <div id="invoice-archive-warning-banner" class="archive-warning-banner" style="display: none; margin: 0 16px 16px;">
+        <span class="banner-icon">⚠️</span>
+        <span id="invoice-archive-warning-message">このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。</span>
+        <button class="banner-close" onclick="hideInvoiceArchiveWarning()">&times;</button>
       </div>
       <div class="modal-body">
         <!-- ヘッダー情報 -->
@@ -3640,6 +3673,14 @@
           // 明細をレンダリング（編集可否を渡す）
           renderEditLines(invoice.lines || [], isEditable);
 
+          // アーカイブデータの場合は警告バナーを表示
+          if (invoice._archived) {
+            const fiscalYear = invoice._archiveFiscalYear || '過去';
+            showInvoiceArchiveWarning(`このデータは${fiscalYear}年度のアーカイブです。編集内容はアーカイブDBに反映されます。`);
+          } else {
+            hideInvoiceArchiveWarning();
+          }
+
           // モーダルを表示
           document.getElementById('editModal').classList.add('active');
         })
@@ -3657,6 +3698,29 @@
     function closeEditModal() {
       document.getElementById('editModal').classList.remove('active');
       currentEditInvoice = null;
+      hideInvoiceArchiveWarning();
+    }
+
+    /**
+     * 請求書アーカイブ警告バナーを表示
+     */
+    function showInvoiceArchiveWarning(message) {
+      const banner = document.getElementById('invoice-archive-warning-banner');
+      const messageEl = document.getElementById('invoice-archive-warning-message');
+      if (banner && messageEl) {
+        messageEl.textContent = message || 'このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。';
+        banner.style.display = 'flex';
+      }
+    }
+
+    /**
+     * 請求書アーカイブ警告バナーを非表示
+     */
+    function hideInvoiceArchiveWarning() {
+      const banner = document.getElementById('invoice-archive-warning-banner');
+      if (banner) {
+        banner.style.display = 'none';
+      }
     }
 
     /**
