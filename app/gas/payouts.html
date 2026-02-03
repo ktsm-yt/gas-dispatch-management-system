@@ -295,6 +295,8 @@
     /* Page-specific modal overrides */
     .modal-overlay { display: none; }
     .modal-overlay.active { display: flex; }
+    /* 確認モーダルは他モーダルより前面に表示 */
+    #confirmModal.active { z-index: 10001; }
     .modal { max-width: 400px; width: 90%; }
     .modal.modal-lg { max-width: 700px; }
     .modal-header h2 { font-size: 16px; font-weight: 600; }
@@ -1651,7 +1653,7 @@
           <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
           <td><span class="status-badge draft">未払</span></td>
           <td>
-            <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}')">詳細</button>
+            <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}', { status: 'unpaid' })">詳細</button>
           </td>
         </tr>
       `;
@@ -1673,7 +1675,7 @@
           <td style="max-width: 150px; white-space: normal;">${p.notes}</td>
           <td><span class="status-badge confirmed">確認済み</span></td>
           <td style="white-space: nowrap;">
-            <button class="btn btn-secondary" onclick="openPayoutModal('${p.staffId}', '${p.staffName}')">詳細</button>
+            <button class="btn btn-secondary" onclick="openPayoutModal('${p.staffId}', '${p.staffName}', { status: 'confirmed', payoutId: '${p.payoutId}', updatedAt: '${p.updatedAt}' })">詳細</button>
             <button class="btn btn-primary" onclick="payConfirmed('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">支払</button>
             <button class="btn btn-secondary" onclick="undoConfirm('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">取消</button>
           </td>
@@ -2448,17 +2450,70 @@
     // ========== Payout Detail Modal ==========
     let modalUnpaidData = null;
     let modalHistoryData = [];
+    let modalPayoutStatus = 'unpaid';  // 'unpaid' or 'confirmed'
+    let modalPayoutId = null;
+    let modalPayoutUpdatedAt = null;
 
-    function openPayoutModal(staffId, staffName) {
+    function openPayoutModal(staffId, staffName, options = {}) {
       const modal = document.getElementById('payoutDetailModal');
+      const status = options.status || 'unpaid';
+      const payoutId = options.payoutId || null;
+      const updatedAt = options.updatedAt || null;
+
       modal.dataset.staffId = staffId;
       modal.dataset.assignmentsLoaded = 'false';
       modal.dataset.assignmentsLoading = 'false';
       document.getElementById('modalStaffName').textContent = staffName || '';
       modalUnpaidData = null;
       modalHistoryData = [];
+      modalPayoutStatus = status;
+      modalPayoutId = payoutId;
+      modalPayoutUpdatedAt = updatedAt;
       const endDate = document.getElementById('endDateFilter').value;
 
+      // 確認済みの場合はgetPayoutDetailsを使用
+      if (status === 'confirmed' && payoutId) {
+        document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+        modal.classList.add('active');
+
+        // Payout詳細と履歴を並行取得
+        let payoutResult = null;
+        let historyResult = null;
+        let completed = 0;
+
+        function checkAndRenderConfirmed() {
+          completed++;
+          if (completed === 2) {
+            if (modal.dataset.staffId !== staffId) return;
+            if (payoutResult && payoutResult.ok) {
+              modalUnpaidData = payoutResult.data;
+              modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
+              // 最新のupdatedAtで楽観ロック用の値を更新
+              if (payoutResult.data.updatedAt) {
+                modalPayoutUpdatedAt = payoutResult.data.updatedAt;
+              }
+              renderPayoutModal(payoutResult.data, modalHistoryData, { status: 'confirmed' });
+            } else {
+              document.getElementById('payoutModalBody').innerHTML =
+                `<div class="empty-state">${payoutResult?.error || 'エラーが発生しました'}</div>`;
+            }
+          }
+        }
+
+        google.script.run
+          .withSuccessHandler(result => { payoutResult = result; checkAndRenderConfirmed(); })
+          .withFailureHandler(err => { payoutResult = { ok: false, error: err.message }; checkAndRenderConfirmed(); })
+          .getPayoutDetails(payoutId, { include_assignments: false });
+
+        google.script.run
+          .withSuccessHandler(result => { historyResult = result; checkAndRenderConfirmed(); })
+          .withFailureHandler(err => { historyResult = { ok: false, data: { payouts: [] } }; checkAndRenderConfirmed(); })
+          .searchPayouts({ staff_id: staffId, status: 'paid', limit: 10 });
+
+        return;
+      }
+
+      // 未払の場合は従来通り
       const cachedSummary = getCachedUnpaidPreview(staffId, endDate);
       const cachedHistory = getCachedHistoryForStaff(staffId);
       const summaryComplete = cachedSummary && cachedSummary.isComplete;
@@ -2469,7 +2524,7 @@
         renderPayoutModal(
           cachedSummary.data,
           cachedHistory ? cachedHistory : null,
-          { preview: !summaryComplete }
+          { preview: !summaryComplete, status: 'unpaid' }
         );
       } else {
         document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
@@ -2511,7 +2566,7 @@
           if (unpaidResult && unpaidResult.ok) {
             modalUnpaidData = unpaidResult.data;
             modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
-            renderPayoutModal(unpaidResult.data, modalHistoryData);
+            renderPayoutModal(unpaidResult.data, modalHistoryData, { status: 'unpaid' });
           } else {
             document.getElementById('payoutModalBody').innerHTML =
               `<div class="empty-state">${unpaidResult?.error || 'エラーが発生しました'}</div>`;
@@ -2588,6 +2643,29 @@
       modal.dataset.assignmentsLoading = 'true';
       wrapper.innerHTML = '<div class="loading">読み込み中...</div>';
 
+      // 確認済みの場合はgetPayoutDetailsを使用
+      if (modalPayoutStatus === 'confirmed' && modalPayoutId) {
+        google.script.run
+          .withSuccessHandler(result => {
+            if (modal.dataset.staffId !== staffId) return;
+            modal.dataset.assignmentsLoading = 'false';
+            if (result.ok) {
+              modal.dataset.assignmentsLoaded = 'true';
+              renderModalAssignments(result.data.assignments || []);
+            } else {
+              wrapper.innerHTML = `<div class="empty-state">${result.error || '取得に失敗しました'}</div>`;
+            }
+          })
+          .withFailureHandler(err => {
+            if (modal.dataset.staffId !== staffId) return;
+            modal.dataset.assignmentsLoading = 'false';
+            wrapper.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+          })
+          .getPayoutDetails(modalPayoutId, { include_assignments: true });
+        return;
+      }
+
+      // 未払の場合は従来通り
       google.script.run
         .withSuccessHandler(result => {
           if (modal.dataset.staffId !== staffId) return;
@@ -2621,6 +2699,7 @@
       const today = new Date().toISOString().split('T')[0];
       const body = document.getElementById('payoutModalBody');
       const preview = options.preview === true;
+      const status = options.status || modalPayoutStatus || 'unpaid';
       const disabledAttr = preview ? 'disabled' : '';
       const baseText = (data.baseAmount === null || data.baseAmount === undefined) ? '-' : formatCurrency(data.baseAmount);
       const transportText = (data.transportAmount === null || data.transportAmount === undefined) ? '-' : formatCurrency(data.transportAmount);
@@ -2638,7 +2717,26 @@
       payBtn.style.display = '';
       payBtn.disabled = preview;
 
+      // ステータスに応じたボタンテキストとアクションを設定
+      // 確認済みの場合、調整額・備考は既に確定しているので無効化
+      const isConfirmed = status === 'confirmed';
+      const adjustmentDisabled = isConfirmed ? 'disabled' : disabledAttr;
+
+      if (isConfirmed) {
+        payBtn.textContent = '支払済にする';
+        payBtn.onclick = markAsPaidFromModal;
+      } else {
+        payBtn.textContent = '確認済みにする';
+        payBtn.onclick = confirmFromModal;
+      }
+
       const historyHtml = buildHistoryListHtml(history);
+
+      // 確認済みの場合、既存の調整額を表示用に準備
+      const existingAdjustment = data.adjustmentAmount || 0;
+      const adjustmentSign = existingAdjustment < 0 ? '-' : '+';
+      const adjustmentValue = Math.abs(existingAdjustment);
+      const existingNotes = data.notes || '';
 
       const assignmentsLoaded = Array.isArray(data.assignments);
       const modal = document.getElementById('payoutDetailModal');
@@ -2698,12 +2796,12 @@
               </div>
               <div class="filter-group">
                 <label>調整額:</label>
-                <button type="button" class="btn-sign positive" id="modalSignBtn" onclick="toggleModalSign()" ${disabledAttr}>+</button>
-                <input type="number" id="modalAdjustment" value="0" min="0" style="width: 80px;" onchange="updateModalTotal()" oninput="updateModalTotal()" ${disabledAttr} />
+                <button type="button" class="btn-sign ${adjustmentSign === '-' ? 'negative' : 'positive'}" id="modalSignBtn" onclick="toggleModalSign()" ${adjustmentDisabled}>${adjustmentSign}</button>
+                <input type="number" id="modalAdjustment" value="${adjustmentValue}" min="0" style="width: 80px;" onchange="updateModalTotal()" oninput="updateModalTotal()" ${adjustmentDisabled} />
               </div>
               <div class="filter-group" style="flex: 1;">
                 <label style="white-space: nowrap;">備考:</label>
-                <input type="text" id="modalNotes" placeholder="任意" style="flex: 1;" ${disabledAttr} />
+                <input type="text" id="modalNotes" placeholder="任意" value="${existingNotes}" style="flex: 1;" ${adjustmentDisabled} />
               </div>
             </div>
           </div>
@@ -2733,6 +2831,14 @@
 
     function updateModalTotal() {
       if (!modalUnpaidData) return;
+
+      // 確認済みの場合、totalAmountは既に調整込みなので再計算しない
+      if (modalPayoutStatus === 'confirmed') {
+        document.getElementById('modalTotalAmount').textContent = formatCurrency(modalUnpaidData.totalAmount);
+        return;
+      }
+
+      // 未払の場合は入力値から計算
       const signBtn = document.getElementById('modalSignBtn');
       const sign = signBtn && signBtn.textContent === '-' ? -1 : 1;
       const adjustment = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
@@ -2757,6 +2863,47 @@
       const notes = document.getElementById('modalNotes').value;
       const total = modalUnpaidData.totalAmount + adjustmentAmount;
 
+      // 確認済みからの支払い
+      if (modalPayoutStatus === 'confirmed' && modalPayoutId) {
+        showConfirmModal(
+          '支払済確認',
+          `<p><strong>${modalUnpaidData.staffName}</strong> を支払済にします。</p>
+           <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
+           <p>支払日: ${paidDate}</p>
+           <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
+          '支払済にする',
+          'btn-primary',
+          () => {
+            showLoading('支払処理中...');
+            google.script.run
+              .withSuccessHandler(result => {
+                hideLoading();
+                if (result.ok) {
+                  showToast('success', '支払済にしました');
+                  closePayoutModal();
+                  // 確認済み行を削除
+                  const row = document.querySelector(`tr[data-payout-id="${modalPayoutId}"]`);
+                  if (row) row.remove();
+                  // 履歴に追加
+                  if (result.data && result.data.payout) {
+                    prependHistoryRow(result.data.payout);
+                  }
+                  clearSession();
+                } else {
+                  showToast('error', result.error);
+                }
+              })
+              .withFailureHandler(err => {
+                hideLoading();
+                showToast('error', err.message);
+              })
+              .payConfirmedPayout(modalPayoutId, modalPayoutUpdatedAt, paidDate);
+          }
+        );
+        return;
+      }
+
+      // 未払から直接支払い（従来の処理、ただし通常はconfirmFromModalが呼ばれるはず）
       showConfirmModal(
         '支払済確認',
         `<p><strong>${modalUnpaidData.staffName}</strong> を支払済にします。</p>
@@ -2797,10 +2944,81 @@
       );
     }
 
+    // 未払モーダルから確認済みにする
+    function confirmFromModal() {
+      const modal = document.getElementById('payoutDetailModal');
+      const staffId = modal.dataset.staffId;
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (!staffId || !modalUnpaidData) {
+        showToast('error', 'データがありません');
+        return;
+      }
+
+      const signBtn = document.getElementById('modalSignBtn');
+      const sign = signBtn && signBtn.textContent === '-' ? -1 : 1;
+      const adjustmentAmount = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
+      const notes = document.getElementById('modalNotes').value;
+      const total = modalUnpaidData.totalAmount + adjustmentAmount;
+
+      showConfirmModal(
+        '確認済みにする',
+        `<p><strong>${modalUnpaidData.staffName}</strong> を確認済みにします。</p>
+         <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
+         <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
+        '確認済みにする',
+        'btn-primary',
+        () => {
+          showLoading('確認処理中...');
+          google.script.run
+            .withSuccessHandler(result => {
+              hideLoading();
+              if (result.ok) {
+                showToast('success', '確認済みにしました');
+                closePayoutModal();
+                // 未払行を確認済み行に更新
+                const row = document.querySelector(`tr[data-staff-id="${staffId}"][data-status="unpaid"]`);
+                if (row && result.data && result.data.payout) {
+                  const p = result.data.payout;
+                  const confirmedRow = {
+                    payoutId: p.payout_id,
+                    staffId: p.staff_id,
+                    staffName: modalUnpaidData.staffName,
+                    unpaidCount: p.assignment_count,
+                    periodStart: p.period_start,
+                    periodEnd: p.period_end,
+                    estimatedAmount: p.total_amount,
+                    adjustmentAmount: p.adjustment_amount || 0,
+                    notes: p.notes || '',
+                    updatedAt: p.updated_at,
+                    rowId: `confirmed-${p.payout_id}`
+                  };
+                  row.outerHTML = renderConfirmedRow(confirmedRow);
+                }
+                clearSession();
+              } else {
+                showToast('error', result.error);
+              }
+            })
+            .withFailureHandler(err => {
+              hideLoading();
+              showToast('error', err.message);
+            })
+            .confirmPayout(staffId, endDate, {
+              adjustment_amount: adjustmentAmount,
+              notes: notes
+            });
+        }
+      );
+    }
+
     function closePayoutModal() {
       const modal = document.getElementById('payoutDetailModal');
       modal.classList.remove('active');
       modalUnpaidData = null;
+      modalPayoutStatus = 'unpaid';
+      modalPayoutId = null;
+      modalPayoutUpdatedAt = null;
     }
 
     function handlePayoutModalOverlayClick(event) {

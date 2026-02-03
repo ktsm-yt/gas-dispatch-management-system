@@ -106,6 +106,11 @@ const AssignmentRepository = {
       records = records.filter(r => r.status === query.status);
     }
 
+    // payout_idで絞り込み（確認済み/支払済み配置の取得用）
+    if (query.payout_id) {
+      records = records.filter(r => r.payout_id === query.payout_id);
+    }
+
     return records;
   },
 
