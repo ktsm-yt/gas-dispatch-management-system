@@ -941,9 +941,6 @@
       // Load subcontractor list for second tab
       loadSubcontractorList();
 
-      // スタッフリストがロードされた後にデータを復元（UIに反映）
-      restoreFromSession();
-
       // Event delegation for subcontractor payout undo buttons
       document.addEventListener('click', function(e) {
         if (e.target.classList.contains('btn-undo-sub-payout')) {
@@ -996,29 +993,6 @@
         showToast('エクスポート先フォルダが設定されていません。設定画面で設定してください。', 'warning');
       }
       return false; // リンク遷移を阻止
-    }
-
-    function restoreFromSession() {
-      const saved = loadFromSession();
-      if (!saved) return;
-
-      // Restore filter values
-      if (saved.staffId) {
-        document.getElementById('staffFilter').value = saved.staffId;
-      }
-      if (saved.endDate) {
-        document.getElementById('endDateFilter').value = saved.endDate;
-      }
-
-      // Restore and render data
-      if (saved.mode === 'single' && saved.data) {
-        currentUnpaid = saved.data;
-        renderUnpaidSummary(saved.data);
-      } else if (saved.mode === 'list' && saved.data) {
-        // Restore with confirmed data if available
-        const confirmedData = saved.confirmedData || [];
-        renderUnpaidStaffList(saved.data, confirmedData);
-      }
     }
 
     // Load staff list for filter (Stale-While-Revalidate)
