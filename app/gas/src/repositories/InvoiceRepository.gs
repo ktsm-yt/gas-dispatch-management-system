@@ -9,15 +9,19 @@ const InvoiceRepository = {
   ID_COLUMN: 'invoice_id',
 
   /**
-   * IDで請求書を取得
+   * IDで請求書を取得（アーカイブDBフォールバック付き）
    * @param {string} invoiceId - 請求ID
    * @returns {Object|null} 請求書レコードまたはnull
    */
   findById: function(invoiceId) {
+    // 1. カレントDBを検索
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, invoiceId);
-    if (!record) return null;
+    if (record) {
+      return this._normalizeRecord(record);
+    }
 
-    return this._normalizeRecord(record);
+    // 2. カレントDBに見つからない場合、アーカイブDBを検索
+    return this._findInArchive(invoiceId);
   },
 
   /**
@@ -204,9 +208,9 @@ const InvoiceRepository = {
       return { success: false, error: 'invoice_id is required' };
     }
 
-    // アーカイブデータの編集を防止
-    if (invoice._archived) {
-      return { success: false, error: 'ARCHIVED_DATA', message: '過去年度のデータは編集できません。' };
+    // アーカイブデータの場合はアーカイブDBに書き込み
+    if (invoice._archived && invoice._archiveFiscalYear) {
+      return this._updateArchiveRecord(invoice, expectedUpdatedAt);
     }
 
     const sheet = getSheet(this.TABLE_NAME);
@@ -799,5 +803,158 @@ const InvoiceRepository = {
     }
 
     return archiveRecords;
+  },
+
+  /**
+   * アーカイブDBのレコードを更新（P2-5拡張）
+   * @param {Object} invoice - 更新データ（invoice_id, _archived, _archiveFiscalYear必須）
+   * @param {string} expectedUpdatedAt - 期待するupdated_at
+   * @returns {Object} 更新結果 { success: boolean, invoice?: Object, error?: string }
+   */
+  _updateArchiveRecord: function(invoice, expectedUpdatedAt) {
+    const fiscalYear = invoice._archiveFiscalYear;
+    const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+
+    if (!archiveDbId) {
+      return { success: false, error: 'ARCHIVE_DB_NOT_FOUND', message: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
+    }
+
+    try {
+      const archiveDb = SpreadsheetApp.openById(archiveDbId);
+      const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+      const sheet = archiveDb.getSheetByName(sheetName);
+
+      if (!sheet) {
+        return { success: false, error: 'ARCHIVE_SHEET_NOT_FOUND', message: `アーカイブDBに${sheetName}シートが見つかりません。` };
+      }
+
+      const headers = getHeaders(sheet);
+      const idColIndex = headers.indexOf(this.ID_COLUMN);
+      const updatedAtColIndex = headers.indexOf('updated_at');
+
+      if (idColIndex === -1) {
+        return { success: false, error: 'SCHEMA_ERROR', message: 'アーカイブDBのスキーマが不正です。' };
+      }
+
+      // IDで行を検索
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      let targetRowIndex = -1;
+      let currentRecord = null;
+
+      for (let i = 0; i < data.length; i++) {
+        if (data[i][idColIndex] === invoice.invoice_id) {
+          targetRowIndex = i;
+          currentRecord = rowToObject(headers, data[i]);
+          break;
+        }
+      }
+
+      if (targetRowIndex === -1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      // 楽観ロックチェック
+      if (expectedUpdatedAt && currentRecord.updated_at !== expectedUpdatedAt) {
+        return {
+          success: false,
+          error: 'CONFLICT_ERROR',
+          currentUpdatedAt: currentRecord.updated_at
+        };
+      }
+
+      const user = getCurrentUserEmail();
+      const now = getCurrentTimestamp();
+
+      // 更新可能フィールド（ホワイトリスト）
+      const updatableFields = [
+        'invoice_number', 'issue_date', 'due_date',
+        'subtotal', 'expense_amount', 'tax_amount', 'total_amount',
+        'invoice_format', 'shipper_name',
+        'pdf_file_id', 'excel_file_id', 'sheet_file_id',
+        'status', 'notes', 'is_deleted'
+      ];
+
+      const updatedInvoice = { ...currentRecord };
+
+      for (const field of updatableFields) {
+        if (invoice[field] !== undefined) {
+          updatedInvoice[field] = invoice[field];
+        }
+      }
+
+      updatedInvoice.updated_at = now;
+
+      // アーカイブDBに書き込み
+      const newRow = objectToRow(headers, updatedInvoice);
+      sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
+
+      // アーカイブフラグを付与して返す
+      const result = this._normalizeRecord(updatedInvoice);
+      result._archived = true;
+      result._archiveFiscalYear = fiscalYear;
+
+      return {
+        success: true,
+        invoice: result,
+        before: currentRecord
+      };
+
+    } catch (e) {
+      Logger.log(`アーカイブDB更新エラー: ${e.message}`);
+      return { success: false, error: 'ARCHIVE_UPDATE_ERROR', message: e.message };
+    }
+  },
+
+  /**
+   * アーカイブDBからIDで請求書を検索（P2-5: findById拡張）
+   * @param {string} invoiceId - 請求ID
+   * @returns {Object|null} 請求書レコード（_archived, _archiveFiscalYear付き）またはnull
+   */
+  _findInArchive: function(invoiceId) {
+    const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
+
+    // 直近3年度分のアーカイブを検索（新しい年度から）
+    for (let y = currentFiscalYear - 1; y >= currentFiscalYear - 3 && y >= 2020; y--) {
+      const archiveDbId = ArchiveService.getArchiveDbId(y);
+      if (!archiveDbId) continue;
+
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+        const sheet = archiveDb.getSheetByName(sheetName);
+        if (!sheet) continue;
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+
+        const headers = data[0];
+        const idColIndex = headers.indexOf(this.ID_COLUMN);
+        if (idColIndex === -1) continue;
+
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][idColIndex] === invoiceId) {
+            const record = {};
+            for (let j = 0; j < headers.length; j++) {
+              record[headers[j]] = data[i][j];
+            }
+            // アーカイブフラグを付与
+            record._archived = true;
+            record._archiveFiscalYear = y;
+
+            // 正規化して返す
+            return this._normalizeRecord(record);
+          }
+        }
+      } catch (e) {
+        Logger.log(`アーカイブDB検索エラー (${y}): ${e.message}`);
+      }
+    }
+
+    return null;
   }
 };
