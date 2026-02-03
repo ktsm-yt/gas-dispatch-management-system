@@ -727,51 +727,49 @@
     </div>
   </div>
 
+  <?!= include('cache_utils'); ?>
+
   <script>
     // State
     let staffList = [];
     let currentUnpaid = null;
     let currentTab = 'staff';
+    let currentUnpaidQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
 
     // Subcontractor State
     let subcontractorList = [];
     let currentSubUnpaid = null;
+    let currentSubUnpaidQuery = null;  // 外注費の検索条件
 
-    // SessionStorage for unpaid data persistence
-    const SS_KEY = 'payouts_unpaid_data';
-    const SS_HISTORY_KEY = 'payouts_history_data';
-    const SS_STAFF_KEY = 'payouts_staff_data';
-    const SS_SUB_KEY = 'payouts_subcontractor_data';
-    const SS_SUB_UNPAID_KEY = 'payouts_sub_unpaid_data';
-    const SS_SUB_HISTORY_KEY = 'payouts_sub_history_data';
-    const CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間（未払データ、他ページと統一）
-    const HISTORY_CACHE_TTL = 2 * 60 * 60 * 1000; // 2時間（履歴）
+    // キャッシュTTL（PageCache.DEFAULT_TTLを使用、未払は短めに）
+    const UNPAID_CACHE_TTL = 5 * 60 * 1000; // 5分（未払データは頻繁に変わる可能性）
+
+    // ====== 互換性維持用のラッパー関数 ======
+    // （段階的にPageCacheに移行、既存ロジックとの互換性を保つ）
 
     function saveToSession(data) {
-      sessionStorage.setItem(SS_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        ...data
-      }));
+      const cacheKey = PageCache.makeKey('payouts_unpaid', data.endDate, data.staffId || 'all');
+      PageCache.set(cacheKey, data);
     }
 
     function loadFromSession(endDate = null) {
-      const saved = sessionStorage.getItem(SS_KEY);
-      if (!saved) return null;
-      const data = JSON.parse(saved);
-      // TTL check
-      if (Date.now() - data.timestamp > CACHE_TTL) {
-        sessionStorage.removeItem(SS_KEY);
-        return null;
-      }
-      // endDate check (キャッシュと異なる日付なら無効)
-      if (endDate && data.endDate !== endDate) {
-        return null;
-      }
-      return data;
+      if (!endDate) return null;
+      const cacheKey = PageCache.makeKey('payouts_unpaid', endDate, 'all');
+      const cached = PageCache.get(cacheKey);
+      if (!cached) return null;
+      // TTL超過でもデータは返す（SWR）、呼び出し側でバックグラウンド更新を判断
+      return cached.data;
+    }
+
+    function isSessionStale(endDate) {
+      if (!endDate) return true;
+      const cacheKey = PageCache.makeKey('payouts_unpaid', endDate, 'all');
+      const cached = PageCache.get(cacheKey);
+      return !cached || cached.age > UNPAID_CACHE_TTL;
     }
 
     function clearSession() {
-      sessionStorage.removeItem(SS_KEY);
+      PageCache.clearByPrefix('payouts_unpaid');
     }
 
     /**
@@ -779,21 +777,13 @@
      * @returns {boolean} 復元できたかどうか
      */
     function tryRestoreFromCache() {
-      const saved = sessionStorage.getItem(SS_KEY);
-      if (!saved) return false;
+      // フィルター状態用のキャッシュを確認
+      const filterCached = PageCache.get('payouts_filter');
+      if (!filterCached) return false;
       try {
-        const data = JSON.parse(saved);
-        // TTL check
-        if (Date.now() - data.timestamp > CACHE_TTL) {
-          sessionStorage.removeItem(SS_KEY);
-          return false;
-        }
-        // 日付フィルターを復元
-        if (data.endDate) {
-          document.getElementById('endDateFilter').value = data.endDate;
-        }
-        if (data.staffId) {
-          // スタッフフィルターは後でpopulateStaffFilterで設定される
+        const filter = filterCached.data;
+        if (filter.endDate) {
+          document.getElementById('endDateFilter').value = filter.endDate;
         }
         return true;
       } catch (e) {
@@ -806,18 +796,12 @@
      * @returns {boolean} 復元できたかどうか
      */
     function tryRestoreSubFromCache() {
-      const saved = sessionStorage.getItem(SS_SUB_UNPAID_KEY);
-      if (!saved) return false;
+      const filterCached = PageCache.get('payouts_sub_filter');
+      if (!filterCached) return false;
       try {
-        const cache = JSON.parse(saved);
-        // TTL check
-        if (Date.now() - cache.timestamp > CACHE_TTL) {
-          sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
-          return false;
-        }
-        // 日付フィルターを復元
-        if (cache.endDate) {
-          document.getElementById('subEndDateFilter').value = cache.endDate;
+        const filter = filterCached.data;
+        if (filter.endDate) {
+          document.getElementById('subEndDateFilter').value = filter.endDate;
         }
         return true;
       } catch (e) {
@@ -827,27 +811,22 @@
 
     // 外注費未払キャッシュ
     function saveSubUnpaidToSession(data, endDate) {
-      sessionStorage.setItem(SS_SUB_UNPAID_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        endDate: endDate,
-        data: data
-      }));
+      const cacheKey = PageCache.makeKey('payouts_sub_unpaid', endDate);
+      PageCache.set(cacheKey, data);
+      // フィルター状態も保存
+      PageCache.set('payouts_sub_filter', { endDate });
     }
 
     function loadSubUnpaidFromSession(endDate) {
-      const saved = sessionStorage.getItem(SS_SUB_UNPAID_KEY);
-      if (!saved) return null;
-      const cache = JSON.parse(saved);
-      // TTL check
-      if (Date.now() - cache.timestamp > CACHE_TTL) {
-        sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
-        return null;
-      }
-      // endDate check
-      if (cache.endDate !== endDate) {
-        return null;
-      }
-      return cache.data;
+      const cacheKey = PageCache.makeKey('payouts_sub_unpaid', endDate);
+      const cached = PageCache.get(cacheKey);
+      return cached ? cached.data : null;
+    }
+
+    function isSubUnpaidSessionStale(endDate) {
+      const cacheKey = PageCache.makeKey('payouts_sub_unpaid', endDate);
+      const cached = PageCache.get(cacheKey);
+      return !cached || cached.age > UNPAID_CACHE_TTL;
     }
 
     function getCachedSubcontractorPreview(subcontractorId, endDate) {
@@ -857,36 +836,31 @@
     }
 
     function clearSubUnpaidSession() {
-      sessionStorage.removeItem(SS_SUB_UNPAID_KEY);
+      PageCache.clearByPrefix('payouts_sub_unpaid');
     }
 
     // History cache functions
     function saveHistoryToSession(payouts) {
-      sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        payouts: payouts
-      }));
+      PageCache.set('payouts_history', payouts);
     }
 
     function loadHistoryFromSession() {
-      const saved = sessionStorage.getItem(SS_HISTORY_KEY);
-      if (!saved) return null;
-      const data = JSON.parse(saved);
-      // TTL check
-      if (Date.now() - data.timestamp > HISTORY_CACHE_TTL) {
-        sessionStorage.removeItem(SS_HISTORY_KEY);
-        return null;
-      }
-      return data.payouts;
+      const cached = PageCache.get('payouts_history');
+      if (!cached) return null;
+      // TTL超過でもデータは返す（SWR）
+      return cached.data;
+    }
+
+    function isHistoryStale() {
+      const cached = PageCache.get('payouts_history');
+      return !cached || cached.age > PageCache.DEFAULT_TTL;
     }
 
     function updateHistoryCache(updater) {
-      const saved = sessionStorage.getItem(SS_HISTORY_KEY);
-      if (!saved) return;
-      const data = JSON.parse(saved);
-      data.payouts = updater(data.payouts);
-      data.timestamp = Date.now(); // refresh TTL
-      sessionStorage.setItem(SS_HISTORY_KEY, JSON.stringify(data));
+      const cached = PageCache.get('payouts_history');
+      if (!cached || !cached.data) return;
+      const newPayouts = updater(cached.data);
+      PageCache.set('payouts_history', newPayouts);
     }
 
     function getCachedUnpaidPreview(staffId, endDate) {
@@ -924,14 +898,19 @@
       return cached.filter(p => p.staff_id === staffId).slice(0, 10);
     }
 
-    // Staff cache functions (no TTL - valid for session)
+    // Staff cache functions (PageCache with TTL)
     function saveStaffToCache(data) {
-      sessionStorage.setItem(SS_STAFF_KEY, JSON.stringify(data));
+      PageCache.set('payouts_staff', data);
     }
 
     function loadStaffFromCache() {
-      const saved = sessionStorage.getItem(SS_STAFF_KEY);
-      return saved ? JSON.parse(saved) : null;
+      const cached = PageCache.get('payouts_staff');
+      return cached ? cached.data : null;
+    }
+
+    function isStaffCacheStale() {
+      const cached = PageCache.get('payouts_staff');
+      return !cached || cached.age > PageCache.MASTER_TTL;
     }
 
     // Initialize
@@ -961,9 +940,6 @@
 
       // Load subcontractor list for second tab
       loadSubcontractorList();
-
-      // スタッフリストがロードされた後にデータを復元（UIに反映）
-      restoreFromSession();
 
       // Event delegation for subcontractor payout undo buttons
       document.addEventListener('click', function(e) {
@@ -1019,36 +995,18 @@
       return false; // リンク遷移を阻止
     }
 
-    function restoreFromSession() {
-      const saved = loadFromSession();
-      if (!saved) return;
-
-      // Restore filter values
-      if (saved.staffId) {
-        document.getElementById('staffFilter').value = saved.staffId;
-      }
-      if (saved.endDate) {
-        document.getElementById('endDateFilter').value = saved.endDate;
-      }
-
-      // Restore and render data
-      if (saved.mode === 'single' && saved.data) {
-        currentUnpaid = saved.data;
-        renderUnpaidSummary(saved.data);
-      } else if (saved.mode === 'list' && saved.data) {
-        // Restore with confirmed data if available
-        const confirmedData = saved.confirmedData || [];
-        renderUnpaidStaffList(saved.data, confirmedData);
-      }
-    }
-
-    // Load staff list for filter
+    // Load staff list for filter (Stale-While-Revalidate)
     function loadStaffList() {
       // Check cache first
       const cached = loadStaffFromCache();
       if (cached) {
         staffList = cached;
         populateStaffFilter();
+
+        // TTL超過ならバックグラウンド更新
+        if (isStaffCacheStale()) {
+          refreshStaffInBackground();
+        }
         return;
       }
 
@@ -1065,6 +1023,24 @@
         .getStaffForPayouts();
     }
 
+    // スタッフマスターをバックグラウンドで更新
+    function refreshStaffInBackground() {
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            const newStaff = result.data.staff;
+            saveStaffToCache(newStaff);
+            // 差分があればUIを更新
+            if (JSON.stringify(staffList) !== JSON.stringify(newStaff)) {
+              staffList = newStaff;
+              populateStaffFilter();
+            }
+          }
+        })
+        .withFailureHandler(() => {}) // サイレント
+        .getStaffForPayouts();
+    }
+
     function populateStaffFilter() {
       const select = document.getElementById('staffFilter');
       // Clear existing options (except first "全て" option)
@@ -1077,7 +1053,7 @@
       });
     }
 
-    // Load unpaid summary
+    // Load unpaid summary (Stale-While-Revalidate)
     function loadUnpaidList(forceRefresh = false) {
       const staffId = document.getElementById('staffFilter').value;
       const endDate = document.getElementById('endDateFilter').value;
@@ -1087,12 +1063,23 @@
         return;
       }
 
-      // キャッシュチェック（全スタッフ一覧の場合のみ）
+      // 現在のクエリを保存（バックグラウンド更新時に使用）
+      currentUnpaidQuery = { staffId, endDate };
+
+      // フィルター状態を保存
+      PageCache.set('payouts_filter', { endDate, staffId });
+
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
       if (!forceRefresh && !staffId) {
         const cached = loadFromSession(endDate);
         if (cached && cached.mode === 'list' && cached.data) {
           const confirmedData = cached.confirmedData || [];
           renderUnpaidStaffList(cached.data, confirmedData);
+
+          // TTL超過ならバックグラウンド更新
+          if (isSessionStale(endDate)) {
+            refreshUnpaidListInBackground(endDate);
+          }
           return;
         }
       }
@@ -1108,7 +1095,7 @@
             hideLoading();
             if (result.ok) {
               renderUnpaidSummary(result.data);
-              // Save to SessionStorage
+              // Save to cache
               saveToSession({
                 mode: 'single',
                 staffId: staffId,
@@ -1145,7 +1132,7 @@
 
           renderUnpaidStaffList(unpaidData, confirmedData);
 
-          // Save to SessionStorage
+          // Save to cache
           saveToSession({
             mode: 'list',
             staffId: null,
@@ -1167,6 +1154,54 @@
           .withFailureHandler(err => { confirmedResult = { ok: false, data: { payouts: [] } }; checkAndRender(); })
           .getConfirmedPayouts({});
       }
+    }
+
+    // 未払一覧をバックグラウンドで更新
+    function refreshUnpaidListInBackground(endDate) {
+      let unpaidResult = null;
+      let confirmedResult = null;
+      let completed = 0;
+
+      function checkAndUpdate() {
+        completed++;
+        if (completed < 2) return;
+
+        // 現在の検索条件と一致する場合のみ更新
+        if (currentUnpaidQuery && currentUnpaidQuery.endDate === endDate && !currentUnpaidQuery.staffId) {
+          const unpaidData = unpaidResult?.ok ? unpaidResult.data : null;
+          const confirmedData = confirmedResult?.ok ? confirmedResult.data.payouts : [];
+
+          if (unpaidData) {
+            // キャッシュを更新
+            saveToSession({
+              mode: 'list',
+              staffId: null,
+              endDate: endDate,
+              data: unpaidData,
+              confirmedData: confirmedData
+            });
+
+            // 差分があればUIを更新
+            const currentData = loadFromSession(endDate);
+            if (!currentData || JSON.stringify(currentData.data) !== JSON.stringify(unpaidData)) {
+              renderUnpaidStaffList(unpaidData, confirmedData);
+              showToast('データを更新しました', 'info');
+            }
+          }
+        }
+      }
+
+      // バックグラウンドで未払一覧を取得
+      google.script.run
+        .withSuccessHandler(result => { unpaidResult = result; checkAndUpdate(); })
+        .withFailureHandler(() => { unpaidResult = { ok: false }; checkAndUpdate(); })
+        .getUnpaidStaffList(endDate);
+
+      // バックグラウンドで確認済み一覧を取得
+      google.script.run
+        .withSuccessHandler(result => { confirmedResult = result; checkAndUpdate(); })
+        .withFailureHandler(() => { confirmedResult = { ok: false, data: { payouts: [] } }; checkAndUpdate(); })
+        .getConfirmedPayouts({});
     }
 
     // Render unpaid summary for single staff
@@ -1415,11 +1450,11 @@
       rows.forEach(row => tbody.appendChild(row));
     }
 
-    // Load payment history (paid only) with cache
+    // Load payment history (paid only) with cache (Stale-While-Revalidate)
     function loadHistory(forceRefresh = false) {
       const staffId = document.getElementById('staffFilter').value;
 
-      // Try cache first
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
       if (!forceRefresh) {
         const cached = loadHistoryFromSession();
         if (cached) {
@@ -1428,6 +1463,11 @@
             ? cached.filter(p => p.staff_id === staffId)
             : cached;
           renderHistory(filtered);
+
+          // TTL超過ならバックグラウンド更新
+          if (isHistoryStale()) {
+            refreshHistoryInBackground(staffId);
+          }
           return;
         }
       }
@@ -1455,6 +1495,32 @@
           document.getElementById('historyTable').innerHTML =
             `<div class="empty-state">エラー: ${err.message}</div>`;
         })
+        .searchPayouts(query);
+    }
+
+    // 履歴をバックグラウンドで更新
+    function refreshHistoryInBackground(currentStaffId) {
+      const query = { status: 'paid', payout_type: 'STAFF', limit: 50 };
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            const newPayouts = result.data.payouts;
+            const oldPayouts = loadHistoryFromSession();
+
+            // キャッシュを更新
+            saveHistoryToSession(newPayouts);
+
+            // 差分があればUIを更新
+            if (!oldPayouts || JSON.stringify(oldPayouts) !== JSON.stringify(newPayouts)) {
+              const filtered = currentStaffId
+                ? newPayouts.filter(p => p.staff_id === currentStaffId)
+                : newPayouts;
+              renderHistory(filtered);
+            }
+          }
+        })
+        .withFailureHandler(() => {}) // サイレント
         .searchPayouts(query);
     }
 
@@ -2974,10 +3040,26 @@
     // ========== Subcontractor Payout Functions (P2-8) ==========
 
     function loadSubcontractorList() {
+      // キャッシュを確認
+      const cached = PageCache.get('payouts_sub_list');
+      if (cached) {
+        subcontractorList = cached.data;
+        renderSubcontractorFilter(subcontractorList);
+        loadSubcontractorHistory();
+        restoreSubFromSession();
+
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshSubcontractorListInBackground();
+        }
+        return;
+      }
+
       google.script.run
         .withSuccessHandler(function(response) {
           if (response.ok && response.data.subcontractors) {
             subcontractorList = response.data.subcontractors;
+            PageCache.set('payouts_sub_list', subcontractorList);
             renderSubcontractorFilter(subcontractorList);
             loadSubcontractorHistory();
             // 外注リストがロードされた後にキャッシュから復元
@@ -2987,6 +3069,24 @@
         .withFailureHandler(function(error) {
           console.error('loadSubcontractorList error:', error);
         })
+        .getSubcontractorsForPayouts();
+    }
+
+    // 外注先マスターをバックグラウンドで更新
+    function refreshSubcontractorListInBackground() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok && response.data.subcontractors) {
+            const newList = response.data.subcontractors;
+            PageCache.set('payouts_sub_list', newList);
+            // 差分があればUIを更新
+            if (JSON.stringify(subcontractorList) !== JSON.stringify(newList)) {
+              subcontractorList = newList;
+              renderSubcontractorFilter(subcontractorList);
+            }
+          }
+        })
+        .withFailureHandler(function() {}) // サイレント
         .getSubcontractorsForPayouts();
     }
 
@@ -3040,11 +3140,19 @@
         return;
       }
 
-      // キャッシュチェック（全外注先一覧の場合のみ）
+      // 現在のクエリを保存（バックグラウンド更新時に使用）
+      currentSubUnpaidQuery = { subId, endDate };
+
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
       if (!forceRefresh && !subId) {
         const cached = loadSubUnpaidFromSession(endDate);
         if (cached) {
           renderSubcontractorUnpaidList(cached);
+
+          // TTL超過ならバックグラウンド更新
+          if (isSubUnpaidSessionStale(endDate)) {
+            refreshSubUnpaidInBackground(endDate);
+          }
           return;
         }
       }
@@ -3097,6 +3205,32 @@
           })
           .getUnpaidSubcontractorList(endDate);
       }
+    }
+
+    // 外注費未払リストをバックグラウンドで更新
+    function refreshSubUnpaidInBackground(endDate) {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok) {
+            const newData = response.data;
+
+            // 現在の検索条件と一致する場合のみ更新
+            if (currentSubUnpaidQuery && currentSubUnpaidQuery.endDate === endDate && !currentSubUnpaidQuery.subId) {
+              const oldData = loadSubUnpaidFromSession(endDate);
+
+              // キャッシュを更新
+              saveSubUnpaidToSession(newData, endDate);
+
+              // 差分があればUIを更新
+              if (!oldData || JSON.stringify(oldData) !== JSON.stringify(newData)) {
+                renderSubcontractorUnpaidList(newData);
+                showToast('データを更新しました', 'info');
+              }
+            }
+          }
+        })
+        .withFailureHandler(function() {}) // サイレント
+        .getUnpaidSubcontractorList(endDate);
     }
 
     function renderSubcontractorUnpaidList(data) {
@@ -3381,11 +3515,25 @@
 
     function loadSubcontractorHistory() {
       const container = document.getElementById('subHistoryTable');
+
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
+      const cached = PageCache.get('payouts_sub_history');
+      if (cached) {
+        renderSubcontractorHistory(cached.data);
+
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.DEFAULT_TTL) {
+          refreshSubHistoryInBackground();
+        }
+        return;
+      }
+
       container.innerHTML = '<div class="loading">読み込み中...</div>';
 
       google.script.run
         .withSuccessHandler(function(response) {
           if (response.ok) {
+            PageCache.set('payouts_sub_history', response.data.payouts);
             renderSubcontractorHistory(response.data.payouts);
           } else {
             container.innerHTML = '<div class="empty-state">履歴の取得に失敗しました</div>';
@@ -3394,6 +3542,26 @@
         .withFailureHandler(function(error) {
           container.innerHTML = '<div class="empty-state">エラー: ' + error.message + '</div>';
         })
+        .searchSubcontractorPayouts({ sort_order: 'desc' });
+    }
+
+    // 外注履歴をバックグラウンドで更新
+    function refreshSubHistoryInBackground() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          if (response.ok) {
+            const newPayouts = response.data.payouts;
+            const oldPayouts = PageCache.get('payouts_sub_history')?.data;
+
+            PageCache.set('payouts_sub_history', newPayouts);
+
+            // 差分があればUIを更新
+            if (!oldPayouts || JSON.stringify(oldPayouts) !== JSON.stringify(newPayouts)) {
+              renderSubcontractorHistory(newPayouts);
+            }
+          }
+        })
+        .withFailureHandler(function() {}) // サイレント
         .searchSubcontractorPayouts({ sort_order: 'desc' });
     }
 

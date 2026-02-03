@@ -482,17 +482,19 @@ const PayoutService = {
       }
     }
 
-    // 5. 監査ログ（一括）
-    for (const payout of insertedPayouts) {
-      try {
-        logCreate('T_Payouts', payout.payout_id, payout);
-      } catch (e) {
-        Logger.log(`[bulkConfirmPayouts] Audit log error: ${e.message}`);
-      }
+    // 5. 監査ログ（一括 - 1回のシートI/O）
+    try {
+      const auditRecords = insertedPayouts.map(p => ({
+        recordId: p.payout_id,
+        data: p
+      }));
+      logCreateBulk('T_Payouts', auditRecords);
+    } catch (e) {
+      Logger.log(`[bulkConfirmPayouts] Audit log error: ${e.message}`);
     }
 
-    // 6. スタッフ名を付与して返す
-    const enrichedPayouts = insertedPayouts.map(p => this._enrichPayout(p));
+    // 6. スタッフ名を付与して返す（1回のシートI/O）
+    const enrichedPayouts = this._enrichPayoutsBulk(insertedPayouts);
 
     const result = {
       success: success,
@@ -526,16 +528,19 @@ const PayoutService = {
 
     Logger.log(`[bulkPayConfirmed] Completed: success=${result.success}, failed=${result.failed}`);
 
-    // スタッフ名を付与
-    const enrichedPayouts = result.payouts.map(p => this._enrichPayout(p));
+    // スタッフ名を付与（1回のシートI/O）
+    const enrichedPayouts = this._enrichPayoutsBulk(result.payouts);
 
-    // 監査ログ（成功した更新のみ）
-    for (const payout of enrichedPayouts) {
-      try {
-        logUpdate('T_Payouts', payout.payout_id, { status: 'confirmed' }, payout);
-      } catch (e) {
-        Logger.log(`[bulkPayConfirmed] Audit log error: ${e.message}`);
-      }
+    // 監査ログ（1回のシートI/O）
+    try {
+      const auditRecords = enrichedPayouts.map(p => ({
+        recordId: p.payout_id,
+        before: { status: 'confirmed' },
+        after: p
+      }));
+      logUpdateBulk('T_Payouts', auditRecords);
+    } catch (e) {
+      Logger.log(`[bulkPayConfirmed] Audit log error: ${e.message}`);
     }
 
     return {
@@ -620,7 +625,7 @@ const PayoutService = {
    */
   search: function(query = {}) {
     const payouts = PayoutRepository.search(query);
-    return payouts.map(p => this._enrichPayout(p));
+    return this._enrichPayoutsBulk(payouts);
   },
 
   /**
@@ -715,7 +720,7 @@ const PayoutService = {
    */
   getHistory: function(staffId, options = {}) {
     const payouts = PayoutRepository.findByStaffId(staffId, options);
-    return payouts.map(p => this._enrichPayout(p));
+    return this._enrichPayoutsBulk(payouts);
   },
 
   /**
@@ -746,7 +751,7 @@ const PayoutService = {
       sort_order: 'asc'  // 日付昇順でエクスポート
     });
 
-    return payouts.map(p => this._enrichPayout(p));
+    return this._enrichPayoutsBulk(payouts);
   },
 
   /**
@@ -1043,6 +1048,45 @@ const PayoutService = {
       ...payout,
       target_name: targetName
     };
+  },
+
+  /**
+   * 支払いにスタッフ/外注先名を一括付与（バルク版）
+   * @param {Object[]} payouts - 支払いデータ配列
+   * @returns {Object[]} 名前付き支払いデータ配列
+   */
+  _enrichPayoutsBulk: function(payouts) {
+    if (!payouts || payouts.length === 0) {
+      return [];
+    }
+
+    // IDを収集
+    const staffIds = [];
+    const subIds = [];
+    for (const p of payouts) {
+      if (p.payout_type === 'STAFF' && p.staff_id) {
+        staffIds.push(p.staff_id);
+      } else if (p.payout_type === 'SUBCONTRACTOR' && p.subcontractor_id) {
+        subIds.push(p.subcontractor_id);
+      }
+    }
+
+    // 1回のシートI/Oで一括取得
+    const staffMap = staffIds.length > 0 ? StaffRepository.findByIds(staffIds) : new Map();
+    const subMap = subIds.length > 0 ? SubcontractorRepository.findByIds(subIds) : new Map();
+
+    // 名前を付与
+    return payouts.map(p => {
+      let targetName = '';
+      if (p.payout_type === 'STAFF' && p.staff_id) {
+        const staff = staffMap.get(p.staff_id);
+        targetName = staff ? staff.name : '(不明)';
+      } else if (p.payout_type === 'SUBCONTRACTOR' && p.subcontractor_id) {
+        const sub = subMap.get(p.subcontractor_id);
+        targetName = sub ? sub.company_name : '(不明)';
+      }
+      return { ...p, target_name: targetName };
+    });
   },
 
   /**
@@ -1419,6 +1463,6 @@ const PayoutService = {
    */
   getSubcontractorHistory: function(subcontractorId, options = {}) {
     const payouts = PayoutRepository.findBySubcontractorId(subcontractorId, options);
-    return payouts.map(p => this._enrichPayout(p));
+    return this._enrichPayoutsBulk(payouts);
   }
 };
