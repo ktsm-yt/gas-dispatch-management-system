@@ -579,6 +579,7 @@ const InvoiceLineRepository = {
     return {
       ...record,
       work_date: this._normalizeDate(record.work_date),
+      time_note: this._normalizeTime(record.time_note),
       line_number: Number(record.line_number) || 0,
       quantity: Number(record.quantity) || 0,
       unit_price: Number(record.unit_price) || 0,
@@ -601,5 +602,43 @@ const InvoiceLineRepository = {
 
     // 文字列の場合はスラッシュをハイフンに変換
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 時刻を正規化してHH:mm形式の文字列に変換
+   * スプレッドシートは "08:00" を時刻型に自動変換することがある
+   * @param {Date|string|number} timeValue - 時刻値
+   * @returns {string} 正規化された時刻文字列
+   */
+  _normalizeTime: function(timeValue) {
+    // null/undefined/空文字はそのまま空文字を返す
+    if (timeValue === null || timeValue === undefined || timeValue === '') {
+      return '';
+    }
+
+    try {
+      // Date型の場合（スプレッドシートの時刻セル）
+      if (timeValue instanceof Date) {
+        return Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+      }
+
+      // 数値型の場合（スプレッドシートの時刻は0〜1の小数）
+      if (typeof timeValue === 'number') {
+        const totalMinutes = Math.round(timeValue * 24 * 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        // padStartの代わりに手動でゼロパディング
+        const hh = hours < 10 ? '0' + hours : String(hours);
+        const mm = minutes < 10 ? '0' + minutes : String(minutes);
+        return hh + ':' + mm;
+      }
+
+      // 既に文字列の場合はそのまま返す
+      return String(timeValue);
+    } catch (e) {
+      // エラー時は空文字を返す（ログは出力）
+      console.warn('_normalizeTime error:', e.message, 'value:', timeValue);
+      return '';
+    }
   }
 };
