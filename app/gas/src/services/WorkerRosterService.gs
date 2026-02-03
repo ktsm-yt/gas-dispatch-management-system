@@ -348,87 +348,107 @@ const WorkerRosterService = {
    */
   _populateStaffRow: function(sheet, baseRow, index, staff) {
     // 全建統一様式第５号のセル配置に合わせてデータを設定
-    // 各フィールドの正確な位置はテンプレートに依存
+    // 行単位の選択的setValuesでパフォーマンス最適化（24回→4回のAPI呼び出し）
 
-    // 番号
-    sheet.getRange(baseRow, 1).setValue(index);
-
-    // フリガナ（Row 1）
-    sheet.getRange(baseRow, 2).setValue(staff.name_kana || '');
-
-    // 職種（Row 1）- ユーザーが手動入力
-
-    // 雇入年月日（Row 1）
+    // 計算が必要な値を事前に取得
     const hireDateStr = this._formatJapaneseDate(staff.hire_date);
-    sheet.getRange(baseRow, 9).setValue(hireDateStr);
-
-    // 生年月日（Row 1）
     const birthDateStr = this._formatJapaneseDate(staff.birth_date);
-    sheet.getRange(baseRow, 13).setValue(birthDateStr);
-
-    // 現住所（Row 1）
-    sheet.getRange(baseRow, 17).setValue(staff.address || '');
-
-    // TEL（Row 1）
-    sheet.getRange(baseRow, 26).setValue(staff.phone || '');
-
-    // 氏名（Row 3）
-    sheet.getRange(baseRow + 2, 2).setValue(staff.name || '');
-
-    // 技能者ID（Row 5）
-    sheet.getRange(baseRow + 4, 2).setValue(staff.ccus_id || '');
-
-    // 経験年数（Row 4）
     const experienceYears = this._calculateExperienceYears(staff.hire_date);
-    if (experienceYears !== null) {
-      sheet.getRange(baseRow + 3, 9).setValue(experienceYears + '年');
-    }
-
-    // 年齢（Row 4）
     const age = this._calculateAge(staff.birth_date);
-    if (age !== null) {
-      sheet.getRange(baseRow + 3, 13).setValue(age + ' 歳');
-    }
-
-    // 家族連絡先氏名（Row 4, column Q）
-    sheet.getRange(baseRow + 3, 17).setValue(staff.emergency_contact_name || '');
-
-    // 家族連絡先住所（Row 5, column Q）
-    sheet.getRange(baseRow + 4, 17).setValue(staff.emergency_contact_address || '');
-
-    // 家族連絡先電話番号（Row 4, column Z）
-    sheet.getRange(baseRow + 3, 26).setValue(staff.emergency_contact_phone || '');
-
-    // 血液型（Row 1, column AH）
-    sheet.getRange(baseRow, 34).setValue(staff.blood_type || '');
-
-    // 健康保険（Row 1, column AM）
-    sheet.getRange(baseRow, 39).setValue(staff.health_insurance_type || '');
-
-    // 年金保険（Row 3）
-    sheet.getRange(baseRow + 2, 38).setValue(staff.pension_type || '');
-
-    // 年金番号（Row 4）- 厚生年金番号
-    sheet.getRange(baseRow + 3, 38).setValue(staff.pension_number || '');
-
-    // 雇用保険（Row 5）- 下4桁のみ
     const insuranceNo = this._formatInsuranceNumber(staff.employment_insurance_no);
-    sheet.getRange(baseRow + 4, 38).setValue(insuranceNo);
 
-    // 建退共（Row 1, column AT）
-    sheet.getRange(baseRow, 46).setValue(staff.kensetsu_kyosai || '');
+    // Row 0 (baseRow): cols 1-46
+    const row0 = this._buildRow0(index, staff, hireDateStr, birthDateStr);
+    sheet.getRange(baseRow, 1, 1, 46).setValues([row0]);
 
-    // 中退共（Row 3）
-    sheet.getRange(baseRow + 2, 46).setValue(staff.chusho_kyosai || '');
+    // Row 2 (baseRow+2): cols 2-46
+    const row2 = this._buildRow2(staff);
+    sheet.getRange(baseRow + 2, 2, 1, 45).setValues([row2]);
 
-    // 特別教育（Row 4, column AU）
-    sheet.getRange(baseRow + 3, 47).setValue(staff.special_training || '');
+    // Row 3 (baseRow+3): cols 9-51
+    const row3 = this._buildRow3(staff, experienceYears, age);
+    sheet.getRange(baseRow + 3, 9, 1, 43).setValues([row3]);
 
-    // 技能講習（Row 4）
-    sheet.getRange(baseRow + 3, 49).setValue(staff.skill_training || '');
+    // Row 4 (baseRow+4): cols 2-38
+    const row4 = this._buildRow4(staff, insuranceNo);
+    sheet.getRange(baseRow + 4, 2, 1, 37).setValues([row4]);
+  },
 
-    // 免許（Row 4）
-    sheet.getRange(baseRow + 3, 51).setValue(staff.licenses || '');
+  /**
+   * Row 0 (baseRow) のデータを構築: cols 1-46
+   * @private
+   */
+  _buildRow0: function(index, staff, hireDateStr, birthDateStr) {
+    const row = Array(46).fill('');
+    row[0] = index;                                    // col 1: 番号
+    row[1] = staff.name_kana || '';                    // col 2: フリガナ
+    // col 3-8: 職種等（ユーザー手動入力、スキップ）
+    row[8] = hireDateStr;                              // col 9: 雇入年月日
+    // col 10-12: スキップ
+    row[12] = birthDateStr;                            // col 13: 生年月日
+    // col 14-16: スキップ
+    row[16] = staff.address || '';                     // col 17: 現住所
+    // col 18-25: スキップ
+    row[25] = staff.phone || '';                       // col 26: TEL
+    // col 27-33: スキップ
+    row[33] = staff.blood_type || '';                  // col 34: 血液型
+    // col 35-38: スキップ
+    row[38] = staff.health_insurance_type || '';       // col 39: 健康保険
+    // col 40-45: スキップ
+    row[45] = staff.kensetsu_kyosai || '';             // col 46: 建退共
+    return row;
+  },
+
+  /**
+   * Row 2 (baseRow+2) のデータを構築: cols 2-46
+   * @private
+   */
+  _buildRow2: function(staff) {
+    const row = Array(45).fill('');  // col 2-46 → 45列
+    row[0] = staff.name || '';                         // col 2: 氏名
+    // col 3-37: スキップ
+    row[36] = staff.pension_type || '';                // col 38: 年金保険
+    // col 39-45: スキップ
+    row[44] = staff.chusho_kyosai || '';               // col 46: 中退共
+    return row;
+  },
+
+  /**
+   * Row 3 (baseRow+3) のデータを構築: cols 9-51
+   * @private
+   */
+  _buildRow3: function(staff, experienceYears, age) {
+    const row = Array(43).fill('');  // col 9-51 → 43列
+    row[0] = experienceYears !== null ? experienceYears + '年' : '';  // col 9: 経験年数
+    // col 10-12: スキップ
+    row[4] = age !== null ? age + ' 歳' : '';          // col 13: 年齢
+    // col 14-16: スキップ
+    row[8] = staff.emergency_contact_name || '';       // col 17: 家族連絡先氏名
+    // col 18-25: スキップ
+    row[17] = staff.emergency_contact_phone || '';     // col 26: 家族連絡先電話
+    // col 27-37: スキップ
+    row[29] = staff.pension_number || '';              // col 38: 年金番号
+    // col 39-46: スキップ
+    row[38] = staff.special_training || '';            // col 47: 特別教育
+    // col 48: スキップ
+    row[40] = staff.skill_training || '';              // col 49: 技能講習
+    // col 50: スキップ
+    row[42] = staff.licenses || '';                    // col 51: 免許
+    return row;
+  },
+
+  /**
+   * Row 4 (baseRow+4) のデータを構築: cols 2-38
+   * @private
+   */
+  _buildRow4: function(staff, insuranceNo) {
+    const row = Array(37).fill('');  // col 2-38 → 37列
+    row[0] = staff.ccus_id || '';                      // col 2: 技能者ID
+    // col 3-16: スキップ
+    row[15] = staff.emergency_contact_address || '';   // col 17: 家族連絡先住所
+    // col 18-37: スキップ
+    row[36] = insuranceNo;                             // col 38: 雇用保険
+    return row;
   },
 
   /**
