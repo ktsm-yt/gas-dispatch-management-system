@@ -10,15 +10,19 @@ const PayoutRepository = {
   ID_COLUMN: 'payout_id',
 
   /**
-   * IDで支払いを取得
+   * IDで支払いを取得（アーカイブDBフォールバック付き）
    * @param {string} payoutId - 支払ID
    * @returns {Object|null} 支払いレコードまたはnull
    */
   findById: function(payoutId) {
+    // 1. カレントDBを検索
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, payoutId);
-    if (!record) return null;
+    if (record) {
+      return this._normalizeRecord(record);
+    }
 
-    return this._normalizeRecord(record);
+    // 2. カレントDBに見つからない場合、アーカイブDBを検索
+    return this._findInArchive(payoutId);
   },
 
   /**
@@ -300,6 +304,11 @@ const PayoutRepository = {
       return { success: false, error: 'payout_id is required' };
     }
 
+    // アーカイブデータの場合はアーカイブDBに書き込み
+    if (payout._archived && payout._archiveFiscalYear) {
+      return this._updateArchiveRecord(payout, expectedUpdatedAt);
+    }
+
     const sheet = getSheet(this.TABLE_NAME);
     const rowNum = findRowById(sheet, this.ID_COLUMN, payout.payout_id);
 
@@ -558,5 +567,157 @@ const PayoutRepository = {
 
     const [y, m, d] = parts.map(Number);
     return new Date(y, m - 1, d); // ローカルタイムゾーンで作成
+  },
+
+  /**
+   * アーカイブDBのレコードを更新（P2-5拡張）
+   * @param {Object} payout - 更新データ（payout_id, _archived, _archiveFiscalYear必須）
+   * @param {string} expectedUpdatedAt - 期待するupdated_at
+   * @returns {Object} 更新結果 { success: boolean, payout?: Object, error?: string }
+   */
+  _updateArchiveRecord: function(payout, expectedUpdatedAt) {
+    const fiscalYear = payout._archiveFiscalYear;
+    const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+
+    if (!archiveDbId) {
+      return { success: false, error: 'ARCHIVE_DB_NOT_FOUND', message: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
+    }
+
+    try {
+      const archiveDb = SpreadsheetApp.openById(archiveDbId);
+      const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+      const sheet = archiveDb.getSheetByName(sheetName);
+
+      if (!sheet) {
+        return { success: false, error: 'ARCHIVE_SHEET_NOT_FOUND', message: `アーカイブDBに${sheetName}シートが見つかりません。` };
+      }
+
+      const headers = getHeaders(sheet);
+      const idColIndex = headers.indexOf(this.ID_COLUMN);
+      const updatedAtColIndex = headers.indexOf('updated_at');
+
+      if (idColIndex === -1) {
+        return { success: false, error: 'SCHEMA_ERROR', message: 'アーカイブDBのスキーマが不正です。' };
+      }
+
+      // IDで行を検索
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      let targetRowIndex = -1;
+      let currentRecord = null;
+
+      for (let i = 0; i < data.length; i++) {
+        if (data[i][idColIndex] === payout.payout_id) {
+          targetRowIndex = i;
+          currentRecord = rowToObject(headers, data[i]);
+          break;
+        }
+      }
+
+      if (targetRowIndex === -1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      // 楽観ロックチェック
+      if (expectedUpdatedAt && currentRecord.updated_at !== expectedUpdatedAt) {
+        return {
+          success: false,
+          error: 'CONFLICT_ERROR',
+          currentUpdatedAt: currentRecord.updated_at
+        };
+      }
+
+      const user = getCurrentUserEmail();
+      const now = getCurrentTimestamp();
+
+      // 更新可能フィールド（ホワイトリスト）
+      const updatableFields = [
+        'period_start', 'period_end', 'assignment_count',
+        'base_amount', 'transport_amount', 'adjustment_amount',
+        'tax_amount', 'total_amount',
+        'status', 'paid_date', 'notes', 'is_deleted'
+      ];
+
+      const updatedPayout = { ...currentRecord };
+
+      for (const field of updatableFields) {
+        if (payout[field] !== undefined) {
+          updatedPayout[field] = payout[field];
+        }
+      }
+
+      updatedPayout.updated_at = now;
+
+      // アーカイブDBに書き込み
+      const newRow = objectToRow(headers, updatedPayout);
+      sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
+
+      // アーカイブフラグを付与して返す
+      const result = this._normalizeRecord(updatedPayout);
+      result._archived = true;
+      result._archiveFiscalYear = fiscalYear;
+
+      return {
+        success: true,
+        payout: result,
+        before: currentRecord
+      };
+
+    } catch (e) {
+      Logger.log(`アーカイブDB更新エラー: ${e.message}`);
+      return { success: false, error: 'ARCHIVE_UPDATE_ERROR', message: e.message };
+    }
+  },
+
+  /**
+   * アーカイブDBからIDで支払いを検索（P2-5: findById拡張）
+   * @param {string} payoutId - 支払ID
+   * @returns {Object|null} 支払いレコード（_archived, _archiveFiscalYear付き）またはnull
+   */
+  _findInArchive: function(payoutId) {
+    const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
+
+    // 直近3年度分のアーカイブを検索（新しい年度から）
+    for (let y = currentFiscalYear - 1; y >= currentFiscalYear - 3 && y >= 2020; y--) {
+      const archiveDbId = ArchiveService.getArchiveDbId(y);
+      if (!archiveDbId) continue;
+
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+        const sheet = archiveDb.getSheetByName(sheetName);
+        if (!sheet) continue;
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+
+        const headers = data[0];
+        const idColIndex = headers.indexOf(this.ID_COLUMN);
+        if (idColIndex === -1) continue;
+
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][idColIndex] === payoutId) {
+            const record = {};
+            for (let j = 0; j < headers.length; j++) {
+              record[headers[j]] = data[i][j];
+            }
+            // アーカイブフラグを付与
+            record._archived = true;
+            record._archiveFiscalYear = y;
+
+            // 正規化して返す
+            return this._normalizeRecord(record);
+          }
+        }
+      } catch (e) {
+        Logger.log(`アーカイブDB検索エラー (${y}): ${e.message}`);
+      }
+    }
+
+    return null;
   }
 };

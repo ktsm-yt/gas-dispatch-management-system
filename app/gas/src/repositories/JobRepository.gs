@@ -9,22 +9,26 @@ const JobRepository = {
   ID_COLUMN: 'job_id',
 
   /**
-   * IDで案件を取得
+   * IDで案件を取得（アーカイブDBフォールバック付き）
    * @param {string} jobId - 案件ID
    * @returns {Object|null} 案件レコードまたはnull
    */
   findById: function(jobId) {
+    // 1. カレントDBを検索
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, jobId);
-    if (!record) return null;
+    if (record) {
+      // work_dateをYYYY-MM-DD形式、start_timeをHH:mm形式の文字列に変換
+      return {
+        ...record,
+        work_date: record.work_date instanceof Date
+          ? Utilities.formatDate(record.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
+          : record.work_date,
+        start_time: this._normalizeTime(record.start_time)
+      };
+    }
 
-    // work_dateをYYYY-MM-DD形式、start_timeをHH:mm形式の文字列に変換
-    return {
-      ...record,
-      work_date: record.work_date instanceof Date
-        ? Utilities.formatDate(record.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-        : record.work_date,
-      start_time: this._normalizeTime(record.start_time)
-    };
+    // 2. カレントDBに見つからない場合、アーカイブDBを検索
+    return this._findInArchive(jobId);
   },
 
   /**
@@ -196,9 +200,9 @@ const JobRepository = {
       return { success: false, error: 'job_id is required' };
     }
 
-    // アーカイブデータの編集を防止
-    if (job._archived) {
-      return { success: false, error: 'ARCHIVED_DATA', message: '過去年度のデータは編集できません。' };
+    // アーカイブデータの場合はアーカイブDBに書き込み
+    if (job._archived && job._archiveFiscalYear) {
+      return this._updateArchiveRecord(job, expectedUpdatedAt);
     }
 
     const sheet = getSheet(this.TABLE_NAME);
@@ -424,5 +428,167 @@ const JobRepository = {
     }
 
     return years;
+  },
+
+  /**
+   * アーカイブDBのレコードを更新（P2-5拡張）
+   * @param {Object} job - 更新データ（job_id, _archived, _archiveFiscalYear必須）
+   * @param {string} expectedUpdatedAt - 期待するupdated_at
+   * @returns {Object} 更新結果 { success: boolean, job?: Object, error?: string }
+   */
+  _updateArchiveRecord: function(job, expectedUpdatedAt) {
+    const fiscalYear = job._archiveFiscalYear;
+    const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+
+    if (!archiveDbId) {
+      return { success: false, error: 'ARCHIVE_DB_NOT_FOUND', message: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
+    }
+
+    try {
+      const archiveDb = SpreadsheetApp.openById(archiveDbId);
+      const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+      const sheet = archiveDb.getSheetByName(sheetName);
+
+      if (!sheet) {
+        return { success: false, error: 'ARCHIVE_SHEET_NOT_FOUND', message: `アーカイブDBに${sheetName}シートが見つかりません。` };
+      }
+
+      const headers = getHeaders(sheet);
+      const idColIndex = headers.indexOf(this.ID_COLUMN);
+      const updatedAtColIndex = headers.indexOf('updated_at');
+
+      if (idColIndex === -1) {
+        return { success: false, error: 'SCHEMA_ERROR', message: 'アーカイブDBのスキーマが不正です。' };
+      }
+
+      // IDで行を検索
+      const lastRow = sheet.getLastRow();
+      if (lastRow <= 1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      let targetRowIndex = -1;
+      let currentRecord = null;
+
+      for (let i = 0; i < data.length; i++) {
+        if (data[i][idColIndex] === job.job_id) {
+          targetRowIndex = i;
+          currentRecord = rowToObject(headers, data[i]);
+          break;
+        }
+      }
+
+      if (targetRowIndex === -1) {
+        return { success: false, error: 'NOT_FOUND' };
+      }
+
+      // 楽観ロックチェック
+      if (expectedUpdatedAt && currentRecord.updated_at !== expectedUpdatedAt) {
+        return {
+          success: false,
+          error: 'CONFLICT_ERROR',
+          currentUpdatedAt: currentRecord.updated_at
+        };
+      }
+
+      const user = Session.getActiveUser().getEmail() || 'system';
+      const now = getCurrentTimestamp();
+
+      // 更新可能フィールド（ホワイトリスト）
+      const updatableFields = [
+        'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
+        'start_time', 'required_count',
+        'pay_unit', 'work_category', 'work_detail',
+        'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+        'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
+      ];
+
+      const updatedJob = { ...currentRecord };
+
+      for (const field of updatableFields) {
+        if (job[field] !== undefined) {
+          updatedJob[field] = job[field];
+        }
+      }
+
+      updatedJob.updated_at = now;
+      updatedJob.updated_by = user;
+
+      // アーカイブDBに書き込み
+      const newRow = objectToRow(headers, updatedJob);
+      sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
+
+      // アーカイブフラグを付与して返す
+      const result = {
+        ...updatedJob,
+        work_date: this._normalizeDate(updatedJob.work_date),
+        start_time: this._normalizeTime(updatedJob.start_time),
+        _archived: true,
+        _archiveFiscalYear: fiscalYear
+      };
+
+      return {
+        success: true,
+        job: result,
+        before: currentRecord
+      };
+
+    } catch (e) {
+      Logger.log(`アーカイブDB更新エラー: ${e.message}`);
+      return { success: false, error: 'ARCHIVE_UPDATE_ERROR', message: e.message };
+    }
+  },
+
+  /**
+   * アーカイブDBからIDで案件を検索（P2-5: findById拡張）
+   * @param {string} jobId - 案件ID
+   * @returns {Object|null} 案件レコード（_archived, _archiveFiscalYear付き）またはnull
+   */
+  _findInArchive: function(jobId) {
+    const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
+
+    // 直近3年度分のアーカイブを検索（新しい年度から）
+    for (let y = currentFiscalYear - 1; y >= currentFiscalYear - 3 && y >= 2020; y--) {
+      const archiveDbId = ArchiveService.getArchiveDbId(y);
+      if (!archiveDbId) continue;
+
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
+        const sheet = archiveDb.getSheetByName(sheetName);
+        if (!sheet) continue;
+
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+
+        const headers = data[0];
+        const idColIndex = headers.indexOf(this.ID_COLUMN);
+        if (idColIndex === -1) continue;
+
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][idColIndex] === jobId) {
+            const record = {};
+            for (let j = 0; j < headers.length; j++) {
+              record[headers[j]] = data[i][j];
+            }
+            // アーカイブフラグを付与
+            record._archived = true;
+            record._archiveFiscalYear = y;
+
+            // 日付・時刻を正規化して返す
+            return {
+              ...record,
+              work_date: this._normalizeDate(record.work_date),
+              start_time: this._normalizeTime(record.start_time)
+            };
+          }
+        }
+      } catch (e) {
+        Logger.log(`アーカイブDB検索エラー (${y}): ${e.message}`);
+      }
+    }
+
+    return null;
   }
 };
