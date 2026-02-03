@@ -94,20 +94,21 @@ const AssignmentService = {
 
       const auditLogs = [];
       const toInsert = [];
+      const toUpdate = [];
       const pendingStaffIds = new Set();
 
-      // 削除処理
+      // 削除処理（一括）
       if (changes.deletes && changes.deletes.length > 0) {
-        for (const assignmentId of changes.deletes) {
-          const deleteResult = AssignmentRepository.softDelete(assignmentId);
-          if (deleteResult.success) {
-            results.deleted.push(assignmentId);
+        const deleteResult = AssignmentRepository.bulkSoftDelete(changes.deletes);
+        if (deleteResult.deleted > 0) {
+          for (const result of deleteResult.results) {
+            results.deleted.push(result.assignmentId);
             auditLogs.push({
               action: 'DELETE',
               table_name: 'T_JobAssignments',
-              record_id: assignmentId,
-              before: deleteResult.before,
-              after: deleteResult.assignment
+              record_id: result.assignmentId,
+              before: result.before,
+              after: result.after
             });
           }
         }
@@ -163,20 +164,10 @@ const AssignmentService = {
           const processedAssignment = this._processTransportFee(assignment);
 
           if (processedAssignment.assignment_id) {
-            // 更新
+            // 更新対象を収集（後で一括処理）
             const existing = AssignmentRepository.findById(processedAssignment.assignment_id);
             if (existing) {
-              const updateResult = AssignmentRepository.update(processedAssignment);
-              if (updateResult.success) {
-                results.updated.push(updateResult.assignment);
-                auditLogs.push({
-                  action: 'UPDATE',
-                  table_name: 'T_JobAssignments',
-                  record_id: processedAssignment.assignment_id,
-                  before: updateResult.before,
-                  after: updateResult.assignment
-                });
-              }
+              toUpdate.push(processedAssignment);
             }
           } else {
             // 新規作成
@@ -214,6 +205,23 @@ const AssignmentService = {
             before: null,
             after: newAssignment
           });
+        }
+      }
+
+      // 更新処理（一括更新）
+      if (toUpdate.length > 0) {
+        const updateResult = AssignmentRepository.bulkUpdate(toUpdate);
+        if (updateResult.updated > 0) {
+          for (const result of updateResult.results) {
+            results.updated.push(result.after);
+            auditLogs.push({
+              action: 'UPDATE',
+              table_name: 'T_JobAssignments',
+              record_id: result.assignmentId,
+              before: result.before,
+              after: result.after
+            });
+          }
         }
       }
 
@@ -455,12 +463,13 @@ const AssignmentService = {
 
   /**
    * 交通費マスターからエリア情報を取得
+   * MasterCache経由でO(1)アクセス
    * @private
    */
   _getTransportFeeByArea: function(areaCode) {
     try {
-      const records = getAllRecords('M_TransportFee');
-      return records.find(r => r.area_code === areaCode);
+      const feeMap = MasterCache.getTransportFeeMap();
+      return feeMap[areaCode] || null;
     } catch (e) {
       console.error('getTransportFeeByArea error:', e);
       return null;
