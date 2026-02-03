@@ -2571,6 +2571,14 @@
 
       const newRowHtml = renderConfirmedRow(confirmedRow);
       row.outerHTML = newRowHtml;
+
+      // チェック状態を維持（連続操作を可能にする）
+      const newRow = document.querySelector(`tr[data-payout-id="${payout.payout_id}"]`);
+      if (newRow) {
+        const checkbox = newRow.querySelector('.payout-check');
+        if (checkbox) checkbox.checked = true;
+      }
+
       updatePayoutSummary();
     }
 
