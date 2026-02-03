@@ -10,6 +10,12 @@
       <h2 class="modal-title" id="job-modal-title">案件編集</h2>
       <button class="modal-close" onclick="closeJobModal()">&times;</button>
     </div>
+    <!-- アーカイブデータ警告バナー -->
+    <div id="archive-warning-banner" class="archive-warning-banner" style="display: none; margin: 0 16px;">
+      <span class="banner-icon">⚠️</span>
+      <span id="archive-warning-message">このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。</span>
+      <button class="banner-close" onclick="hideArchiveWarningBanner()">&times;</button>
+    </div>
     <div class="modal-body">
       <form id="job-form">
         <input type="hidden" id="job-id" name="job_id">
