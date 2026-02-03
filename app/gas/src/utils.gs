@@ -273,6 +273,7 @@ const MasterCache = {
   _customerMap: null,
   _subcontractorCache: null,
   _transportFeeCache: null,
+  _transportFeeMap: null,
   _companyCache: null,
 
   /**
@@ -511,6 +512,23 @@ const MasterCache = {
   },
 
   /**
+   * M_TransportFeeをマップ形式で取得（area_code → fee）
+   * @returns {Object} 交通費マップ
+   */
+  getTransportFeeMap: function() {
+    if (this._transportFeeMap === null) {
+      const fees = this.getTransportFees();
+      this._transportFeeMap = {};
+      for (const f of fees) {
+        if (f.area_code) {
+          this._transportFeeMap[f.area_code] = f;
+        }
+      }
+    }
+    return this._transportFeeMap;
+  },
+
+  /**
    * 自社情報の全レコードを取得（2層キャッシュ付き）
    * @returns {Object} 会社情報
    */
@@ -560,6 +578,7 @@ const MasterCache = {
    */
   invalidateTransportFees: function() {
     this._transportFeeCache = null;
+    this._transportFeeMap = null;
     try {
       CacheService.getScriptCache().remove(this.CACHE_KEY_TRANSPORT_FEES);
     } catch (e) {
@@ -591,9 +610,12 @@ const MasterCache = {
     try {
       // メモリキャッシュをクリア（強制的にシートから読み込む）
       this._staffCache = null;
+      this._staffMap = null;
       this._customerCache = null;
+      this._customerMap = null;
       this._subcontractorCache = null;
       this._transportFeeCache = null;
+      this._transportFeeMap = null;
       this._companyCache = null;
 
       // CacheServiceもクリア
