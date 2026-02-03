@@ -76,29 +76,6 @@
       gap: var(--spacing-sm);
     }
 
-    /* Collapsible Section */
-    .collapsible-header {
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      user-select: none;
-    }
-    .collapsible-header:hover {
-      opacity: 0.8;
-    }
-    .collapse-icon {
-      display: inline-block;
-      transition: transform 0.2s ease;
-      font-size: 12px;
-    }
-    .collapse-icon.collapsed {
-      transform: rotate(-90deg);
-    }
-    .collapsible-content.collapsed {
-      display: none;
-    }
-
     /* Buttons */
     .btn {
       display: inline-flex;
@@ -525,6 +502,51 @@
     .tab-content.active {
       display: block;
     }
+
+    /* ========== View Toggle (ダッシュボード準拠) ========== */
+    .view-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 2px;
+    }
+
+    .view-toggle-btn {
+      background: transparent;
+      border: none;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+
+    .view-toggle-btn:hover {
+      color: var(--text-primary);
+    }
+
+    .view-toggle-btn.active {
+      background: white;
+      color: var(--color-primary);
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* Staff/Sub View Containers */
+    .staff-view,
+    .sub-view {
+      display: none;
+    }
+
+    .staff-view.active,
+    .sub-view.active {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -631,15 +653,15 @@
   <div id="tabContentStaff" class="tab-content active">
     <div class="toolbar">
       <div class="filter-group">
-        <label>スタッフ:</label>
-        <select id="staffFilter">
-          <option value="">全て</option>
-        </select>
-
-        <label>終了日:</label>
-        <input type="date" id="endDateFilter" />
-
-        <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
+        <!-- View Toggle -->
+        <div class="view-toggle" id="staffViewToggle">
+          <button class="view-toggle-btn active" data-view="aggregation" onclick="switchStaffView('aggregation')">
+            📊 未払い集計
+          </button>
+          <button class="view-toggle-btn" data-view="history" onclick="switchStaffView('history')">
+            📋 支払履歴
+          </button>
+        </div>
       </div>
       <div class="toolbar-actions">
         <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
@@ -647,42 +669,68 @@
       </div>
     </div>
 
-    <!-- 一括操作バー -->
-    <div id="bulkActionBar" class="bulk-action-bar">
-      <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
-        <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
-        全選択
-      </label>
-      <span class="selected-count"><span id="selectedCount">0</span>件選択中</span>
-      <select id="bulkStatusSelect">
-        <option value="">ステータス変更...</option>
-        <option value="confirmed">確認済みにする</option>
-        <option value="paid">支払済にする</option>
-        <option value="unpaid">未払に戻す</option>
-      </select>
-      <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
-      <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
-    </div>
+    <!-- ========== 未払い集計ビュー ========== -->
+    <div id="staffAggregationView" class="staff-view active">
+      <!-- 集計フィルター -->
+      <div class="toolbar" style="border-top: none;">
+        <div class="filter-group">
+          <label>スタッフ:</label>
+          <select id="staffFilter">
+            <option value="">全て</option>
+          </select>
 
-    <div class="main-content">
-      <!-- 未払サマリー（開閉可能） -->
-      <div id="unpaidSection" class="summary-card">
-        <h3 class="collapsible-header" onclick="toggleUnpaidSection()">
-          <span class="collapse-icon" id="unpaidCollapseIcon">▼</span>
-          未払集計
-        </h3>
-        <div id="unpaidSummary" class="collapsible-content">
-          スタッフを選択して「集計」をクリックしてください
+          <label>終了日:</label>
+          <input type="date" id="endDateFilter" />
+
+          <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
         </div>
       </div>
 
-      <!-- 支払履歴 -->
-      <div class="section-header">
-        <h2>支払履歴</h2>
+      <!-- 一括操作バー -->
+      <div id="bulkActionBar" class="bulk-action-bar">
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="bulkSelectAll" onchange="toggleSelectAllFromBar()">
+          全選択
+        </label>
+        <span class="selected-count"><span id="selectedCount">0</span>件選択中</span>
+        <select id="bulkStatusSelect">
+          <option value="">ステータス変更...</option>
+          <option value="confirmed">確認済みにする</option>
+          <option value="paid">支払済にする</option>
+          <option value="unpaid">未払に戻す</option>
+        </select>
+        <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
+        <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
       </div>
 
-      <div id="historyTable">
-        <div class="loading">読み込み中...</div>
+      <div class="main-content">
+        <!-- 未払サマリー（開閉可能） -->
+        <div id="unpaidSection" class="summary-card">
+          <h3>未払集計</h3>
+          <div id="unpaidSummary">
+            スタッフを選択して「集計」をクリックしてください
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 支払履歴ビュー ========== -->
+    <div id="staffHistoryView" class="staff-view">
+      <!-- 履歴フィルター（集計ビューと同じtoolbar構造） -->
+      <div class="toolbar" style="border-top: none;">
+        <div class="filter-group">
+          <label>期間:</label>
+          <input type="date" id="historyFromDate">
+          <span>〜</span>
+          <input type="date" id="historyToDate">
+          <button class="btn btn-secondary" onclick="loadAllPayoutHistory()">検索</button>
+        </div>
+      </div>
+
+      <div class="main-content">
+        <div id="historyTable">
+          <div class="empty-state">期間を指定して「検索」をクリックしてください</div>
+        </div>
       </div>
     </div>
   </div>
@@ -691,38 +739,64 @@
   <div id="tabContentSubcontractor" class="tab-content">
     <div class="toolbar">
       <div class="filter-group">
-        <label>外注先:</label>
-        <select id="subcontractorFilter">
-          <option value="">全て</option>
-        </select>
-
-        <label>終了日:</label>
-        <input type="date" id="subEndDateFilter" />
-
-        <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
-        <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締集計</button>
+        <!-- View Toggle -->
+        <div class="view-toggle" id="subViewToggle">
+          <button class="view-toggle-btn active" data-view="aggregation" onclick="switchSubView('aggregation')">
+            📊 未払い集計
+          </button>
+          <button class="view-toggle-btn" data-view="history" onclick="switchSubView('history')">
+            📋 支払履歴
+          </button>
+        </div>
       </div>
     </div>
 
-    <div class="main-content">
-      <!-- 外注費未払サマリー -->
-      <div id="subUnpaidSection" class="summary-card">
-        <h3 class="collapsible-header" onclick="toggleSubUnpaidSection()">
-          <span class="collapse-icon" id="subUnpaidCollapseIcon">▼</span>
-          外注費 未払集計
-        </h3>
-        <div id="subUnpaidSummary" class="collapsible-content">
-          外注先を選択して「集計」をクリックしてください
+    <!-- ========== 外注費 未払い集計ビュー ========== -->
+    <div id="subAggregationView" class="sub-view active">
+      <!-- 集計フィルター -->
+      <div class="toolbar" style="border-top: none;">
+        <div class="filter-group">
+          <label>外注先:</label>
+          <select id="subcontractorFilter">
+            <option value="">全て</option>
+          </select>
+
+          <label>終了日:</label>
+          <input type="date" id="subEndDateFilter" />
+
+          <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
+          <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締集計</button>
         </div>
       </div>
 
-      <!-- 外注費支払履歴 -->
-      <div class="section-header">
-        <h2>外注費 支払履歴</h2>
+      <div class="main-content">
+        <!-- 外注費未払サマリー -->
+        <div id="subUnpaidSection" class="summary-card">
+          <h3>外注費 未払集計</h3>
+          <div id="subUnpaidSummary">
+            外注先を選択して「集計」をクリックしてください
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========== 外注費 支払履歴ビュー ========== -->
+    <div id="subHistoryView" class="sub-view">
+      <!-- 履歴フィルター（集計ビューと同じtoolbar構造） -->
+      <div class="toolbar" style="border-top: none;">
+        <div class="filter-group">
+          <label>期間:</label>
+          <input type="date" id="subHistoryFromDate">
+          <span>〜</span>
+          <input type="date" id="subHistoryToDate">
+          <button class="btn btn-secondary" onclick="loadAllSubcontractorPayoutHistory()">検索</button>
+        </div>
       </div>
 
-      <div id="subHistoryTable">
-        <div class="loading">読み込み中...</div>
+      <div class="main-content">
+        <div id="subHistoryTable">
+          <div class="empty-state">期間を指定して「検索」をクリックしてください</div>
+        </div>
       </div>
     </div>
   </div>
@@ -740,6 +814,12 @@
     let subcontractorList = [];
     let currentSubUnpaid = null;
     let currentSubUnpaidQuery = null;  // 外注費の検索条件
+
+    // View Toggle State
+    let currentStaffView = 'aggregation';  // 'aggregation' | 'history'
+    let currentSubView = 'aggregation';    // 'aggregation' | 'history'
+    let staffHistoryLoaded = false;
+    let subHistoryLoaded = false;
 
     // キャッシュTTL（PageCache.DEFAULT_TTLを使用、未払は短めに）
     const UNPAID_CACHE_TTL = 5 * 60 * 1000; // 5分（未払データは頻繁に変わる可能性）
@@ -784,8 +864,11 @@
         const filter = filterCached.data;
         if (filter.endDate) {
           document.getElementById('endDateFilter').value = filter.endDate;
+          // ★ 集計結果があれば自動で集計を実行（キャッシュから即座に表示）
+          return { hasCache: true, endDate: filter.endDate };
         }
-        return true;
+        // endDateがない場合はデフォルト日付を設定するためfalseを返す
+        return false;
       } catch (e) {
         return false;
       }
@@ -920,12 +1003,15 @@
       // Initialize navigation bar with breadcrumb
       initNavBar('payouts', '支払管理');
 
+      // View Toggle初期化（localStorage復元）
+      initViewToggle();
+
       // キャッシュから復元を試みる（日付フィルターも含む）
-      const hasRestoredStaff = tryRestoreFromCache();
+      const restoredStaff = tryRestoreFromCache();
       const hasRestoredSub = tryRestoreSubFromCache();
 
       // キャッシュがない場合のみデフォルト日付を設定
-      if (!hasRestoredStaff) {
+      if (!restoredStaff) {
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('endDateFilter').value = today;
       }
@@ -935,7 +1021,13 @@
       }
 
       loadStaffList();
-      loadHistory();
+      // loadHistory(); -- 履歴はビュー切り替え時にオンデマンドでロード
+
+      // ★ キャッシュがあれば自動で集計結果を表示
+      if (restoredStaff && restoredStaff.hasCache) {
+        // loadStaffList等の完了後に実行
+        setTimeout(() => loadUnpaidList(false), 100);
+      }
       loadPayoutFolderLink();
 
       // Load subcontractor list for second tab
@@ -948,6 +1040,26 @@
           const updatedAt = e.target.dataset.updatedAt;
           const targetName = e.target.dataset.targetName;
           undoSubcontractorPayoutConfirm(payoutId, updatedAt, targetName);
+        }
+      });
+
+      // ★ SWR: タブ復帰時のrevalidate
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          // スタッフタブのrevalidate
+          if (currentUnpaidQuery && currentUnpaidQuery.endDate) {
+            if (isUnpaidCacheStale(currentUnpaidQuery.endDate)) {
+              console.log('[SWR] Tab visible - revalidating staff unpaid list');
+              refreshUnpaidListInBackground(currentUnpaidQuery.endDate);
+            }
+          }
+          // 外注タブのrevalidate
+          if (currentSubUnpaidQuery && currentSubUnpaidQuery.endDate && !currentSubUnpaidQuery.subId) {
+            if (isSubUnpaidSessionStale(currentSubUnpaidQuery.endDate)) {
+              console.log('[SWR] Tab visible - revalidating subcontractor unpaid list');
+              refreshSubUnpaidInBackground(currentSubUnpaidQuery.endDate);
+            }
+          }
         }
       });
     }
@@ -967,6 +1079,85 @@
       // Load data for subcontractor tab if switching to it
       if (tab === 'subcontractor' && subcontractorList.length === 0) {
         loadSubcontractorList();
+      }
+    }
+
+    // ========== View Toggle (スタッフ) ==========
+    function switchStaffView(view, save = true) {
+      currentStaffView = view;
+
+      // ボタン状態更新
+      document.querySelectorAll('#staffViewToggle .view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+      });
+
+      // ビュー表示切り替え
+      document.getElementById('staffAggregationView').classList.toggle('active', view === 'aggregation');
+      document.getElementById('staffHistoryView').classList.toggle('active', view === 'history');
+
+      // 保存
+      if (save) {
+        localStorage.setItem('payouts_staff_view', view);
+      }
+
+      // 履歴ビューに切り替え時、初回のみデフォルト日付を設定
+      if (view === 'history' && !staffHistoryLoaded) {
+        setDefaultHistoryDates('staff');
+      }
+    }
+
+    // ========== View Toggle (外注費) ==========
+    function switchSubView(view, save = true) {
+      currentSubView = view;
+
+      // ボタン状態更新
+      document.querySelectorAll('#subViewToggle .view-toggle-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === view);
+      });
+
+      // ビュー表示切り替え
+      document.getElementById('subAggregationView').classList.toggle('active', view === 'aggregation');
+      document.getElementById('subHistoryView').classList.toggle('active', view === 'history');
+
+      // 保存
+      if (save) {
+        localStorage.setItem('payouts_sub_view', view);
+      }
+
+      // 履歴ビューに切り替え時、初回のみデフォルト日付を設定
+      if (view === 'history' && !subHistoryLoaded) {
+        setDefaultHistoryDates('sub');
+      }
+    }
+
+    // 履歴ビューのデフォルト日付設定（過去1ヶ月）
+    function setDefaultHistoryDates(type) {
+      const today = new Date();
+      const oneMonthAgo = new Date(today);
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+
+      const toDateStr = today.toISOString().split('T')[0];
+      const fromDateStr = oneMonthAgo.toISOString().split('T')[0];
+
+      if (type === 'staff') {
+        document.getElementById('historyFromDate').value = fromDateStr;
+        document.getElementById('historyToDate').value = toDateStr;
+      } else {
+        document.getElementById('subHistoryFromDate').value = fromDateStr;
+        document.getElementById('subHistoryToDate').value = toDateStr;
+      }
+    }
+
+    // View Toggle初期化（localStorage復元）
+    function initViewToggle() {
+      const savedStaffView = localStorage.getItem('payouts_staff_view');
+      if (savedStaffView) {
+        switchStaffView(savedStaffView, false);
+      }
+
+      const savedSubView = localStorage.getItem('payouts_sub_view');
+      if (savedSubView) {
+        switchSubView(savedSubView, false);
       }
     }
 
@@ -1114,94 +1305,169 @@
           })
           .getUnpaidSummary(staffId, endDate, { include_assignments: false });
       } else {
-        // 全スタッフの未払一覧 + 確認済み一覧を並列取得
+        // 全スタッフの未払一覧を取得（確認済みも同時に取得）
         showLoading('データを読み込み中...');
 
-        let unpaidResult = null;
-        let confirmedResult = null;
-        let completed = 0;
-
-        function checkAndRender() {
-          completed++;
-          if (completed < 2) return;
-
-          hideLoading();
-
-          const unpaidData = unpaidResult?.ok ? unpaidResult.data : { staffList: [], totalCount: 0, totalAmount: 0 };
-          const confirmedData = confirmedResult?.ok ? confirmedResult.data.payouts : [];
-
-          renderUnpaidStaffList(unpaidData, confirmedData);
-
-          // Save to cache
-          saveToSession({
-            mode: 'list',
-            staffId: null,
-            endDate: endDate,
-            data: unpaidData,
-            confirmedData: confirmedData
-          });
-        }
-
-        // 未払一覧を取得
         google.script.run
-          .withSuccessHandler(result => { unpaidResult = result; checkAndRender(); })
-          .withFailureHandler(err => { unpaidResult = { ok: false, error: err.message }; checkAndRender(); })
+          .withSuccessHandler(result => {
+            hideLoading();
+
+            if (result.ok) {
+              const unpaidData = result.data;
+              // ★ APIが確認済みPayoutも返すようになった
+              const confirmedData = unpaidData.confirmedPayouts || [];
+
+              renderUnpaidStaffList(unpaidData, confirmedData);
+
+              // Save to cache
+              saveToSession({
+                mode: 'list',
+                staffId: null,
+                endDate: endDate,
+                data: unpaidData,
+                confirmedData: confirmedData
+              });
+            } else {
+              const summaryDiv = document.getElementById('unpaidSummary');
+              summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
+              clearSession();
+            }
+          })
+          .withFailureHandler(err => {
+            hideLoading();
+            const summaryDiv = document.getElementById('unpaidSummary');
+            summaryDiv.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+            clearSession();
+          })
           .getUnpaidStaffList(endDate);
-
-        // 確認済み一覧を取得
-        google.script.run
-          .withSuccessHandler(result => { confirmedResult = result; checkAndRender(); })
-          .withFailureHandler(err => { confirmedResult = { ok: false, data: { payouts: [] } }; checkAndRender(); })
-          .getConfirmedPayouts({});
       }
     }
 
-    // 未払一覧をバックグラウンドで更新
+    // 未払一覧をバックグラウンドで更新（差分更新対応）
     function refreshUnpaidListInBackground(endDate) {
-      let unpaidResult = null;
-      let confirmedResult = null;
-      let completed = 0;
+      const cached = loadFromSession(endDate);
+      const lastSyncTimestamp = cached?.syncTimestamp;
 
-      function checkAndUpdate() {
-        completed++;
-        if (completed < 2) return;
+      // 差分更新を試みる（lastSyncTimestampがある場合）
+      if (lastSyncTimestamp) {
+        console.log('[SWR] Attempting delta update since', lastSyncTimestamp);
+        google.script.run
+          .withSuccessHandler(result => {
+            if (!result.ok) {
+              console.log('[SWR] Delta update failed, falling back to full refresh');
+              refreshUnpaidListFull(endDate);
+              return;
+            }
 
-        // 現在の検索条件と一致する場合のみ更新
-        if (currentUnpaidQuery && currentUnpaidQuery.endDate === endDate && !currentUnpaidQuery.staffId) {
-          const unpaidData = unpaidResult?.ok ? unpaidResult.data : null;
-          const confirmedData = confirmedResult?.ok ? confirmedResult.data.payouts : [];
+            const data = result.data;
 
-          if (unpaidData) {
-            // キャッシュを更新
-            saveToSession({
-              mode: 'list',
-              staffId: null,
-              endDate: endDate,
-              data: unpaidData,
-              confirmedData: confirmedData
-            });
+            // 差分が空なら何もしない
+            if (data.isDelta && data.changedStaffIds.length === 0 && data.removedStaffIds.length === 0) {
+              console.log('[SWR] No changes detected');
+              return;
+            }
 
-            // 差分があればUIを更新
-            const currentData = loadFromSession(endDate);
-            if (!currentData || JSON.stringify(currentData.data) !== JSON.stringify(unpaidData)) {
-              renderUnpaidStaffList(unpaidData, confirmedData);
-              showToast('データを更新しました', 'info');
+            // 現在の検索条件と一致する場合のみ更新
+            if (currentUnpaidQuery && currentUnpaidQuery.endDate === endDate && !currentUnpaidQuery.staffId) {
+              if (data.isDelta && cached?.data?.staffList) {
+                // 差分マージ
+                const mergedData = mergeUnpaidDelta(cached.data, data);
+                const confirmedData = data.confirmedPayouts || [];
+
+                // キャッシュを更新（新しいsyncTimestampで）
+                saveToSession({
+                  mode: 'list',
+                  staffId: null,
+                  endDate: endDate,
+                  data: mergedData,
+                  confirmedData: confirmedData,
+                  syncTimestamp: data.currentTimestamp
+                });
+
+                renderUnpaidStaffList(mergedData, confirmedData);
+                showToast('info', `データを更新しました（${data.changedStaffIds.length}件変更）`);
+              } else {
+                // 差分ではない場合（フォールバック）
+                refreshUnpaidListFull(endDate);
+              }
+            }
+          })
+          .withFailureHandler(() => {
+            console.log('[SWR] Delta API not available, falling back to full refresh');
+            refreshUnpaidListFull(endDate);
+          })
+          .getUnpaidStaffListDelta(endDate, lastSyncTimestamp);
+      } else {
+        // lastSyncTimestampがない場合は全件取得
+        refreshUnpaidListFull(endDate);
+      }
+    }
+
+    // 未払一覧を全件取得（フォールバック用）
+    function refreshUnpaidListFull(endDate) {
+      google.script.run
+        .withSuccessHandler(result => {
+          if (currentUnpaidQuery && currentUnpaidQuery.endDate === endDate && !currentUnpaidQuery.staffId) {
+            if (result.ok) {
+              const unpaidData = result.data;
+              const confirmedData = unpaidData.confirmedPayouts || [];
+
+              // キャッシュを更新（syncTimestamp付き）
+              saveToSession({
+                mode: 'list',
+                staffId: null,
+                endDate: endDate,
+                data: unpaidData,
+                confirmedData: confirmedData,
+                syncTimestamp: new Date().toISOString()
+              });
+
+              // 差分があればUIを更新
+              const currentData = loadFromSession(endDate);
+              if (!currentData || JSON.stringify(currentData.data) !== JSON.stringify(unpaidData)) {
+                renderUnpaidStaffList(unpaidData, confirmedData);
+                showToast('info', 'データを更新しました');
+              }
             }
           }
-        }
+        })
+        .withFailureHandler(() => { /* バックグラウンドなのでエラーは無視 */ })
+        .getUnpaidStaffList(endDate);
+    }
+
+    /**
+     * 差分データをマージ
+     * @param {Object} currentData - 現在のキャッシュデータ
+     * @param {Object} deltaData - 差分データ
+     * @returns {Object} マージされたデータ
+     */
+    function mergeUnpaidDelta(currentData, deltaData) {
+      const staffList = [...(currentData.staffList || [])];
+      const changedSet = new Set(deltaData.changedStaffIds || []);
+      const removedSet = new Set(deltaData.removedStaffIds || []);
+
+      // 1. 削除されたスタッフを除去
+      const filteredList = staffList.filter(s => !removedSet.has(s.staffId));
+
+      // 2. 変更されたスタッフを更新/追加
+      const staffMap = new Map(filteredList.map(s => [s.staffId, s]));
+      for (const updated of (deltaData.staffList || [])) {
+        staffMap.set(updated.staffId, updated);
       }
 
-      // バックグラウンドで未払一覧を取得
-      google.script.run
-        .withSuccessHandler(result => { unpaidResult = result; checkAndUpdate(); })
-        .withFailureHandler(() => { unpaidResult = { ok: false }; checkAndUpdate(); })
-        .getUnpaidStaffList(endDate);
+      // 3. 金額降順でソート
+      const mergedList = Array.from(staffMap.values())
+        .sort((a, b) => b.estimatedAmount - a.estimatedAmount);
 
-      // バックグラウンドで確認済み一覧を取得
-      google.script.run
-        .withSuccessHandler(result => { confirmedResult = result; checkAndUpdate(); })
-        .withFailureHandler(() => { confirmedResult = { ok: false, data: { payouts: [] } }; checkAndUpdate(); })
-        .getConfirmedPayouts({});
+      return {
+        ...currentData,
+        staffList: mergedList,
+        totalCount: mergedList.length,
+        totalAmount: mergedList.reduce((sum, s) => sum + s.estimatedAmount, 0),
+        confirmedPayouts: deltaData.confirmedPayouts || currentData.confirmedPayouts,
+        confirmedCount: deltaData.confirmedCount ?? currentData.confirmedCount,
+        confirmedAmount: deltaData.confirmedAmount ?? currentData.confirmedAmount
+      };
     }
 
     // Render unpaid summary for single staff
@@ -1524,6 +1790,140 @@
         .searchPayouts(query);
     }
 
+    // ========== 新しい履歴ロード関数（View Toggle用） ==========
+
+    // スタッフ支払履歴を期間指定でロード
+    function loadAllPayoutHistory() {
+      const fromDate = document.getElementById('historyFromDate').value;
+      const toDate = document.getElementById('historyToDate').value;
+
+      if (!fromDate || !toDate) {
+        showToast('期間を指定してください', 'error');
+        return;
+      }
+
+      const container = document.getElementById('historyTable');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      const query = {
+        payout_type: 'STAFF',
+        status_in: ['confirmed', 'paid'],
+        period_start_from: fromDate,
+        period_end_to: toDate,
+        limit: 200
+      };
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            staffHistoryLoaded = true;
+            // 日付降順ソート
+            const sorted = (result.data.payouts || []).sort((a, b) =>
+              new Date(b.period_end) - new Date(a.period_end)
+            );
+            renderHistory(sorted);
+          } else {
+            container.innerHTML = `<div class="empty-state">${result.error}</div>`;
+          }
+        })
+        .withFailureHandler(err => {
+          container.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+        })
+        .searchPayouts(query);
+    }
+
+    // 外注費支払履歴を期間指定でロード
+    function loadAllSubcontractorPayoutHistory() {
+      const fromDate = document.getElementById('subHistoryFromDate').value;
+      const toDate = document.getElementById('subHistoryToDate').value;
+
+      if (!fromDate || !toDate) {
+        showToast('期間を指定してください', 'error');
+        return;
+      }
+
+      const container = document.getElementById('subHistoryTable');
+      container.innerHTML = '<div class="loading">読み込み中...</div>';
+
+      const query = {
+        payout_type: 'SUBCONTRACTOR',
+        status_in: ['confirmed', 'paid'],
+        period_start_from: fromDate,
+        period_end_to: toDate,
+        limit: 200
+      };
+
+      google.script.run
+        .withSuccessHandler(result => {
+          if (result.ok) {
+            subHistoryLoaded = true;
+            // 日付降順ソート
+            const sorted = (result.data.payouts || []).sort((a, b) =>
+              new Date(b.period_end) - new Date(a.period_end)
+            );
+            renderSubHistory(sorted);
+          } else {
+            container.innerHTML = `<div class="empty-state">${result.error}</div>`;
+          }
+        })
+        .withFailureHandler(err => {
+          container.innerHTML = `<div class="empty-state">エラー: ${err.message}</div>`;
+        })
+        .searchPayouts(query);
+    }
+
+    // 外注費履歴テーブルレンダリング
+    function renderSubHistory(payouts) {
+      const container = document.getElementById('subHistoryTable');
+
+      if (payouts.length === 0) {
+        container.innerHTML = '<div class="empty-state">支払履歴がありません</div>';
+        return;
+      }
+
+      let html = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="white-space: nowrap;">外注先</th>
+              <th style="white-space: nowrap;">期間</th>
+              <th style="white-space: nowrap;">支払日</th>
+              <th style="white-space: nowrap;">配置数</th>
+              <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">調整額</th>
+              <th style="white-space: nowrap;">合計金額</th>
+              <th style="white-space: nowrap;">ステータス</th>
+              <th style="white-space: nowrap; width: 200px;">備考</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+
+      payouts.forEach(p => {
+        const baseAmount = (p.base_amount || 0) + (p.transport_amount || 0);
+        const adjustmentAmount = p.adjustment_amount || 0;
+        const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
+        const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済' : '下書き');
+
+        html += `
+          <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
+            <td>${p.target_name}</td>
+            <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
+            <td>${p.paid_date || '-'}</td>
+            <td>${p.assignment_count}件</td>
+            <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+            <td class="amount">${formatCurrency(p.total_amount)}</td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td style="white-space: normal; max-width: 200px;">${p.notes || ''}</td>
+          </tr>
+        `;
+      });
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
     // Render history table with undo button
     function renderHistory(payouts) {
       const container = document.getElementById('historyTable');
@@ -1736,12 +2136,27 @@
             .withSuccessHandler(result => {
               hideLoading();
               if (result.ok) {
-                showToast('success', `${result.data.success}件を確認済みにしました`);
                 const data = result.data || {};
                 const payouts = data.payouts || [];
                 const results = data.results || [];
+                const skippedCount = data.skipped || 0;
 
-                // 成功したスタッフの行を確認済みに更新
+                // ★ warningチェックを追加（Assignment更新失敗等）
+                if (data.warning) {
+                  showToast('error', data.warning);
+                  // 警告がある場合は処理を中断し、リロードを促す
+                  setTimeout(() => location.reload(), 3000);
+                  return;
+                }
+
+                // ★ スキップ数も含めたメッセージ表示
+                if (skippedCount > 0) {
+                  showToast('warning', `${data.success}件を確認済みにしました（${skippedCount}件は既に処理済み）`);
+                } else {
+                  showToast('success', `${data.success}件を確認済みにしました`);
+                }
+
+                // 成功したスタッフの行を確認済みに更新（スキップ含む）
                 const successStaffIds = results
                   .filter(r => r.success)
                   .map(r => r.staffId);
@@ -1753,8 +2168,14 @@
                   }
                 });
 
+                // ★ SWR: キャッシュをクリアし、バックグラウンドで最新データを再取得
                 clearSession();
                 updateFab();
+                const currentEndDate = document.getElementById('endDateFilter')?.value;
+                if (currentEndDate) {
+                  console.log('[SWR] Status changed (confirm) - scheduling background revalidate');
+                  setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
+                }
               } else {
                 showToast('error', result.error);
               }
@@ -1773,8 +2194,19 @@
 
     // Bulk pay confirmed (confirmed → paid)
     function bulkPayConfirmed() {
+      // ★ デバッグ: セレクタの確認
+      const allPayoutChecks = document.querySelectorAll('.payout-check');
+      const confirmedChecks = document.querySelectorAll('.payout-check[data-status="confirmed"]');
+      const checkedConfirmed = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked');
+      console.log('[bulkPayConfirmed] Debug:', {
+        allPayoutChecks: allPayoutChecks.length,
+        confirmedChecks: confirmedChecks.length,
+        checkedConfirmed: checkedConfirmed.length
+      });
+
       const checkboxes = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked');
       const payoutIds = Array.from(checkboxes).map(cb => cb.value);
+      console.log('[bulkPayConfirmed] payoutIds:', payoutIds);
 
       if (payoutIds.length === 0) {
         showToast('error', '確認済みのスタッフを選択してください');
@@ -1814,8 +2246,14 @@
                   prependHistoryRow(payout);
                 });
 
+                // ★ SWR: キャッシュをクリアし、バックグラウンドで最新データを再取得
                 clearSession();
                 updateFab();
+                const currentEndDate = document.getElementById('endDateFilter')?.value;
+                if (currentEndDate) {
+                  console.log('[SWR] Status changed (paid) - scheduling background revalidate');
+                  setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
+                }
               } else {
                 showToast('error', result.error);
               }
@@ -1862,7 +2300,7 @@
               showToast('error', err.message);
             })
             .payConfirmedPayout(payoutId, {
-              expected_updated_at: updatedAt,
+              expectedUpdatedAt: updatedAt,
               paid_date: paidDate
             });
         }
@@ -1892,8 +2330,14 @@
                   // フォールバック: 行を削除のみ
                   removeConfirmedRow(payoutId);
                 }
+                // ★ SWR: キャッシュをクリアし、バックグラウンドで最新データを再取得
                 clearSession();
                 updateFab();
+                const currentEndDate = document.getElementById('endDateFilter')?.value;
+                if (currentEndDate) {
+                  console.log('[SWR] Status changed (undo confirm) - scheduling background revalidate');
+                  setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
+                }
               } else {
                 showToast('error', result.error);
               }
@@ -1949,7 +2393,13 @@
                 showToast('success', '支払を取り消しました');
                 // 差分リロード: 履歴から行を削除
                 removeHistoryRow(payoutId);
-                // 未払リストは次回の集計時に自動反映されるため、再読込しない
+                // ★ SWR: バックグラウンドで未払リストを再取得
+                const currentEndDate = document.getElementById('endDateFilter')?.value;
+                if (currentEndDate) {
+                  console.log('[SWR] Status changed (undo paid) - scheduling background revalidate');
+                  clearSession();
+                  setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
+                }
               } else {
                 showToast('error', result.error);
               }
@@ -2803,15 +3253,6 @@
       }
     });
 
-    // ========== Collapsible Section ==========
-
-    function toggleUnpaidSection() {
-      const content = document.getElementById('unpaidSummary');
-      const icon = document.getElementById('unpaidCollapseIcon');
-      content.classList.toggle('collapsed');
-      icon.classList.toggle('collapsed');
-    }
-
     // ========== Export Functions ==========
 
     function formatDate(date) {
@@ -3621,13 +4062,6 @@
 
       html += '</tbody></table>';
       container.innerHTML = html;
-    }
-
-    function toggleSubUnpaidSection() {
-      const icon = document.getElementById('subUnpaidCollapseIcon');
-      const content = document.getElementById('subUnpaidSummary');
-      icon.classList.toggle('collapsed');
-      content.classList.toggle('collapsed');
     }
   </script>
 
