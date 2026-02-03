@@ -1180,20 +1180,20 @@ const InvoiceExportService = {
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
-    // P2-8: 日付+現場名の重複表示抑制用 & 案件グループ化用
+    // P2-8: 明細データを2D配列として構築（バルク処理）
+    // 案件間の空行と日付+現場の重複表示抑制を維持
     let prevDateSite = null;
     let prevJobId = null;
-    let currentRow = startRow;
+    const rowsData = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
       // P2-8: 案件が変わったら空行を挿入（同一案件内は連続配置）
       if (prevJobId !== null && line.job_id !== prevJobId) {
-        currentRow++;  // 空行をスキップ
+        // 空行を追加（10列分の空文字列）
+        rowsData.push(['', '', '', '', '', '', '', '', '', '']);
       }
-      const row = currentRow;
-      currentRow++;
       prevJobId = line.job_id;
 
       // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
@@ -1201,17 +1201,26 @@ const InvoiceExportService = {
       const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
       prevDateSite = currentDateSite;
 
-      sheet.getRange(row, 1).setValue(isFirstLineForDateSite ? (line.work_date || '') : '');
-      sheet.getRange(row, 2).setValue(isFirstLineForDateSite ? (line.site_name || '') : '');
-      sheet.getRange(row, 3).setValue(line.order_number || '');
-      sheet.getRange(row, 4).setValue(line.branch_office || '');
-      sheet.getRange(row, 5).setValue(line.item_name || '');
-      sheet.getRange(row, 6).setValue(line.time_note || '');
-      sheet.getRange(row, 7).setValue(line.quantity || 0);
-      sheet.getRange(row, 8).setValue(line.unit || '人');
-      sheet.getRange(row, 9).setValue(line.unit_price || 0);
-      sheet.getRange(row, 10).setValue(line.amount || 0);
+      // 行データを構築（A〜J列）
+      rowsData.push([
+        isFirstLineForDateSite ? (line.work_date || '') : '',  // A: 日付
+        isFirstLineForDateSite ? (line.site_name || '') : '',  // B: 案件名
+        line.order_number || '',                                // C: 発注No
+        line.branch_office || '',                               // D: 営業所
+        line.item_name || '',                                   // E: 品目
+        line.time_note || '',                                   // F: 時間/備考
+        line.quantity || 0,                                     // G: 数量
+        line.unit || '人',                                      // H: 単位
+        line.unit_price || 0,                                   // I: 単価
+        line.amount || 0                                        // J: 金額
+      ]);
     }
+
+    // 一括書き込み
+    if (rowsData.length > 0) {
+      sheet.getRange(startRow, 1, rowsData.length, 10).setValues(rowsData);
+    }
+    const currentRow = startRow + rowsData.length;
 
     // 合計行と最終行に閉じる罫線（税別小計 = 作業費 + 諸経費）
     let totalRow;
