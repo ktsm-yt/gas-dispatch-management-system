@@ -318,9 +318,9 @@ const AssignmentRepository = {
    * Note: payout_idはメタデータであり、配置の実質的な内容変更ではないため
    *       updated_at/updated_by は更新しない（請求変更検知の誤検知防止）
    *
-   * ★ パフォーマンス改善: 全行setValuesではなく対象セルのみsetValue
+   * ★ パフォーマンス改善: 連続範囲をバッチ化してsetValues
    *   - 読み込み: 全行（対象行を特定するため）
-   *   - 書き込み: 対象セルのみ（数万行の書き戻しを回避）
+   *   - 書き込み: 連続範囲ごとにsetValues（API呼び出し回数を大幅削減）
    */
   bulkUpdatePayoutId: function(updates) {
     if (!updates || updates.length === 0) {
@@ -347,27 +347,64 @@ const AssignmentRepository = {
     const payoutIdColNum = payoutIdColIdx + 1;  // 1-indexed for getRange
     Logger.log(`[bulkUpdatePayoutId] Starting: ${updates.length} updates, payoutIdColNum=${payoutIdColNum}`);
 
-    let successCount = 0;
-
-    // ヘッダー行をスキップして処理
-    // payout_idのみ更新（updated_at/updated_byは更新しない）
+    // Phase 1: 更新対象を収集
+    const updateBatch = [];
     for (let i = 1; i < allRows.length; i++) {
       const assignmentId = allRows[i][idColIdx];
       if (updateMap.has(assignmentId)) {
-        const rowNum = i + 1;  // 1-indexed for getRange
-        // ★ 対象セルのみ更新（全行setValuesを回避）
-        sheet.getRange(rowNum, payoutIdColNum).setValue(updateMap.get(assignmentId));
-        successCount++;
-
-        // 全件更新したら早期終了
-        if (successCount >= updates.length) {
+        updateBatch.push({
+          rowNum: i + 1,  // 1-indexed for getRange
+          value: updateMap.get(assignmentId)
+        });
+        // 全件見つかったら早期終了
+        if (updateBatch.length >= updates.length) {
           break;
         }
       }
     }
 
-    Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated`);
+    // Phase 2: 連続範囲にグループ化してバッチ書き込み
+    const ranges = this._groupContiguousRanges(updateBatch);
+    let successCount = 0;
+
+    for (const range of ranges) {
+      const values = range.map(r => [r.value]);
+      sheet.getRange(range[0].rowNum, payoutIdColNum, range.length, 1).setValues(values);
+      successCount += range.length;
+    }
+
+    Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated (${ranges.length} batch writes)`);
     return { success: successCount, failed: updates.length - successCount };
+  },
+
+  /**
+   * 連続する行番号をグループ化
+   * @param {Object[]} updateBatch - { rowNum, value } の配列
+   * @returns {Object[][]} グループ化された配列の配列
+   * @private
+   */
+  _groupContiguousRanges: function(updateBatch) {
+    if (updateBatch.length === 0) return [];
+
+    // 行番号でソート
+    const sorted = updateBatch.slice().sort((a, b) => a.rowNum - b.rowNum);
+
+    const ranges = [];
+    let currentRange = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].rowNum === sorted[i - 1].rowNum + 1) {
+        // 連続 → 現在のグループに追加
+        currentRange.push(sorted[i]);
+      } else {
+        // 不連続 → 新しいグループを開始
+        ranges.push(currentRange);
+        currentRange = [sorted[i]];
+      }
+    }
+    ranges.push(currentRange);
+
+    return ranges;
   },
 
   /**
