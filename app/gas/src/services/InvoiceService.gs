@@ -108,7 +108,10 @@ const InvoiceService = {
 
       return {
         success: true,
-        invoice: invoice,
+        invoice: {
+          ...invoice,
+          customer_name: customer.company_name || ''
+        },
         lines: createdLines
       };
     } catch (error) {
@@ -1117,9 +1120,13 @@ const InvoiceService = {
       }
     }
 
-    // 数値の場合は文字列に変換
+    // 数値の場合（スプレッドシートの時刻は0〜1の小数）
     if (typeof value === 'number') {
-      return String(value);
+      // 0.333333... = 8:00, 0.5 = 12:00 など
+      const totalMinutes = Math.round(value * 24 * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
     }
 
     return '';

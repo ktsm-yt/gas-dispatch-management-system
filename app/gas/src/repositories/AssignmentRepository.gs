@@ -106,6 +106,11 @@ const AssignmentRepository = {
       records = records.filter(r => r.status === query.status);
     }
 
+    // payout_idで絞り込み（確認済み/支払済み配置の取得用）
+    if (query.payout_id) {
+      records = records.filter(r => r.payout_id === query.payout_id);
+    }
+
     return records;
   },
 
@@ -254,6 +259,220 @@ const AssignmentRepository = {
       success: true,
       assignment: updatedAssignment,
       before: currentAssignment
+    };
+  },
+
+  /**
+   * 複数配置を一括更新（パフォーマンス最適化版）
+   * 全データを一括読み込み → メモリ上で更新 → 一括書き込み
+   * @param {Object[]} assignments - 更新する配置データ配列（assignment_id必須）
+   * @returns {Object} 更新結果 { success: boolean, updated: number, results: Object[], errors: string[] }
+   */
+  bulkUpdate: function(assignments) {
+    if (!assignments || assignments.length === 0) {
+      return { success: true, updated: 0, results: [], errors: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: false,
+        updated: 0,
+        results: [],
+        errors: assignments.map(a => `${a.assignment_id}: NOT_FOUND`)
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const updatedByIndex = headers.indexOf('updated_by');
+
+    // 更新可能フィールドのインデックスマップ
+    const updatableFields = [
+      'staff_id', 'worker_type', 'subcontractor_id', 'display_time_slot',
+      'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
+      'transport_area', 'transport_amount', 'transport_is_manual',
+      'transport_station', 'transport_has_bus',
+      'site_role', 'assignment_role', 'is_leader',
+      'entry_date', 'safety_training_date',
+      'status', 'payout_id',
+      'notes'
+    ];
+    const fieldIndexMap = {};
+    for (const field of updatableFields) {
+      const idx = headers.indexOf(field);
+      if (idx !== -1) {
+        fieldIndexMap[field] = idx;
+      }
+    }
+
+    // 3. 更新対象のMapを作成 (assignment_id -> assignment data)
+    const updateMap = new Map(assignments.map(a => [a.assignment_id, a]));
+
+    const user = Session.getActiveUser().getEmail() || 'system';
+    const now = getCurrentTimestamp();
+    const errors = [];
+    const results = [];
+    let updated = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const assignmentId = row[idIndex];
+
+      if (!updateMap.has(assignmentId)) continue;
+
+      const assignmentData = updateMap.get(assignmentId);
+
+      // 論理削除済みチェック
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        errors.push(`${assignmentId}: DELETED`);
+        updateMap.delete(assignmentId);
+        continue;
+      }
+
+      // 更新前の状態を保存（監査ログ用）
+      const before = rowToObject(headers, row);
+
+      // フィールドを更新
+      for (const field of updatableFields) {
+        if (assignmentData[field] !== undefined && fieldIndexMap[field] !== undefined) {
+          row[fieldIndexMap[field]] = assignmentData[field];
+        }
+      }
+
+      // updated_at/updated_byを更新
+      if (updatedAtIndex !== -1) row[updatedAtIndex] = now;
+      if (updatedByIndex !== -1) row[updatedByIndex] = user;
+
+      // 更新後の状態
+      const after = rowToObject(headers, row);
+
+      results.push({ assignmentId, before, after });
+      hasChanges = true;
+      updated++;
+      updateMap.delete(assignmentId);
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const [assignmentId] of updateMap) {
+      errors.push(`${assignmentId}: NOT_FOUND`);
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success: errors.length === 0,
+      updated,
+      results,
+      errors
+    };
+  },
+
+  /**
+   * 複数配置を一括論理削除（パフォーマンス最適化版）
+   * @param {string[]} assignmentIds - 削除する配置IDの配列
+   * @returns {Object} 削除結果 { success: boolean, deleted: number, results: Object[], errors: string[] }
+   */
+  bulkSoftDelete: function(assignmentIds) {
+    if (!assignmentIds || assignmentIds.length === 0) {
+      return { success: true, deleted: 0, results: [], errors: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: false,
+        deleted: 0,
+        results: [],
+        errors: assignmentIds.map(id => `${id}: NOT_FOUND`)
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    const statusIndex = headers.indexOf('status');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const updatedByIndex = headers.indexOf('updated_by');
+
+    // 3. 削除対象のSetを作成
+    const deleteSet = new Set(assignmentIds);
+
+    const user = Session.getActiveUser().getEmail() || 'system';
+    const now = getCurrentTimestamp();
+    const errors = [];
+    const results = [];
+    let deleted = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const assignmentId = row[idIndex];
+
+      if (!deleteSet.has(assignmentId)) continue;
+
+      // 既に論理削除済みの場合はスキップ
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        errors.push(`${assignmentId}: ALREADY_DELETED`);
+        deleteSet.delete(assignmentId);
+        continue;
+      }
+
+      // 削除前の状態を保存（監査ログ用）
+      const before = rowToObject(headers, row);
+
+      // 論理削除
+      if (isDeletedIndex !== -1) row[isDeletedIndex] = true;
+      if (statusIndex !== -1) row[statusIndex] = 'CANCELLED';
+      if (updatedAtIndex !== -1) row[updatedAtIndex] = now;
+      if (updatedByIndex !== -1) row[updatedByIndex] = user;
+
+      // 削除後の状態
+      const after = rowToObject(headers, row);
+
+      results.push({ assignmentId, before, after });
+      hasChanges = true;
+      deleted++;
+      deleteSet.delete(assignmentId);
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const assignmentId of deleteSet) {
+      errors.push(`${assignmentId}: NOT_FOUND`);
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success: errors.length === 0,
+      deleted,
+      results,
+      errors
     };
   },
 

@@ -106,11 +106,83 @@ function getUnpaidAssignments(staffId, endDate) {
 }
 
 /**
- * 未払いスタッフ一覧を取得
- * @param {string} endDate - 集計終了日
+ * 確認済みPayoutの詳細を取得（配置情報含む）
+ * @param {string} payoutId - 支払ID
+ * @param {Object} options - オプション { include_assignments: boolean }
  * @returns {Object} APIレスポンス
  */
-function getUnpaidStaffList(endDate) {
+function getPayoutDetails(payoutId, options = {}) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!payoutId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
+    }
+
+    const payout = PayoutService.get(payoutId);
+    if (!payout) {
+      return buildErrorResponse(ERROR_CODES.NOT_FOUND, 'Payout not found', {}, requestId);
+    }
+
+    // モーダル表示用にデータを整形
+    const result = {
+      staffId: payout.staff_id,
+      staffName: payout.target_name || '(不明)',
+      assignmentCount: payout.assignment_count || 0,
+      baseAmount: payout.base_amount,
+      transportAmount: payout.transport_amount,
+      adjustmentAmount: payout.adjustment_amount || 0,
+      totalAmount: payout.total_amount,
+      periodStart: payout.period_start,
+      periodEnd: payout.period_end,
+      status: payout.status,
+      payoutId: payout.payout_id,
+      updatedAt: payout.updated_at,
+      paidDate: payout.paid_date,
+      notes: payout.notes
+    };
+
+    // 配置情報を取得（オプション）- payout_idで直接検索して最適化
+    if (options.include_assignments !== false) {
+      const linkedAssignments = AssignmentRepository.search({ payout_id: payoutId })
+        .filter(a => !a.is_deleted);
+
+      // Job情報を付与
+      const jobIds = [...new Set(linkedAssignments.map(a => a.job_id))];
+      const jobs = jobIds.length > 0 ? JobRepository.search({ job_ids: jobIds }) : [];
+      const jobMap = new Map(jobs.map(j => [j.job_id, j]));
+
+      result.assignments = linkedAssignments.map(a => {
+        const job = jobMap.get(a.job_id) || {};
+        return {
+          assignment_id: a.assignment_id,
+          work_date: job.work_date,
+          site_name: job.site_name || '(現場名なし)'
+        };
+      });
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    console.error('getPayoutDetails error:', error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  }
+}
+
+/**
+ * 未払いスタッフ一覧を取得
+ * @param {string} endDate - 集計終了日
+ * @param {Object} [options={}] - オプション
+ * @param {string} [options.staffId] - 特定スタッフのみ取得する場合に指定
+ * @returns {Object} APIレスポンス
+ */
+function getUnpaidStaffList(endDate, options = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -125,13 +197,19 @@ function getUnpaidStaffList(endDate) {
       endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
     }
 
-    const result = PayoutService.getUnpaidStaffList(endDate);
+    const result = PayoutService.getUnpaidStaffList(endDate, options);
 
     // ★ 同じ期間の確認済みPayoutも取得（リロード後の状態復元用）
-    const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+    let confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+
+    // 特定スタッフ指定時は確認済みもフィルタ
+    if (options.staffId) {
+      confirmedPayouts = confirmedPayouts.filter(p => p.staff_id === options.staffId);
+    }
 
     return buildSuccessResponse({
       endDate: endDate,
+      staffId: options.staffId || null,  // 個人選択モードのフラグとして返す
       staffList: result,
       totalCount: result.length,
       totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0),
