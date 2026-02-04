@@ -846,12 +846,20 @@ const PayoutService = {
   /**
    * 未払いがあるスタッフ一覧を取得（バルク処理版）
    * @param {string} endDate - 集計終了日
+   * @param {Object} [options={}] - オプション
+   * @param {string} [options.staffId] - 特定スタッフのみ取得する場合に指定
    * @returns {Object[]} { staffId, staffName, unpaidCount, estimatedAmount }
    */
-  getUnpaidStaffList: function(endDate) {
+  getUnpaidStaffList: function(endDate, options = {}) {
     // 1. 全データを一括取得（外注スタッフは除外 - 外注費管理タブで別途管理）
-    const staffList = StaffRepository.search({ is_active: true })
+    let staffList = StaffRepository.search({ is_active: true })
       .filter(s => s.staff_type !== 'subcontract');
+
+    // 特定スタッフ指定時はフィルタ
+    if (options.staffId) {
+      staffList = staffList.filter(s => s.staff_id === options.staffId);
+    }
+
     if (staffList.length === 0) return [];
 
     const staffMap = new Map(staffList.map(s => [s.staff_id, s]));

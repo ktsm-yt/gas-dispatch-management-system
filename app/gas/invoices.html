@@ -790,6 +790,7 @@
       bottom: 0;
       background: rgba(255, 255, 255, 0.8);
       z-index: 9998;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
@@ -805,6 +806,12 @@
       border-top-color: var(--color-primary);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+    }
+
+    .loading-message {
+      margin-top: 16px;
+      color: #666;
+      font-size: 14px;
     }
 
     @keyframes spin {
@@ -1365,6 +1372,7 @@
   <!-- Loading -->
   <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
+    <div class="loading-message" id="loading-message"></div>
   </div>
 
   <!-- Toast -->
@@ -1643,6 +1651,39 @@
       });
     }
 
+    /**
+     * 請求書が現在のフィルタ条件に一致するかチェック
+     * @param {Object} invoice - 請求書オブジェクト
+     * @returns {boolean} フィルタに一致すればtrue
+     */
+    function matchesCurrentFilter(invoice) {
+      if (!currentInvoiceQuery) return false;
+
+      // customer_idチェック
+      if (currentInvoiceQuery.customer_id && invoice.customer_id !== currentInvoiceQuery.customer_id) {
+        return false;
+      }
+
+      // billing_yearチェック (billing_ymから年を抽出)
+      if (currentInvoiceQuery.billing_year && invoice.billing_ym) {
+        const invoiceYear = parseInt(invoice.billing_ym.split('-')[0]);
+        if (invoiceYear !== currentInvoiceQuery.billing_year) return false;
+      }
+
+      // billing_monthチェック (billing_ymから月を抽出)
+      if (currentInvoiceQuery.billing_month && invoice.billing_ym) {
+        const invoiceMonth = parseInt(invoice.billing_ym.split('-')[1]);
+        if (invoiceMonth !== currentInvoiceQuery.billing_month) return false;
+      }
+
+      // statusチェック（生成直後は常にdraft）
+      if (currentInvoiceQuery.status && invoice.status !== currentInvoiceQuery.status) {
+        return false;
+      }
+
+      return true;
+    }
+
     function loadInvoices(skipCache = false) {
       clearSelection();
 
@@ -1694,7 +1735,7 @@
       }
 
       // キャッシュなし: ローディング表示してAPI取得
-      showLoading();
+      showLoading('請求書一覧を読み込み中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -2275,7 +2316,7 @@
         return;
       }
 
-      showLoading();
+      showLoading('請求書を生成中...');
       closeGenerateModal();
 
       google.script.run
@@ -2283,8 +2324,28 @@
           hideLoading();
           if (result.ok) {
             showToast('請求書を生成しました', 'success');
-            loadInvoices(true);  // Skip cache after data change
+            // 差分更新: 生成した請求書をリストの先頭に追加
+            if (result.data?.invoice) {
+              const newInvoice = result.data.invoice;
+              // 支払額は0で初期化
+              newInvoice.total_paid = 0;
+              newInvoice.outstanding = newInvoice.total_amount || 0;
+
+              // フィルタ条件に一致する場合のみ差分更新、一致しない場合はリロード
+              if (matchesCurrentFilter(newInvoice)) {
+                invoices.unshift(newInvoice);
+                renderInvoices();
+                // キャッシュを更新
+                const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+                PageCache.set(cacheKey, invoices);
+              } else {
+                // フィルタに一致しない場合、キャッシュをクリアしてリロード
+                PageCache.clearByPrefix('invoices_list');
+                loadInvoices(true);
+              }
+            }
           } else if (result.error?.code === 'CONFLICT_ERROR' && result.error?.details?.existingInvoice) {
+            hideLoading();
             // 既存請求書がある場合、上書き確認モーダルを表示
             const existing = result.error.details.existingInvoice;
             pendingOverwrite = { customerId, ym, existingInvoice: existing };
@@ -2293,6 +2354,7 @@
               existing.total_amount ? '¥' + Number(existing.total_amount).toLocaleString() : '-';
             document.getElementById('invoiceOverwriteModal').classList.add('active');
           } else {
+            hideLoading();
             showToast(result.error?.message || '生成に失敗しました', 'error');
           }
         })
@@ -2316,19 +2378,40 @@
 
       const { customerId, ym, existingInvoice } = pendingOverwrite;
       closeInvoiceOverwriteModal();
-      showLoading();
+      showLoading('既存請求書を削除中...');
 
       // 既存請求書を削除してから再生成
       google.script.run
         .withSuccessHandler(function (deleteResult) {
           if (deleteResult.ok) {
-            // 削除成功、新規生成
+            // 削除成功、リストから削除
+            invoices = invoices.filter(inv => inv.invoice_id !== existingInvoice.invoice_id);
+            // 新規生成
+            showLoading('請求書を再生成中...');
             google.script.run
               .withSuccessHandler(function (genResult) {
                 hideLoading();
                 if (genResult.ok) {
                   showToast('請求書を再生成しました', 'success');
-                  loadInvoices(true);
+                  // 差分更新: 生成した請求書をリストの先頭に追加
+                  if (genResult.data?.invoice) {
+                    const newInvoice = genResult.data.invoice;
+                    newInvoice.total_paid = 0;
+                    newInvoice.outstanding = newInvoice.total_amount || 0;
+
+                    // フィルタ条件に一致する場合のみ差分更新
+                    if (matchesCurrentFilter(newInvoice)) {
+                      invoices.unshift(newInvoice);
+                      renderInvoices();
+                      // キャッシュを更新
+                      const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+                      PageCache.set(cacheKey, invoices);
+                    } else {
+                      // フィルタに一致しない場合はリロード
+                      PageCache.clearByPrefix('invoices_list');
+                      loadInvoices(true);
+                    }
+                  }
                 } else {
                   showToast(genResult.error?.message || '再生成に失敗しました', 'error');
                 }
@@ -2683,7 +2766,7 @@
         newTab.document.write(loadingHtml);
         newTab.document.close();
       }
-      showLoading();
+      showLoading('ファイルを出力中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -3384,7 +3467,7 @@
         newTab.document.close();
       }
 
-      showLoading();
+      showLoading('エクスポート中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -3432,12 +3515,16 @@
         .replace(/'/g, '&#039;');
     }
 
-    function showLoading() {
+    function showLoading(message) {
       document.getElementById('loading').classList.add('active');
+      const msgEl = document.getElementById('loading-message');
+      if (msgEl) msgEl.textContent = message || '';
     }
 
     function hideLoading() {
       document.getElementById('loading').classList.remove('active');
+      const msgEl = document.getElementById('loading-message');
+      if (msgEl) msgEl.textContent = '';
     }
 
     function showToast(message, type = 'info') {
@@ -3538,7 +3625,7 @@
       // ローディング表示
       confirmBtn.disabled = true;
       confirmBtn.textContent = '再生成中...';
-      showLoading();
+      showLoading('請求書を再生成中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -3546,9 +3633,21 @@
           closeRegenerateConfirm();
           if (result.ok) {
             showToast(customerName + ' の請求書を再生成しました', 'success');
-            // キャッシュをクリアして再読み込み
-            clearInvoiceCache();
-            loadInvoices(true);
+            // 差分更新: 該当請求書を更新
+            if (result.data?.invoice) {
+              const updatedInvoice = result.data.invoice;
+              const idx = invoices.findIndex(inv => inv.invoice_id === invoiceId);
+              if (idx !== -1) {
+                // 支払額を保持
+                updatedInvoice.total_paid = invoices[idx].total_paid || 0;
+                updatedInvoice.outstanding = (updatedInvoice.total_amount || 0) - updatedInvoice.total_paid;
+                invoices[idx] = updatedInvoice;
+                renderInvoices();
+                // キャッシュを更新
+                const cacheKey = 'invoices_list_' + JSON.stringify(currentInvoiceQuery);
+                PageCache.set(cacheKey, invoices);
+              }
+            }
           } else {
             const errorMsg = result.error?.message || result.error || '再生成に失敗しました';
             showToast(errorMsg, 'error');
@@ -3623,7 +3722,7 @@
      * @param {string} invoiceId - 請求書ID
      */
     function openEditModal(invoiceId) {
-      showLoading();
+      showLoading('請求書を読み込み中...');
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
@@ -3765,7 +3864,7 @@
         });
       });
 
-      showLoading();
+      showLoading('保存中...');
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();

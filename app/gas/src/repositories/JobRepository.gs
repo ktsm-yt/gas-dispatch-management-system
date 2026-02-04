@@ -339,11 +339,20 @@ const JobRepository = {
    * @returns {string|null} HH:mm形式の文字列またはnull
    */
   _normalizeTime: function(timeValue) {
-    if (!timeValue) return '';
+    if (!timeValue && timeValue !== 0) return '';
 
     if (timeValue instanceof Date) {
       // 1899-1900年のDateはスプレッドシートの時刻のみセル
       return Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+    }
+
+    // 数値型の場合（スプレッドシートの時刻は0〜1の小数）
+    if (typeof timeValue === 'number') {
+      // 0.333333... = 8:00, 0.5 = 12:00 など
+      const totalMinutes = Math.round(timeValue * 24 * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
     }
 
     // 既に文字列の場合はそのまま返す
