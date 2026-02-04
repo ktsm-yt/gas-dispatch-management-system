@@ -1543,6 +1543,13 @@
       const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear', 'billingExportYear'];
       yearSelects.forEach(id => {
         const select = document.getElementById(id);
+        // filterYearのみ「全て」オプションを追加（全期間検索用）
+        if (id === 'filterYear') {
+          const allOption = document.createElement('option');
+          allOption.value = '';
+          allOption.textContent = '全て';
+          select.appendChild(allOption);
+        }
         for (let y = currentYear - 2; y <= currentYear + 1; y++) {
           const option = document.createElement('option');
           option.value = y;
@@ -1664,16 +1671,27 @@
         return false;
       }
 
-      // billing_yearチェック (billing_ymから年を抽出)
-      if (currentInvoiceQuery.billing_year && invoice.billing_ym) {
-        const invoiceYear = parseInt(invoice.billing_ym.split('-')[0]);
-        if (invoiceYear !== currentInvoiceQuery.billing_year) return false;
+      // billing_ym_from/to チェック（年月範囲フィルタ）
+      if (currentInvoiceQuery.billing_ym_from || currentInvoiceQuery.billing_ym_to) {
+        // 請求書のbilling_ymを構築
+        const invoiceYm = invoice.billing_year && invoice.billing_month
+          ? `${invoice.billing_year}-${String(invoice.billing_month).padStart(2, '0')}`
+          : null;
+        // 空値は一致扱い（既存互換）
+        if (invoiceYm) {
+          if (currentInvoiceQuery.billing_ym_from && invoiceYm < currentInvoiceQuery.billing_ym_from) return false;
+          if (currentInvoiceQuery.billing_ym_to && invoiceYm > currentInvoiceQuery.billing_ym_to) return false;
+        }
       }
 
-      // billing_monthチェック (billing_ymから月を抽出)
-      if (currentInvoiceQuery.billing_month && invoice.billing_ym) {
-        const invoiceMonth = parseInt(invoice.billing_ym.split('-')[1]);
-        if (invoiceMonth !== currentInvoiceQuery.billing_month) return false;
+      // billing_yearチェック (従来互換)
+      if (currentInvoiceQuery.billing_year && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
+        if (invoice.billing_year !== currentInvoiceQuery.billing_year) return false;
+      }
+
+      // billing_monthチェック (従来互換)
+      if (currentInvoiceQuery.billing_month && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
+        if (invoice.billing_month !== currentInvoiceQuery.billing_month) return false;
       }
 
       // statusチェック（生成直後は常にdraft）
@@ -1692,19 +1710,48 @@
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
 
-      // 顧客未選択時は月の指定が必須
-      if (!customerId && !month) {
-        showToast('顧客を選択するか、月を指定してください', 'warning');
-        return;
-      }
-
       const query = {};
-      if (year) {
-        query.billing_year = parseInt(year);
+
+      // 年が「全て」の場合 → 全期間表示（フィルタなし）
+      if (!year) {
+        // billing_ym_from/to を設定しない = 全件
+        // ただし顧客指定がない場合は警告
+        if (!customerId) {
+          showToast('全期間表示は顧客を選択してください', 'warning');
+          return;
+        }
       }
-      if (month) {
+      // 顧客指定あり → 期間制限なし（既存動作維持）
+      else if (customerId) {
+        query.customer_id = customerId;
+        // 年/月指定があれば適用
+        if (year) query.billing_year = parseInt(year);
+        if (month) query.billing_month = parseInt(month);
+      }
+      // 月指定あり → 単一月表示
+      else if (month) {
+        query.billing_year = parseInt(year);
         query.billing_month = parseInt(month);
       }
+      // 月指定なし → 「当月＋前月」デフォルト（★ 新機能）
+      else {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+
+        // YYYY-MM形式で範囲指定（年またぎも安全）
+        const currentYm = `${year}-${String(currentMonth).padStart(2, '0')}`;
+        let prevYm;
+        if (currentMonth === 1) {
+          // 1月の場合は前年12月を含める
+          prevYm = `${parseInt(year) - 1}-12`;
+        } else {
+          prevYm = `${year}-${String(currentMonth - 1).padStart(2, '0')}`;
+        }
+
+        query.billing_ym_from = prevYm;
+        query.billing_ym_to = currentYm;
+      }
+
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
 
