@@ -89,6 +89,8 @@ const InvoiceRepository = {
    * @param {string} query.customer_id - 顧客ID
    * @param {number} query.billing_year - 請求年
    * @param {number} query.billing_month - 請求月
+   * @param {string} query.billing_ym_from - 年月範囲開始（YYYY-MM形式、例: "2025-12"）
+   * @param {string} query.billing_ym_to - 年月範囲終了（YYYY-MM形式、例: "2026-01"）
    * @param {string} query.status - ステータス
    * @param {string} query.invoice_format - 書式
    * @param {number} query.limit - 取得件数制限
@@ -112,13 +114,28 @@ const InvoiceRepository = {
       records = records.filter(r => r.customer_id === query.customer_id);
     }
 
-    // 年で絞り込み
-    if (query.billing_year) {
+    // ★ 年月範囲フィルタ（YYYY-MM形式で文字列比較、年またぎ対応）
+    // billing_ym_from: "2025-12", billing_ym_to: "2026-01" のように指定
+    if (query.billing_ym_from || query.billing_ym_to) {
+      records = records.filter(r => {
+        // billing_ymを構築（billing_year + billing_month から）
+        const billingYm = this._toBillingYm(r.billing_year, r.billing_month);
+        // 空値は除外しない（既存互換）
+        if (!billingYm) return true;
+
+        if (query.billing_ym_from && billingYm < query.billing_ym_from) return false;
+        if (query.billing_ym_to && billingYm > query.billing_ym_to) return false;
+        return true;
+      });
+    }
+
+    // 年で絞り込み（billing_ym_from/to が指定されていない場合のみ）
+    if (query.billing_year && !query.billing_ym_from && !query.billing_ym_to) {
       records = records.filter(r => r.billing_year === query.billing_year);
     }
 
-    // 月で絞り込み
-    if (query.billing_month) {
+    // 月で絞り込み（billing_ym_from/to が指定されていない場合のみ）
+    if (query.billing_month && !query.billing_ym_from && !query.billing_ym_to) {
       records = records.filter(r => r.billing_month === query.billing_month);
     }
 
@@ -744,6 +761,20 @@ const InvoiceRepository = {
 
     // 文字列の場合はスラッシュをハイフンに変換
     return String(dateValue).replace(/\//g, '-');
+  },
+
+  /**
+   * 年・月からYYYY-MM形式の文字列を生成
+   * @param {number} year - 年
+   * @param {number} month - 月
+   * @returns {string} YYYY-MM形式（年または月が無効な場合は空文字）
+   */
+  _toBillingYm: function(year, month) {
+    if (!year || !month) return '';
+    const y = Number(year);
+    const m = Number(month);
+    if (isNaN(y) || isNaN(m) || y < 1900 || m < 1 || m > 12) return '';
+    return `${y}-${String(m).padStart(2, '0')}`;
   },
 
   /**
