@@ -13,11 +13,16 @@
     "e2e:connect": "npx tsx e2e/scripts/screenshot-connect.ts",
     "gas:push": "cd app/gas && npx clasp push",
     "gas:deploy": "bash scripts/deploy-prod.sh",
-    "typecheck": "tsc -p app/gas/tsconfig.json --noEmit"
+    "typecheck": "tsc -p app/gas/tsconfig.json --noEmit",
+    "lint": "eslint app/gas/src/ --ext .js,.gs,.ts",
+    "lint:fix": "eslint app/gas/src/ --ext .js,.gs,.ts --fix"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
     "@types/google-apps-script": "1.0.83",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "eslint": "8.56.0",
     "tsx": "^4.21.0",
     "typescript": "5.3.3",
     "xlsx": "^0.18.5"
