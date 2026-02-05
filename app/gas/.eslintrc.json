@@ -1,0 +1,57 @@
+{
+  "root": true,
+  "env": {
+    "es2020": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "script"
+  },
+  "globals": {
+    "SpreadsheetApp": "readonly",
+    "DriveApp": "readonly",
+    "PropertiesService": "readonly",
+    "LockService": "readonly",
+    "Logger": "readonly",
+    "Session": "readonly",
+    "Utilities": "readonly",
+    "UrlFetchApp": "readonly",
+    "ContentService": "readonly",
+    "HtmlService": "readonly",
+    "CacheService": "readonly",
+    "console": "readonly",
+    "ScriptApp": "readonly",
+    "DocumentApp": "readonly",
+    "FormApp": "readonly",
+    "CalendarApp": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+    "no-undef": "error"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.ts"],
+      "parser": "@typescript-eslint/parser",
+      "plugins": ["@typescript-eslint"],
+      "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/recommended"
+      ]
+    },
+    {
+      "files": ["**/*.js", "**/*.gs"],
+      "extends": ["eslint:recommended"],
+      "rules": {
+        "no-unused-vars": "warn",
+        "no-undef": "warn",
+        "no-empty": "warn",
+        "no-case-declarations": "warn",
+        "no-useless-escape": "warn",
+        "no-irregular-whitespace": "warn",
+        "no-redeclare": "warn",
+        "no-inner-declarations": "warn"
+      }
+    }
+  ]
+}
