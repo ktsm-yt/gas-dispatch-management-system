@@ -15,7 +15,8 @@
     "gas:deploy": "bash scripts/deploy-prod.sh",
     "typecheck": "tsc -p app/gas/tsconfig.json --noEmit",
     "lint": "eslint app/gas/src/ --ext .js,.gs,.ts",
-    "lint:fix": "eslint app/gas/src/ --ext .js,.gs,.ts --fix"
+    "lint:fix": "eslint app/gas/src/ --ext .js,.gs,.ts --fix",
+    "check": "npm run typecheck && npm run lint"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
