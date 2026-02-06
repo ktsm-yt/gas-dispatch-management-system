@@ -26,7 +26,7 @@ declare global {
 
   // === ステータス系（status_rules.ts） ===
   type JobStatus = 'pending' | 'assigned' | 'hold' | 'cancelled' | 'problem';
-  type AssignmentStatus = 'ASSIGNED' | 'CONFIRMED' | 'CANCELLED';
+  type AssignmentStatus = 'assigned' | 'confirmed' | 'cancelled';
   type InvoiceStatus = 'unsent' | 'sent' | 'paid' | 'unpaid';
   type InvoiceLegacyStatus = 'draft' | 'issued';
   type PayoutStatus = 'draft' | 'confirmed' | 'paid';
