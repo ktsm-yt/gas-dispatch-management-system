@@ -127,8 +127,7 @@ function requireFields_(data: Record<string, unknown>, requiredFields: string[])
   if (missing.length > 0) {
     throw new ValidationError(
       `必須項目が不足しています: ${missing.join(', ')}`,
-      { missingFields: missing } as any
-    );
+      { missingFields: missing }    );
   }
 }
 
@@ -136,8 +135,7 @@ function validateLength_(value: string | null | undefined, fieldName: string, ma
   if (value && value.length > maxLength) {
     throw new ValidationError(
       `${fieldName}は${maxLength}文字以内で入力してください`,
-      { field: fieldName, maxLength, actualLength: value.length } as any
-    );
+      { field: fieldName, maxLength, actualLength: value.length }    );
   }
 }
 
@@ -148,8 +146,7 @@ function validateEnum_(value: unknown, fieldName: string, enumObj: Record<string
   if (!validValues.includes(value as string)) {
     throw new ValidationError(
       `${fieldName}の値が不正です: ${value}`,
-      { field: fieldName, validValues, actualValue: value } as any
-    );
+      { field: fieldName, validValues, actualValue: value }    );
   }
 }
 
@@ -164,29 +161,25 @@ function validateNumber_(
   if (isNaN(num)) {
     throw new ValidationError(
       `${fieldName}は数値で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 
   if (options.min !== undefined && num < options.min) {
     throw new ValidationError(
       `${fieldName}は${options.min}以上で入力してください`,
-      { field: fieldName, min: options.min, actualValue: num } as any
-    );
+      { field: fieldName, min: options.min, actualValue: num }    );
   }
 
   if (options.max !== undefined && num > options.max) {
     throw new ValidationError(
       `${fieldName}は${options.max}以下で入力してください`,
-      { field: fieldName, max: options.max, actualValue: num } as any
-    );
+      { field: fieldName, max: options.max, actualValue: num }    );
   }
 
   if (options.allowDecimal === false && !Number.isInteger(num)) {
     throw new ValidationError(
       `${fieldName}は整数で入力してください`,
-      { field: fieldName, actualValue: num } as any
-    );
+      { field: fieldName, actualValue: num }    );
   }
 }
 
@@ -197,16 +190,14 @@ function validateDateFormat_(value: string | null | undefined, fieldName: string
   if (!dateRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}はYYYY-MM-DD形式で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 
   const date = new Date(value);
   if (isNaN(date.getTime())) {
     throw new ValidationError(
       `${fieldName}は有効な日付を入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -217,8 +208,7 @@ function validateTimeFormat_(value: string | null | undefined, fieldName: string
   if (!timeRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}はHH:MM形式で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -229,8 +219,7 @@ function validateIsoDateTime_(value: string | null | undefined, fieldName: strin
   if (isNaN(date.getTime())) {
     throw new ValidationError(
       `${fieldName}は有効な日時形式で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -241,8 +230,7 @@ function validateEmail_(value: string | null | undefined, fieldName: string): vo
   if (!emailRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}は正しいメールアドレス形式で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -253,8 +241,7 @@ function validatePhone_(value: string | null | undefined, fieldName: string): vo
   if (!phoneRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}は正しい電話番号形式で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -265,8 +252,7 @@ function validatePostalCode_(value: string | null | undefined, fieldName: string
   if (!postalRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}は正しい郵便番号形式（例: 120-0034）で入力してください`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -280,8 +266,7 @@ function validateUuid_(value: string | null | undefined, fieldName: string): voi
   if (!prefixedUuidRegex.test(value) && !pureUuidRegex.test(value) && !prefixedShortIdRegex.test(value)) {
     throw new ValidationError(
       `${fieldName}は正しいID形式ではありません`,
-      { field: fieldName, actualValue: value } as any
-    );
+      { field: fieldName, actualValue: value }    );
   }
 }
 
@@ -385,8 +370,7 @@ function validateAssignment_(assignment: Record<string, any>, isNew: boolean = f
     if (typeof assignment.is_leader !== 'boolean') {
       throw new ValidationError(
         'リーダーフラグはtrue/falseで指定してください',
-        { field: 'is_leader', actualValue: assignment.is_leader } as any
-      );
+        { field: 'is_leader', actualValue: assignment.is_leader }      );
     }
   }
 }
