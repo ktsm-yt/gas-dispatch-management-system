@@ -44,34 +44,21 @@ declare global {
     cannotIssue: { invoice: Record<string, unknown>; reason: string }[];
   }
 
-  // === エラー系（errors.js → errors.ts で詳細化予定） ===
+  // === エラー系（errors.ts） ===
   type ErrorCode = 'VALIDATION_ERROR' | 'PERMISSION_DENIED' | 'NOT_FOUND'
     | 'CONFLICT_ERROR' | 'BUSY_ERROR' | 'SYSTEM_ERROR';
 
-  class AppError extends Error {
-    code: string;
-    details: unknown;
-    constructor(code: string, message: string, details?: unknown);
-    toResponse(): { code: string; message: string; details: unknown };
-  }
+  // エラークラスは errors.ts に実装として定義
 
-  class ValidationError extends AppError {
-    constructor(message: string, details?: unknown);
-  }
+  // === 外部関数宣言（utils.gs, auth.gs 等） ===
+  function generateRequestId(): string;
+  function buildSuccessResponse(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string };
+  function buildErrorResponse(code: string, message: string, details: unknown, requestId: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string };
+  function checkPermission(requiredRole: string): { allowed: boolean; message: string };
 
-  class PermissionDeniedError extends AppError {
-    constructor(message?: string);
-  }
-
-  class NotFoundError extends AppError {
-    constructor(message: string, details?: unknown);
-  }
-
-  class ConflictError extends AppError {
-    constructor(message: string, details?: unknown);
-  }
-
-  class BusyError extends AppError {
-    constructor(message?: string);
+  // === UI関連（ui_jobs.ts） ===
+  interface PageConfig {
+    file: string;
+    title: string;
   }
 }

@@ -49,8 +49,7 @@ function validateJobStatusTransition_(fromStatus: string, toStatus: string): voi
   if (!isValidTransition_(JOB_STATUS_TRANSITIONS, fromStatus, toStatus)) {
     throw new ValidationError(
       `案件ステータスを「${getJobStatusLabel_(fromStatus)}」から「${getJobStatusLabel_(toStatus)}」に変更できません`,
-      { fromStatus, toStatus, allowedStatuses: JOB_STATUS_TRANSITIONS[fromStatus as JobStatus] } as any  // TODO: errors.ts移行後に削除
-    );
+      { fromStatus, toStatus, allowedStatuses: JOB_STATUS_TRANSITIONS[fromStatus as JobStatus] }    );
   }
 }
 
@@ -58,8 +57,7 @@ function validateAssignmentStatusTransition_(fromStatus: string, toStatus: strin
   if (!isValidTransition_(ASSIGNMENT_STATUS_TRANSITIONS, fromStatus, toStatus)) {
     throw new ValidationError(
       `配置ステータスを「${getAssignmentStatusLabel_(fromStatus)}」から「${getAssignmentStatusLabel_(toStatus)}」に変更できません`,
-      { fromStatus, toStatus, allowedStatuses: ASSIGNMENT_STATUS_TRANSITIONS[fromStatus as AssignmentStatus] } as any  // TODO: errors.ts移行後に削除
-    );
+      { fromStatus, toStatus, allowedStatuses: ASSIGNMENT_STATUS_TRANSITIONS[fromStatus as AssignmentStatus] }    );
   }
 }
 
@@ -67,8 +65,7 @@ function validateInvoiceStatusTransition_(fromStatus: string, toStatus: string):
   if (!isValidTransition_(INVOICE_STATUS_TRANSITIONS, fromStatus, toStatus)) {
     throw new ValidationError(
       `請求ステータスを「${getInvoiceStatusLabel_(fromStatus)}」から「${getInvoiceStatusLabel_(toStatus)}」に変更できません`,
-      { fromStatus, toStatus, allowedStatuses: INVOICE_STATUS_TRANSITIONS[fromStatus as InvoiceStatus] } as any  // TODO: errors.ts移行後に削除
-    );
+      { fromStatus, toStatus, allowedStatuses: INVOICE_STATUS_TRANSITIONS[fromStatus as InvoiceStatus] }    );
   }
 }
 
@@ -76,8 +73,7 @@ function validatePayoutStatusTransition_(fromStatus: string, toStatus: string): 
   if (!isValidTransition_(PAYOUT_STATUS_TRANSITIONS, fromStatus, toStatus)) {
     throw new ValidationError(
       `支払ステータスを「${getPayoutStatusLabel_(fromStatus)}」から「${getPayoutStatusLabel_(toStatus)}」に変更できません`,
-      { fromStatus, toStatus, allowedStatuses: PAYOUT_STATUS_TRANSITIONS[fromStatus as PayoutStatus] } as any  // TODO: errors.ts移行後に削除
-    );
+      { fromStatus, toStatus, allowedStatuses: PAYOUT_STATUS_TRANSITIONS[fromStatus as PayoutStatus] }    );
   }
 }
 
