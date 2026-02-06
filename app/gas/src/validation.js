@@ -718,15 +718,6 @@ const TIME_SLOT_LABELS = {
 };
 
 /**
- * 案件ステータスのラベルを取得
- * @param {string} status - ステータス
- * @returns {string} ラベル
- */
-function getJobStatusLabel_(status) {
-  return JOB_STATUS_LABELS[status] || status;
-}
-
-/**
  * 時間区分のラベルを取得
  * @param {string} slot - 時間区分
  * @returns {string} ラベル
@@ -736,42 +727,7 @@ function getTimeSlotLabel_(slot) {
 }
 
 // ============================================
-// 編集可能チェック
+// ステータス関連ユーティリティ
 // ============================================
-
-/**
- * 案件が編集可能かチェック
- * @param {string} status - ステータス
- * @returns {boolean} 編集可能ならtrue
- */
-function isJobEditable_(status) {
-  // キャンセル以外は編集可能
-  return status !== 'cancelled';
-}
-
-/**
- * 請求が編集可能かチェック
- * @param {string} status - ステータス
- * @returns {boolean} 編集可能ならtrue
- */
-function isInvoiceEditable_(status) {
-  // 未送付のみ編集可能（後方互換: draft/issuedも許可）
-  return status === 'unsent' || status === 'draft' || status === 'issued';
-}
-
-// ============================================
-// ステータス自動計算
-// ============================================
-
-/**
- * 案件のステータスを配置状況から計算
- * @param {number} requiredCount - 必要人数
- * @param {number} assignedCount - 配置済み人数
- * @returns {string} 計算されたステータス
- */
-function calculateJobStatus_(requiredCount, assignedCount) {
-  if (assignedCount >= requiredCount) {
-    return 'assigned';
-  }
-  return 'pending';
-}
+// 注: getJobStatusLabel_, isJobEditable_, isInvoiceEditable_, calculateJobStatus_ は
+// status_rules.js で定義されています（重複解消済み）
