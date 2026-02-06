@@ -10,9 +10,9 @@ const JOB_STATUS_TRANSITIONS = {
 } as const;
 
 const ASSIGNMENT_STATUS_TRANSITIONS = {
-  ASSIGNED: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['ASSIGNED', 'CANCELLED'],
-  CANCELLED: ['ASSIGNED']
+  assigned: ['confirmed', 'cancelled'],
+  confirmed: ['assigned', 'cancelled'],
+  cancelled: []
 } as const;
 
 const INVOICE_STATUS_TRANSITIONS = {
