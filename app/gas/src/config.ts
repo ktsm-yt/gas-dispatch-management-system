@@ -1,6 +1,6 @@
-// File: config.gs
+// File: config.ts
 // 英語キー ↔ 日本語ラベルの対応表（UI用）
-function getFieldLabelMap() {
+function getFieldLabelMap(): Record<string, string> {
   return {
     client_id: '顧客ID',
     client_name: '顧客名',
@@ -23,7 +23,7 @@ function getFieldLabelMap() {
   };
 }
 
-function getSpreadsheetId() {
+function getSpreadsheetId(): string {
   const prop = PropertiesService.getScriptProperties();
   const env = prop.getProperty('ENV') || 'dev';
   const id = env === 'prod'
@@ -33,7 +33,7 @@ function getSpreadsheetId() {
   return id;
 }
 
-function getSheetByName(name) {
+function getSheetByName(name: string): GoogleAppsScript.Spreadsheet.Sheet {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   const sheet = ss.getSheetByName(name);
   if (!sheet) throw new Error(`Sheet not found: ${name}`);
