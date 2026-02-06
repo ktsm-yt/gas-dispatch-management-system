@@ -10,6 +10,7 @@ const RoundingMode = {
 } as const;
 
 const TOBIAGE_MULTIPLIER = 1.5;
+const FLOATING_POINT_PRECISION_FACTOR = 1e10;
 
 // ============================================
 // 正規化ユーティリティ
@@ -62,7 +63,8 @@ function calculateTaxExcluded_(
   if (amount === null || amount === undefined || isNaN(amount)) return 0;
   const normalizedRate = normalizeTaxRate_(taxRate);
   const taxExcluded = amount / (1 + normalizedRate);
-  return applyRounding_(taxExcluded, roundingMode);
+  const normalizedTaxExcluded = Math.round(taxExcluded * FLOATING_POINT_PRECISION_FACTOR) / FLOATING_POINT_PRECISION_FACTOR;
+  return applyRounding_(normalizedTaxExcluded, roundingMode);
 }
 
 function calculateTaxAmount_(
@@ -143,8 +145,18 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
 }
 
 /** @deprecated 将来的に廃止予定。直接マスター値を使用すること。 */
-function getUnitMultiplier_(_unit: string): number {
-  return 1.0;
+function getUnitMultiplier_(unit: string): number {
+  const normalizedUnit = normalizeUnit_(unit);
+
+  switch (normalizedUnit) {
+    case 'half':
+    case 'halfday':
+    case 'am':
+    case 'pm':
+      return 0.5;
+    default:
+      return 1.0;
+  }
 }
 
 function calculateWage_(
