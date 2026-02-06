@@ -114,7 +114,7 @@ const ASSIGNMENT_ROLES = {
 
 function requireField_(value: unknown, fieldName: string): void {
   if (value === null || value === undefined || value === '') {
-    throw new ValidationError(`${fieldName}は必須です`, { field: fieldName } as any);
+    throw new ValidationError(`${fieldName}は必須です`, { field: fieldName });
   }
 }
 
