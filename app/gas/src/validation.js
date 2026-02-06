@@ -717,17 +717,8 @@ const TIME_SLOT_LABELS = {
   'mitei': '未定'
 };
 
-/**
- * 時間区分のラベルを取得
- * @param {string} slot - 時間区分
- * @returns {string} ラベル
- */
-function getTimeSlotLabel_(slot) {
-  return TIME_SLOT_LABELS[slot] || slot;
-}
-
 // ============================================
 // ステータス関連ユーティリティ
 // ============================================
-// 注: getJobStatusLabel_, isJobEditable_, isInvoiceEditable_, calculateJobStatus_ は
-// status_rules.js で定義されています（重複解消済み）
+// 注: getJobStatusLabel_, getTimeSlotLabel_, isJobEditable_, isInvoiceEditable_,
+// calculateJobStatus_ は status_rules.js で定義されています（重複解消済み）

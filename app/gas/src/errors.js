@@ -16,6 +16,9 @@ const ErrorCodes = {
 
 /**
  * アプリケーションエラー基底クラス
+ * @param {string} code
+ * @param {string} message
+ * @param {*} [details]
  */
 class AppError extends Error {
   constructor(code, message, details = null) {
@@ -37,7 +40,7 @@ class AppError extends Error {
 /**
  * バリデーションエラー
  * @param {string} message - エラーメッセージ
- * @param {Object} details - 詳細（フィールド名、期待値等）
+ * @param {*} [details] - 詳細（フィールド名、期待値等）
  */
 class ValidationError extends AppError {
   constructor(message, details = null) {

@@ -6,7 +6,8 @@
     "module": "None",
     "declaration": false,
     "sourceMap": false,
-    "removeComments": false
+    "removeComments": false,
+    "alwaysStrict": false
   },
   "include": ["src/**/*.ts", "src/types/**/*.d.ts"],
   "exclude": ["src/tests/**/*", "dist"]
