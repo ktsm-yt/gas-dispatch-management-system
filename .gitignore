@@ -3,6 +3,7 @@
 
 # Node / clasp / Apps Script
 node_modules/
+app/gas/dist/
 .clasp.json
 app/gas/.clasp.json
 app/gas/.cache/

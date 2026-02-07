@@ -6,10 +6,14 @@ set -e
 
 DEPLOYMENT_ID="DEPLOY_ID_DEMO"
 
-cd "$(dirname "$0")/../app/gas"
+cd "$(dirname "$0")/.."
 
-# 1. コードをプッシュ
+# 1. ビルド＋プッシュ
+echo "🔧 Building TypeScript..."
+npm run build
+
 echo "📤 Pushing code to GAS..."
+cd app/gas
 npx clasp push
 
 # 2. 現在のデプロイメント情報を取得してバージョン番号を抽出
