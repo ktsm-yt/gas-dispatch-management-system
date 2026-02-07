@@ -153,8 +153,8 @@ function apiHandler_(fn: (...args: unknown[]) => unknown): (...args: unknown[]) 
       if (e instanceof AppError) {
         return buildErrorResponse(e.code, e.message, e.details, requestId);
       }
-      const error = e as Error;
-      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, error.message, {}, requestId);
+      const msg = e instanceof Error ? e.message : String(e);
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
     }
   };
 }
@@ -184,8 +184,8 @@ function apiHandlerWithLock_(fn: (...args: unknown[]) => unknown, lockTimeoutMs:
       if (e instanceof AppError) {
         return buildErrorResponse(e.code, e.message, e.details, requestId);
       }
-      const error = e as Error;
-      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, error.message, {}, requestId);
+      const msg = e instanceof Error ? e.message : String(e);
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
     } finally {
       try {
         lock.releaseLock();
