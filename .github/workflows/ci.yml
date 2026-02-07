@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'app/gas/**'
+      - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
   pull_request:
     branches: [main]
     paths:
       - 'app/gas/**'
+      - 'scripts/**'
       - 'package.json'
       - 'package-lock.json'
 
@@ -31,6 +33,9 @@ jobs:
 
       - name: TypeScript type check
         run: npm run typecheck
+
+      - name: Build (tsc + dist)
+        run: npm run build
 
       - name: ESLint
         run: npm run lint
