@@ -48,20 +48,11 @@ const OLD_SHEET_MAP = {
 
 /**
  * DB Spreadsheetを取得
+ * ID取得は config.ts::getSpreadsheetId() に委譲
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} Spreadsheetオブジェクト
  */
 function getDb() {
-  const prop = PropertiesService.getScriptProperties();
-  const env = prop.getProperty('ENV') || 'dev';
-  const spreadsheetId = env === 'prod'
-    ? prop.getProperty('SPREADSHEET_ID_PROD')
-    : prop.getProperty('SPREADSHEET_ID_DEV');
-
-  if (!spreadsheetId) {
-    throw new Error(`DB Spreadsheet ID が設定されていません (ENV=${env})`);
-  }
-
-  return SpreadsheetApp.openById(spreadsheetId);
+  return SpreadsheetApp.openById(getSpreadsheetId());
 }
 
 /**
@@ -99,6 +90,41 @@ function getSheet(tableName) {
     throw new Error(`シートが見つかりません: ${sheetName}`);
   }
 
+  return sheet;
+}
+
+/**
+ * 任意のSpreadsheetからシートを検索（null返却版）
+ * シート未存在を許容する場面用（ArchiveService等）
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} db - 対象Spreadsheet
+ * @param {string} tableName - テーブル名（T_Jobs等）
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet|null} シートまたはnull
+ */
+function findSheetFromDb(db, tableName) {
+  const sheetName = TABLE_SHEET_MAP[tableName];
+  if (!sheetName) return null;
+
+  let sheet = db.getSheetByName(sheetName);
+  if (!sheet) {
+    const oldName = OLD_SHEET_MAP[sheetName];
+    if (oldName) sheet = db.getSheetByName(oldName);
+  }
+  return sheet;
+}
+
+/**
+ * 任意のSpreadsheetからシートを取得（throw版）
+ * シートが必ず存在すべき場面用（Repository等）
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} db - 対象Spreadsheet
+ * @param {string} tableName - テーブル名（T_Jobs等）
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} シートオブジェクト
+ */
+function getSheetFromDb(db, tableName) {
+  const sheet = findSheetFromDb(db, tableName);
+  if (!sheet) {
+    const sheetName = TABLE_SHEET_MAP[tableName] || tableName;
+    throw new Error(`シートが見つかりません: ${sheetName} (DB: ${db.getName()})`);
+  }
   return sheet;
 }
 
