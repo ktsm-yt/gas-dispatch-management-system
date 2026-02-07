@@ -12,7 +12,33 @@
  *   5. rollbackArchiveSheetNames() — アーカイブDBもロールバック
  *
  * Step 3（クリーンアップ）完了後にこのファイルを削除する。
+ *
+ * GASエディタから実行する場合（引数なしラッパー）:
+ *   - migrateSheetNamesDryRun()   — プレビュー
+ *   - migrateSheetNamesExecute()  — 実行
+ *   - migrateArchiveDryRun()      — アーカイブDBプレビュー
+ *   - migrateArchiveExecute()     — アーカイブDB実行
  */
+
+/** GASエディタ用: dry-runプレビュー */
+function migrateSheetNamesDryRun() {
+  return migrateSheetNames(true);
+}
+
+/** GASエディタ用: 実行 */
+function migrateSheetNamesExecute() {
+  return migrateSheetNames(false);
+}
+
+/** GASエディタ用: アーカイブDB dry-run */
+function migrateArchiveDryRun() {
+  return migrateArchiveSheetNames(true);
+}
+
+/** GASエディタ用: アーカイブDB実行 */
+function migrateArchiveExecute() {
+  return migrateArchiveSheetNames(false);
+}
 
 /**
  * 日本語→英語のリネームマッピング
