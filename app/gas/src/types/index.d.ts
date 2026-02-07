@@ -62,11 +62,14 @@ declare global {
   function getSheetFromDb(db: GoogleAppsScript.Spreadsheet.Spreadsheet, tableName: string): GoogleAppsScript.Spreadsheet.Sheet;
   function getSheetDirect(sheetName: string): GoogleAppsScript.Spreadsheet.Sheet;
 
-  // === 外部関数宣言（utils.gs, auth.gs 等） ===
+  // === 外部関数宣言（utils.gs, auth.gs, errors.ts 等） ===
   function generateRequestId(): string;
   function buildSuccessResponse(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string };
   function buildErrorResponse(code: string, message: string, details: unknown, requestId: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string };
   function checkPermission(requiredRole: string): { allowed: boolean; message: string };
+  function requirePermission(requiredRole: string): { allowed: boolean; message: string };
+  function logErr(context: string, error: unknown, requestId?: string): void;
+  function getCurrentUserEmail(): string;
 
   // === UI関連（ui_jobs.ts） ===
   interface PageConfig {

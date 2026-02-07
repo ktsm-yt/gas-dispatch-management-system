@@ -115,7 +115,7 @@ const InvoiceService = {
         lines: createdLines
       };
     } catch (error) {
-      console.error('InvoiceService.generate error:', error);
+      logErr('InvoiceService.generate', error);
       return { success: false, error: error.message || 'GENERATE_ERROR' };
     }
   },
@@ -275,7 +275,7 @@ const InvoiceService = {
         lines: InvoiceLineRepository.findByInvoiceId(invoice.invoice_id)
       };
     } catch (error) {
-      console.error('InvoiceService.save error:', error);
+      logErr('InvoiceService.save', error);
       return { success: false, error: error.message || 'SAVE_ERROR' };
     }
   },
@@ -583,7 +583,7 @@ const InvoiceService = {
           });
 
         } catch (e) {
-          console.error(`BulkGenerate error for customer ${customerId}:`, e);
+          logErr(`BulkGenerate error for customer ${customerId}`, e);
           results.failed.push({ customerId, companyName, error: e.message || 'UNKNOWN_ERROR' });
         }
       }
@@ -597,7 +597,7 @@ const InvoiceService = {
       }
 
     } catch (e) {
-      console.error('BulkGenerate batch error:', e);
+      logErr('BulkGenerate batch error', e);
       // バッチ全体のエラーは全顧客に影響
       for (const customer of customers) {
         if (!results.success.find(s => s.customerId === customer.customer_id) &&
@@ -1290,7 +1290,7 @@ const InvoiceService = {
           const lineResult = InvoiceLineRepository.bulkUpdate(lineUpdates);
           if (!lineResult.success) {
             // 明細更新失敗（ヘッダーは既に更新済み - GASにトランザクションがないため）
-            console.error('updateDetails: 明細更新失敗', lineResult.errors);
+            logErr('updateDetails: 明細更新失敗', lineResult.errors);
             return {
               success: false,
               error: 'LINE_UPDATE_ERROR',
@@ -1321,7 +1321,7 @@ const InvoiceService = {
         lines: updatedLines
       };
     } catch (error) {
-      console.error('InvoiceService.updateDetails error:', error);
+      logErr('InvoiceService.updateDetails', error);
       return { success: false, error: error.message || 'UPDATE_DETAILS_ERROR' };
     }
   }

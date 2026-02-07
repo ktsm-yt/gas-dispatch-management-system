@@ -172,7 +172,7 @@ const InvoiceExportService = {
       }
       return { exists: false };
     } catch (error) {
-      console.error('checkExistingFile error:', error);
+      logErr('checkExistingFile', error);
       return { exists: false, error: error.message };
     }
   },
@@ -227,7 +227,7 @@ const InvoiceExportService = {
           return { success: false, error: 'INVALID_MODE' };
       }
     } catch (error) {
-      console.error('InvoiceExportService.export error:', error);
+      logErr('InvoiceExportService.export', error);
       return { success: false, error: error.message || 'EXPORT_ERROR' };
     }
   },
@@ -277,7 +277,7 @@ const InvoiceExportService = {
           return { success: false, error: 'INVALID_MODE' };
       }
     } catch (error) {
-      console.error('InvoiceExportService.exportWithData error:', error);
+      logErr('InvoiceExportService.exportWithData', error);
       return { success: false, error: error.message || 'EXPORT_ERROR' };
     }
   },
@@ -374,7 +374,7 @@ const InvoiceExportService = {
 
       return result;
     } catch (error) {
-      console.error('exportToPdf error:', error);
+      logErr('exportToPdf', error);
       return { success: false, error: error.message || 'PDF_EXPORT_ERROR' };
     }
   },
@@ -451,7 +451,7 @@ const InvoiceExportService = {
 
       return result;
     } catch (error) {
-      console.error('exportToExcel error:', error);
+      logErr('exportToExcel', error);
       return { success: false, error: error.message || 'EXCEL_EXPORT_ERROR' };
     }
   },
@@ -496,7 +496,7 @@ const InvoiceExportService = {
         invoiceId: invoice.invoice_id
       };
     } catch (error) {
-      console.error('createEditSheet error:', error);
+      logErr('createEditSheet', error);
       return { success: false, error: error.message || 'EDIT_SHEET_ERROR' };
     }
   },
@@ -578,7 +578,7 @@ const InvoiceExportService = {
         invoiceId: invoice.invoice_id
       };
     } catch (error) {
-      console.error('exportCoverOnly error:', error);
+      logErr('exportCoverOnly', error);
       return { success: false, error: error.message || 'COVER_EXPORT_ERROR' };
     }
   },
@@ -999,7 +999,7 @@ const InvoiceExportService = {
     let dataSheet = spreadsheet.getSheetByName('データ');
 
     if (!dataSheet) {
-      console.error('データシートが見つかりません。従来の方式で書き込みます。');
+      Logger.log('データシートが見つかりません。従来の方式で書き込みます。');
       // フォールバック: 従来の直接書き込み
       this._populateFormat2Legacy(sheet, invoice, lines, customer, company);
       return;
@@ -1335,7 +1335,7 @@ const InvoiceExportService = {
     }
 
     if (!dataSheet) {
-      console.error('データシートが見つかりません。従来の方式で書き込みます。');
+      Logger.log('データシートが見つかりません。従来の方式で書き込みます。');
       this._populateAtagamiLegacy(sheet, invoice, lines, customer, company);
       return;
     }

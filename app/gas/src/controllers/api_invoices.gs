@@ -18,7 +18,7 @@ function getCustomers() {
     }
     return result;
   } catch (error) {
-    console.error('getCustomers error:', error);
+    logErr('getCustomers', error);
     return buildErrorResponse('SYSTEM_ERROR', error.message);
   }
 }
@@ -861,7 +861,7 @@ function startBulkExport(params) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('startBulkExport error:', error);
+    logErr('startBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       error.message,
@@ -895,7 +895,7 @@ function cancelBulkExport(params) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('cancelBulkExport error:', error);
+    logErr('cancelBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       error.message,

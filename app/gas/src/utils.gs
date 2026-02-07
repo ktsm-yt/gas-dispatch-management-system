@@ -122,9 +122,14 @@ function serializeForWeb(obj) {
 
 /**
  * 成功レスポンスを構築
+ *
+ * Controller層: 直接呼び出し（try-catchで手動ラップ）
+ * Service層: apiHandler_()ラッパー経由で自動ラップ（errors.ts参照）
+ *
  * @param {Object} data - レスポンスデータ
  * @param {string} requestId - リクエストID
  * @returns {Object} 成功レスポンス
+ * @see errors.ts apiHandler_() - Service層での自動エラーハンドリング
  */
 function buildSuccessResponse(data, requestId) {
   const response = {
@@ -139,11 +144,16 @@ function buildSuccessResponse(data, requestId) {
 
 /**
  * エラーレスポンスを構築
+ *
+ * Controller層: 直接呼び出し（try-catchで手動ラップ）
+ * Service層: apiHandler_()ラッパー経由で自動ラップ（errors.ts参照）
+ *
  * @param {string} code - エラーコード
  * @param {string} message - エラーメッセージ
  * @param {Object} details - 詳細情報（省略可）
  * @param {string} requestId - リクエストID
  * @returns {Object} エラーレスポンス
+ * @see errors.ts apiHandler_() - Service層での自動エラーハンドリング
  */
 function buildErrorResponse(code, message, details, requestId) {
   const response = {
@@ -164,7 +174,9 @@ function buildErrorResponse(code, message, details, requestId) {
 // @see errors.js ErrorCodes
 // 後方互換性のため ERROR_CODES は errors.js で ErrorCodes のエイリアスとして定義
 
-// buildSuccessResponse / buildErrorResponse のエイリアス（master_service.gs などで使用）
+// buildSuccessResponse / buildErrorResponse のエイリアス
+// 使用箇所: master_service.gs, CustomerFolderService.gs のみ
+// 新規コードでは buildXxxResponse を直接使用すること
 const successResponse = buildSuccessResponse;
 const errorResponse = buildErrorResponse;
 
@@ -651,7 +663,7 @@ const MasterCache = {
     } catch (e) {
       results.success = false;
       results.error = e.message;
-      console.error('MasterCache warmup failed:', e);
+      logErr('MasterCache.warmup', e);
     }
 
     return results;

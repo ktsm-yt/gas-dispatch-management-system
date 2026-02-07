@@ -121,7 +121,7 @@ const SlotService = {
       }, requestId);
 
     } catch (e) {
-      console.error('saveSlots error:', e);
+      logErr('saveSlots', e);
       return buildErrorResponse(
         ERROR_CODES.SYSTEM_ERROR,
         'システムエラーが発生しました',
@@ -271,7 +271,7 @@ const SlotService = {
       }, requestId);
 
     } catch (e) {
-      console.error('assignToSlot error:', e);
+      logErr('assignToSlot', e);
       return buildErrorResponse(
         ERROR_CODES.SYSTEM_ERROR,
         'システムエラーが発生しました',
