@@ -295,14 +295,6 @@ const PayoutExportService = {
     var props = PropertiesService.getScriptProperties();
     var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
 
-    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
-    if (!folderId) {
-      folderId = props.getProperty('OUTPUT_FOLDER_ID');
-      if (folderId) {
-        Logger.log('Using legacy OUTPUT_FOLDER_ID for payout export');
-      }
-    }
-
     if (!folderId) {
       throw new Error(
         'PAYOUT_EXPORT_FOLDER_ID が未設定です。\n' +
