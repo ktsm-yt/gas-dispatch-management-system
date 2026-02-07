@@ -1,30 +1,20 @@
-// File: ui_jobs.gs
+// File: ui_jobs.ts
 // Web App エントリーポイント
 
-/**
- * Web App メインエントリーポイント
- * URLパラメータでページを切り替え
- */
-function doGet(e) {
+function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutput {
   const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'dashboard';
 
-  const pages = {
-    // P1-3: ダッシュボード・案件管理
+  const pages: Record<string, PageConfig> = {
     dashboard: { file: 'dashboard', title: 'ダッシュボード' },
     jobs: { file: 'jobs', title: '案件管理' },
-    // P1-4: 配置管理
     assignments: { file: 'assignments', title: '配置管理' },
-    // P1-2: マスター管理
     customers: { file: 'customers', title: '顧客マスター' },
     staff: { file: 'staff', title: 'スタッフマスター' },
     subcontractors: { file: 'subcontractors', title: '外注先マスター' },
     transportFees: { file: 'transportFees', title: '交通費マスター' },
     company: { file: 'company', title: '自社情報' },
-    // P2-1: 請求管理
     invoices: { file: 'invoices', title: '請求管理' },
-    // P2-3: 支払管理
     payouts: { file: 'payouts', title: '支払管理' },
-    // P2-6: 売上分析ダッシュボード
     sales_analytics: { file: 'sales_analytics', title: '売上分析' }
   };
 
@@ -36,25 +26,21 @@ function doGet(e) {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function submitJob(formData) {
-  // formData は英語キーで来る前提（フロントでname=英語キー）
+function submitJob(formData: Record<string, unknown>): { ok: boolean } {
   addJob(formData);
   return { ok: true };
 }
 
-function include(filename) {
+function include(filename: string): string {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
-function debugCheck() {
+function debugCheck(): string {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  Logger.log(ss.getSheets().map(s => s.getName())); // 期待: master_clients 等
-  return getSheetByName('jobs').getName(); // ここで名前が返ればOK
+  Logger.log(ss.getSheets().map(s => s.getName()));
+  return getSheetByName('jobs').getName();
 }
 
-/**
- * WebアプリのURLを取得（ナビゲーション用）
- */
-function getScriptUrl() {
+function getScriptUrl(): string {
   return ScriptApp.getService().getUrl();
 }
