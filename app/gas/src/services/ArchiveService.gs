@@ -105,7 +105,7 @@ const ArchiveService = {
 
     } catch (e) {
       Logger.log(`アーカイブエラー: ${e.message}`);
-      console.error('Archive error:', e);
+      logErr('Archive error', e);
       return { success: false, error: e.message };
 
     } finally {

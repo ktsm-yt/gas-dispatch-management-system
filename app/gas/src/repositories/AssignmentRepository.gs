@@ -120,7 +120,7 @@ const AssignmentRepository = {
    * @returns {Object} 作成した配置
    */
   insert: function(assignment) {
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const newAssignment = {
@@ -184,7 +184,7 @@ const AssignmentRepository = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
@@ -241,7 +241,7 @@ const AssignmentRepository = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const updatedAssignment = {
@@ -318,7 +318,7 @@ const AssignmentRepository = {
     // 3. 更新対象のMapを作成 (assignment_id -> assignment data)
     const updateMap = new Map(assignments.map(a => [a.assignment_id, a]));
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
     const errors = [];
     const results = [];
@@ -419,7 +419,7 @@ const AssignmentRepository = {
     // 3. 削除対象のSetを作成
     const deleteSet = new Set(assignmentIds);
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
     const errors = [];
     const results = [];
@@ -486,7 +486,7 @@ const AssignmentRepository = {
       return [];
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
     const sheet = getSheet(this.TABLE_NAME);
     const headers = getHeaders(sheet);
