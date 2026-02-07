@@ -16,15 +16,7 @@
  */
 function getSheetDirect(sheetName) {
   const ss = getDb();
-  let sheet = ss.getSheetByName(sheetName);
-
-  // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
-  if (!sheet) {
-    const oldName = OLD_SHEET_MAP[sheetName];
-    if (oldName) {
-      sheet = ss.getSheetByName(oldName);
-    }
-  }
+  const sheet = ss.getSheetByName(sheetName);
 
   if (!sheet) {
     throw new Error(`シート "${sheetName}" が見つかりません`);
