@@ -22,10 +22,10 @@ function appendRow(sheetName, recordObj) {
 
 function addJob(job) {
   // job は英語キーのオブジェクトで渡す
-  appendRow('jobs', job);
+  appendRow('Jobs', job);
 }
 
 function getJobs() {
-  Logger.log('getJobs -> readRows("jobs")');
-  return readRows('jobs');
+  Logger.log('getJobs -> readRows("Jobs")');
+  return readRows('Jobs');
 }

@@ -1,4 +1,7 @@
 // File: config.gs
+
+// テーブル名 → シート名のマッピングは db.gs の TABLE_SHEET_MAP を参照
+
 // 英語キー ↔ 日本語ラベルの対応表（UI用）
 function getFieldLabelMap() {
   return {
@@ -35,7 +38,16 @@ function getSpreadsheetId() {
 
 function getSheetByName(name) {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  const sheet = ss.getSheetByName(name);
+  let sheet = ss.getSheetByName(name);
+
+  // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
+  if (!sheet && typeof OLD_SHEET_MAP !== 'undefined') {
+    const oldName = OLD_SHEET_MAP[name];
+    if (oldName) {
+      sheet = ss.getSheetByName(oldName);
+    }
+  }
+
   if (!sheet) throw new Error(`Sheet not found: ${name}`);
   return sheet;
 }
