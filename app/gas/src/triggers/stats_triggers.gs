@@ -131,7 +131,7 @@ function dailyStatsUpdate() {
 
   } catch (error) {
     Logger.log(`✗ エラーが発生しました: ${error.message}`);
-    console.error('dailyStatsUpdate error:', error);
+    logErr('dailyStatsUpdate error', error);
   }
 
   const endTime = new Date();
@@ -162,7 +162,7 @@ function monthlyStatsFinalize() {
 
   } catch (error) {
     Logger.log(`✗ エラーが発生しました: ${error.message}`);
-    console.error('monthlyStatsFinalize error:', error);
+    logErr('monthlyStatsFinalize error', error);
   }
 
   const endTime = new Date();

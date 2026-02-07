@@ -25,7 +25,7 @@ function getStaffForPayouts() {
     return buildSuccessResponse({ staff: data }, requestId);
 
   } catch (error) {
-    console.error('getStaffForPayouts error:', error);
+    logErr('getStaffForPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -65,7 +65,7 @@ function getUnpaidSummary(staffId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('getUnpaidSummary error:', error);
+    logErr('getUnpaidSummary', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -100,7 +100,7 @@ function getUnpaidAssignments(staffId, endDate) {
     return buildSuccessResponse({ assignments: assignments, count: assignments.length }, requestId);
 
   } catch (error) {
-    console.error('getUnpaidAssignments error:', error);
+    logErr('getUnpaidAssignments', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -170,7 +170,7 @@ function getPayoutDetails(payoutId, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('getPayoutDetails error:', error);
+    logErr('getPayoutDetails', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -220,7 +220,7 @@ function getUnpaidStaffList(endDate, options = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('getUnpaidStaffList error:', error);
+    logErr('getUnpaidStaffList', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -272,7 +272,7 @@ function getUnpaidStaffListDelta(endDate, lastSyncTimestamp) {
     }, requestId);
 
   } catch (error) {
-    console.error('getUnpaidStaffListDelta error:', error);
+    logErr('getUnpaidStaffListDelta', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -318,7 +318,7 @@ function markAsPaid(staffId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('markAsPaid error:', error);
+    logErr('markAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -368,7 +368,7 @@ function bulkMarkAsPaid(staffIds, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('bulkMarkAsPaid error:', error);
+    logErr('bulkMarkAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -405,7 +405,7 @@ function searchPayouts(query = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('searchPayouts error:', error);
+    logErr('searchPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -438,7 +438,7 @@ function getPayout(payoutId) {
     return buildSuccessResponse({ payout: payout }, requestId);
 
   } catch (error) {
-    console.error('getPayout error:', error);
+    logErr('getPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -472,7 +472,7 @@ function getPayoutHistory(staffId, options = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('getPayoutHistory error:', error);
+    logErr('getPayoutHistory', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -518,7 +518,7 @@ function updatePayoutStatus(payoutId, status, expectedUpdatedAt) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('updatePayoutStatus error:', error);
+    logErr('updatePayoutStatus', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -556,7 +556,7 @@ function undoPayout(payoutId, expectedUpdatedAt) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('undoPayout error:', error);
+    logErr('undoPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -613,7 +613,7 @@ function savePayout(payout, expectedUpdatedAt) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('savePayout error:', error);
+    logErr('savePayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -656,7 +656,7 @@ function confirmPayout(staffId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('confirmPayout error:', error);
+    logErr('confirmPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -693,7 +693,7 @@ function bulkConfirmPayouts(staffIds, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('bulkConfirmPayouts error:', error);
+    logErr('bulkConfirmPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -750,7 +750,7 @@ function payConfirmedPayout(payoutId, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('payConfirmedPayout error:', error);
+    logErr('payConfirmedPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -815,7 +815,7 @@ function bulkPayConfirmed(payoutIds, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('bulkPayConfirmed error:', error);
+    logErr('bulkPayConfirmed', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -844,7 +844,7 @@ function getConfirmedPayouts(options = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('getConfirmedPayouts error:', error);
+    logErr('getConfirmedPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -945,7 +945,7 @@ function checkPayoutExportFile(fromDate, toDate) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('checkPayoutExportFile error:', error);
+    logErr('checkPayoutExportFile', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -999,7 +999,7 @@ function exportPayouts(fromDate, toDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('exportPayouts error:', error);
+    logErr('exportPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1021,7 +1021,7 @@ function getPayoutExportFolderUrl() {
     return buildSuccessResponse(status, requestId);
 
   } catch (error) {
-    console.error('getPayoutExportFolderUrl error:', error);
+    logErr('getPayoutExportFolderUrl', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1051,7 +1051,7 @@ function getSubcontractorsForPayouts() {
     return buildSuccessResponse({ subcontractors: data }, requestId);
 
   } catch (error) {
-    console.error('getSubcontractorsForPayouts error:', error);
+    logErr('getSubcontractorsForPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1087,7 +1087,7 @@ function getUnpaidSummaryForSubcontractor(subcontractorId, endDate) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('getUnpaidSummaryForSubcontractor error:', error);
+    logErr('getUnpaidSummaryForSubcontractor', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1120,7 +1120,7 @@ function getUnpaidSubcontractorList(endDate) {
     }, requestId);
 
   } catch (error) {
-    console.error('getUnpaidSubcontractorList error:', error);
+    logErr('getUnpaidSubcontractorList', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1158,7 +1158,7 @@ function confirmSubcontractorPayout(subcontractorId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('confirmSubcontractorPayout error:', error);
+    logErr('confirmSubcontractorPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1200,7 +1200,7 @@ function markSubcontractorPayoutAsPaid(subcontractorId, endDate, options = {}) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    console.error('markSubcontractorPayoutAsPaid error:', error);
+    logErr('markSubcontractorPayoutAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1233,7 +1233,7 @@ function getSubcontractorPayoutHistory(subcontractorId, options = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('getSubcontractorPayoutHistory error:', error);
+    logErr('getSubcontractorPayoutHistory', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }
@@ -1266,7 +1266,7 @@ function searchSubcontractorPayouts(query = {}) {
     }, requestId);
 
   } catch (error) {
-    console.error('searchSubcontractorPayouts error:', error);
+    logErr('searchSubcontractorPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }

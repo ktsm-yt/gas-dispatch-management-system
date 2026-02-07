@@ -131,7 +131,7 @@ function dailyArchiveCheck() {
       Logger.log(`✓ 事前通知送信完了: ${targetFiscalYear}年度`);
     } catch (error) {
       Logger.log(`✗ 事前通知エラー: ${error.message}`);
-      console.error('Archive warning error:', error);
+      logErr('Archive warning error', error);
     }
     return;
   }
@@ -154,7 +154,7 @@ function dailyArchiveCheck() {
       }
     } catch (error) {
       Logger.log(`✗ アーカイブエラー: ${error.message}`);
-      console.error('Archive execution error:', error);
+      logErr('Archive execution error', error);
       ArchiveNotificationService.sendArchiveError(
         ArchiveService.getCurrentFiscalYear() - 2,
         error
@@ -182,7 +182,7 @@ function dailyArchiveCheck() {
         }
       } catch (error) {
         Logger.log(`✗ アーカイブエラー: ${error.message}`);
-        console.error('Archive continuation error:', error);
+        logErr('Archive continuation error', error);
       }
     } else {
       Logger.log('継続するアーカイブ処理はありません');
@@ -233,7 +233,7 @@ function manualArchive(fiscalYear) {
 
   } catch (error) {
     Logger.log(`✗ エラー: ${error.message}`);
-    console.error('Manual archive error:', error);
+    logErr('Manual archive error', error);
   }
 }
 
