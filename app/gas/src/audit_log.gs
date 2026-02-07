@@ -45,7 +45,7 @@ function generateUuid() {
 function logToAudit(action, tableName, recordId, beforeData, afterData) {
   try {
     const sheet = getAuditLogSheet();
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail();
     const timestamp = new Date().toISOString();
     const logId = generateUuid();
 
@@ -90,7 +90,7 @@ function logBatch(logs) {
 
   try {
     const sheet = getAuditLogSheet();
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail();
 
     const rows = [];
     const results = [];
