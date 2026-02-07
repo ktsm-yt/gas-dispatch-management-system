@@ -273,11 +273,10 @@ const InvoiceBulkExportService = {
    */
   _loadLinesInChunks: function(targetIdSet) {
     const CHUNK_SIZE = 3000;  // GAS制約を考慮した適切なチャンクサイズ
-    const sheetName = TABLE_SHEET_MAP['T_InvoiceLines'];  // '請求明細'
-    const sheet = getDb().getSheetByName(sheetName);
+    const sheet = findSheetFromDb(getDb(), 'T_InvoiceLines');
 
     if (!sheet) {
-      Logger.log('[BulkExport] ' + sheetName + ' シートが見つかりません');
+      Logger.log('[BulkExport] InvoiceLines シートが見つかりません');
       return {};
     }
 
