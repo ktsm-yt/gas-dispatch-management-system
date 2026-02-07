@@ -33,10 +33,15 @@ function getAuditLogSheet() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('ログ');
+  let sheet = ss.getSheetByName('AuditLog');
+
+  // フォールバック: 旧日本語名で検索
+  if (!sheet) {
+    sheet = ss.getSheetByName('ログ');
+  }
 
   if (!sheet) {
-    throw new Error('ログシートが見つかりません');
+    throw new Error('AuditLog シートが見つかりません');
   }
 
   return sheet;

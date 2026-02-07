@@ -200,7 +200,7 @@ const CustomerFolderService = {
    * @returns {string} 新しいupdated_at
    */
   _updateCustomerFolderId: function(customerId, folderId) {
-    const sheet = getSheetDirect('顧客');
+    const sheet = getSheetDirect('Customers');
     const row = findById(sheet, 'customer_id', customerId);
 
     if (row) {

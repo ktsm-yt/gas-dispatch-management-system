@@ -67,8 +67,8 @@ function initInvoiceSheets() {
   // シート作成
   const results = [];
 
-  results.push(createOrUpdateSheet_(db, '請求', invoicesHeaders));
-  results.push(createOrUpdateSheet_(db, '請求明細', invoiceLinesHeaders));
+  results.push(createOrUpdateSheet_(db, 'Invoices', invoicesHeaders));
+  results.push(createOrUpdateSheet_(db, 'InvoiceLines', invoiceLinesHeaders));
 
   Logger.log('=== Invoice Sheets Initialization Complete ===');
   results.forEach(r => Logger.log(`${r.sheetName}: ${r.status}`));

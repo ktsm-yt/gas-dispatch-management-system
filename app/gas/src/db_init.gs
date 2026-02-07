@@ -11,7 +11,7 @@
 const TABLE_DEFINITIONS = {
   // マスターテーブル
   M_Customers: {
-    sheetName: '顧客',
+    sheetName: 'Customers',
     headers: [
       'customer_id', 'company_name', 'branch_name', 'department_name',
       'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax',
@@ -26,7 +26,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   M_Staff: {
-    sheetName: 'スタッフ',
+    sheetName: 'Staff',
     headers: [
       'staff_id', 'name', 'name_kana', 'phone', 'line_id', 'postal_code',
       'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
@@ -42,7 +42,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   M_Subcontractors: {
-    sheetName: '外注先',
+    sheetName: 'Subcontractors',
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
       'half_day_rate', 'full_day_rate',
@@ -51,13 +51,13 @@ const TABLE_DEFINITIONS = {
     ]
   },
   M_TransportFee: {
-    sheetName: '交通費',
+    sheetName: 'TransportFees',
     headers: [
       'area_code', 'area_name', 'default_fee'
     ]
   },
   M_Company: {
-    sheetName: '自社情報',
+    sheetName: 'Company',
     headers: [
       'company_id', 'company_name', 'postal_code', 'address', 'phone', 'fax',
       'invoice_registration_number', 'bank_name', 'bank_branch',
@@ -67,7 +67,7 @@ const TABLE_DEFINITIONS = {
   },
   // トランザクションテーブル
   T_Jobs: {
-    sheetName: '案件',
+    sheetName: 'Jobs',
     headers: [
       'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
       'time_slot', 'start_time', 'required_count',
@@ -79,7 +79,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_JobSlots: {
-    sheetName: '案件枠',
+    sheetName: 'JobSlots',
     headers: [
       'slot_id', 'job_id', 'slot_time_slot', 'slot_pay_unit', 'slot_count',
       'sort_order', 'notes',
@@ -88,7 +88,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_JobAssignments: {
-    sheetName: '配置',
+    sheetName: 'Assignments',
     headers: [
       'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
       'slot_id',  // 枠システム: 配置が紐づく枠のID（NULL許可）
@@ -104,7 +104,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_Invoices: {
-    sheetName: '請求',
+    sheetName: 'Invoices',
     headers: [
       'invoice_id', 'invoice_number', 'customer_id', 'billing_year', 'billing_month',
       'issue_date', 'due_date', 'subtotal', 'expense_amount', 'tax_amount',
@@ -114,7 +114,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_InvoiceLines: {
-    sheetName: '請求明細',
+    sheetName: 'InvoiceLines',
     headers: [
       'line_id', 'invoice_id', 'line_number', 'work_date', 'job_id',
       'assignment_id', 'site_name', 'item_name', 'time_note', 'quantity', 'unit',
@@ -124,7 +124,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_Payouts: {
-    sheetName: '支払',
+    sheetName: 'Payouts',
     headers: [
       'payout_id', 'payout_type', 'staff_id', 'subcontractor_id',
       'period_start', 'period_end', 'assignment_count',  // P2-3: 差分支払い方式
@@ -134,7 +134,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_AuditLog: {
-    sheetName: 'ログ',
+    sheetName: 'AuditLog',
     headers: [
       'log_id', 'timestamp', 'user_email', 'action', 'table_name', 'record_id',
       'before_data', 'after_data'
@@ -142,7 +142,7 @@ const TABLE_DEFINITIONS = {
   },
   // P3: 入金記録テーブル（売掛管理用）
   T_Payments: {
-    sheetName: '入金記録',
+    sheetName: 'Payments',
     headers: [
       'payment_id', 'invoice_id', 'payment_date', 'amount', 'payment_method',
       'bank_ref', 'notes', 'is_deleted', 'created_at', 'created_by',
@@ -151,7 +151,7 @@ const TABLE_DEFINITIONS = {
   },
   // P2-6: 月次統計テーブル（売上分析ダッシュボード用）
   T_MonthlyStats: {
-    sheetName: '月次統計',
+    sheetName: 'MonthlyStats',
     headers: [
       'stat_id', 'year', 'month',
       // 案件・配置
@@ -266,7 +266,7 @@ function createSheet(ss, tableName, definition) {
  */
 function addIncludeCoverPageColumn() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -308,7 +308,7 @@ function addIncludeCoverPageColumn() {
  */
 function migrateAtagamiToFormat1() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -442,9 +442,9 @@ function addJobsSheetToExistingDb() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 案件シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('案件');
+  const existingSheet = ss.getSheetByName('Jobs');
   if (existingSheet) {
-    Logger.log('案件シートは既に存在します');
+    Logger.log('Jobs シートは既に存在します');
     return;
   }
 
@@ -458,12 +458,12 @@ function addJobsSheetToExistingDb() {
     'notes', 'created_at', 'updated_at', 'is_deleted'
   ];
 
-  const sheet = ss.insertSheet('案件');
+  const sheet = ss.insertSheet('Jobs');
   sheet.getRange(1, 1, 1, jobsHeaders.length).setValues([jobsHeaders]);
   sheet.setFrozenRows(1);
   sheet.getRange(1, 1, 1, jobsHeaders.length).setFontWeight('bold');
 
-  Logger.log('✓ 案件シートを追加しました');
+  Logger.log('✓ Jobs シートを追加しました');
 }
 
 /**
@@ -502,7 +502,7 @@ function migrateAddAssignmentRoleColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -564,7 +564,7 @@ function migrateAddPayoutIdColumn() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -623,7 +623,7 @@ function migrateAddJobSlotsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 案件枠シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('案件枠');
+  const existingSheet = ss.getSheetByName('JobSlots');
   if (existingSheet) {
     Logger.log('✓ 案件枠シートは既に存在します');
     return;
@@ -651,7 +651,7 @@ function migrateAddSlotIdColumn() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -726,7 +726,7 @@ function migrateStaffEmergencyContactColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('スタッフ');
+  const sheet = ss.getSheetByName('Staff');
 
   if (!sheet) {
     Logger.log('ERROR: スタッフシートが見つかりません');
@@ -795,15 +795,15 @@ function migrateAddDeletedAtColumns() {
 
   // 対象シートと日本語名のマッピング
   const sheetsToMigrate = [
-    { name: '顧客', tableName: 'M_Customers' },
-    { name: 'スタッフ', tableName: 'M_Staff' },
-    { name: '外注先', tableName: 'M_Subcontractors' },
-    { name: '案件', tableName: 'T_Jobs' },
-    { name: '案件枠', tableName: 'T_JobSlots' },
-    { name: '配置', tableName: 'T_JobAssignments' },
-    { name: '請求', tableName: 'T_Invoices' },
-    { name: '請求明細', tableName: 'T_InvoiceLines' },
-    { name: '支払', tableName: 'T_Payouts' }
+    { name: 'Customers', tableName: 'M_Customers' },
+    { name: 'Staff', tableName: 'M_Staff' },
+    { name: 'Subcontractors', tableName: 'M_Subcontractors' },
+    { name: 'Jobs', tableName: 'T_Jobs' },
+    { name: 'JobSlots', tableName: 'T_JobSlots' },
+    { name: 'Assignments', tableName: 'T_JobAssignments' },
+    { name: 'Invoices', tableName: 'T_Invoices' },
+    { name: 'InvoiceLines', tableName: 'T_InvoiceLines' },
+    { name: 'Payouts', tableName: 'T_Payouts' }
   ];
 
   Logger.log('=== deleted_at/deleted_by カラム追加マイグレーション ===\n');
@@ -871,7 +871,7 @@ function migrateAddMonthlyStatsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 月次統計シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('月次統計');
+  const existingSheet = ss.getSheetByName('MonthlyStats');
   if (existingSheet) {
     Logger.log('✓ 月次統計シートは既に存在します');
     return;
@@ -901,7 +901,7 @@ function migrateAddSubcontractorRateColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('外注先');
+  const sheet = ss.getSheetByName('Subcontractors');
 
   if (!sheet) {
     Logger.log('✗ 外注先シートが見つかりません');
@@ -991,7 +991,7 @@ function migrateAddTransportExpenseColumns() {
  * 配置シートに transport_station, transport_has_bus カラムを追加
  */
 function migrateAssignmentTransportColumns_(ss) {
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -1039,7 +1039,7 @@ function migrateAssignmentTransportColumns_(ss) {
  * 顧客シートに has_transport_fee カラムを追加
  */
 function migrateCustomerTransportFeeColumn_(ss) {
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -1096,7 +1096,7 @@ function migrateAddPaymentsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 入金記録シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('入金記録');
+  const existingSheet = ss.getSheetByName('Payments');
   if (existingSheet) {
     Logger.log('✓ 入金記録シートは既に存在します');
     return;
