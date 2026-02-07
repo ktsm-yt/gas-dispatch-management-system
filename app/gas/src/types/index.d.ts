@@ -50,6 +50,10 @@ declare global {
 
   // エラークラスは errors.ts に実装として定義
 
+  // === 外部定数宣言（db.gs 等） ===
+  const TABLE_SHEET_MAP: Record<string, string>;
+  const OLD_SHEET_MAP: Record<string, string>;
+
   // === 外部関数宣言（utils.gs, auth.gs 等） ===
   function generateRequestId(): string;
   function buildSuccessResponse(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string };

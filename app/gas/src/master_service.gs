@@ -11,13 +11,13 @@
  * - M_Company (自社情報)
  */
 
-// シート名定義
+// シート名定義（TABLE_SHEET_MAP から派生）
 const SHEET_NAMES = {
-  CUSTOMERS: '顧客',
-  STAFF: 'スタッフ',
-  SUBCONTRACTORS: '外注先',
-  TRANSPORT_FEE: '交通費',
-  COMPANY: '自社情報'
+  CUSTOMERS: TABLE_SHEET_MAP['M_Customers'],
+  STAFF: TABLE_SHEET_MAP['M_Staff'],
+  SUBCONTRACTORS: TABLE_SHEET_MAP['M_Subcontractors'],
+  TRANSPORT_FEE: TABLE_SHEET_MAP['M_TransportFee'],
+  COMPANY: TABLE_SHEET_MAP['M_Company']
 };
 
 // ID列名定義

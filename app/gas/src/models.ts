@@ -21,10 +21,11 @@ function appendRow(sheetName: string, recordObj: Record<string, unknown>): void 
 }
 
 function addJob(job: Record<string, unknown>): void {
-  appendRow('jobs', job);
+  // job は英語キーのオブジェクトで渡す
+  appendRow('Jobs', job);
 }
 
 function getJobs(): Record<string, unknown>[] {
-  Logger.log('getJobs -> readRows("jobs")');
-  return readRows('jobs');
+  Logger.log('getJobs -> readRows("Jobs")');
+  return readRows('Jobs');
 }

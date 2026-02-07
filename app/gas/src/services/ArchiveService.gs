@@ -179,14 +179,23 @@ const ArchiveService = {
       return { movedCount: 0, remainingCount: 0 };
     }
 
-    const currentSheet = currentDb.getSheetByName(sheetName);
+    let currentSheet = currentDb.getSheetByName(sheetName);
+    // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
+    if (!currentSheet) {
+      const oldName = OLD_SHEET_MAP[sheetName];
+      if (oldName) currentSheet = currentDb.getSheetByName(oldName);
+    }
     if (!currentSheet) {
       Logger.log(`シート ${sheetName} が見つかりません`);
       return { movedCount: 0, remainingCount: 0 };
     }
 
-    // アーカイブ先シート取得/作成（日本語シート名で作成）
+    // アーカイブ先シート取得/作成（英語名で検索、フォールバック旧名）
     let archiveSheet = archiveDb.getSheetByName(sheetName);
+    if (!archiveSheet) {
+      const oldName = OLD_SHEET_MAP[sheetName];
+      if (oldName) archiveSheet = archiveDb.getSheetByName(oldName);
+    }
     if (!archiveSheet) {
       archiveSheet = archiveDb.insertSheet(sheetName);
       const headers = currentSheet.getRange(1, 1, 1, currentSheet.getLastColumn()).getValues();
@@ -332,7 +341,12 @@ const ArchiveService = {
       return new Set();
     }
 
-    const parentSheet = archiveDb.getSheetByName(parentSheetName);
+    let parentSheet = archiveDb.getSheetByName(parentSheetName);
+    // フォールバック: 旧日本語名で検索（旧アーカイブDB対応）
+    if (!parentSheet) {
+      const oldName = OLD_SHEET_MAP[parentSheetName];
+      if (oldName) parentSheet = archiveDb.getSheetByName(oldName);
+    }
     if (!parentSheet) {
       Logger.log(`アーカイブDBに ${parentSheetName} シートがありません`);
       return new Set();

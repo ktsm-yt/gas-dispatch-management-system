@@ -410,7 +410,7 @@ function testBulkOperations() {
     if (testJobs.length > 0) {
       // シートを直接操作して一括削除
       const ss = SpreadsheetApp.openById(getSpreadsheetId());
-      const sheet = ss.getSheetByName('T_Jobs');
+      const sheet = ss.getSheetByName('Jobs');
       const data = sheet.getDataRange().getValues();
       const headers = data[0];
       const isDeletedIdx = headers.indexOf('is_deleted');
