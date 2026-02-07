@@ -36,18 +36,4 @@ function getSpreadsheetId(): string {
   return id;
 }
 
-function getSheetByName(name: string): GoogleAppsScript.Spreadsheet.Sheet {
-  const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  let sheet = ss.getSheetByName(name);
-
-  // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
-  if (!sheet && typeof OLD_SHEET_MAP !== 'undefined') {
-    const oldName = OLD_SHEET_MAP[name];
-    if (oldName) {
-      sheet = ss.getSheetByName(oldName);
-    }
-  }
-
-  if (!sheet) throw new Error(`Sheet not found: ${name}`);
-  return sheet;
-}
+// getSheetByName() は削除 → repository.gs::getSheetDirect() に統一

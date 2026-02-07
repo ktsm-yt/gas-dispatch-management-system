@@ -2,7 +2,7 @@
 // シートのヘッダ（英語キー）を読み、行をオブジェクトで扱う
 function readRows(sheetName: string): Record<string, unknown>[] {
   if (!sheetName) throw new Error('readRows: sheetName is required');
-  const sh = getSheetByName(sheetName);
+  const sh = getSheetDirect(sheetName);
   const values = sh.getDataRange().getValues();
   if (values.length === 0) return [];
   const header = values[0] as string[];
@@ -14,7 +14,7 @@ function readRows(sheetName: string): Record<string, unknown>[] {
 }
 
 function appendRow(sheetName: string, recordObj: Record<string, unknown>): void {
-  const sh = getSheetByName(sheetName);
+  const sh = getSheetDirect(sheetName);
   const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0] as string[];
   const row = header.map(key => recordObj[key] ?? '');
   sh.appendRow(row);
