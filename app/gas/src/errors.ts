@@ -79,6 +79,22 @@ class SystemError extends AppError {
   }
 }
 
+/**
+ * エラーログを統一フォーマットで出力（requestId・スタックトレース付き）
+ *
+ * @param context - エラー発生箇所（関数名やコンテキスト）
+ * @param error - キャッチしたエラー（unknown型対応）
+ * @param requestId - APIリクエストID（省略可）
+ */
+function logErr(context: string, error: unknown, requestId?: string): void {
+  const prefix = requestId ? `[${requestId}] ` : '';
+  const msg = error instanceof Error ? error.message : String(error);
+  Logger.log(`${prefix}Error in ${context}: ${msg}`);
+  if (error instanceof Error && error.stack) {
+    Logger.log(`${prefix}Stack: ${error.stack}`);
+  }
+}
+
 function generateRequestId_(): string {
   return 'req_' + Utilities.getUuid().replace(/-/g, '').substring(0, 12);
 }
@@ -87,6 +103,7 @@ function getServerTime_(): string {
   return new Date().toISOString();
 }
 
+/** 内部用。外部からは utils.gs の buildSuccessResponse() を使うこと */
 function successResponse_(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string } {
   return {
     ok: true,
@@ -96,6 +113,7 @@ function successResponse_(data: unknown, requestId: string): { ok: true; data: u
   };
 }
 
+/** 内部用。外部からは utils.gs の buildErrorResponse() を使うこと */
 function errorResponse_(error: AppError | Error, requestId: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string } {
   if (error instanceof AppError) {
     return {
@@ -114,6 +132,16 @@ function errorResponse_(error: AppError | Error, requestId: string): { ok: false
   };
 }
 
+/**
+ * API関数をラップし、成功/エラーレスポンスを自動構築する
+ *
+ * @example
+ * const getJobApi = apiHandler_(function getJob(params) {
+ *   return JobService.getJob(params.id);
+ * });
+ *
+ * @see utils.gs buildSuccessResponse / buildErrorResponse
+ */
 function apiHandler_(fn: (...args: unknown[]) => unknown): (...args: unknown[]) => unknown {
   return function(this: unknown, ...args: unknown[]): unknown {
     const requestId = generateRequestId();
@@ -121,19 +149,23 @@ function apiHandler_(fn: (...args: unknown[]) => unknown): (...args: unknown[]) 
       const result = fn.apply(this, args);
       return buildSuccessResponse(result, requestId);
     } catch (e: unknown) {
-      const error = e as Error;
-      Logger.log(`[${requestId}] Error in ${fn.name}: ${error.message}`);
-      if (error.stack) {
-        Logger.log(`[${requestId}] Stack: ${error.stack}`);
-      }
+      logErr(fn.name || 'anonymous', e, requestId);
       if (e instanceof AppError) {
         return buildErrorResponse(e.code, e.message, e.details, requestId);
       }
-      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, error.message, {}, requestId);
+      const msg = e instanceof Error ? e.message : String(e);
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
     }
   };
 }
 
+/**
+ * API関数をスクリプトロック付きでラップする
+ * 同時実行を防止し、成功/エラーレスポンスを自動構築する
+ *
+ * @param fn - ラップ対象の関数
+ * @param lockTimeoutMs - ロック取得タイムアウト（デフォルト3000ms）
+ */
 function apiHandlerWithLock_(fn: (...args: unknown[]) => unknown, lockTimeoutMs: number = 3000): (...args: unknown[]) => unknown {
   return function(this: unknown, ...args: unknown[]): unknown {
     const requestId = generateRequestId();
@@ -148,12 +180,12 @@ function apiHandlerWithLock_(fn: (...args: unknown[]) => unknown, lockTimeoutMs:
       const result = fn.apply(this, args);
       return buildSuccessResponse(result, requestId);
     } catch (e: unknown) {
-      const error = e as Error;
-      Logger.log(`[${requestId}] Error in ${fn.name}: ${error.message}`);
+      logErr(fn.name || 'anonymous', e, requestId);
       if (e instanceof AppError) {
         return buildErrorResponse(e.code, e.message, e.details, requestId);
       }
-      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, error.message, {}, requestId);
+      const msg = e instanceof Error ? e.message : String(e);
+      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
     } finally {
       try {
         lock.releaseLock();
@@ -166,13 +198,6 @@ function apiHandlerWithLock_(fn: (...args: unknown[]) => unknown, lockTimeoutMs:
 
 // 後方互換性のためのエイリアス
 const ERROR_CODES = ErrorCodes;
-
-function requirePermission(requiredRole: string): void {
-  const authResult = checkPermission(requiredRole);
-  if (!authResult.allowed) {
-    throw new PermissionDeniedError(authResult.message);
-  }
-}
 
 function requireParam(value: unknown, name: string): void {
   if (value === undefined || value === null || value === '') {

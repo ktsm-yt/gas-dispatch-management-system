@@ -272,7 +272,7 @@ const AssignmentService = {
       }, requestId);
 
     } catch (e) {
-      console.error('saveAssignments error:', e);
+      logErr('saveAssignments', e);
       return buildErrorResponse(
         ERROR_CODES.SYSTEM_ERROR,
         'システムエラーが発生しました',
@@ -471,7 +471,7 @@ const AssignmentService = {
       const feeMap = MasterCache.getTransportFeeMap();
       return feeMap[areaCode] || null;
     } catch (e) {
-      console.error('getTransportFeeByArea error:', e);
+      logErr('getTransportFeeByArea', e);
       return null;
     }
   },
@@ -484,7 +484,7 @@ const AssignmentService = {
     try {
       return getRecordById('M_Staff', 'staff_id', staffId);
     } catch (e) {
-      console.error('getStaffInfo error:', e);
+      logErr('getStaffInfo', e);
       return null;
     }
   },
@@ -503,7 +503,7 @@ const AssignmentService = {
       }
       return cache;
     } catch (e) {
-      console.error('buildStaffCache error:', e);
+      logErr('buildStaffCache', e);
       return {};
     }
   },

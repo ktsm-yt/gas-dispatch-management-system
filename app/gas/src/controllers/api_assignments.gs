@@ -85,7 +85,7 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
     return AssignmentService.saveAssignments(jobId, changes, expectedUpdatedAt);
 
   } catch (e) {
-    console.error('saveAssignments error:', e);
+    logErr('saveAssignments', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -131,7 +131,7 @@ function getAssignments(jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (e) {
-    console.error('getAssignments error:', e);
+    logErr('getAssignments', e, requestId);
 
     if (e.message === '案件が見つかりません') {
       return buildErrorResponse(
@@ -186,7 +186,7 @@ function getJobShortage(jobId) {
     return buildSuccessResponse(shortage, requestId);
 
   } catch (e) {
-    console.error('getJobShortage error:', e);
+    logErr('getJobShortage', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -232,7 +232,7 @@ function getShortageByDate(date) {
     return buildSuccessResponse(summary, requestId);
 
   } catch (e) {
-    console.error('getShortageByDate error:', e);
+    logErr('getShortageByDate', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -279,7 +279,7 @@ function checkStaffAvailability(staffId, jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (e) {
-    console.error('checkStaffAvailability error:', e);
+    logErr('checkStaffAvailability', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -381,7 +381,7 @@ function getAvailableStaff(options = {}) {
     return buildSuccessResponse({ staff: staffList }, requestId);
 
   } catch (e) {
-    console.error('getAvailableStaff error:', e);
+    logErr('getAvailableStaff', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -416,7 +416,7 @@ function getTransportFeeAreas() {
     return buildSuccessResponse({ areas: areas }, requestId);
 
   } catch (e) {
-    console.error('getTransportFeeAreas error:', e);
+    logErr('getTransportFeeAreas', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -462,7 +462,7 @@ function getJobSlots(jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (e) {
-    console.error('getJobSlots error:', e);
+    logErr('getJobSlots', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -508,7 +508,7 @@ function getSlotStatus(jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (e) {
-    console.error('getSlotStatus error:', e);
+    logErr('getSlotStatus', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -555,7 +555,7 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
     return SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
 
   } catch (e) {
-    console.error('assignToSlot error:', e);
+    logErr('assignToSlot', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -601,7 +601,7 @@ function getSlotStatusByDate(date) {
     return buildSuccessResponse(result, requestId);
 
   } catch (e) {
-    console.error('getSlotStatusByDate error:', e);
+    logErr('getSlotStatusByDate', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -650,7 +650,7 @@ function getDayAssignmentsForConflictCheck(date) {
     return buildSuccessResponse({ assignments: assignments }, requestId);
 
   } catch (e) {
-    console.error('getDayAssignmentsForConflictCheck error:', e);
+    logErr('getDayAssignmentsForConflictCheck', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -773,7 +773,7 @@ function getDashboardAssignments(date) {
     }, requestId);
 
   } catch (e) {
-    console.error('getDashboardAssignments error:', e);
+    logErr('getDashboardAssignments', e, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',

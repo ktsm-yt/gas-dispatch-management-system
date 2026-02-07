@@ -24,7 +24,7 @@ function warmupMasterCache() {
       duration: result.duration + 'ms'
     });
   } else {
-    console.error('Cache warmup failed:', result.error);
+    logErr('Cache warmup failed', result.error);
   }
 
   return result;

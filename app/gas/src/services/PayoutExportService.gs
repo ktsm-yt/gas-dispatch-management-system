@@ -32,7 +32,7 @@ const PayoutExportService = {
       }
       return { exists: false };
     } catch (error) {
-      console.error('checkExistingFile error:', error);
+      logErr('checkExistingFile', error);
       return { exists: false, error: error.message };
     }
   },

@@ -95,7 +95,7 @@ const SlotRepository = {
       return { success: false, error: validation.error };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const newSlot = {
@@ -161,7 +161,7 @@ const SlotRepository = {
       return { success: false, error: validation.error };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
@@ -222,7 +222,7 @@ const SlotRepository = {
       };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     currentSlot.is_deleted = true;
