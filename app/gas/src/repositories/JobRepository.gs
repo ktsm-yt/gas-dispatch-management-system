@@ -148,7 +148,7 @@ const JobRepository = {
    * @returns {Object} 作成した案件
    */
   insert: function(job) {
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const newJob = {
@@ -226,7 +226,7 @@ const JobRepository = {
       };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
