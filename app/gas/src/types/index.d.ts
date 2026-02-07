@@ -54,6 +54,14 @@ declare global {
   const TABLE_SHEET_MAP: Record<string, string>;
   const OLD_SHEET_MAP: Record<string, string>;
 
+  // === DB関数宣言（db.gs, repository.gs, config.ts） ===
+  function getSpreadsheetId(): string;
+  function getDb(): GoogleAppsScript.Spreadsheet.Spreadsheet;
+  function getSheet(tableName: string): GoogleAppsScript.Spreadsheet.Sheet;
+  function findSheetFromDb(db: GoogleAppsScript.Spreadsheet.Spreadsheet, tableName: string): GoogleAppsScript.Spreadsheet.Sheet | null;
+  function getSheetFromDb(db: GoogleAppsScript.Spreadsheet.Spreadsheet, tableName: string): GoogleAppsScript.Spreadsheet.Sheet;
+  function getSheetDirect(sheetName: string): GoogleAppsScript.Spreadsheet.Sheet;
+
   // === 外部関数宣言（utils.gs, auth.gs 等） ===
   function generateRequestId(): string;
   function buildSuccessResponse(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string };

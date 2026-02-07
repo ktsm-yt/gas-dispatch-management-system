@@ -22,29 +22,7 @@ const AUDIT_ACTIONS = {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} ログシート
  */
 function getAuditLogSheet() {
-  const prop = PropertiesService.getScriptProperties();
-  const env = prop.getProperty('ENV') || 'dev';
-  const spreadsheetId = env === 'prod'
-    ? prop.getProperty('SPREADSHEET_ID_PROD')
-    : prop.getProperty('SPREADSHEET_ID_DEV');
-
-  if (!spreadsheetId) {
-    throw new Error('DB Spreadsheet ID が設定されていません');
-  }
-
-  const ss = SpreadsheetApp.openById(spreadsheetId);
-  let sheet = ss.getSheetByName('AuditLog');
-
-  // フォールバック: 旧日本語名で検索
-  if (!sheet) {
-    sheet = ss.getSheetByName('ログ');
-  }
-
-  if (!sheet) {
-    throw new Error('AuditLog シートが見つかりません');
-  }
-
-  return sheet;
+  return getSheet('T_AuditLog');
 }
 
 /**

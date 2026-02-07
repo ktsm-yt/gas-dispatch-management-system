@@ -376,14 +376,7 @@ const JobRepository = {
 
       try {
         const archiveDb = SpreadsheetApp.openById(archiveDbId);
-        // TABLE_SHEET_MAPを使ってシート名に変換
-        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
-        let sheet = archiveDb.getSheetByName(sheetName);
-        // フォールバック: 旧日本語名で検索（旧アーカイブDB対応）
-        if (!sheet) {
-          const oldName = OLD_SHEET_MAP[sheetName];
-          if (oldName) sheet = archiveDb.getSheetByName(oldName);
-        }
+        const sheet = findSheetFromDb(archiveDb, this.TABLE_NAME);
         if (!sheet) continue;
 
         const data = sheet.getDataRange().getValues();

@@ -172,30 +172,16 @@ const ArchiveService = {
     const currentDb = SpreadsheetApp.openById(getSpreadsheetId());
     const archiveDb = SpreadsheetApp.openById(archiveDbId);
 
-    // テーブル名から日本語シート名に変換
+    // currentSheet: 見つからなければスキップ（既存仕様維持）
     const sheetName = TABLE_SHEET_MAP[tableName];
-    if (!sheetName) {
-      Logger.log(`不明なテーブル名: ${tableName}`);
+    const currentSheet = findSheetFromDb(currentDb, tableName);
+    if (!currentSheet) {
+      Logger.log(`シート ${sheetName || tableName} が見つかりません`);
       return { movedCount: 0, remainingCount: 0 };
     }
 
-    let currentSheet = currentDb.getSheetByName(sheetName);
-    // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
-    if (!currentSheet) {
-      const oldName = OLD_SHEET_MAP[sheetName];
-      if (oldName) currentSheet = currentDb.getSheetByName(oldName);
-    }
-    if (!currentSheet) {
-      Logger.log(`シート ${sheetName} が見つかりません`);
-      return { movedCount: 0, remainingCount: 0 };
-    }
-
-    // アーカイブ先シート取得/作成（英語名で検索、フォールバック旧名）
-    let archiveSheet = archiveDb.getSheetByName(sheetName);
-    if (!archiveSheet) {
-      const oldName = OLD_SHEET_MAP[sheetName];
-      if (oldName) archiveSheet = archiveDb.getSheetByName(oldName);
-    }
+    // archiveSheet: 見つからなければ新規作成
+    let archiveSheet = findSheetFromDb(archiveDb, tableName);
     if (!archiveSheet) {
       archiveSheet = archiveDb.insertSheet(sheetName);
       const headers = currentSheet.getRange(1, 1, 1, currentSheet.getLastColumn()).getValues();
@@ -334,21 +320,9 @@ const ArchiveService = {
    */
   getArchivedParentIds(archiveDbId, parentTable, idColumn) {
     const archiveDb = SpreadsheetApp.openById(archiveDbId);
-    const parentSheetName = TABLE_SHEET_MAP[parentTable];
-
-    if (!parentSheetName) {
-      Logger.log(`不明な親テーブル名: ${parentTable}`);
-      return new Set();
-    }
-
-    let parentSheet = archiveDb.getSheetByName(parentSheetName);
-    // フォールバック: 旧日本語名で検索（旧アーカイブDB対応）
+    const parentSheet = findSheetFromDb(archiveDb, parentTable);
     if (!parentSheet) {
-      const oldName = OLD_SHEET_MAP[parentSheetName];
-      if (oldName) parentSheet = archiveDb.getSheetByName(oldName);
-    }
-    if (!parentSheet) {
-      Logger.log(`アーカイブDBに ${parentSheetName} シートがありません`);
+      Logger.log(`アーカイブDBに ${TABLE_SHEET_MAP[parentTable] || parentTable} シートがありません`);
       return new Set();
     }
 
