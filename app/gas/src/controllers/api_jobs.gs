@@ -323,7 +323,7 @@ function deleteJob(jobId, expectedUpdatedAt) {
     }
 
     // 案件を取得
-    const sheet = getSheetDirect('案件');
+    const sheet = getSheetDirect('Jobs');
     const existing = findById(sheet, 'job_id', jobId);
 
     if (!existing) {

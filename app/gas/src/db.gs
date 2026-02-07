@@ -5,23 +5,45 @@
  */
 
 /**
- * テーブル名とシート名のマッピング
+ * テーブル名とシート名のマッピング（英語統一）
  */
 const TABLE_SHEET_MAP = {
-  'M_Customers': '顧客',
-  'M_Staff': 'スタッフ',
-  'M_Subcontractors': '外注先',
-  'M_TransportFee': '交通費',
-  'M_Company': '自社情報',
-  'T_Jobs': '案件',
-  'T_JobSlots': '案件枠',  // 枠システム用
-  'T_JobAssignments': '配置',
-  'T_Invoices': '請求',
-  'T_InvoiceLines': '請求明細',
-  'T_Payouts': '支払',
-  'T_MonthlyStats': '月次統計',  // P2-6: 売上分析ダッシュボード用
-  'T_Payments': '入金記録',  // P2: 入金管理機能
-  'T_AuditLog': 'ログ'
+  'M_Customers': 'Customers',
+  'M_Staff': 'Staff',
+  'M_Subcontractors': 'Subcontractors',
+  'M_TransportFee': 'TransportFees',
+  'M_Company': 'Company',
+  'T_Jobs': 'Jobs',
+  'T_JobSlots': 'JobSlots',
+  'T_JobAssignments': 'Assignments',
+  'T_Invoices': 'Invoices',
+  'T_InvoiceLines': 'InvoiceLines',
+  'T_Payouts': 'Payouts',
+  'T_MonthlyStats': 'MonthlyStats',
+  'T_Payments': 'Payments',
+  'T_AuditLog': 'AuditLog'
+};
+
+/**
+ * 旧シート名（日本語）へのフォールバック用マッピング
+ * 英語名 → 日本語名（シートリネーム前の過渡期に使用）
+ * Step 3（クリーンアップ）で削除予定
+ */
+const OLD_SHEET_MAP = {
+  'Customers': '顧客',
+  'Staff': 'スタッフ',
+  'Subcontractors': '外注先',
+  'TransportFees': '交通費',
+  'Company': '自社情報',
+  'Jobs': '案件',
+  'JobSlots': '案件枠',
+  'Assignments': '配置',
+  'Invoices': '請求',
+  'InvoiceLines': '請求明細',
+  'Payouts': '支払',
+  'MonthlyStats': '月次統計',
+  'Payments': '入金記録',
+  'AuditLog': 'ログ'
 };
 
 /**
@@ -63,7 +85,15 @@ function getSheet(tableName) {
   }
 
   const db = getDb();
-  const sheet = db.getSheetByName(sheetName);
+  let sheet = db.getSheetByName(sheetName);
+
+  // フォールバック: 旧日本語名で検索（シートリネーム前の過渡期用）
+  if (!sheet) {
+    const oldName = OLD_SHEET_MAP[sheetName];
+    if (oldName) {
+      sheet = db.getSheetByName(oldName);
+    }
+  }
 
   if (!sheet) {
     throw new Error(`シートが見つかりません: ${sheetName}`);

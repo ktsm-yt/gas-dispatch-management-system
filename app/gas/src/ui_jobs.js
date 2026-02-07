@@ -49,7 +49,7 @@ function include(filename) {
 function debugCheck() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   Logger.log(ss.getSheets().map(s => s.getName())); // 期待: master_clients 等
-  return getSheetByName('jobs').getName(); // ここで名前が返ればOK
+  return getSheetByName('Jobs').getName(); // ここで名前が返ればOK
 }
 
 /**
