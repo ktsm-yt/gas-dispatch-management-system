@@ -38,7 +38,7 @@ function include(filename: string): string {
 function debugCheck(): string {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
   Logger.log(ss.getSheets().map(s => s.getName()));
-  return getSheetByName('Jobs').getName();
+  return getSheetDirect('Jobs').getName();
 }
 
 function getScriptUrl(): string {
