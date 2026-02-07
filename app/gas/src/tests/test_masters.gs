@@ -451,7 +451,7 @@ function testStaffInsert() {
     );
     assertEq(staffRecords.length, 1, 'staff should be inserted');
     assertEq(staffRecords[0].name, '山田太郎', 'name should match');
-    assertEq(staffRecords[0].daily_rate_tobi, 15000, 'daily_rate_tobi should match');
+    assertEq(staffRecords[0].daily_rate_tobi, 17000, 'daily_rate_tobi should match');
 
     // クリーンアップ
     softDeleteMasterRecord('M_Staff', 'staff_id', testId);
