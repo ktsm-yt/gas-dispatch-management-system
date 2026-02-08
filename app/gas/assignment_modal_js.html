@@ -240,7 +240,10 @@ function resetAssignmentModalUI() {
   document.getElementById('modal-job-time').textContent = '-';
   document.getElementById('modal-job-start-time').textContent = '';
   document.getElementById('modal-job-start-time').style.display = 'none';
-  document.getElementById('modal-job-type').textContent = '-';
+  const typeTag = document.getElementById('modal-job-type-tag');
+  if (typeTag) { typeTag.style.display = 'none'; typeTag.textContent = ''; }
+  const addrEl = document.getElementById('modal-site-address');
+  if (addrEl) addrEl.textContent = '';
 
   // 統計バッジ
   document.getElementById('modal-required').textContent = '0';
@@ -372,7 +375,8 @@ function fillAssignmentModalFromCache(cachedData) {
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
   updateStartTimeDisplay(job.start_time);
-  document.getElementById('modal-job-type').textContent = job.work_category || '-';
+  updateWorkCategoryTag(job.work_category);
+  updateSiteAddress(job.site_address);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -497,7 +501,8 @@ function handleAssignmentData(response, requestJobId) {
   document.getElementById('modal-job-date').textContent = formatAssignmentModalDate(job.work_date);
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
   updateStartTimeDisplay(job.start_time);
-  document.getElementById('modal-job-type').textContent = job.work_category || '-';
+  updateWorkCategoryTag(job.work_category);
+  updateSiteAddress(job.site_address);
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -1869,6 +1874,30 @@ function updateStartTimeDisplay(startTime) {
     el.textContent = '';
     el.style.display = 'none';
   }
+}
+
+const WORK_CATEGORY_TAG_MAP = {
+  'jotou': { cls: 'tag-jotou', label: '上棟' },
+  'keisagyo': { cls: 'tag-keisagyo', label: '軽作業' },
+  'niage': { cls: 'tag-niage', label: '荷揚げ' },
+};
+
+function updateWorkCategoryTag(category) {
+  const el = document.getElementById('modal-job-type-tag');
+  if (!el) return;
+  const info = WORK_CATEGORY_TAG_MAP[category];
+  if (info) {
+    el.textContent = info.label;
+    el.className = 'work-category-tag ' + info.cls;
+    el.style.display = 'inline';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function updateSiteAddress(address) {
+  const el = document.getElementById('modal-site-address');
+  if (el) el.textContent = address || '';
 }
 
 // ========== Event Listeners Setup ==========
