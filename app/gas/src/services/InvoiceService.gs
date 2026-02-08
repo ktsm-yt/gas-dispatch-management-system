@@ -132,9 +132,12 @@ const InvoiceService = {
     const lines = InvoiceLineRepository.findByInvoiceId(invoiceId);
     const customer = this._getCustomer(invoice.customer_id);
 
+    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoiceId);
+
     return {
       ...invoice,
       lines: lines,
+      adjustments: adjustments,
       customer: customer
     };
   },
@@ -358,6 +361,9 @@ const InvoiceService = {
 
     // 明細を削除
     InvoiceLineRepository.deleteByInvoiceId(invoiceId);
+
+    // 調整項目を削除
+    InvoiceAdjustmentRepository.softDeleteByInvoiceId(invoiceId);
 
     // 請求書を削除
     const result = InvoiceRepository.softDelete(invoiceId, expectedUpdatedAt);
@@ -739,16 +745,72 @@ const InvoiceService = {
       return { success: false, error: 'CANNOT_REGENERATE_SENT_INVOICE' };
     }
 
+    // 調整項目を事前に取得（再生成後にコピーするため）
+    const existingAdjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoiceId);
+
     // 既存を削除
     this.delete(invoiceId, invoice.updated_at);
 
     // 新規生成
-    return this.generate(
+    const result = this.generate(
       invoice.customer_id,
       invoice.billing_year,
       invoice.billing_month,
       { allowDuplicate: true }
     );
+
+    // 調整項目を直接挿入（delete で論理削除済みのため copyToInvoice ではなく直接挿入）
+    if (result.success && existingAdjustments.length > 0) {
+      try {
+        const newInvoiceId = result.invoice.invoice_id;
+        const user = getCurrentUserEmail();
+        const now = getCurrentTimestamp();
+        const newRecords = existingAdjustments.map(adj => ({
+          adjustment_id: generateId('adj'),
+          invoice_id: newInvoiceId,
+          item_name: adj.item_name,
+          amount: adj.amount,
+          sort_order: adj.sort_order,
+          notes: adj.notes || '',
+          created_at: now,
+          created_by: user,
+          updated_at: now,
+          updated_by: user,
+          is_deleted: false,
+          deleted_at: '',
+          deleted_by: ''
+        }));
+        insertRecords('T_InvoiceAdjustments', newRecords);
+        result.adjustmentsPreserved = newRecords.length;
+
+        // 合計を調整項目込みで再計算
+        if (newRecords.length > 0) {
+          const newAdjustments = InvoiceAdjustmentRepository.findByInvoiceId(newInvoiceId);
+          const newLines = InvoiceLineRepository.findByInvoiceId(newInvoiceId);
+          const customer = this._getCustomer(invoice.customer_id);
+          const taxRate = Number(customer.tax_rate) || 0.1;
+          const expenseRate = Number(customer.expense_rate) || 0;
+          const totals = this._calculateTotals(newLines, newAdjustments, taxRate, expenseRate, invoice.invoice_format);
+
+          InvoiceRepository.update({
+            invoice_id: result.invoice.invoice_id,
+            subtotal: totals.subtotal,
+            expense_amount: totals.expenseAmount,
+            adjustment_total: totals.adjustmentTotal,
+            tax_amount: totals.taxAmount,
+            total_amount: totals.totalAmount
+          }, result.invoice.updated_at);
+
+          // 返却データを更新
+          result.invoice = InvoiceRepository.findById(result.invoice.invoice_id);
+        }
+      } catch (copyError) {
+        console.warn('調整項目コピーエラー:', copyError.message);
+        result.adjustmentsCopyFailed = true;
+      }
+    }
+
+    return result;
   },
 
   // ============================================
@@ -1141,7 +1203,21 @@ const InvoiceService = {
    * @param {string} format - 請求書フォーマット
    * @returns {Object} { subtotal, expenseAmount, taxAmount, totalAmount }
    */
-  _calculateTotals: function(lines, taxRate, expenseRate, format) {
+  _calculateTotals: function(lines, adjustmentsOrTaxRate, taxRateOrExpenseRate, expenseRateOrFormat, formatArg) {
+    // 後方互換: (lines, taxRate, expenseRate, format) or (lines, adjustments, taxRate, expenseRate, format)
+    let adjustments, taxRate, expenseRate, format;
+    if (Array.isArray(adjustmentsOrTaxRate)) {
+      adjustments = adjustmentsOrTaxRate;
+      taxRate = taxRateOrExpenseRate;
+      expenseRate = expenseRateOrFormat;
+      format = formatArg;
+    } else {
+      adjustments = [];
+      taxRate = adjustmentsOrTaxRate;
+      expenseRate = taxRateOrExpenseRate;
+      format = expenseRateOrFormat;
+    }
+
     // P2-8: 作業費と諸経費を分けて集計
     let workAmount = 0;    // 作業費（諸経費以外）
     let expenseAmount = 0; // 諸経費（交通費等）
@@ -1155,17 +1231,23 @@ const InvoiceService = {
       }
     });
 
-    // 小計（税抜）= 作業費 + 諸経費
-    const subtotal = workAmount + expenseAmount;
+    // 調整項目の合計
+    let adjustmentTotal = 0;
+    if (adjustments && adjustments.length > 0) {
+      adjustments.forEach(adj => {
+        adjustmentTotal += Number(adj.amount) || 0;
+      });
+    }
 
     // 従来の諸経費率による計算（頭紙形式かつ交通費がない場合のフォールバック）
-    // ただし、交通費が明細にある場合はそちらを優先
     if (format === 'atamagami' && expenseRate > 0 && expenseAmount === 0) {
       expenseAmount = calculateExpense_(workAmount, expenseRate);
     }
 
+    // 小計（税抜）= 作業費 + 諸経費 + 調整合計
+    const taxableAmount = workAmount + expenseAmount + adjustmentTotal;
+
     // 消費税
-    const taxableAmount = subtotal;
     const taxAmount = calculateTaxAmount_(taxableAmount, taxRate);
 
     // 合計
@@ -1174,6 +1256,7 @@ const InvoiceService = {
     return {
       subtotal: Math.floor(workAmount),  // 頭紙用: 作業費のみ
       expenseAmount: Math.floor(expenseAmount),
+      adjustmentTotal: Math.floor(adjustmentTotal),
       taxAmount: Math.floor(taxAmount),
       totalAmount: totalAmount
     };
@@ -1229,10 +1312,11 @@ const InvoiceService = {
    * @param {string} invoiceId - 請求ID
    * @param {Object} headerData - ヘッダー更新データ { issue_date, due_date, notes }
    * @param {Object[]} linesData - 明細更新データ [{ line_id, item_name, time_note, site_name }]
+   * @param {Object[]|undefined} adjustmentsData - 調整項目データ [{ adjustment_id?, item_name, amount }]
    * @param {string} expectedUpdatedAt - 期待するupdated_at
-   * @returns {Object} 更新結果 { success, invoice, lines, error }
+   * @returns {Object} 更新結果 { success, invoice, lines, adjustments, error }
    */
-  updateDetails: function(invoiceId, headerData, linesData, expectedUpdatedAt) {
+  updateDetails: function(invoiceId, headerData, linesData, adjustmentsData, expectedUpdatedAt) {
     try {
       // 1. 請求書を取得
       const invoice = InvoiceRepository.findById(invoiceId);
@@ -1302,7 +1386,48 @@ const InvoiceService = {
         }
       }
 
-      // 6. 監査ログを記録
+      // 6. 調整項目を更新（adjustmentsData が指定された場合のみ）
+      let updatedAdjustments = [];
+      if (adjustmentsData !== undefined && Array.isArray(adjustmentsData)) {
+        // サーバー側5件上限バリデーション
+        if (adjustmentsData.length > 5) {
+          return { success: false, error: 'ADJUSTMENT_LIMIT_EXCEEDED', partialUpdate: true };
+        }
+
+        // 合計を事前計算して負数チェック（bulkUpsert 前に検証）
+        const currentLines = InvoiceLineRepository.findByInvoiceId(invoiceId);
+        const customer = this._getCustomer(invoice.customer_id);
+        const taxRate = Number(customer.tax_rate) || 0.1;
+        const expenseRate = Number(customer.expense_rate) || 0;
+        // adjustmentsData をそのまま計算に使用（amount フィールドのみ必要）
+        const totals = this._calculateTotals(currentLines, adjustmentsData, taxRate, expenseRate, invoice.invoice_format);
+
+        if (totals.totalAmount < 0) {
+          return { success: false, error: 'NEGATIVE_TOTAL', partialUpdate: true };
+        }
+
+        // 検証通過後に bulkUpsert 実行
+        const adjResult = InvoiceAdjustmentRepository.bulkUpsert(invoiceId, adjustmentsData);
+        if (!adjResult.success) {
+          return { success: false, error: 'ADJUSTMENT_UPDATE_ERROR', partialUpdate: true };
+        }
+        updatedAdjustments = adjResult.adjustments;
+
+        // 最新の updated_at を取得して合計を更新
+        const latestInvoice = InvoiceRepository.findById(invoiceId);
+        InvoiceRepository.update({
+          invoice_id: invoiceId,
+          subtotal: totals.subtotal,
+          expense_amount: totals.expenseAmount,
+          adjustment_total: totals.adjustmentTotal,
+          tax_amount: totals.taxAmount,
+          total_amount: totals.totalAmount
+        }, latestInvoice.updated_at);
+      } else {
+        updatedAdjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoiceId);
+      }
+
+      // 7. 監査ログを記録
       try {
         logUpdate('T_Invoices', invoiceId,
           { issue_date: invoice.issue_date, due_date: invoice.due_date, notes: invoice.notes },
@@ -1312,14 +1437,15 @@ const InvoiceService = {
         console.warn('監査ログ記録エラー (updateDetails):', logError.message);
       }
 
-      // 7. 更新後のデータを返す
+      // 8. 更新後のデータを返す
       const updatedInvoice = InvoiceRepository.findById(invoiceId);
       const updatedLines = InvoiceLineRepository.findByInvoiceId(invoiceId);
 
       return {
         success: true,
         invoice: updatedInvoice,
-        lines: updatedLines
+        lines: updatedLines,
+        adjustments: updatedAdjustments
       };
     } catch (error) {
       logErr('InvoiceService.updateDetails', error);
