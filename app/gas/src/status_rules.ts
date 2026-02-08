@@ -16,10 +16,11 @@ const ASSIGNMENT_STATUS_TRANSITIONS = {
 } as const;
 
 const INVOICE_STATUS_TRANSITIONS = {
-  unsent: ['sent'],
-  sent: ['paid', 'unpaid', 'unsent'],
-  unpaid: ['paid', 'sent'],
-  paid: ['sent']
+  unsent: ['sent', 'hold'],
+  sent: ['paid', 'unpaid', 'unsent', 'hold'],
+  unpaid: ['paid', 'sent', 'hold'],
+  paid: ['sent', 'hold'],
+  hold: ['unsent', 'sent', 'unpaid', 'paid']
 } as const;
 
 const PAYOUT_STATUS_TRANSITIONS = {
@@ -107,6 +108,7 @@ function getInvoiceStatusLabel_(status: string): string {
     sent: '送付済',
     unpaid: '未回収',
     paid: '入金済',
+    hold: '保留',
     draft: '未送付',
     issued: '未送付'
   };
@@ -196,11 +198,11 @@ function isJobEditable_(status: string): boolean {
 }
 
 function isInvoiceEditable_(status: string): boolean {
-  return status === 'unsent' || status === 'draft' || status === 'issued';
+  return status === 'unsent' || status === 'hold' || status === 'draft' || status === 'issued';
 }
 
 function isInvoiceDeletable_(status: string): boolean {
-  return status === 'unsent' || status === 'draft' || status === 'issued';
+  return status === 'unsent' || status === 'hold' || status === 'draft' || status === 'issued';
 }
 
 function isAssignmentEditable_(assignmentStatus: string, jobStatus: string): boolean {

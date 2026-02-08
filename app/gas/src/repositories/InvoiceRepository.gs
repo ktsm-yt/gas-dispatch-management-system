@@ -358,7 +358,7 @@ const InvoiceRepository = {
     const normalizedTargetStatus = normalizeStatus(targetStatus);
 
     // 有効なステータスチェック
-    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
     if (!validStatuses.includes(normalizedTargetStatus)) {
       return {
         success: 0,
@@ -374,10 +374,11 @@ const InvoiceRepository = {
 
     // ステータス遷移ルール
     const allowedTransitions = {
-      unsent: ['sent'],
-      sent: ['paid', 'unpaid', 'unsent'],
-      unpaid: ['paid', 'sent'],
-      paid: ['sent']
+      unsent: ['sent', 'hold'],
+      sent: ['paid', 'unpaid', 'unsent', 'hold'],
+      unpaid: ['paid', 'sent', 'hold'],
+      paid: ['sent', 'hold'],
+      hold: ['unsent', 'sent', 'unpaid', 'paid']
     };
 
     const sheet = getSheet(this.TABLE_NAME);
