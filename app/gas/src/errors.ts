@@ -7,7 +7,8 @@ const ErrorCodes = {
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT_ERROR: 'CONFLICT_ERROR',
   BUSY_ERROR: 'BUSY_ERROR',
-  SYSTEM_ERROR: 'SYSTEM_ERROR'
+  SYSTEM_ERROR: 'SYSTEM_ERROR',
+  BUSINESS_ERROR: 'BUSINESS_ERROR'
 } as const;
 
 class AppError extends Error {
