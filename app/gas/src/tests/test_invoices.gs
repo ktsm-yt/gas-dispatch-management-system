@@ -353,8 +353,8 @@ function testFormat2Export() {
     };
   }
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -439,7 +439,7 @@ function testFormat2ExportFromCustomer() {
   }
 
   // エクスポート実行
-  const result = InvoiceExportService.export(invoiceId, 'edit', { keepSheet: true });
+  const result = InvoiceExportService.export(invoiceId, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -471,8 +471,8 @@ function testFormat2ExportWithExistingInvoice() {
   const invoice = invoices[0];
   Logger.log(`✓ 請求書を使用: ${invoice.invoice_id} (${invoice.invoice_number || 'No number'})`);
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(invoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(invoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -675,8 +675,8 @@ function testFormat3Export() {
   }
   Logger.log(`✓ 明細追加: ${testLines.length}件`);
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);

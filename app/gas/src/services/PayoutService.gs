@@ -325,14 +325,6 @@ const PayoutService = {
   },
 
   /**
-   * 支払いを生成（後方互換性のため残す - markAsPaidを使用推奨）
-   * @deprecated markAsPaid() を使用してください
-   */
-  generatePayout: function(staffId, endDate, options = {}) {
-    return this.markAsPaid(staffId, endDate, options);
-  },
-
-  /**
    * 複数スタッフの支払いを一括確認
    * @param {string[]} staffIds - スタッフID配列
    * @param {string} endDate - 集計終了日
@@ -671,14 +663,6 @@ const PayoutService = {
       results: results,
       payouts: payouts  // 差分リロード用に追加
     };
-  },
-
-  /**
-   * 複数スタッフの支払いを一括生成（後方互換性のため残す）
-   * @deprecated bulkMarkAsPaid() を使用してください
-   */
-  bulkGenerate: function(staffIds, endDate) {
-    return this.bulkMarkAsPaid(staffIds, endDate);
   },
 
   /**

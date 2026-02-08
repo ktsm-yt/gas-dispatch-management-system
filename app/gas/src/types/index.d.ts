@@ -52,7 +52,6 @@ declare global {
 
   // === 外部定数宣言（db.gs 等） ===
   const TABLE_SHEET_MAP: Record<string, string>;
-  const OLD_SHEET_MAP: Record<string, string>;
 
   // === DB関数宣言（db.gs, repository.gs, config.ts） ===
   function getSpreadsheetId(): string;

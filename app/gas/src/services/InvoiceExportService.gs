@@ -180,7 +180,7 @@ const InvoiceExportService = {
   /**
    * 請求書を出力
    * @param {string} invoiceId - 請求ID
-   * @param {string} mode - 出力モード（pdf/excel/edit）
+   * @param {string} mode - 出力モード（pdf/excel/cover）
    * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url, error }
    */
@@ -221,8 +221,6 @@ const InvoiceExportService = {
           return this.exportToExcel(invoice, lines, customer, company, options);
         case 'cover':
           return this.exportCoverOnly(invoice, lines, customer, company, options);
-        case 'edit':
-          return this.createEditSheet(invoice, lines, customer, company, options);
         default:
           return { success: false, error: 'INVALID_MODE' };
       }
@@ -237,7 +235,7 @@ const InvoiceExportService = {
    * InvoiceService.get() をスキップしてシートI/Oを削減
    *
    * @param {Object} invoiceData - InvoiceService.get()相当のデータ
-   * @param {string} mode - 出力モード（pdf/excel/edit）
+   * @param {string} mode - 出力モード（pdf/excel/cover）
    * @param {Object} options - オプション
    * @param {Object} options.company - 自社情報（省略時は内部で取得）
    * @returns {Object} { success, fileId, url, error }
@@ -271,8 +269,6 @@ const InvoiceExportService = {
           return this.exportToExcel(invoice, lines, customer, company, options);
         case 'cover':
           return this.exportCoverOnly(invoice, lines, customer, company, options);
-        case 'edit':
-          return this.createEditSheet(invoice, lines, customer, company, options);
         default:
           return { success: false, error: 'INVALID_MODE' };
       }
@@ -453,51 +449,6 @@ const InvoiceExportService = {
     } catch (error) {
       logErr('exportToExcel', error);
       return { success: false, error: error.message || 'EXCEL_EXPORT_ERROR' };
-    }
-  },
-
-  /**
-   * 編集用スプレッドシート作成
-   * @deprecated 2026-06 削除予定。Excel出力後にGoogle Driveで開いて編集してください。
-   * @param {Object} invoice - 請求書データ
-   * @param {Object[]} lines - 明細データ
-   * @param {Object} customer - 顧客データ
-   * @param {Object} company - 自社データ
-   * @param {Object} options - オプション
-   * @returns {Object} { success, sheetFileId, url }
-   */
-  createEditSheet: function(invoice, lines, customer, company, options = {}) {
-    console.warn('[DEPRECATED] createEditSheet() は 2026-06 に削除予定です。Excel出力を使用してください。');
-    try {
-      // スプレッドシートを作成（編集用：ページ分割なし、連続データ）
-      const sheetResult = this._createFilledSheet(invoice, lines, customer, company, { forPdf: false });
-      if (!sheetResult.success) {
-        return sheetResult;
-      }
-
-      const spreadsheet = sheetResult.spreadsheet;
-
-      // 出力先フォルダに移動
-      const folder = this._getOutputFolder(customer);
-      const file = DriveApp.getFileById(spreadsheet.getId());
-      file.moveTo(folder);
-
-      // ファイル名を設定
-      const fileName = this._generateFileName(invoice, customer, 'sheet');
-      file.setName(fileName);
-
-      // 請求書のファイルIDを更新
-      InvoiceRepository.updateFileIds(invoice.invoice_id, { sheet_file_id: spreadsheet.getId() });
-
-      return {
-        success: true,
-        sheetFileId: spreadsheet.getId(),
-        url: spreadsheet.getUrl(),
-        invoiceId: invoice.invoice_id
-      };
-    } catch (error) {
-      logErr('createEditSheet', error);
-      return { success: false, error: error.message || 'EDIT_SHEET_ERROR' };
     }
   },
 
@@ -996,13 +947,10 @@ const InvoiceExportService = {
   _populateFormat2: function(sheet, invoice, lines, customer, company) {
     // データシートを取得（atamagamiと同じアーキテクチャ）
     const spreadsheet = sheet.getParent();
-    let dataSheet = spreadsheet.getSheetByName('データ');
+    const dataSheet = spreadsheet.getSheetByName('データ');
 
     if (!dataSheet) {
-      Logger.log('データシートが見つかりません。従来の方式で書き込みます。');
-      // フォールバック: 従来の直接書き込み
-      this._populateFormat2Legacy(sheet, invoice, lines, customer, company);
-      return;
+      throw new Error(`format2 template invalid: required sheet "データ" is missing (templateId=${spreadsheet.getId()})`);
     }
 
     // P2-8: 合計金額は税抜（作業費 + 諸経費）
@@ -1131,141 +1079,6 @@ const InvoiceExportService = {
   },
 
   /**
-   * 様式2のデータを入力（レガシー：データシートがない場合のフォールバック）
-   * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
-   * @param {Object} invoice - 請求書データ
-   * @param {Object[]} lines - 明細データ
-   * @param {Object} customer - 顧客データ
-   * @param {Object} company - 自社データ
-   */
-  _populateFormat2Legacy: function(sheet, invoice, lines, customer, company) {
-    // P2-8: 合計金額は税抜（作業費 + 諸経費）
-    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
-
-    // ヘッダー部分（ラベルセルを上書きしない）
-    sheet.getRange('B2').setValue(customer.company_name || '');
-    sheet.getRange('B5').setValue(`${invoice.billing_year}年${invoice.billing_month}月分`);
-    sheet.getRange('I5').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
-    sheet.getRange('B6').setValue(invoice.shipper_name || '');
-    if (company.company_name) {
-      sheet.getRange('G2').setValue(company.company_name);
-    }
-    if (company.postal_code) {
-      sheet.getRange('G3').setValue('〒' + company.postal_code);
-    }
-    if (company.address) {
-      sheet.getRange('I3').setValue(company.address);
-    }
-
-    // 明細行（同一案件内は連続・案件変更時に空行）
-    const startRow = 10;
-    const templateFormatRow = 10;
-    const lastTemplateRow = sheet.getLastRow();
-
-    // P2-8: 案件間の空行数を計算（同一案件内は連続、案件が変わる時に空行）
-    let jobTransitions = 0;
-    let prevJobIdForCount = null;
-    for (const line of lines) {
-      if (prevJobIdForCount !== null && line.job_id !== prevJobIdForCount) {
-        jobTransitions++;
-      }
-      prevJobIdForCount = line.job_id;
-    }
-    const totalRowsNeeded = lines.length + jobTransitions;
-    const lastNeededRow = startRow + totalRowsNeeded - 1;
-
-    // テンプレートの行数が足りない場合、書式を一括拡張（パフォーマンス最適化）
-    if (lastNeededRow > lastTemplateRow) {
-      const rowsToExtend = lastNeededRow - lastTemplateRow + 1;
-      this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
-    }
-
-    // P2-8: 明細データを2D配列として構築（バルク処理）
-    // 案件間の空行と日付+現場の重複表示抑制を維持
-    let prevDateSite = null;
-    let prevJobId = null;
-    const rowsData = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // P2-8: 案件が変わったら空行を挿入（同一案件内は連続配置）
-      if (prevJobId !== null && line.job_id !== prevJobId) {
-        // 空行を追加（10列分の空文字列）
-        rowsData.push(['', '', '', '', '', '', '', '', '', '']);
-      }
-      prevJobId = line.job_id;
-
-      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
-      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
-      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
-      prevDateSite = currentDateSite;
-
-      // 行データを構築（A〜J列）
-      rowsData.push([
-        isFirstLineForDateSite ? (line.work_date || '') : '',  // A: 日付
-        isFirstLineForDateSite ? (line.site_name || '') : '',  // B: 案件名
-        line.order_number || '',                                // C: 発注No
-        line.branch_office || '',                               // D: 営業所
-        line.item_name || '',                                   // E: 品目
-        line.time_note || '',                                   // F: 時間/備考
-        line.quantity || 0,                                     // G: 数量
-        line.unit || '人',                                      // H: 単位
-        line.unit_price || 0,                                   // I: 単価
-        line.amount || 0                                        // J: 金額
-      ]);
-    }
-
-    // 一括書き込み
-    if (rowsData.length > 0) {
-      sheet.getRange(startRow, 1, rowsData.length, 10).setValues(rowsData);
-    }
-    const currentRow = startRow + rowsData.length;
-
-    // 合計行と最終行に閉じる罫線（税別小計 = 作業費 + 諸経費）
-    let totalRow;
-    if (lines.length > 0) {
-      const lastDataRow = currentRow - 1;  // 最後に書き込んだ行
-      totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
-      sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
-      // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
-      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
-      sheet.getRange(totalRow, 10).setValue(totalBeforeTax);      // J: 税別合計
-
-      // 合計行の上下に罫線を追加
-      sheet.getRange(totalRow, 1, 1, 10).setBorder(
-        true, true, true, true, null, null,
-        '#000000', SpreadsheetApp.BorderStyle.SOLID
-      );
-    } else {
-      totalRow = startRow;
-    }
-
-    // === 余分な行を削除（テンプレートより明細が少ない場合）===
-    const currentLastRow = sheet.getLastRow();
-    if (currentLastRow > totalRow) {
-      const rowsToDelete = currentLastRow - totalRow;
-      if (rowsToDelete > 0) {
-        sheet.deleteRows(totalRow + 1, rowsToDelete);
-      }
-    }
-
-    // === 合計行より下の罫線をクリア（書式拡張で残った縦罫線を除去）===
-    const maxRows = sheet.getMaxRows();
-    if (maxRows > totalRow) {
-      const rowsBelow = maxRows - totalRow;
-      sheet.getRange(totalRow + 1, 1, rowsBelow, 10).setBorder(
-        false, false, false, false, false, false
-      );
-      // 合計行の下罫線を再設定（隣接セルの罫線クリアで消えた分を復元）
-      sheet.getRange(totalRow, 1, 1, 10).setBorder(
-        null, null, true, null, null, null,
-        '#000000', SpreadsheetApp.BorderStyle.SOLID
-      );
-    }
-  },
-
-  /**
    * 様式3のデータを入力
    * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet - シート
    * @param {Object} invoice - 請求書データ
@@ -1335,9 +1148,7 @@ const InvoiceExportService = {
     }
 
     if (!dataSheet) {
-      Logger.log('データシートが見つかりません。従来の方式で書き込みます。');
-      this._populateAtagamiLegacy(sheet, invoice, lines, customer, company);
-      return;
+      throw new Error(`atagami template invalid: required sheet "データ" or "頭紙データ" is missing (templateId=${spreadsheet.getId()})`);
     }
 
     // === 顧客情報（原本シートに直接書き込み） ===
@@ -1450,55 +1261,6 @@ const InvoiceExportService = {
     sheet.getRange('F23').setValue('作業費');
     sheet.getRange('F24').setValue('諸経費');
 
-    sheet.getRange('AI23').setValue(invoice.subtotal || 0);
-    sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
-  },
-
-  /**
-   * 頭紙のデータを入力（従来方式 - フォールバック用）
-   * データシートがない場合に使用
-   */
-  _populateAtagamiLegacy: function(sheet, invoice, lines, customer, company) {
-    // 顧客情報
-    if (customer.postal_code) sheet.getRange('F2').setValue(customer.postal_code);
-    if (customer.address) sheet.getRange('E3').setValue(customer.address);
-
-    let customerDisplay = customer.company_name || '';
-    if (customer.contact_name) {
-      const honorific = customer.honorific === 'なし' ? '' : (customer.honorific || '様');
-      customerDisplay += `　${customer.contact_name}${honorific ? '　' + honorific : ''}`;
-    }
-    sheet.getRange('E5').setValue(customerDisplay);
-
-    // 発行日（ラベル+値を連結）
-    if (invoice.issue_date) {
-      const parts = invoice.issue_date.split('-');
-      const formatted = `発行日　${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
-      sheet.getRange('AG2').setValue(formatted);
-    }
-
-    // No
-    if (invoice.invoice_number) {
-      sheet.getRange('AG3').setValue(`No　${invoice.invoice_number}`);
-    }
-
-    // 支払期限
-    if (invoice.due_date) {
-      const dueParts = invoice.due_date.split('-');
-      sheet.getRange('J11').setValue(parseInt(dueParts[0]));
-      sheet.getRange('M11').setValue(parseInt(dueParts[1]));
-      sheet.getRange('P11').setValue(parseInt(dueParts[2]));
-    }
-
-    // 請求金額
-    const totalFormatted = (invoice.total_amount || 0).toLocaleString();
-    sheet.getRange('A13').setValue(`ご請求金額　　　　　　　　¥${totalFormatted}`);
-
-    // 明細
-    const billingPeriod = `${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}`;
-    sheet.getRange('A23').setValue(billingPeriod);
-    sheet.getRange('F23').setValue('作業費');
-    sheet.getRange('F24').setValue('諸経費');
     sheet.getRange('AI23').setValue(invoice.subtotal || 0);
     sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
   },
@@ -1956,15 +1718,7 @@ const InvoiceExportService = {
 
     // デフォルトの出力先フォルダ（ScriptPropertiesから取得）
     const props = PropertiesService.getScriptProperties();
-    let folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
-
-    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
-    if (!folderId) {
-      folderId = props.getProperty('OUTPUT_FOLDER_ID');
-      if (folderId) {
-        Logger.log('Using legacy OUTPUT_FOLDER_ID for invoice export');
-      }
-    }
+    const folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
 
     if (folderId) {
       try {
