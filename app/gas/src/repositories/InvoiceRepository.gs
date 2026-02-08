@@ -260,6 +260,7 @@ const InvoiceRepository = {
       'subtotal', 'expense_amount', 'tax_amount', 'total_amount',
       'invoice_format', 'shipper_name',
       'pdf_file_id', 'excel_file_id', 'sheet_file_id',
+      'adjustment_total',
       'status', 'notes', 'is_deleted'
     ];
 
@@ -744,7 +745,8 @@ const InvoiceRepository = {
       subtotal: Number(record.subtotal) || 0,
       expense_amount: Number(record.expense_amount) || 0,
       tax_amount: Number(record.tax_amount) || 0,
-      total_amount: Number(record.total_amount) || 0
+      total_amount: Number(record.total_amount) || 0,
+      adjustment_total: Number(record.adjustment_total) || 0
     };
   },
 
