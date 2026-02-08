@@ -1510,13 +1510,17 @@
       if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
       if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
       if (!options.skipCustomer && filter.customer !== undefined) {
-        document.getElementById('filterCustomer').value = filter.customer;
-        // autocomplete の表示テキストも復元
         if (filter.customer && filterAutocomplete) {
+          // 顧客IDがまだ有効か検証（削除/アーカイブ済みならクリア）
           const match = customers.find(function (c) { return c.customer_id === filter.customer; });
           if (match) {
             filterAutocomplete.setValue(match.customer_id, match.company_name);
+          } else {
+            // 無効なIDはクリア（「全て」にフォールバック）
+            document.getElementById('filterCustomer').value = '';
           }
+        } else {
+          document.getElementById('filterCustomer').value = filter.customer || '';
         }
       }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
