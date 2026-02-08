@@ -521,6 +521,13 @@ function testAssignmentStatusTransitions() {
 function testInvoiceStatusTransitions() {
   // 有効な遷移（引数順序: transitions, fromStatus, toStatus）
   assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'unsent', 'sent'), 'unsent -> sent');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'unsent', 'hold'), 'unsent -> hold');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'sent', 'hold'), 'sent -> hold');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'unpaid', 'hold'), 'unpaid -> hold');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'hold', 'sent'), 'hold -> sent');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'hold', 'unpaid'), 'hold -> unpaid');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'paid', 'hold'), 'paid -> hold');
+  assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'hold', 'paid'), 'hold -> paid');
   assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'sent', 'paid'), 'sent -> paid');
   assertTrue(isValidTransition_(INVOICE_STATUS_TRANSITIONS, 'sent', 'unsent'), 'sent -> unsent (取消)');
 
@@ -549,6 +556,7 @@ function testIsEditable() {
 
   // Invoice editability
   assertTrue(isInvoiceEditable_('unsent'), 'unsent invoice is editable');
+  assertTrue(isInvoiceEditable_('hold'), 'hold invoice is editable');
   assertTrue(isInvoiceEditable_('draft'), 'draft invoice is editable (後方互換)');
   assertFalse(isInvoiceEditable_('sent'), 'sent invoice is not editable');
 }
