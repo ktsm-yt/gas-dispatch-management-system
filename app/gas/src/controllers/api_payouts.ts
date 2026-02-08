@@ -7,36 +7,40 @@
 
 /**
  * スタッフ一覧を取得（支払い画面用）
- * @returns {Object} { ok: true, data: { staff: [] } }
+ * @returns { ok: true, data: { staff: [] } }
  */
-function getStaffForPayouts() {
+function getStaffForPayouts(): unknown {
   const requestId = generateRequestId();
 
   try {
     const staffList = StaffRepository.search({ is_active: true });
 
     // 必要なフィールドのみ返す
-    const data = staffList.map(s => ({
-      staff_id: s.staff_id,
-      name: s.name,
-      payment_frequency: s.payment_frequency || 'monthly'
-    }));
+    const data = staffList.map(function(s) {
+      return {
+        staff_id: s.staff_id as string,
+        name: s.name as string,
+        payment_frequency: (s.payment_frequency as string) || 'monthly'
+      };
+    });
 
     return buildSuccessResponse({ staff: data }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getStaffForPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 未払いサマリーを取得
- * @param {string} staffId - スタッフID
- * @param {string} endDate - 集計終了日（YYYY-MM-DD）
- * @returns {Object} APIレスポンス
+ * @param staffId - スタッフID
+ * @param endDate - 集計終了日（YYYY-MM-DD）
+ * @param options - オプション
+ * @returns APIレスポンス
  */
-function getUnpaidSummary(staffId, endDate, options = {}) {
+function getUnpaidSummary(staffId: string, endDate: string, options: Record<string, unknown> = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -56,27 +60,28 @@ function getUnpaidSummary(staffId, endDate, options = {}) {
     }
 
     // Service呼び出し
-    const result = PayoutService.calculatePayout(staffId, endDate, options);
+    const result = PayoutService.calculatePayout(staffId, endDate, options) as unknown as Record<string, unknown>;
 
     // スタッフ名を付与
     const staff = StaffRepository.findById(staffId);
-    result.staffName = staff ? staff.name : '(不明)';
+    result.staffName = staff ? staff.name as string : '(不明)';
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidSummary', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 未払い配置一覧を取得（詳細表示用）
- * @param {string} staffId - スタッフID
- * @param {string} endDate - 集計終了日（YYYY-MM-DD）
- * @returns {Object} APIレスポンス
+ * @param staffId - スタッフID
+ * @param endDate - 集計終了日（YYYY-MM-DD）
+ * @returns APIレスポンス
  */
-function getUnpaidAssignments(staffId, endDate) {
+function getUnpaidAssignments(staffId: string, endDate: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -99,19 +104,20 @@ function getUnpaidAssignments(staffId, endDate) {
 
     return buildSuccessResponse({ assignments: assignments, count: assignments.length }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidAssignments', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 確認済みPayoutの詳細を取得（配置情報含む）
- * @param {string} payoutId - 支払ID
- * @param {Object} options - オプション { include_assignments: boolean }
- * @returns {Object} APIレスポンス
+ * @param payoutId - 支払ID
+ * @param options - オプション { include_assignments: boolean }
+ * @returns APIレスポンス
  */
-function getPayoutDetails(payoutId, options = {}) {
+function getPayoutDetails(payoutId: string, options: { include_assignments?: boolean } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -130,9 +136,9 @@ function getPayoutDetails(payoutId, options = {}) {
     }
 
     // モーダル表示用にデータを整形
-    const result = {
+    const result: Record<string, unknown> = {
       staffId: payout.staff_id,
-      staffName: payout.target_name || '(不明)',
+      staffName: (payout as PayoutRecord & { target_name?: string }).target_name || '(不明)',
       assignmentCount: payout.assignment_count || 0,
       baseAmount: payout.base_amount,
       transportAmount: payout.transport_amount,
@@ -150,39 +156,39 @@ function getPayoutDetails(payoutId, options = {}) {
     // 配置情報を取得（オプション）- payout_idで直接検索して最適化
     if (options.include_assignments !== false) {
       const linkedAssignments = AssignmentRepository.search({ payout_id: payoutId })
-        .filter(a => !a.is_deleted);
+        .filter(function(a) { return !a.is_deleted; });
 
       // Job情報を付与
-      const jobIds = [...new Set(linkedAssignments.map(a => a.job_id))];
+      const jobIds = [...new Set(linkedAssignments.map(function(a) { return a.job_id as string; }))];
       const jobs = jobIds.length > 0 ? JobRepository.search({ job_ids: jobIds }) : [];
-      const jobMap = new Map(jobs.map(j => [j.job_id, j]));
+      const jobMap = new Map(jobs.map(function(j) { return [j.job_id as string, j]; }));
 
-      result.assignments = linkedAssignments.map(a => {
-        const job = jobMap.get(a.job_id) || {};
+      result.assignments = linkedAssignments.map(function(a) {
+        const job = jobMap.get(a.job_id as string) || {};
         return {
-          assignment_id: a.assignment_id,
-          work_date: job.work_date,
-          site_name: job.site_name || '(現場名なし)'
+          assignment_id: a.assignment_id as string,
+          work_date: (job as Record<string, unknown>).work_date,
+          site_name: ((job as Record<string, unknown>).site_name as string) || '(現場名なし)'
         };
       });
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getPayoutDetails', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 未払いスタッフ一覧を取得
- * @param {string} endDate - 集計終了日
- * @param {Object} [options={}] - オプション
- * @param {string} [options.staffId] - 特定スタッフのみ取得する場合に指定
- * @returns {Object} APIレスポンス
+ * @param endDate - 集計終了日
+ * @param options - オプション
+ * @returns APIレスポンス
  */
-function getUnpaidStaffList(endDate, options = {}) {
+function getUnpaidStaffList(endDate: string, options: { staffId?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -204,7 +210,7 @@ function getUnpaidStaffList(endDate, options = {}) {
 
     // 特定スタッフ指定時は確認済みもフィルタ
     if (options.staffId) {
-      confirmedPayouts = confirmedPayouts.filter(p => p.staff_id === options.staffId);
+      confirmedPayouts = confirmedPayouts.filter(function(p) { return p.staff_id === options.staffId; });
     }
 
     return buildSuccessResponse({
@@ -212,26 +218,27 @@ function getUnpaidStaffList(endDate, options = {}) {
       staffId: options.staffId || null,  // 個人選択モードのフラグとして返す
       staffList: result,
       totalCount: result.length,
-      totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0),
+      totalAmount: result.reduce(function(sum: number, s: UnpaidStaffItem) { return sum + s.estimatedAmount; }, 0),
       // ★ 確認済みPayoutを追加
       confirmedPayouts: confirmedPayouts,
       confirmedCount: confirmedPayouts.length,
-      confirmedAmount: confirmedPayouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
+      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidStaffList', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 未払スタッフリストの差分を取得（SWR差分更新用）
- * @param {string} endDate - 集計終了日（YYYY-MM-DD）
- * @param {string} lastSyncTimestamp - 前回同期時刻（ISO形式）
- * @returns {Object} APIレスポンス { changedStaffIds, staffList, confirmedPayouts, ... }
+ * @param endDate - 集計終了日（YYYY-MM-DD）
+ * @param lastSyncTimestamp - 前回同期時刻（ISO形式）
+ * @returns APIレスポンス { changedStaffIds, staffList, confirmedPayouts, ... }
  */
-function getUnpaidStaffListDelta(endDate, lastSyncTimestamp) {
+function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -251,7 +258,11 @@ function getUnpaidStaffListDelta(endDate, lastSyncTimestamp) {
     }
 
     // 差分取得
-    const deltaResult = PayoutService.getUnpaidStaffListDelta(endDate, lastSyncTimestamp);
+    const deltaResult = PayoutService.getUnpaidStaffListDelta(endDate, lastSyncTimestamp) as {
+      changedStaffIds: string[];
+      removedStaffIds: string[];
+      staffList: UnpaidStaffItem[];
+    };
 
     // 確認済みPayoutも差分で取得
     const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
@@ -265,26 +276,27 @@ function getUnpaidStaffListDelta(endDate, lastSyncTimestamp) {
       removedStaffIds: deltaResult.removedStaffIds,
       staffList: deltaResult.staffList,
       totalCount: deltaResult.staffList.length,
-      totalAmount: deltaResult.staffList.reduce((sum, s) => sum + s.estimatedAmount, 0),
+      totalAmount: deltaResult.staffList.reduce(function(sum: number, s: UnpaidStaffItem) { return sum + s.estimatedAmount; }, 0),
       confirmedPayouts: confirmedPayouts,
       confirmedCount: confirmedPayouts.length,
-      confirmedAmount: confirmedPayouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
+      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidStaffListDelta', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払いを支払済として記録
- * @param {string} staffId - スタッフID
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション { adjustment_amount, notes, paid_date }
- * @returns {Object} APIレスポンス
+ * @param staffId - スタッフID
+ * @param endDate - 集計終了日
+ * @param options - オプション { adjustment_amount, notes, paid_date }
+ * @returns APIレスポンス
  */
-function markAsPaid(staffId, endDate, options = {}) {
+function markAsPaid(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; paid_date?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -309,28 +321,29 @@ function markAsPaid(staffId, endDate, options = {}) {
     }
 
     // Service呼び出し
-    const result = PayoutService.markAsPaid(staffId, endDate, options);
+    const result = PayoutService.markAsPaid(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('markAsPaid', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 複数スタッフの支払いを一括で支払済にする
- * @param {string[]} staffIds - スタッフID配列
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション { paid_date, adjustments: { [staffId]: { adjustment_amount, notes } } }
- * @returns {Object} APIレスポンス
+ * @param staffIds - スタッフID配列
+ * @param endDate - 集計終了日
+ * @param options - オプション { paid_date, adjustments: { [staffId]: { adjustment_amount, notes } } }
+ * @returns APIレスポンス
  */
-function bulkMarkAsPaid(staffIds, endDate, options = {}) {
+function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_date?: string; adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -359,18 +372,19 @@ function bulkMarkAsPaid(staffIds, endDate, options = {}) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('bulkMarkAsPaid', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払い一覧を検索
- * @param {Object} query - 検索条件
- * @returns {Object} APIレスポンス
+ * @param query - 検索条件
+ * @returns APIレスポンス
  */
-function searchPayouts(query = {}) {
+function searchPayouts(query: PayoutSearchQuery = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -388,18 +402,19 @@ function searchPayouts(query = {}) {
       count: payouts.length
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('searchPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払い詳細を取得
- * @param {string} payoutId - 支払ID
- * @returns {Object} APIレスポンス
+ * @param payoutId - 支払ID
+ * @returns APIレスポンス
  */
-function getPayout(payoutId) {
+function getPayout(payoutId: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -421,19 +436,20 @@ function getPayout(payoutId) {
 
     return buildSuccessResponse({ payout: payout }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getPayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払い履歴を取得
- * @param {string} staffId - スタッフID
- * @param {Object} options - オプション { limit }
- * @returns {Object} APIレスポンス
+ * @param staffId - スタッフID
+ * @param options - オプション { limit }
+ * @returns APIレスポンス
  */
-function getPayoutHistory(staffId, options = {}) {
+function getPayoutHistory(staffId: string, options: { limit?: number } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -455,19 +471,20 @@ function getPayoutHistory(staffId, options = {}) {
       count: history.length
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getPayoutHistory', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払いを取り消し（未払い状態に戻す）
- * @param {string} payoutId - 支払ID
- * @param {string} expectedUpdatedAt - 楽観ロック用
- * @returns {Object} APIレスポンス
+ * @param payoutId - 支払ID
+ * @param expectedUpdatedAt - 楽観ロック用
+ * @returns APIレスポンス
  */
-function undoPayout(payoutId, expectedUpdatedAt) {
+function undoPayout(payoutId: string, expectedUpdatedAt: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -482,40 +499,41 @@ function undoPayout(payoutId, expectedUpdatedAt) {
     }
 
     // Service呼び出し
-    const result = PayoutService.undoPayout(payoutId, expectedUpdatedAt);
+    const result = PayoutService.undoPayout(payoutId, expectedUpdatedAt) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(errorCode, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('undoPayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払いを削除（undoPayoutのエイリアス）
- * @param {string} payoutId - 支払ID
- * @param {string} expectedUpdatedAt - 楽観ロック用
- * @returns {Object} APIレスポンス
+ * @param payoutId - 支払ID
+ * @param expectedUpdatedAt - 楽観ロック用
+ * @returns APIレスポンス
  */
-function deletePayout(payoutId, expectedUpdatedAt) {
+function deletePayout(payoutId: string, expectedUpdatedAt: string): unknown {
   return undoPayout(payoutId, expectedUpdatedAt);
 }
 
 /**
  * 支払いを更新（調整額・備考）
- * @param {Object} payout - 更新データ
- * @param {string} expectedUpdatedAt - 楽観ロック用
- * @returns {Object} APIレスポンス
+ * @param payout - 更新データ
+ * @param expectedUpdatedAt - 楽観ロック用
+ * @returns APIレスポンス
  */
-function savePayout(payout, expectedUpdatedAt) {
+function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -538,21 +556,22 @@ function savePayout(payout, expectedUpdatedAt) {
       }
     }
 
-    // Service呼び出し
-    const result = PayoutService.update(payout, expectedUpdatedAt);
+    // Service呼び出し（payout_idの存在は上で検証済み）
+    const result = PayoutService.update(payout as Partial<PayoutRecord> & { payout_id: string }, expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, {}, requestId);
+      return buildErrorResponse(errorCode, result.error || 'Unknown error', {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('savePayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
@@ -560,12 +579,12 @@ function savePayout(payout, expectedUpdatedAt) {
 
 /**
  * 支払いを確認済みとして記録（confirmed状態）
- * @param {string} staffId - スタッフID
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション { adjustment_amount, notes }
- * @returns {Object} APIレスポンス
+ * @param staffId - スタッフID
+ * @param endDate - 集計終了日
+ * @param options - オプション { adjustment_amount, notes }
+ * @returns APIレスポンス
  */
-function confirmPayout(staffId, endDate, options = {}) {
+function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -585,28 +604,29 @@ function confirmPayout(staffId, endDate, options = {}) {
     }
 
     // Service呼び出し
-    const result = PayoutService.confirmPayout(staffId, endDate, options);
+    const result = PayoutService.confirmPayout(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('confirmPayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 複数スタッフの支払いを一括確認
- * @param {string[]} staffIds - スタッフID配列
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション { adjustments: { [staffId]: { adjustment_amount, notes } } }
- * @returns {Object} APIレスポンス
+ * @param staffIds - スタッフID配列
+ * @param endDate - 集計終了日
+ * @param options - オプション { adjustments: { [staffId]: { adjustment_amount, notes } } }
+ * @returns APIレスポンス
  */
-function bulkConfirmPayouts(staffIds, endDate, options = {}) {
+function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -630,19 +650,20 @@ function bulkConfirmPayouts(staffIds, endDate, options = {}) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('bulkConfirmPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 確認済み支払いを振込完了にする
- * @param {string} payoutId - 支払ID
- * @param {Object} options - オプション { paid_date, expectedUpdatedAt }
- * @returns {Object} APIレスポンス
+ * @param payoutId - 支払ID
+ * @param options - オプション { paid_date, expectedUpdatedAt }
+ * @returns APIレスポンス
  */
-function payConfirmedPayout(payoutId, options = {}) {
+function payConfirmedPayout(payoutId: string, options: { paid_date?: string; expectedUpdatedAt?: string; expected_updated_at?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -671,37 +692,36 @@ function payConfirmedPayout(payoutId, options = {}) {
     if (options.paid_date) {
       const validationResult = _validatePaidDate(payoutId, options.paid_date);
       if (!validationResult.valid) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, validationResult.error, {}, requestId);
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, validationResult.error || 'Validation failed', {}, requestId);
       }
     }
 
     // Service呼び出し
-    const result = PayoutService.payConfirmedPayout(payoutId, options);
+    const result = PayoutService.payConfirmedPayout(payoutId, options) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(errorCode, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('payConfirmedPayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 複数の確認済み支払いを一括振込完了にする
- * @param {string[]} payoutIds - 支払ID配列
- * @param {Object} options - オプション { paid_date, expectedUpdatedAtMap }
- * @param {string} options.paid_date - 支払日（YYYY-MM-DD形式）
- * @param {Object} options.expectedUpdatedAtMap - 楽観ロック用 { [payoutId]: expectedUpdatedAt }
- * @returns {Object} APIレスポンス
+ * @param payoutIds - 支払ID配列
+ * @param options - オプション { paid_date, expectedUpdatedAtMap }
+ * @returns APIレスポンス
  */
-function bulkPayConfirmed(payoutIds, options = {}) {
+function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; expectedUpdatedAtMap?: Record<string, string> } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -723,13 +743,13 @@ function bulkPayConfirmed(payoutIds, options = {}) {
 
     // paid_dateの業務整合性検証（各payoutに対して検証）
     if (options.paid_date) {
-      const validationErrors = [];
+      const validationErrors: { payoutId: string; error: string }[] = [];
       for (const payoutId of payoutIds) {
         const validationResult = _validatePaidDate(payoutId, options.paid_date);
         if (!validationResult.valid) {
           validationErrors.push({
             payoutId: payoutId,
-            error: validationResult.error
+            error: validationResult.error || 'Validation failed'
           });
         }
       }
@@ -752,18 +772,19 @@ function bulkPayConfirmed(payoutIds, options = {}) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('bulkPayConfirmed', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 確認済み支払い一覧を取得
- * @param {Object} options - オプション { payout_type }
- * @returns {Object} APIレスポンス
+ * @param options - オプション { payout_type }
+ * @returns APIレスポンス
  */
-function getConfirmedPayouts(options = {}) {
+function getConfirmedPayouts(options: { payout_type?: PayoutType } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -778,12 +799,13 @@ function getConfirmedPayouts(options = {}) {
     return buildSuccessResponse({
       payouts: payouts,
       count: payouts.length,
-      totalAmount: payouts.reduce((sum, p) => sum + (p.total_amount || 0), 0)
+      totalAmount: payouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getConfirmedPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
@@ -791,10 +813,10 @@ function getConfirmedPayouts(options = {}) {
 
 /**
  * 日付文字列をローカルタイムゾーンでパース（UTC解釈回避）
- * @param {string} dateStr - 日付文字列（YYYY-MM-DD形式）
- * @returns {Date|null} パースされた日付またはnull
+ * @param dateStr - 日付文字列（YYYY-MM-DD形式）
+ * @returns パースされた日付またはnull
  */
-function _parseLocalDate(dateStr) {
+function _parseLocalDate(dateStr: string): Date | null {
   if (!dateStr) return null;
 
   const normalized = String(dateStr).replace(/\//g, '-');
@@ -812,11 +834,11 @@ function _parseLocalDate(dateStr) {
 
 /**
  * paid_dateの業務整合性を検証
- * @param {string} payoutId - 支払ID
- * @param {string} paidDate - 支払日
- * @returns {Object} { valid: boolean, error?: string }
+ * @param payoutId - 支払ID
+ * @param paidDate - 支払日
+ * @returns { valid: boolean, error?: string }
  */
-function _validatePaidDate(payoutId, paidDate) {
+function _validatePaidDate(payoutId: string, paidDate: string): { valid: boolean; error?: string } {
   const payout = PayoutRepository.findById(payoutId);
   if (!payout) {
     return { valid: false, error: 'Payout not found' };
@@ -859,11 +881,11 @@ function _validatePaidDate(payoutId, paidDate) {
 
 /**
  * 支払いエクスポート時の同名ファイル存在チェック
- * @param {string} fromDate - 開始日（YYYY-MM-DD）
- * @param {string} toDate - 終了日（YYYY-MM-DD）
- * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+ * @param fromDate - 開始日（YYYY-MM-DD）
+ * @param toDate - 終了日（YYYY-MM-DD）
+ * @returns APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
  */
-function checkPayoutExportFile(fromDate, toDate) {
+function checkPayoutExportFile(fromDate: string, toDate: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -882,20 +904,21 @@ function checkPayoutExportFile(fromDate, toDate) {
     const result = PayoutExportService.checkExistingFile(fromDate, toDate);
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('checkPayoutExportFile', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 振込金額集計をExcelエクスポート
- * @param {string} fromDate - 開始日（YYYY-MM-DD）
- * @param {string} toDate - 終了日（YYYY-MM-DD）
- * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
- * @returns {Object} { ok: true, data: { fileId, url, fileName, recordCount } }
+ * @param fromDate - 開始日（YYYY-MM-DD）
+ * @param toDate - 終了日（YYYY-MM-DD）
+ * @param options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
+ * @returns { ok: true, data: { fileId, url, fileName, recordCount } }
  */
-function exportPayouts(fromDate, toDate, options = {}) {
+function exportPayouts(fromDate: string, toDate: string, options: { action?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -936,17 +959,18 @@ function exportPayouts(fromDate, toDate, options = {}) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('exportPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 支払エクスポートフォルダのURLを取得
- * @returns {Object} APIレスポンス
+ * @returns APIレスポンス
  */
-function getPayoutExportFolderUrl() {
+function getPayoutExportFolderUrl(): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -958,9 +982,10 @@ function getPayoutExportFolderUrl() {
     const status = PayoutExportService.getExportFolderStatus();
     return buildSuccessResponse(status, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getPayoutExportFolderUrl', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
@@ -968,9 +993,9 @@ function getPayoutExportFolderUrl() {
 
 /**
  * 外注先一覧を取得（支払い画面用）
- * @returns {Object} { ok: true, data: { subcontractors: [] } }
+ * @returns { ok: true, data: { subcontractors: [] } }
  */
-function getSubcontractorsForPayouts() {
+function getSubcontractorsForPayouts(): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -981,26 +1006,29 @@ function getSubcontractorsForPayouts() {
 
     const subcontractors = SubcontractorRepository.search({ is_active: true });
 
-    const data = subcontractors.map(s => ({
-      subcontractor_id: s.subcontractor_id,
-      company_name: s.company_name
-    }));
+    const data = subcontractors.map(function(s) {
+      return {
+        subcontractor_id: s.subcontractor_id as string,
+        company_name: s.company_name as string
+      };
+    });
 
     return buildSuccessResponse({ subcontractors: data }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getSubcontractorsForPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 外注先の未払いサマリーを取得
- * @param {string} subcontractorId - 外注先ID
- * @param {string} endDate - 集計終了日（YYYY-MM-DD）
- * @returns {Object} APIレスポンス
+ * @param subcontractorId - 外注先ID
+ * @param endDate - 集計終了日（YYYY-MM-DD）
+ * @returns APIレスポンス
  */
-function getUnpaidSummaryForSubcontractor(subcontractorId, endDate) {
+function getUnpaidSummaryForSubcontractor(subcontractorId: string, endDate: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1017,25 +1045,26 @@ function getUnpaidSummaryForSubcontractor(subcontractorId, endDate) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    const result = PayoutService.calculatePayoutForSubcontractor(subcontractorId, endDate);
+    const result = PayoutService.calculatePayoutForSubcontractor(subcontractorId, endDate) as unknown as Record<string, unknown>;
 
     const subcontractor = SubcontractorRepository.findById(subcontractorId);
-    result.companyName = subcontractor ? subcontractor.company_name : '(不明)';
+    result.companyName = subcontractor ? subcontractor.company_name as string : '(不明)';
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidSummaryForSubcontractor', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 未払い外注先一覧を取得
- * @param {string} endDate - 集計終了日
- * @returns {Object} APIレスポンス
+ * @param endDate - 集計終了日
+ * @returns APIレスポンス
  */
-function getUnpaidSubcontractorList(endDate) {
+function getUnpaidSubcontractorList(endDate: string): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1048,29 +1077,30 @@ function getUnpaidSubcontractorList(endDate) {
       endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
     }
 
-    const result = PayoutService.getUnpaidSubcontractorList(endDate);
+    const result = PayoutService.getUnpaidSubcontractorList(endDate) as unknown as Record<string, unknown>[];
 
     return buildSuccessResponse({
       endDate: endDate,
       subcontractorList: result,
       totalCount: result.length,
-      totalAmount: result.reduce((sum, s) => sum + s.estimatedAmount, 0)
+      totalAmount: result.reduce(function(sum: number, s: Record<string, unknown>) { return sum + ((s.estimatedAmount as number) || 0); }, 0)
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getUnpaidSubcontractorList', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 外注費を確認済みにする
- * @param {string} subcontractorId - 外注先ID
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション
- * @returns {Object} APIレスポンス
+ * @param subcontractorId - 外注先ID
+ * @param endDate - 集計終了日
+ * @param options - オプション
+ * @returns APIレスポンス
  */
-function confirmSubcontractorPayout(subcontractorId, endDate, options = {}) {
+function confirmSubcontractorPayout(subcontractorId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1087,28 +1117,29 @@ function confirmSubcontractorPayout(subcontractorId, endDate, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options);
+    const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('confirmSubcontractorPayout', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 外注費を支払済にする
- * @param {string} subcontractorId - 外注先ID
- * @param {string} endDate - 集計終了日
- * @param {Object} options - オプション
- * @returns {Object} APIレスポンス
+ * @param subcontractorId - 外注先ID
+ * @param endDate - 集計終了日
+ * @param options - オプション
+ * @returns APIレスポンス
  */
-function markSubcontractorPayoutAsPaid(subcontractorId, endDate, options = {}) {
+function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string, options: { paid_date?: string; adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1129,27 +1160,28 @@ function markSubcontractorPayoutAsPaid(subcontractorId, endDate, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options);
+    const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error, { message: result.message }, requestId);
+      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('markSubcontractorPayoutAsPaid', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 外注先の支払い履歴を取得
- * @param {string} subcontractorId - 外注先ID
- * @param {Object} options - オプション { limit }
- * @returns {Object} APIレスポンス
+ * @param subcontractorId - 外注先ID
+ * @param options - オプション { limit }
+ * @returns APIレスポンス
  */
-function getSubcontractorPayoutHistory(subcontractorId, options = {}) {
+function getSubcontractorPayoutHistory(subcontractorId: string, options: { limit?: number } = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1170,18 +1202,19 @@ function getSubcontractorPayoutHistory(subcontractorId, options = {}) {
       count: history.length
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('getSubcontractorPayoutHistory', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
 
 /**
  * 外注費の支払い一覧を検索
- * @param {Object} query - 検索条件
- * @returns {Object} APIレスポンス
+ * @param query - 検索条件
+ * @returns APIレスポンス
  */
-function searchSubcontractorPayouts(query = {}) {
+function searchSubcontractorPayouts(query: PayoutSearchQuery = {}): unknown {
   const requestId = generateRequestId();
 
   try {
@@ -1191,7 +1224,7 @@ function searchSubcontractorPayouts(query = {}) {
     }
 
     // 外注先支払いのみを検索
-    const searchQuery = {
+    const searchQuery: PayoutSearchQuery = {
       ...query,
       payout_type: 'SUBCONTRACTOR'
     };
@@ -1203,8 +1236,9 @@ function searchSubcontractorPayouts(query = {}) {
       count: payouts.length
     }, requestId);
 
-  } catch (error) {
+  } catch (error: unknown) {
     logErr('searchSubcontractorPayouts', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
   }
 }
