@@ -83,7 +83,8 @@ const INVOICE_STATUSES = {
   UNSENT: 'unsent',
   SENT: 'sent',
   UNPAID: 'unpaid',
-  PAID: 'paid'
+  PAID: 'paid',
+  HOLD: 'hold'
 } as const;
 
 const ASSIGNMENT_STATUSES = {

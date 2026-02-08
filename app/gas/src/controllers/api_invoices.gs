@@ -323,7 +323,7 @@ function bulkUpdateInvoiceStatus(updates, status) {
     }
 
     // 有効なステータスチェック
-    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
     if (!validStatuses.includes(status)) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
     }
@@ -346,7 +346,12 @@ function bulkUpdateInvoiceStatus(updates, status) {
     // エラー情報を抽出
     const errors = result.results
       .filter(r => !r.success)
-      .map(r => ({ invoiceId: r.invoiceId, error: r.error }));
+      .map(r => ({
+        invoiceId: r.invoiceId,
+        error: r.error,
+        currentStatus: r.currentStatus,
+        currentUpdatedAt: r.currentUpdatedAt
+      }));
 
     return buildSuccessResponse({
       success: true,
