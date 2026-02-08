@@ -255,6 +255,11 @@
       color: #059669;
     }
 
+    .status-hold {
+      background: #FFF7ED;
+      color: #EA580C;
+    }
+
     /* Assignment Change Warning */
     .assignment-change-warning {
       cursor: pointer;
@@ -859,6 +864,7 @@
       <select id="filterStatus">
         <option value="">全て</option>
         <option value="unsent">未送付</option>
+        <option value="hold">保留</option>
         <option value="sent">送付済</option>
         <option value="unpaid">未回収</option>
         <option value="paid">入金済</option>
@@ -884,8 +890,10 @@
     <select id="bulkStatusSelect">
       <option value="">ステータス変更...</option>
       <option value="unsent">未送付</option>
+      <option value="hold">保留</option>
       <option value="sent">送付済</option>
       <option value="unpaid">未回収</option>
+      <option value="paid">入金済</option>
     </select>
     <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
@@ -1914,7 +1922,7 @@
           rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
         }
         // 帳票出力ボタン（常に表示、編集可否はモーダル内で制御）
-        const isEditable = inv.status === 'unsent' || inv.status === 'draft' || inv.status === 'issued';
+        const isEditable = inv.status === 'unsent' || inv.status === 'hold' || inv.status === 'draft' || inv.status === 'issued';
         const btnLabel = isEditable ? '確認' : '出力';
         const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
         const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
@@ -1935,6 +1943,7 @@
     function getStatusLabel(status) {
       const labels = {
         unsent: '未送付',
+        hold: '保留',
         sent: '送付済',
         unpaid: '未回収',
         paid: '入金済',
@@ -2167,7 +2176,7 @@
 
     // ========== ソート機能 ==========
     let invoiceSortDirection = 0; // 0:なし, 1:昇順, -1:降順
-    const statusOrder = { 'unsent': 1, 'sent': 2, 'unpaid': 3, 'paid': 4, 'draft': 1, 'issued': 1 };
+    const statusOrder = { 'unsent': 1, 'hold': 1.5, 'sent': 2, 'unpaid': 3, 'paid': 4, 'draft': 1, 'issued': 1 };
 
     function toggleStatusSort() {
       // ソート方向をトグル
@@ -2266,6 +2275,7 @@
 
       const statusLabel = {
         unsent: '未送付',
+        hold: '保留',
         sent: '送付済',
         unpaid: '未回収',
         paid: '入金済'
@@ -3630,7 +3640,7 @@
      */
     function showRegenerateConfirm(invoiceId, customerName, period, status) {
       // 送付済みの場合は再生成不可
-      if (status !== 'unsent' && status !== 'draft' && status !== 'issued') {
+      if (status !== 'unsent' && status !== 'hold' && status !== 'draft' && status !== 'issued') {
         showToast('送付済みの請求書は再生成できません', 'warning');
         return;
       }
@@ -3782,7 +3792,7 @@
           currentEditInvoice = invoice;
 
           // 編集可能なステータスかチェック
-          const editableStatuses = ['unsent', 'draft', 'issued'];
+          const editableStatuses = ['unsent', 'hold', 'draft', 'issued'];
           const isEditable = editableStatuses.includes(invoice.status);
 
           // モーダルタイトルを設定

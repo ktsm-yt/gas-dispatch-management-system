@@ -292,7 +292,7 @@ const InvoiceService = {
     const normalizedStatus = normalizeStatus(status);
 
     // ステータス遷移の検証
-    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
     if (!validStatuses.includes(normalizedStatus)) {
       return { success: false, error: 'INVALID_STATUS' };
     }
@@ -308,10 +308,11 @@ const InvoiceService = {
       (current.status === 'draft' || current.status === 'issued') ? 'unsent' : current.status
     );
     const allowedTransitions = {
-      unsent: ['sent'],
-      sent: ['paid', 'unpaid', 'unsent'],
-      unpaid: ['paid', 'sent'],
-      paid: ['sent']
+      unsent: ['sent', 'hold'],
+      sent: ['paid', 'unpaid', 'unsent', 'hold'],
+      unpaid: ['paid', 'sent', 'hold'],
+      paid: ['sent', 'hold'],
+      hold: ['unsent', 'sent', 'unpaid', 'paid']
     };
     if (currentStatusNormalized !== normalizedStatus && !allowedTransitions[currentStatusNormalized]?.includes(normalizedStatus)) {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
@@ -349,8 +350,8 @@ const InvoiceService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // 送付済み以降は削除不可（未送付/draft/issuedのみ削除可能）
-    const deletableStatuses = ['unsent', 'draft', 'issued'];
+    // 送付済み以降は削除不可（未送付/保留/draft/issuedのみ削除可能）
+    const deletableStatuses = ['unsent', 'hold', 'draft', 'issued'];
     if (!deletableStatuses.includes(invoice.status)) {
       return { success: false, error: 'CANNOT_DELETE_SENT_INVOICE' };
     }
