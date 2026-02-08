@@ -86,6 +86,13 @@ const AssignmentService = {
         );
       }
 
+      // 既存配置を1回だけ読み込み、重複チェック用Mapを構築（N回のDB読み込みを1回に削減）
+      const existingAssignments = AssignmentRepository.findByJobId(jobId);
+      const existingStaffMap = new Map();
+      existingAssignments
+        .filter(a => a.status !== 'CANCELLED')
+        .forEach(a => existingStaffMap.set(a.staff_id, a.assignment_id));
+
       const results = {
         inserted: [],
         updated: [],
@@ -110,6 +117,10 @@ const AssignmentService = {
               before: result.before,
               after: result.after
             });
+            // 削除されたスタッフをMapから除去（同一リクエスト内で再追加を許可）
+            if (result.before?.staff_id) {
+              existingStaffMap.delete(result.before.staff_id);
+            }
           }
         }
       }
@@ -177,11 +188,8 @@ const AssignmentService = {
               continue; // 同一リクエスト内の重複はスキップ
             }
 
-            if (AssignmentRepository.checkDuplicateAssignment(
-              processedAssignment.staff_id,
-              jobId
-            )) {
-              continue; // 重複はスキップ
+            if (existingStaffMap.has(processedAssignment.staff_id)) {
+              continue; // 重複はスキップ（Mapルックアップ、DBアクセス不要）
             }
 
             processedAssignment.job_id = jobId;
@@ -231,16 +239,23 @@ const AssignmentService = {
         expectedUpdatedAt
       );
 
-      // 案件のステータス更新（配置数に応じて）
-      this._updateJobStatus(jobId);
+      // 更新後の配置一覧を取得（1回だけ。ステータス計算・スロット・レスポンスで共用）
+      const updatedAssignments = AssignmentRepository.findByJobId(jobId);
+      const activeCount = updatedAssignments.filter(a => a.status !== 'CANCELLED').length;
+
+      // 更新後の案件を取得（updated_atが更新済み）
+      // ステータス変更判定 + 楽観ロック + レスポンス用に共用
+      const updatedJob = JobRepository.findById(jobId);
+
+      // 案件のステータス更新（プリロードデータで再取得を省略）
+      this._updateJobStatus(jobId, { job: updatedJob, assignedCount: activeCount });
 
       // 監査ログの記録
       if (auditLogs.length > 0) {
         logBatch(auditLogs);
       }
 
-      // 更新後の配置一覧を取得（スタッフ名付き）
-      const updatedAssignments = AssignmentRepository.findByJobId(jobId);
+      // スタッフ情報を付加
       const staffCache = this._buildStaffCache();
       const enrichedAssignments = updatedAssignments.map(a => {
         const staff = staffCache[a.staff_id];
@@ -251,14 +266,17 @@ const AssignmentService = {
         };
       });
 
-      // スロット情報を取得（配置モーダルの状態更新用）
+      // スロット情報を取得（1回だけ）
       const slotsData = SlotService.getSlotsByJobId(jobId);
       const slots = slotsData.slots || [];
 
-      // スロット充足状況を取得
+      // スロット充足状況を取得（プリロードデータで再取得を省略）
       let slotStatus = null;
       if (slots.length > 0) {
-        slotStatus = SlotService.getSlotStatus(jobId);
+        slotStatus = SlotService.getSlotStatus(jobId, {
+          slots: slots,
+          assignments: updatedAssignments
+        });
       }
 
       return buildSuccessResponse({
@@ -266,7 +284,7 @@ const AssignmentService = {
         inserted: results.inserted.length,
         updated: results.updated.length,
         deleted: results.deleted.length,
-        job: JobRepository.findById(jobId),
+        job: updatedJob,
         slots: slots,
         slotStatus: slotStatus
       }, requestId);
@@ -511,27 +529,39 @@ const AssignmentService = {
   /**
    * 案件ステータスを更新（配置数に応じて）
    * @private
+   * @param {string} jobId - 案件ID
+   * @param {Object} [preloadedData] - プリロード済みデータ（省略時はDB取得）
+   * @param {Object} [preloadedData.job] - 案件データ
+   * @param {number} [preloadedData.assignedCount] - 配置済み数
    */
-  _updateJobStatus: function(jobId) {
-    const job = JobRepository.findById(jobId);
+  _updateJobStatus: function(jobId, preloadedData) {
+    const job = preloadedData?.job || JobRepository.findById(jobId);
     if (!job || job.status === 'cancelled') {
       return;
     }
 
-    const shortage = this.getShortage(jobId);
+    const requiredCount = Number(job.required_count) || 0;
+    let assignedCount;
+    if (preloadedData?.assignedCount != null) {
+      assignedCount = preloadedData.assignedCount;
+    } else {
+      assignedCount = AssignmentRepository.countByJobId(jobId);
+    }
+
     let newStatus = job.status;
 
-    if (shortage.assigned === 0) {
+    if (assignedCount === 0) {
       newStatus = 'pending';
-    } else if (shortage.shortage <= 0) {
+    } else if (assignedCount >= requiredCount) {
       newStatus = 'assigned';
     } else {
-      // 一部配置済みの場合もassignedとする（または別ステータス）
       newStatus = 'pending';
     }
 
     if (newStatus !== job.status) {
       JobRepository.update({ job_id: jobId, status: newStatus }, job.updated_at);
+      // プリロードオブジェクトにも反映（レスポンス用）
+      job.status = newStatus;
     }
   },
 
