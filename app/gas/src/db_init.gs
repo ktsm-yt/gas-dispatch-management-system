@@ -108,7 +108,7 @@ const TABLE_DEFINITIONS = {
     headers: [
       'invoice_id', 'invoice_number', 'customer_id', 'billing_year', 'billing_month',
       'issue_date', 'due_date', 'subtotal', 'expense_amount', 'tax_amount',
-      'total_amount', 'invoice_format', 'shipper_name', 'pdf_file_id',
+      'total_amount', 'adjustment_total', 'invoice_format', 'shipper_name', 'pdf_file_id',
       'excel_file_id', 'sheet_file_id', 'status', 'notes', 'created_at',
       'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -147,6 +147,16 @@ const TABLE_DEFINITIONS = {
       'payment_id', 'invoice_id', 'payment_date', 'amount', 'payment_method',
       'bank_ref', 'notes', 'is_deleted', 'created_at', 'created_by',
       'deleted_at', 'deleted_by'
+    ]
+  },
+  // 調整項目テーブル（請求書の金額調整用）
+  T_InvoiceAdjustments: {
+    sheetName: 'InvoiceAdjustments',
+    headers: [
+      'adjustment_id', 'invoice_id', 'item_name', 'amount',
+      'sort_order', 'notes',
+      'created_at', 'created_by', 'updated_at', 'updated_by',
+      'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   // P2-6: 月次統計テーブル（売上分析ダッシュボード用）
@@ -1110,4 +1120,67 @@ function migrateAddPaymentsSheet() {
   Logger.log('✓ 入金記録シートを追加しました');
   Logger.log('カラム: payment_id, invoice_id, payment_date, amount, payment_method, ...');
   Logger.log('用途: 請求書に対する入金記録、売掛金管理');
+}
+
+/**
+ * 調整項目マイグレーション:
+ * 1. T_InvoiceAdjustments シートを追加
+ * 2. T_Invoices に adjustment_total カラムを追加
+ * GASエディタから実行: migrateAddInvoiceAdjustments()
+ */
+function migrateAddInvoiceAdjustments() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  Logger.log('=== 調整項目マイグレーション ===\n');
+
+  // 1. T_InvoiceAdjustments シート追加
+  const existingSheet = ss.getSheetByName('InvoiceAdjustments');
+  if (existingSheet) {
+    Logger.log('✓ InvoiceAdjustments シートは既に存在します');
+  } else {
+    const definition = TABLE_DEFINITIONS.T_InvoiceAdjustments;
+    createSheet(ss, 'T_InvoiceAdjustments', definition);
+    Logger.log('✓ InvoiceAdjustments シートを追加しました');
+  }
+
+  // 2. T_Invoices に adjustment_total カラム追加
+  const invoiceSheet = ss.getSheetByName('Invoices');
+  if (!invoiceSheet) {
+    Logger.log('✗ Invoices シートが見つかりません');
+    return;
+  }
+
+  const lastCol = invoiceSheet.getLastColumn();
+  const headers = invoiceSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  if (headers.includes('adjustment_total')) {
+    Logger.log('✓ adjustment_total カラムは既に存在します');
+  } else {
+    // total_amount の後に挿入
+    const totalAmountIndex = headers.indexOf('total_amount');
+    if (totalAmountIndex === -1) {
+      Logger.log('✗ total_amount カラムが見つかりません');
+      return;
+    }
+
+    const insertPosition = totalAmountIndex + 2; // 1-indexed
+    invoiceSheet.insertColumnAfter(totalAmountIndex + 1);
+    invoiceSheet.getRange(1, insertPosition).setValue('adjustment_total');
+
+    // ヘッダー行のスタイルを適用
+    const newLastCol = invoiceSheet.getLastColumn();
+    invoiceSheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log(`✓ adjustment_total カラムを列 ${insertPosition} に追加しました`);
+  }
+
+  Logger.log('\n=== 調整項目マイグレーション完了 ===');
 }
