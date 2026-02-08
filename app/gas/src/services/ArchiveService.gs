@@ -59,10 +59,11 @@ const ArchiveService = {
         return { success: false, error: 'ALREADY_RUNNING' };
       }
 
-      // 対象年度の決定
+      // 対象年度の決定（3月始まり/2月終わり）
       const targetYear = fiscalYear || this.getCurrentFiscalYear() - 1;
-      const startDate = `${targetYear}-04-01`;
-      const endDate = `${targetYear + 1}-03-31`;
+      const startDate = `${targetYear}-03-01`;
+      const lastDay = new Date(targetYear + 1, 2, 0).getDate(); // 2月末日（閏年対応）
+      const endDate = `${targetYear + 1}-02-${String(lastDay).padStart(2, '0')}`;
 
       Logger.log(`=== アーカイブ開始: ${targetYear}年度 (${startDate} - ${endDate}) ===`);
 
@@ -302,9 +303,9 @@ const ArchiveService = {
    * 請求年月が対象年度内かチェック
    */
   isInFiscalYear(billingYear, billingMonth, fiscalYear) {
-    // 年度: 4月〜翌3月
-    // 例: 2024年度 = 2024/4 〜 2025/3
-    if (billingMonth >= 4) {
+    // 年度: 3月〜翌2月（2月決算）
+    // 例: 2024年度 = 2024/3 〜 2025/2
+    if (billingMonth >= 3) {
       return billingYear === fiscalYear;
     } else {
       return billingYear === fiscalYear + 1;
@@ -357,7 +358,7 @@ const ArchiveService = {
     const today = new Date();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
-    return month >= 4 ? year : year - 1;
+    return month >= 3 ? year : year - 1;
   },
 
   /**
@@ -370,8 +371,8 @@ const ArchiveService = {
     const failedMonths = [];
     let successCount = 0;
 
-    // 4月〜12月
-    for (let m = 4; m <= 12; m++) {
+    // 3月〜12月（当年）
+    for (let m = 3; m <= 12; m++) {
       try {
         StatsService.finalizeMonthStats(fiscalYear, m);
         successCount++;
@@ -381,8 +382,8 @@ const ArchiveService = {
       }
     }
 
-    // 翌年1月〜3月
-    for (let m = 1; m <= 3; m++) {
+    // 翌年1月〜2月
+    for (let m = 1; m <= 2; m++) {
       try {
         StatsService.finalizeMonthStats(fiscalYear + 1, m);
         successCount++;
@@ -405,17 +406,18 @@ const ArchiveService = {
    * 未処理項目をチェック
    */
   checkPendingItems(fiscalYear) {
-    const startDate = `${fiscalYear}-04-01`;
-    const endDate = `${fiscalYear + 1}-03-31`;
+    const startDate = `${fiscalYear}-03-01`;
+    const lastDay = new Date(fiscalYear + 1, 2, 0).getDate();
+    const endDate = `${fiscalYear + 1}-02-${String(lastDay).padStart(2, '0')}`;
 
-    // 未発行請求書（年度全体: 4月〜翌3月）
+    // 未発行請求書（年度全体: 3月〜翌2月）
     const unpaidInvoices = [];
     try {
-      // 4月〜12月（当年）
-      for (let m = 4; m <= 12; m++) {
+      // 3月〜12月（当年）
+      for (let m = 3; m <= 12; m++) {
         const invoices = InvoiceRepository.findByPeriod(fiscalYear, m);
         invoices.forEach(inv => {
-          if (inv.status === 'unsent') {
+          if (inv.status === 'unsent' || inv.status === 'hold') {
             unpaidInvoices.push({
               customerId: inv.customer_id,
               customerName: inv.customer_name || inv.customer_id,
@@ -424,11 +426,11 @@ const ArchiveService = {
           }
         });
       }
-      // 1月〜3月（翌年）
-      for (let m = 1; m <= 3; m++) {
+      // 1月〜2月（翌年）
+      for (let m = 1; m <= 2; m++) {
         const invoices = InvoiceRepository.findByPeriod(fiscalYear + 1, m);
         invoices.forEach(inv => {
-          if (inv.status === 'unsent') {
+          if (inv.status === 'unsent' || inv.status === 'hold') {
             unpaidInvoices.push({
               customerId: inv.customer_id,
               customerName: inv.customer_name || inv.customer_id,
