@@ -324,14 +324,6 @@ function markAsPaid(staffId, endDate, options = {}) {
 }
 
 /**
- * 支払いを生成（後方互換性のため残す - markAsPaidを使用推奨）
- * @deprecated markAsPaid() を使用してください
- */
-function generatePayout(staffId, endDate, options = {}) {
-  return markAsPaid(staffId, endDate, options);
-}
-
-/**
  * 複数スタッフの支払いを一括で支払済にする
  * @param {string[]} staffIds - スタッフID配列
  * @param {string} endDate - 集計終了日
@@ -371,14 +363,6 @@ function bulkMarkAsPaid(staffIds, endDate, options = {}) {
     logErr('bulkMarkAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
-}
-
-/**
- * 複数スタッフの支払いを一括生成（後方互換性のため残す）
- * @deprecated bulkMarkAsPaid() を使用してください
- */
-function bulkGeneratePayouts(staffIds, endDate) {
-  return bulkMarkAsPaid(staffIds, endDate);
 }
 
 /**
@@ -473,52 +457,6 @@ function getPayoutHistory(staffId, options = {}) {
 
   } catch (error) {
     logErr('getPayoutHistory', error, requestId);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
-  }
-}
-
-/**
- * 支払いステータスを更新（簡素化版 - paid のみ）
- * @param {string} payoutId - 支払ID
- * @param {string} status - 新ステータス（paid のみ）
- * @param {string} expectedUpdatedAt - 楽観ロック用
- * @returns {Object} APIレスポンス
- * @deprecated 通常は markAsPaid() で直接 paid ステータスで作成するため、このAPIは使用しません
- */
-function updatePayoutStatus(payoutId, status, expectedUpdatedAt) {
-  const requestId = generateRequestId();
-
-  try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
-
-    // 入力検証
-    if (!payoutId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
-    }
-
-    // 簡素化: paid のみ許可
-    if (status !== 'paid') {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'status must be "paid". Use undoPayout() to cancel.', {}, requestId);
-    }
-
-    // Service呼び出し
-    const result = PayoutService.updateStatus(payoutId, status, expectedUpdatedAt);
-
-    if (!result.success) {
-      const errorCode = result.error === 'CONFLICT_ERROR'
-        ? ERROR_CODES.CONFLICT_ERROR
-        : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, { message: result.message }, requestId);
-    }
-
-    return buildSuccessResponse(result, requestId);
-
-  } catch (error) {
-    logErr('updatePayoutStatus', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
 }

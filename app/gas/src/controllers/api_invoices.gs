@@ -407,7 +407,7 @@ function checkInvoiceExportFile(invoiceId, mode, options = {}) {
 /**
  * 請求書を出力（PDF/Excel/編集）
  * @param {string} invoiceId - 請求ID
- * @param {string} mode - 出力モード（pdf/excel/edit）
+ * @param {string} mode - 出力モード（pdf/excel/cover）
  * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
  * @returns {Object} APIレスポンス { fileId, url }
  */
@@ -426,7 +426,7 @@ function exportInvoice(invoiceId, mode, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    const validModes = ['pdf', 'excel', 'cover', 'edit'];
+    const validModes = ['pdf', 'excel', 'cover'];
     if (!mode || !validModes.includes(mode)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -547,7 +547,7 @@ function regenerateInvoice(invoiceId) {
 /**
  * 請求データをエクスポート（集計データ）
  * @param {string} ym - 対象年月（YYYY-MM形式）
- * @param {string} format - 出力形式（xlsx/csv）。csv は @deprecated 2026-06 削除予定
+ * @param {string} format - 出力形式（xlsx）
  * @returns {Object} APIレスポンス { fileId, url }
  */
 function exportBillingData(ym, format = 'xlsx') {
@@ -565,7 +565,7 @@ function exportBillingData(ym, format = 'xlsx') {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'ym must be in YYYY-MM format', {}, requestId);
     }
 
-    const validFormats = ['xlsx', 'csv'];
+    const validFormats = ['xlsx'];
     if (!validFormats.includes(format)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -615,27 +615,15 @@ function exportBillingData(ym, format = 'xlsx') {
 
     SpreadsheetApp.flush();
 
-    // フォーマットに応じて出力
-    let blob;
-    let fileName;
+    // xlsx形式で出力
     const spreadsheetId = spreadsheet.getId();
-
-    if (format === 'csv') {
-      console.warn('[DEPRECATED] CSV出力は 2026-06 に削除予定です。xlsx形式を使用してください。');
-      const csvContent = this._convertToCSV(data);
-      blob = Utilities.newBlob(csvContent, 'text/csv');
-      fileName = `請求データ_${ym}.csv`;
-    } else {
-      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
-      const token = ScriptApp.getOAuthToken();
-      const response = UrlFetchApp.fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      blob = response.getBlob();
-      fileName = `請求データ_${ym}.xlsx`;
-    }
-
-    blob.setName(fileName);
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const blob = response.getBlob();
+    blob.setName(`請求データ_${ym}.xlsx`);
 
     // エクスポートフォルダを取得
     const folder = InvoiceExportService._getOutputFolder();
@@ -677,29 +665,6 @@ function getBillingExportFolderUrl() {
     Logger.log(`getBillingExportFolderUrl error: ${error.message}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
   }
-}
-
-/**
- * 配列をCSV形式に変換
- * @param {Object[]} data - データ配列
- * @returns {string} CSV文字列
- */
-function _convertToCSV(data) {
-  if (!data || data.length === 0) return '';
-
-  const headers = Object.keys(data[0]);
-  const rows = data.map(row =>
-    headers.map(h => {
-      const value = row[h];
-      // カンマや改行を含む場合はダブルクォートで囲む
-      if (String(value).includes(',') || String(value).includes('\n')) {
-        return `"${String(value).replace(/"/g, '""')}"`;
-      }
-      return value;
-    }).join(',')
-  );
-
-  return [headers.join(','), ...rows].join('\n');
 }
 
 /**
