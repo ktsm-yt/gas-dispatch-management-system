@@ -372,6 +372,14 @@
       display: none; /* 非表示にしてコンパクト化 */
     }
 
+    .staff-names {
+      font-size: 10px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     /* Status badge */
     .status-badge {
       font-size: 9px;
@@ -1588,6 +1596,11 @@
         const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '';
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
+        const staffNames = (job.assignments || [])
+          .filter(a => a.status !== 'CANCELLED')
+          .map(a => (a.staff_name || '').slice(0, 3))
+          .filter(n => n)
+          .join(' ');
 
         return `
           <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignmentsForDashboard('${job.job_id}')">
@@ -1608,6 +1621,7 @@
               <span class="site-address">${job.site_address || ''}</span>
               <span class="start-time">${job.start_time || ''}</span>
             </div>
+            ${staffNames ? `<div class="staff-names">${staffNames}</div>` : ''}
           </div>
         `;
       }).join('');
