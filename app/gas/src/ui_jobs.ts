@@ -6,8 +6,6 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
 
   const pages: Record<string, PageConfig> = {
     dashboard: { file: 'dashboard', title: 'ダッシュボード' },
-    jobs: { file: 'jobs', title: '案件管理' },
-    assignments: { file: 'assignments', title: '配置管理' },
     customers: { file: 'customers', title: '顧客マスター' },
     staff: { file: 'staff', title: 'スタッフマスター' },
     subcontractors: { file: 'subcontractors', title: '外注先マスター' },
