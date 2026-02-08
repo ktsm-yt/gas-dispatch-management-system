@@ -1773,6 +1773,9 @@ function generateLineTemplate() {
     ? (workDetailLabel ? `${job.work_category}（${workDetailLabel}）` : job.work_category)
     : workDetailLabel;
 
+  // 最寄駅（配置の transport_station から取得）
+  const nearestStation = activeAssignments.map(a => a.transport_station).find(s => s) || '';
+
   // 顧客名付き現場名
   const siteWithCustomer = job.customer_name
     ? `${job.site_name || ''}（${job.customer_name}）`
@@ -1788,7 +1791,7 @@ function generateLineTemplate() {
 
 ◉作業年月日：${dateStr}
 ◉開始時間：${(job.start_time || '-').replace(/^0/, '')}
-◉最寄駅：
+◉最寄駅：${nearestStation}
 ◉現場住所：${job.site_address || ''}
 ◉現場名：${siteWithCustomer}
 ◉担当者：${job.supervisor_name ? job.supervisor_name + 'さま' : ''}
