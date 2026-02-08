@@ -543,7 +543,17 @@ cursor: help;
 .work-category-tag.tag-keisagyo { background: #4DB6AC; }
 .work-category-tag.tag-niage { background: #9575CD; }
 
+.modal-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+}
+
 .modal-site-address {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
 }
