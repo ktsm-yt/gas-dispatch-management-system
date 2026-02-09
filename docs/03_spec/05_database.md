@@ -223,6 +223,9 @@ WebUI 請求書一覧
 | contact_name | STRING | - | 担当者名 |
 | phone | STRING | - | 電話番号 |
 | notes | STRING | - | 備考 |
+| basic_rate | NUMBER | - | 基本単価（円） |
+| half_day_rate | NUMBER | - | ハーフ単価（円） |
+| full_day_rate | NUMBER | - | 終日単価（円） |
 | folder_id | STRING | - | 関連ファイル格納フォルダID（請求書PDF等） |
 | created_at | DATETIME | ○ | 作成日時 |
 | updated_at | DATETIME | ○ | 更新日時 |
