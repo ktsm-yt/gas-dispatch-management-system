@@ -83,6 +83,77 @@
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
     }
 
+    /* Customer Search */
+    .customer-search-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .customer-search-wrapper input {
+      width: 200px;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      padding-right: 24px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+    }
+
+    .customer-search-wrapper input:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .customer-search-clear {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1;
+      display: none;
+    }
+
+    .customer-search-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 240px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      z-index: 100;
+      display: none;
+    }
+
+    .customer-search-list.open {
+      display: block;
+    }
+
+    .customer-search-item {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .customer-search-item:hover,
+    .customer-search-item.active {
+      background: var(--bg-hover);
+    }
+
+    .customer-search-empty {
+      padding: var(--spacing-sm);
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
     .toolbar-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -313,6 +384,13 @@
         <span>〜</span>
         <input type="month" id="end-month" style="width: 120px;">
       </span>
+
+      <label style="margin-left: var(--spacing-md);">顧客:</label>
+      <div class="customer-search-wrapper">
+        <input type="text" id="customer-search" placeholder="顧客を検索..." autocomplete="off">
+        <span class="customer-search-clear" id="customer-search-clear">&times;</span>
+        <div class="customer-search-list" id="customer-search-list"></div>
+      </div>
     </div>
 
     <div class="toolbar-actions">
@@ -361,31 +439,6 @@
       </div>
     </div>
 
-    <!-- Customer Revenue Section -->
-    <div class="data-table-section" style="margin-bottom: var(--spacing-lg);">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
-        <h3>顧客別売上</h3>
-        <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
-          <label style="font-size: 13px; color: var(--text-muted);">年度:</label>
-          <select id="customer-fiscal-year" style="padding: var(--spacing-xs) var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px;">
-          </select>
-          <label style="font-size: 13px; color: var(--text-muted); margin-left: var(--spacing-sm);">並び替え:</label>
-          <select id="customer-sort" style="padding: var(--spacing-xs) var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px;">
-            <option value="total_desc">合計額（降順）</option>
-            <option value="name_asc">顧客名（昇順）</option>
-          </select>
-        </div>
-      </div>
-      <div style="overflow-x: auto;">
-        <table class="data-table" id="customer-revenue-table">
-          <thead id="customer-revenue-thead"></thead>
-          <tbody id="customer-revenue-tbody">
-            <tr><td colspan="14" class="loading"><div class="loading-spinner"></div><span>読み込み中...</span></td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <!-- Data Table -->
     <div class="data-table-section">
       <h3>月別詳細</h3>
@@ -418,102 +471,119 @@
   <script>
     let monthlyChart = null;
     let currentData = null;
-    let customerRevenueData = null;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
       initNavBar('sales_analytics', '売上分析');
       initFilters();
+      initCustomerFilter();
       loadData();
-      initCustomerSection();
     });
 
-    function initCustomerSection() {
-      var now = new Date();
-      var month = now.getMonth() + 1;
-      var currentFY = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-      var select = document.getElementById('customer-fiscal-year');
-      for (var i = 0; i < 3; i++) {
-        var fy = currentFY - i;
-        var opt = document.createElement('option');
-        opt.value = fy;
-        opt.textContent = fy + '年度（' + fy + '/3〜' + (fy + 1) + '/2）';
-        select.appendChild(opt);
-      }
-      select.addEventListener('change', function() { loadCustomerRevenue(Number(this.value)); });
-      document.getElementById('customer-sort').addEventListener('change', function() {
-        if (customerRevenueData) renderCustomerTable(customerRevenueData);
-      });
-      loadCustomerRevenue(currentFY);
-    }
+    var _allCustomers = [];
+    var _selectedCustomerId = '';
+    var _activeIndex = -1;
 
-    function loadCustomerRevenue(fiscalYear) {
-      var cacheKey = PageCache.makeKey('customer_revenue', { fiscalYear: fiscalYear });
-      var cached = PageCache.get(cacheKey);
-      if (cached) {
-        handleCustomerRevenueLoaded(cached.data);
-        if (cached.age > PageCache.ANALYTICS_TTL) {
-          fetchCustomerRevenueFromServer(fiscalYear, cacheKey);
-        }
-        return;
-      }
-      document.getElementById('customer-revenue-tbody').innerHTML =
-        '<tr><td colspan="14" class="loading"><div class="loading-spinner"></div><span>読み込み中...</span></td></tr>';
-      fetchCustomerRevenueFromServer(fiscalYear, cacheKey);
-    }
+    function initCustomerFilter() {
+      var input = document.getElementById('customer-search');
+      var list = document.getElementById('customer-search-list');
+      var clearBtn = document.getElementById('customer-search-clear');
 
-    function fetchCustomerRevenueFromServer(fiscalYear, cacheKey) {
       google.script.run
         .withSuccessHandler(function(result) {
-          if (result && result.ok) PageCache.set(cacheKey, result);
-          handleCustomerRevenueLoaded(result);
+          if (!result || !result.ok) return;
+          _allCustomers = (result.data.customers || []).map(function(c) {
+            return {
+              id: c.customer_id,
+              label: c.company_name + (c.branch_name ? '（' + c.branch_name + '）' : '')
+            };
+          });
         })
-        .withFailureHandler(function(err) {
-          document.getElementById('customer-revenue-tbody').innerHTML =
-            '<tr><td colspan="14" style="text-align:center;color:var(--color-danger);">取得エラー</td></tr>';
-        })
-        .getCustomerRevenueStats(fiscalYear);
+        .getCustomers();
+
+      input.addEventListener('input', function() {
+        _selectedCustomerId = '';
+        _activeIndex = -1;
+        renderCustomerList(this.value);
+      });
+
+      input.addEventListener('focus', function() {
+        if (_allCustomers.length > 0) renderCustomerList(this.value);
+      });
+
+      input.addEventListener('keydown', function(e) {
+        var items = list.querySelectorAll('.customer-search-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          _activeIndex = Math.min(_activeIndex + 1, items.length - 1);
+          updateActiveItem(items);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          _activeIndex = Math.max(_activeIndex - 1, 0);
+          updateActiveItem(items);
+        } else if (e.key === 'Enter' && _activeIndex >= 0 && items[_activeIndex]) {
+          e.preventDefault();
+          selectCustomer(items[_activeIndex].dataset.id, items[_activeIndex].textContent);
+        } else if (e.key === 'Escape') {
+          list.classList.remove('open');
+        }
+      });
+
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.customer-search-wrapper')) {
+          list.classList.remove('open');
+        }
+      });
+
+      clearBtn.addEventListener('click', function() {
+        input.value = '';
+        clearBtn.style.display = 'none';
+        _selectedCustomerId = '';
+        _activeIndex = -1;
+        list.classList.remove('open');
+        loadData();
+      });
     }
 
-    function handleCustomerRevenueLoaded(result) {
-      if (!result || !result.ok) {
-        document.getElementById('customer-revenue-tbody').innerHTML =
-          '<tr><td colspan="14" style="text-align:center;color:var(--color-danger);">データの取得に失敗しました</td></tr>';
-        return;
+    function renderCustomerList(query) {
+      var list = document.getElementById('customer-search-list');
+      var q = (query || '').toLowerCase();
+      var filtered = _allCustomers.filter(function(c) {
+        return !q || c.label.toLowerCase().indexOf(q) !== -1;
+      });
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<div class="customer-search-empty">該当なし</div>';
+      } else {
+        list.innerHTML = filtered.map(function(c) {
+          return '<div class="customer-search-item" data-id="' + escapeHtml(c.id) + '">' + escapeHtml(c.label) + '</div>';
+        }).join('');
+
+        list.querySelectorAll('.customer-search-item').forEach(function(item) {
+          item.addEventListener('click', function() {
+            selectCustomer(this.dataset.id, this.textContent);
+          });
+        });
       }
-      customerRevenueData = result.data;
-      renderCustomerTable(result.data);
+      _activeIndex = -1;
+      list.classList.add('open');
     }
 
-    function renderCustomerTable(data) {
-      var monthOrder = data.monthOrder;
-      var thead = document.getElementById('customer-revenue-thead');
-      thead.innerHTML = '<tr><th>顧客名</th>' +
-        monthOrder.map(function(m) { return '<th>' + m + '月</th>'; }).join('') +
-        '<th>合計</th></tr>';
+    function updateActiveItem(items) {
+      items.forEach(function(el, i) {
+        el.classList.toggle('active', i === _activeIndex);
+      });
+      if (items[_activeIndex]) items[_activeIndex].scrollIntoView({ block: 'nearest' });
+    }
 
-      var customers = data.customers.slice();
-
-      var sortKey = document.getElementById('customer-sort').value;
-      if (sortKey === 'total_desc') {
-        customers.sort(function(a, b) { return b.total - a.total; });
-      } else if (sortKey === 'name_asc') {
-        customers.sort(function(a, b) { return a.customer_name.localeCompare(b.customer_name, 'ja'); });
-      }
-
-      var tbody = document.getElementById('customer-revenue-tbody');
-      if (customers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
-        return;
-      }
-      tbody.innerHTML = customers.map(function(c) {
-        return '<tr><td>' + escapeHtml(c.customer_name) + '</td>' +
-          monthOrder.map(function(m) {
-            var val = c.months[m] || 0;
-            return '<td>' + (val ? formatCurrency(val) : '-') + '</td>';
-          }).join('') +
-          '<td style="font-weight:600;">' + formatCurrency(c.total) + '</td></tr>';
-      }).join('');
+    function selectCustomer(id, label) {
+      var input = document.getElementById('customer-search');
+      var clearBtn = document.getElementById('customer-search-clear');
+      input.value = label;
+      _selectedCustomerId = id;
+      clearBtn.style.display = 'inline';
+      document.getElementById('customer-search-list').classList.remove('open');
+      loadData();
     }
 
     function initFilters() {
@@ -541,6 +611,8 @@
 
     function getSelectedPeriod() {
       const period = document.getElementById('period-select').value;
+      const customerId = _selectedCustomerId || undefined;
+      var opts;
 
       if (period === 'custom') {
         const startMonth = document.getElementById('start-month').value;
@@ -550,7 +622,7 @@
           const [startYear, startM] = startMonth.split('-').map(Number);
           const [endYear, endM] = endMonth.split('-').map(Number);
 
-          return {
+          opts = {
             period: 'custom',
             startYear: startYear,
             startMonth: startM,
@@ -560,7 +632,9 @@
         }
       }
 
-      return { period: period };
+      if (!opts) opts = { period: period };
+      if (customerId) opts.customerId = customerId;
+      return opts;
     }
 
     function getSalesAnalyticsCacheKey(options) {
@@ -620,72 +694,84 @@
       }
 
       currentData = result.data;
-      updateKPIs(result.data.totals);
-      updateChart(result.data.monthly);
-      updateTable(result.data.monthly);
+      var isCustomerFilter = result.data.totals.payout_total === null;
+      updateKPIs(result.data.totals, isCustomerFilter);
+      updateChart(result.data.monthly, isCustomerFilter);
+      updateTable(result.data.monthly, isCustomerFilter);
     }
 
-    function updateKPIs(totals) {
+    function updateKPIs(totals, isCustomerFilter) {
+      var cards = document.querySelectorAll('#kpi-cards .kpi-card');
+      // カード順: 売上, 支払, 粗利, 交通費
+      for (var i = 1; i < cards.length; i++) {
+        cards[i].style.display = isCustomerFilter ? 'none' : '';
+      }
+
       document.getElementById('kpi-invoice-total').textContent = formatCurrency(totals.invoice_total);
-      document.getElementById('kpi-invoice-count').textContent = '案件数: ' + totals.job_count;
+      document.getElementById('kpi-invoice-count').textContent = totals.job_count !== null ? '案件数: ' + totals.job_count : '';
 
-      document.getElementById('kpi-payout-total').textContent = formatCurrency(totals.payout_total);
-      document.getElementById('kpi-assignment-count').textContent = '配置数: ' + totals.assignment_count;
+      if (!isCustomerFilter) {
+        document.getElementById('kpi-payout-total').textContent = formatCurrency(totals.payout_total);
+        document.getElementById('kpi-assignment-count').textContent = '配置数: ' + totals.assignment_count;
 
-      var marginEl = document.getElementById('kpi-gross-margin');
-      marginEl.textContent = formatCurrency(totals.gross_margin);
-      marginEl.className = 'kpi-card-value ' + (totals.gross_margin >= 0 ? 'positive' : 'negative');
+        var marginEl = document.getElementById('kpi-gross-margin');
+        marginEl.textContent = formatCurrency(totals.gross_margin);
+        marginEl.className = 'kpi-card-value ' + (totals.gross_margin >= 0 ? 'positive' : 'negative');
 
-      document.getElementById('kpi-margin-rate').textContent = '粗利率: ' + totals.margin_rate + '%';
-
-      document.getElementById('kpi-transport-total').textContent = formatCurrency(totals.transport_total);
+        document.getElementById('kpi-margin-rate').textContent = '粗利率: ' + totals.margin_rate + '%';
+        document.getElementById('kpi-transport-total').textContent = formatCurrency(totals.transport_total);
+      }
     }
 
-    function updateChart(monthlyStats) {
+    function updateChart(monthlyStats, isCustomerFilter) {
       var ctx = document.getElementById('monthly-chart').getContext('2d');
 
       var labels = monthlyStats.map(function(s) { return s.year + '/' + s.month; });
       var invoiceData = monthlyStats.map(function(s) { return s.invoice_total; });
-      var payoutData = monthlyStats.map(function(s) { return s.payout_total; });
-      var marginData = monthlyStats.map(function(s) { return s.gross_margin; });
 
       if (monthlyChart) {
         monthlyChart.destroy();
       }
 
+      var datasets = [
+        {
+          label: '売上',
+          data: invoiceData,
+          backgroundColor: 'rgba(23, 45, 144, 0.8)',
+          borderColor: 'rgba(23, 45, 144, 1)',
+          borderWidth: 1,
+          order: 2
+        }
+      ];
+
+      if (!isCustomerFilter) {
+        var payoutData = monthlyStats.map(function(s) { return s.payout_total; });
+        var marginData = monthlyStats.map(function(s) { return s.gross_margin; });
+        datasets.push(
+          {
+            label: '支払',
+            data: payoutData,
+            backgroundColor: 'rgba(220, 53, 69, 0.6)',
+            borderColor: 'rgba(220, 53, 69, 1)',
+            borderWidth: 1,
+            order: 3
+          },
+          {
+            label: '粗利益',
+            data: marginData,
+            type: 'line',
+            borderColor: 'rgba(40, 167, 69, 1)',
+            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+            fill: true,
+            tension: 0.3,
+            order: 1
+          }
+        );
+      }
+
       monthlyChart = new Chart(ctx, {
         type: 'bar',
-        data: {
-          labels: labels,
-          datasets: [
-            {
-              label: '売上',
-              data: invoiceData,
-              backgroundColor: 'rgba(23, 45, 144, 0.8)',
-              borderColor: 'rgba(23, 45, 144, 1)',
-              borderWidth: 1,
-              order: 2
-            },
-            {
-              label: '支払',
-              data: payoutData,
-              backgroundColor: 'rgba(220, 53, 69, 0.6)',
-              borderColor: 'rgba(220, 53, 69, 1)',
-              borderWidth: 1,
-              order: 3
-            },
-            {
-              label: '粗利益',
-              data: marginData,
-              type: 'line',
-              borderColor: 'rgba(40, 167, 69, 1)',
-              backgroundColor: 'rgba(40, 167, 69, 0.1)',
-              fill: true,
-              tension: 0.3,
-              order: 1
-            }
-          ]
-        },
+        data: { labels: labels, datasets: datasets },
         options: {
           responsive: true,
           maintainAspectRatio: false,
@@ -712,15 +798,27 @@
       });
     }
 
-    function updateTable(monthlyStats) {
+    function updateTable(monthlyStats, isCustomerFilter) {
       var tbody = document.getElementById('stats-table-body');
+      var thead = tbody.parentElement.querySelector('thead tr');
+
+      if (isCustomerFilter) {
+        thead.innerHTML = '<th>年月</th><th>売上（税込）</th>';
+      } else {
+        thead.innerHTML = '<th>年月</th><th>案件数</th><th>配置数</th><th>売上（税込）</th><th>支払</th><th>交通費</th><th>粗利益</th><th>粗利率</th><th>状態</th>';
+      }
+
+      var colSpan = isCustomerFilter ? 2 : 9;
 
       if (monthlyStats.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-muted);">データがありません</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="' + colSpan + '" style="text-align: center; color: var(--text-muted);">データがありません</td></tr>';
         return;
       }
 
       tbody.innerHTML = monthlyStats.map(function(s) {
+        if (isCustomerFilter) {
+          return '<tr><td>' + s.year + '年' + s.month + '月</td><td>' + formatCurrency(s.invoice_total) + '</td></tr>';
+        }
         var marginColor = s.gross_margin >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
         var statusBadge = s.is_final ? '<span class="finalized-badge">確定</span>' : '<span class="draft-badge">暫定</span>';
         return [
