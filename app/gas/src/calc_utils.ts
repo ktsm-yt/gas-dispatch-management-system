@@ -144,6 +144,30 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
   }
 }
 
+/**
+ * 外注先マスタの単価区分に基づく単価を取得する。
+ * フォールバック: basic_rate → full_day_rate → 0
+ */
+function getSubcontractorRateByUnit_(
+  subcontractor: Record<string, any>,
+  unit: string
+): number {
+  const normalizedUnit = normalizeUnit_(unit);
+
+  switch (normalizedUnit) {
+    case 'half':
+    case 'halfday':
+    case 'am':
+    case 'pm':
+      return subcontractor.half_day_rate ?? subcontractor.basic_rate ?? 0;
+    case 'full':
+    case 'fullday':
+      return subcontractor.full_day_rate ?? subcontractor.basic_rate ?? 0;
+    default:
+      return subcontractor.basic_rate ?? subcontractor.full_day_rate ?? 0;
+  }
+}
+
 /** @deprecated 将来的に廃止予定。直接マスター値を使用すること。 */
 function getUnitMultiplier_(unit: string): number {
   const normalizedUnit = normalizeUnit_(unit);
