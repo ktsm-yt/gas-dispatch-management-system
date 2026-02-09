@@ -456,16 +456,20 @@
                 </select>
               </div>
               <div class="form-group">
-                <label for="payment-day">支払日</label>
-                <select id="payment-day" name="payment_day">
-                  <option value="">選択してください</option>
-                  <option value="5">5日</option>
-                  <option value="10">10日</option>
-                  <option value="15">15日</option>
-                  <option value="20">20日</option>
-                  <option value="25">25日</option>
-                  <option value="31">末日</option>
-                </select>
+                <label>支払日</label>
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="payment_day_type" value="end_of_month" checked onchange="togglePaymentDayInput()">
+                    末日
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="payment_day_type" value="specific" onchange="togglePaymentDayInput()">
+                    <input type="number" id="payment-day-input" min="1" max="28" placeholder="日" disabled
+                           style="width: 60px;" oninput="updatePaymentDayHidden()">
+                    日
+                  </label>
+                </div>
+                <input type="hidden" id="payment-day" name="payment_day">
               </div>
             </div>
             <div class="form-row cols-3">
@@ -781,6 +785,24 @@
       document.getElementById('closing-day').value = document.getElementById('closing-day-input').value;
     }
 
+    function togglePaymentDayInput() {
+      const type = document.querySelector('input[name="payment_day_type"]:checked').value;
+      const input = document.getElementById('payment-day-input');
+      if (type === 'end_of_month') {
+        input.disabled = true;
+        input.value = '';
+        document.getElementById('payment-day').value = '31';
+      } else {
+        input.disabled = false;
+        input.focus();
+        updatePaymentDayHidden();
+      }
+    }
+
+    function updatePaymentDayHidden() {
+      document.getElementById('payment-day').value = document.getElementById('payment-day-input').value;
+    }
+
     function escapeHtml(text) {
       if (!text) return '';
       const div = document.createElement('div');
@@ -820,6 +842,10 @@
         document.getElementById('invoice-format').value = 'format1';
         document.getElementById('has-transport-fee').checked = false;
         document.getElementById('payment-month-offset').value = '1';
+        // 支払日ラジオを末日に初期化
+        document.getElementById('payment-day-input').disabled = true;
+        document.getElementById('payment-day-input').value = '';
+        document.getElementById('payment-day').value = '31';
 
         // フォルダUI初期化（新規作成モード）
         updateFolderUI(null, null);
@@ -859,7 +885,18 @@
         document.getElementById('closing-day').value = '31';
       }
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
-      document.getElementById('payment-day').value = customer.payment_day || '';
+      // 支払日の復元（ラジオ + number input）
+      if (customer.payment_day && customer.payment_day !== 31) {
+        document.querySelector('input[name="payment_day_type"][value="specific"]').checked = true;
+        document.getElementById('payment-day-input').disabled = false;
+        document.getElementById('payment-day-input').value = customer.payment_day;
+        document.getElementById('payment-day').value = customer.payment_day;
+      } else {
+        document.querySelector('input[name="payment_day_type"][value="end_of_month"]').checked = true;
+        document.getElementById('payment-day-input').disabled = true;
+        document.getElementById('payment-day-input').value = '';
+        document.getElementById('payment-day').value = '31';
+      }
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
       document.getElementById('has-transport-fee').checked = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
       document.getElementById('tax-rate').value = customer.tax_rate ?? 10;
@@ -965,7 +1002,7 @@
       const customer = {};
 
       formData.forEach((value, key) => {
-        if (key === 'closing_day_type') return; // ラジオボタンの値はスキップ
+        if (key === 'closing_day_type' || key === 'payment_day_type') return; // ラジオボタンの値はスキップ
         if (value !== '') {
           // Convert numeric fields
           if (['unit_price_basic', 'unit_price_tobi', 'unit_price_half', 'unit_price_fullday', 'unit_price_night',
@@ -990,6 +1027,19 @@
           return;
         }
         customer.closing_day = val;
+      }
+
+      // 支払日の明示的バリデーション
+      const paymentDayType = document.querySelector('input[name="payment_day_type"]:checked').value;
+      if (paymentDayType === 'end_of_month') {
+        customer.payment_day = 31;
+      } else {
+        const val = Number(document.getElementById('payment-day-input').value);
+        if (!val || val < 1 || val > 28) {
+          showToast('支払日は1〜28の間で指定してください', 'error');
+          return;
+        }
+        customer.payment_day = val;
       }
 
       // Handle checkbox (FormData only includes checked checkboxes)
