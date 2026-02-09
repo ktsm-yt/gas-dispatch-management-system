@@ -21,7 +21,8 @@ const TABLE_SHEET_MAP = {
   'T_Payouts': 'Payouts',
   'T_MonthlyStats': 'MonthlyStats',
   'T_Payments': 'Payments',
-  'T_AuditLog': 'AuditLog'
+  'T_AuditLog': 'AuditLog',
+  'T_InvoiceAdjustments': 'InvoiceAdjustments'
 };
 
 /**
