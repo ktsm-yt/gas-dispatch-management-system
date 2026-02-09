@@ -432,16 +432,20 @@
             <div class="form-section-title">請求設定</div>
             <div class="form-row cols-3">
               <div class="form-group">
-                <label for="closing-day">締め日</label>
-                <select id="closing-day" name="closing_day">
-                  <option value="">選択してください</option>
-                  <option value="5">5日</option>
-                  <option value="10">10日</option>
-                  <option value="15">15日</option>
-                  <option value="20">20日</option>
-                  <option value="25">25日</option>
-                  <option value="31">末日</option>
-                </select>
+                <label>締め日</label>
+                <div style="display: flex; align-items: center; gap: 12px; margin-top: 4px;">
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="closing_day_type" value="end_of_month" checked onchange="toggleClosingDayInput()">
+                    末日
+                  </label>
+                  <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+                    <input type="radio" name="closing_day_type" value="specific" onchange="toggleClosingDayInput()">
+                    <input type="number" id="closing-day-input" min="1" max="28" placeholder="日" disabled
+                           style="width: 60px;" oninput="updateClosingDayHidden()">
+                    日
+                  </label>
+                </div>
+                <input type="hidden" id="closing-day" name="closing_day">
               </div>
               <div class="form-group">
                 <label for="payment-month-offset">支払月</label>
@@ -759,6 +763,24 @@
       return day === 31 ? '末日' : day + '日';
     }
 
+    function toggleClosingDayInput() {
+      const type = document.querySelector('input[name="closing_day_type"]:checked').value;
+      const input = document.getElementById('closing-day-input');
+      if (type === 'end_of_month') {
+        input.disabled = true;
+        input.value = '';
+        document.getElementById('closing-day').value = '31';
+      } else {
+        input.disabled = false;
+        input.focus();
+        updateClosingDayHidden();
+      }
+    }
+
+    function updateClosingDayHidden() {
+      document.getElementById('closing-day').value = document.getElementById('closing-day-input').value;
+    }
+
     function escapeHtml(text) {
       if (!text) return '';
       const div = document.createElement('div');
@@ -824,7 +846,18 @@
       document.getElementById('unit-price-half').value = customer.unit_price_half || '';
       document.getElementById('unit-price-fullday').value = customer.unit_price_fullday || '';
       document.getElementById('unit-price-night').value = customer.unit_price_night || '';
-      document.getElementById('closing-day').value = customer.closing_day || '';
+      // 締め日の復元（ラジオ + number input）
+      if (customer.closing_day && customer.closing_day !== 31) {
+        document.querySelector('input[name="closing_day_type"][value="specific"]').checked = true;
+        document.getElementById('closing-day-input').disabled = false;
+        document.getElementById('closing-day-input').value = customer.closing_day;
+        document.getElementById('closing-day').value = customer.closing_day;
+      } else {
+        document.querySelector('input[name="closing_day_type"][value="end_of_month"]').checked = true;
+        document.getElementById('closing-day-input').disabled = true;
+        document.getElementById('closing-day-input').value = '';
+        document.getElementById('closing-day').value = '31';
+      }
       document.getElementById('payment-month-offset').value = customer.payment_month_offset ?? '1';
       document.getElementById('payment-day').value = customer.payment_day || '';
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
@@ -932,6 +965,7 @@
       const customer = {};
 
       formData.forEach((value, key) => {
+        if (key === 'closing_day_type') return; // ラジオボタンの値はスキップ
         if (value !== '') {
           // Convert numeric fields
           if (['unit_price_basic', 'unit_price_tobi', 'unit_price_half', 'unit_price_fullday', 'unit_price_night',
@@ -944,6 +978,19 @@
           }
         }
       });
+
+      // 締め日の明示的バリデーション
+      const closingDayType = document.querySelector('input[name="closing_day_type"]:checked').value;
+      if (closingDayType === 'end_of_month') {
+        customer.closing_day = 31;
+      } else {
+        const val = Number(document.getElementById('closing-day-input').value);
+        if (!val || val < 1 || val > 28) {
+          showToast('締め日は1〜28の間で指定してください', 'error');
+          return;
+        }
+        customer.closing_day = val;
+      }
 
       // Handle checkbox (FormData only includes checked checkboxes)
       customer.has_transport_fee = document.getElementById('has-transport-fee').checked;

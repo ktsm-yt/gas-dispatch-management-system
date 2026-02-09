@@ -1276,15 +1276,15 @@ const InvoiceService = {
 
     // 発行日（締め日の翌日を基準）
     let issueDate;
-    if (closingDay >= 28) {
+    if (closingDay === 31) {
       // 末日締め → 翌月1日発行
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
       issueDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
     } else {
-      // 中間日締め → 締め日翌日発行
-      const nextDay = closingDay + 1;
-      issueDate = `${year}-${String(month).padStart(2, '0')}-${String(nextDay).padStart(2, '0')}`;
+      // 中間日締め → 締め日翌日発行（カレンダー演算で月跨ぎ対応）
+      const d = new Date(year, month - 1, closingDay + 1);
+      issueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     }
 
     // 支払期限
