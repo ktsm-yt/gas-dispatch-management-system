@@ -45,7 +45,7 @@ const TABLE_DEFINITIONS = {
     sheetName: 'Subcontractors',
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
-      'half_day_rate', 'full_day_rate',
+      'basic_rate', 'half_day_rate', 'full_day_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -918,7 +918,7 @@ function migrateAddSubcontractorRateColumns() {
   Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
 
   // 追加するカラム
-  const columnsToAdd = ['half_day_rate', 'full_day_rate'];
+  const columnsToAdd = ['basic_rate', 'half_day_rate', 'full_day_rate'];
   let addedCount = 0;
 
   // notesの後に挿入（notesの位置を見つける）
@@ -955,6 +955,7 @@ function migrateAddSubcontractorRateColumns() {
 
   Logger.log('\n=== P2-8 マイグレーション完了 ===');
   Logger.log(`${addedCount}個のカラムを追加しました（外注先単価管理用）`);
+  Logger.log('basic_rate: 基本単価');
   Logger.log('half_day_rate: ハーフ単価');
   Logger.log('full_day_rate: 終日単価');
 }
