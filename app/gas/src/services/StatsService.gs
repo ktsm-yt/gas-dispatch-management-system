@@ -225,6 +225,87 @@ const StatsService = {
   },
 
   /**
+   * 顧客別月次集計を取得
+   * @param {number} fiscalYear - 会計年度（例: 2025 → 2025年3月〜2026年2月）
+   * @returns {Object} { customers, fiscalYear, monthOrder }
+   */
+  getCustomerMonthlyBreakdown: function(fiscalYear) {
+    const monthOrder = [3,4,5,6,7,8,9,10,11,12,1,2];
+    const customerMap = MasterCache.getCustomerMap();
+
+    // 現在DBから一括取得し、年度範囲でフィルタ（シート読み込み1回）
+    const allRecords = getAllRecords('T_Invoices');
+    const allInvoices = allRecords.filter(function(r) {
+      if (r.is_deleted) return false;
+      const bm = Number(r.billing_month);
+      const by = Number(r.billing_year);
+      return (bm >= 3 && by === fiscalYear) || (bm <= 2 && by === fiscalYear + 1);
+    });
+
+    // アーカイブDBからも取得
+    const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+    if (archiveDbId) {
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheet = findSheetFromDb(archiveDb, 'T_Invoices');
+        if (sheet) {
+          const data = sheet.getDataRange().getValues();
+          if (data.length > 1) {
+            const headers = data[0];
+            for (let i = 1; i < data.length; i++) {
+              const record = {};
+              for (let j = 0; j < headers.length; j++) {
+                record[headers[j]] = data[i][j];
+              }
+              if (!record.is_deleted) {
+                const bm = Number(record.billing_month);
+                const by = Number(record.billing_year);
+                // 年度内のデータのみ
+                if (monthOrder.includes(bm) &&
+                    ((bm >= 3 && by === fiscalYear) || (bm <= 2 && by === fiscalYear + 1))) {
+                  allInvoices.push(record);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        Logger.log('顧客別集計: アーカイブ読み込みエラー: ' + e.message);
+      }
+    }
+
+    // customer_id × month でグループ化
+    const customerData = {};
+    for (const inv of allInvoices) {
+      const cid = inv.customer_id || 'unknown';
+      const bm = Number(inv.billing_month);
+      if (!customerData[cid]) {
+        customerData[cid] = { months: {}, total: 0 };
+      }
+      const amount = Number(inv.total_amount) || 0;
+      customerData[cid].months[bm] = (customerData[cid].months[bm] || 0) + amount;
+      customerData[cid].total += amount;
+    }
+
+    // 結果を配列に変換（合計額降順）
+    const customers = Object.keys(customerData).map(function(cid) {
+      const customer = customerMap[cid];
+      return {
+        customer_id: cid,
+        customer_name: customer ? customer.customer_name : cid,
+        months: customerData[cid].months,
+        total: customerData[cid].total
+      };
+    }).sort(function(a, b) { return b.total - a.total; });
+
+    return {
+      customers: customers,
+      fiscalYear: fiscalYear,
+      monthOrder: monthOrder
+    };
+  },
+
+  /**
    * 請求データを集計
    * @private
    */
