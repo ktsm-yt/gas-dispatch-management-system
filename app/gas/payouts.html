@@ -384,6 +384,7 @@
       font-weight: 500;
       position: sticky;
       top: 0;
+      z-index: 1;
     }
 
     .assignment-list-table tbody tr:last-child td {
@@ -2639,27 +2640,18 @@
         return;
       }
 
-      // 未払の場合は従来通り
+      // 未払の場合
       const cachedSummary = getCachedUnpaidPreview(staffId, endDate);
       const cachedHistory = getCachedHistoryForStaff(staffId);
-      const summaryComplete = cachedSummary && cachedSummary.isComplete;
 
       if (cachedSummary) {
+        // キャッシュあり → 1回描画のみ（再取得しない）
         modalUnpaidData = cachedSummary.data;
         modalHistoryData = cachedHistory || [];
-        renderPayoutModal(
-          cachedSummary.data,
-          cachedHistory ? cachedHistory : null,
-          { preview: !summaryComplete, status: 'unpaid' }
-        );
-      } else {
-        document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
-      }
+        renderPayoutModal(cachedSummary.data, cachedHistory || [], { status: 'unpaid' });
+        modal.classList.add('active');
 
-      modal.classList.add('active');
-
-      if (summaryComplete) {
-        // サマリーが完備している場合は履歴のみ遅延取得
+        // 履歴だけ差分更新
         if (!cachedHistory) {
           google.script.run
             .withSuccessHandler(result => {
@@ -2680,7 +2672,10 @@
         return;
       }
 
-      // 未払サマリーと支払履歴を並行取得
+      // キャッシュなし → サマリーと履歴を並行取得して1回描画
+      document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+      modal.classList.add('active');
+
       let unpaidResult = null;
       let historyResult = null;
       let completed = 0;
@@ -2732,15 +2727,22 @@
       list.innerHTML = buildHistoryListHtml(history);
     }
 
+    const UNIT_LABEL_MAP = {
+      basic: '', tobi: '上棟鳶', age: '荷揚げ', tobiage: '上棟荷揚げ',
+      half: 'ハーフ', halfday: 'ハーフ', fullday: '終日', night: '夜勤',
+      jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤'
+    };
+
     function buildAssignmentTableHtml(assignments) {
       const rows = assignments.map(a => {
         const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
         const siteName = a.site_name || '(現場名なし)';
-        return `<tr><td>${dateStr}</td><td>${siteName}</td></tr>`;
+        const unitLabel = UNIT_LABEL_MAP[a.invoice_unit || a.pay_unit || 'basic'] || '';
+        return `<tr><td>${dateStr}</td><td>${siteName}</td><td>${unitLabel}</td></tr>`;
       }).join('');
       return `
         <table class="assignment-list-table">
-          <thead><tr><th>日付</th><th>現場名</th></tr></thead>
+          <thead><tr><th>日付</th><th>現場名</th><th>単価区分</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       `;
