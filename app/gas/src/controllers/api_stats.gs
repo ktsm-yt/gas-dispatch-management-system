@@ -130,35 +130,6 @@ function getYearlyStatsSummary(fiscalYear) {
 }
 
 /**
- * 顧客別売上統計を取得
- * @param {number} fiscalYear - 会計年度
- * @returns {Object} APIレスポンス
- */
-function getCustomerRevenueStats(fiscalYear) {
-  const requestId = generateRequestId();
-
-  try {
-    const authResult = checkPermission(ROLES.VIEWER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
-
-    if (!fiscalYear) {
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      fiscalYear = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-    }
-
-    const data = StatsService.getCustomerMonthlyBreakdown(Number(fiscalYear));
-    return buildSuccessResponse(data, requestId);
-
-  } catch (error) {
-    Logger.log('getCustomerRevenueStats error: ' + error.message);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
-  }
-}
-
-/**
  * 指定月の統計を再計算・保存
  * @param {number} year - 年
  * @param {number} month - 月

@@ -208,6 +208,11 @@ const StatsService = {
         startMonth = endMonth = currentMonth;
     }
 
+    // 顧客フィルタが指定された場合は専用ロジックに委譲
+    if (options.customerId) {
+      return this._getDashboardDataForCustomer(options.customerId, startYear, startMonth, endYear, endMonth);
+    }
+
     // 期間内の統計を取得
     const monthlyStats = StatsRepository.findByRange(startYear, startMonth, endYear, endMonth);
 
@@ -225,83 +230,108 @@ const StatsService = {
   },
 
   /**
-   * 顧客別月次集計を取得
-   * @param {number} fiscalYear - 会計年度（例: 2025 → 2025年3月〜2026年2月）
-   * @returns {Object} { customers, fiscalYear, monthOrder }
+   * 顧客フィルタ時のダッシュボードデータを取得
+   * InvoiceRepositoryから生データを集計（アーカイブ含む）
+   * @private
    */
-  getCustomerMonthlyBreakdown: function(fiscalYear) {
-    const monthOrder = [3,4,5,6,7,8,9,10,11,12,1,2];
-    const customerMap = MasterCache.getCustomerMap();
+  _getDashboardDataForCustomer: function(customerId, startYear, startMonth, endYear, endMonth) {
+    // 期間内の全月バケットを0初期値で生成
+    const monthly = [];
+    const monthMap = {}; // "YYYY-MM" → monthly配列のindex
+    let y = startYear, m = startMonth;
+    while (y < endYear || (y === endYear && m <= endMonth)) {
+      const key = y + '-' + m;
+      monthMap[key] = monthly.length;
+      monthly.push({
+        year: y, month: m,
+        invoice_total: 0,
+        payout_total: null, transport_total: null,
+        gross_margin: null, margin_rate: null,
+        job_count: null, assignment_count: null,
+        is_final: false
+      });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
 
-    // 現在DBから一括取得し、年度範囲でフィルタ（シート読み込み1回）
-    const allRecords = getAllRecords('T_Invoices');
-    const allInvoices = allRecords.filter(function(r) {
-      if (r.is_deleted) return false;
-      const bm = Number(r.billing_month);
-      const by = Number(r.billing_year);
-      return (bm >= 3 && by === fiscalYear) || (bm <= 2 && by === fiscalYear + 1);
-    });
+    // メインDB: 1回のgetValues + 列インデックス直参照（オブジェクト生成不要）
+    const cidStr = String(customerId);
+    const mainSheet = getSheet('T_Invoices');
+    const mainData = mainSheet.getDataRange().getValues();
+    if (mainData.length > 1) {
+      const h = mainData[0];
+      const col = {
+        cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
+        bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+        del: h.indexOf('is_deleted')
+      };
+      for (let i = 1; i < mainData.length; i++) {
+        const row = mainData[i];
+        if (row[col.del]) continue;
+        if (String(row[col.cid]) !== cidStr) continue;
+        const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+        if (key in monthMap) {
+          monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
+        }
+      }
+    }
 
-    // アーカイブDBからも取得
-    const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
-    if (archiveDbId) {
+    // アーカイブDBからも取得（期間に含まれる会計年度を特定）
+    const fiscalYears = new Set();
+    for (const entry of monthly) {
+      fiscalYears.add(entry.month >= 3 ? entry.year : entry.year - 1);
+    }
+    for (const fy of fiscalYears) {
+      const archiveDbId = ArchiveService.getArchiveDbId(fy);
+      if (!archiveDbId) continue;
       try {
         const archiveDb = SpreadsheetApp.openById(archiveDbId);
         const sheet = findSheetFromDb(archiveDb, 'T_Invoices');
-        if (sheet) {
-          const data = sheet.getDataRange().getValues();
-          if (data.length > 1) {
-            const headers = data[0];
-            for (let i = 1; i < data.length; i++) {
-              const record = {};
-              for (let j = 0; j < headers.length; j++) {
-                record[headers[j]] = data[i][j];
-              }
-              if (!record.is_deleted) {
-                const bm = Number(record.billing_month);
-                const by = Number(record.billing_year);
-                // 年度内のデータのみ
-                if (monthOrder.includes(bm) &&
-                    ((bm >= 3 && by === fiscalYear) || (bm <= 2 && by === fiscalYear + 1))) {
-                  allInvoices.push(record);
-                }
-              }
-            }
+        if (!sheet) continue;
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+        // 列インデックス直参照（オブジェクト生成不要）
+        const h = data[0];
+        const col = {
+          cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
+          bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+          del: h.indexOf('is_deleted')
+        };
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          if (row[col.del]) continue;
+          if (String(row[col.cid]) !== cidStr) continue;
+          const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+          if (key in monthMap) {
+            monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
           }
         }
       } catch (e) {
-        Logger.log('顧客別集計: アーカイブ読み込みエラー: ' + e.message);
+        Logger.log('顧客フィルタ: アーカイブ読み込みエラー: ' + e.message);
       }
     }
 
-    // customer_id × month でグループ化
-    const customerData = {};
-    for (const inv of allInvoices) {
-      const cid = inv.customer_id || 'unknown';
-      const bm = Number(inv.billing_month);
-      if (!customerData[cid]) {
-        customerData[cid] = { months: {}, total: 0 };
-      }
-      const amount = Number(inv.total_amount) || 0;
-      customerData[cid].months[bm] = (customerData[cid].months[bm] || 0) + amount;
-      customerData[cid].total += amount;
+    // 集計
+    let totalInvoice = 0;
+    for (const entry of monthly) {
+      totalInvoice += entry.invoice_total;
     }
-
-    // 結果を配列に変換（合計額降順）
-    const customers = Object.keys(customerData).map(function(cid) {
-      const customer = customerMap[cid];
-      return {
-        customer_id: cid,
-        customer_name: customer ? customer.customer_name : cid,
-        months: customerData[cid].months,
-        total: customerData[cid].total
-      };
-    }).sort(function(a, b) { return b.total - a.total; });
 
     return {
-      customers: customers,
-      fiscalYear: fiscalYear,
-      monthOrder: monthOrder
+      period: {
+        start: { year: startYear, month: startMonth },
+        end: { year: endYear, month: endMonth }
+      },
+      totals: {
+        invoice_total: totalInvoice,
+        payout_total: null,
+        transport_total: null,
+        gross_margin: null,
+        margin_rate: null,
+        job_count: null,
+        assignment_count: null
+      },
+      monthly: monthly
     };
   },
 
