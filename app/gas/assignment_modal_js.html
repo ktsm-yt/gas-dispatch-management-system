@@ -1705,32 +1705,41 @@ function generateLineTemplate() {
   };
   const workCategoryPrefix = workCategoryLabels[job.work_category] || '';
 
-  // 役割別にグループ化
+  // 役割別にグループ化（外注スタッフはまとめてカウント表示）
   const roleGroups = {};
   activeAssignments.forEach(a => {
     const role = a.assignment_role || '未指定';
-    if (!roleGroups[role]) roleGroups[role] = [];
-    roleGroups[role].push(a.staff_name || '名前未設定');
+    if (!roleGroups[role]) roleGroups[role] = { names: [], subCount: 0 };
+    const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+    if (staff?.staff_type === 'subcontract') {
+      roleGroups[role].subCount++;
+    } else {
+      roleGroups[role].names.push(a.staff_name || '名前未設定');
+    }
   });
 
-  // メンバー欄を役割別に生成（作業種別プレフィックス付き）
+  // メンバー欄を役割別に生成（作業種別プレフィックス付き、外注は「外注○名」）
   const memberLines = [];
   const roleOrder = ['鳶', '鳶補助', '荷揚げ', '鳶揚げ', '未指定'];
+  const formatRoleMembers = (role, group) => {
+    const parts = [...group.names];
+    if (group.subCount > 0) parts.push(`外注${group.subCount}名`);
+    const label = role === '未指定' ? '' : (workCategoryPrefix + role);
+    if (label) {
+      memberLines.push(`${label}（${parts.join('、')}）`);
+    } else {
+      memberLines.push(parts.join('、'));
+    }
+  };
   roleOrder.forEach(role => {
-    if (roleGroups[role] && roleGroups[role].length > 0) {
-      const label = role === '未指定' ? '' : (workCategoryPrefix + role);
-      if (label) {
-        memberLines.push(`${label}（${roleGroups[role].join('、')}）`);
-      } else {
-        memberLines.push(roleGroups[role].join('、'));
-      }
+    if (roleGroups[role] && (roleGroups[role].names.length > 0 || roleGroups[role].subCount > 0)) {
+      formatRoleMembers(role, roleGroups[role]);
     }
   });
   // roleOrderにない役割があれば追加
   Object.keys(roleGroups).forEach(role => {
     if (!roleOrder.includes(role)) {
-      const label = workCategoryPrefix + role;
-      memberLines.push(`${label}（${roleGroups[role].join('、')}）`);
+      formatRoleMembers(role, roleGroups[role]);
     }
   });
   // 複数行の場合は改行＋全角スペース字下げ
