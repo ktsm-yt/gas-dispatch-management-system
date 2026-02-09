@@ -745,7 +745,7 @@ function calculateBillingPeriodFromWorkDate_(workDate, closingDay) {
   const day = workDate.getDate();
 
   // 月末締め（31）の場合
-  if (closingDay >= 31) {
+  if (closingDay === 31) {
     return { billingYear: year, billingMonth: month };
   }
 
