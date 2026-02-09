@@ -166,32 +166,32 @@ const StatsService = {
         break;
 
       case 'thisYear':
-        // 会計年度（4月〜3月）
-        if (currentMonth >= 4) {
+        // 会計年度（3月〜翌2月、2月決算）
+        if (currentMonth >= 3) {
           startYear = currentYear;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
           endMonth = currentMonth;
         } else {
           startYear = currentYear - 1;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
           endMonth = currentMonth;
         }
         break;
 
       case 'lastYear':
-        // 前会計年度
-        if (currentMonth >= 4) {
+        // 前会計年度（2月決算）
+        if (currentMonth >= 3) {
           startYear = currentYear - 1;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
-          endMonth = 3;
+          endMonth = 2;
         } else {
           startYear = currentYear - 2;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear - 1;
-          endMonth = 3;
+          endMonth = 2;
         }
         break;
 
