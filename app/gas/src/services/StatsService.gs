@@ -166,32 +166,32 @@ const StatsService = {
         break;
 
       case 'thisYear':
-        // 会計年度（4月〜3月）
-        if (currentMonth >= 4) {
+        // 会計年度（3月〜翌2月、2月決算）
+        if (currentMonth >= 3) {
           startYear = currentYear;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
           endMonth = currentMonth;
         } else {
           startYear = currentYear - 1;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
           endMonth = currentMonth;
         }
         break;
 
       case 'lastYear':
-        // 前会計年度
-        if (currentMonth >= 4) {
+        // 前会計年度（2月決算）
+        if (currentMonth >= 3) {
           startYear = currentYear - 1;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear;
-          endMonth = 3;
+          endMonth = 2;
         } else {
           startYear = currentYear - 2;
-          startMonth = 4;
+          startMonth = 3;
           endYear = currentYear - 1;
-          endMonth = 3;
+          endMonth = 2;
         }
         break;
 
@@ -208,6 +208,11 @@ const StatsService = {
         startMonth = endMonth = currentMonth;
     }
 
+    // 顧客フィルタが指定された場合は専用ロジックに委譲
+    if (options.customerId) {
+      return this._getDashboardDataForCustomer(options.customerId, startYear, startMonth, endYear, endMonth);
+    }
+
     // 期間内の統計を取得
     const monthlyStats = StatsRepository.findByRange(startYear, startMonth, endYear, endMonth);
 
@@ -221,6 +226,112 @@ const StatsService = {
       },
       totals: totals,
       monthly: monthlyStats
+    };
+  },
+
+  /**
+   * 顧客フィルタ時のダッシュボードデータを取得
+   * InvoiceRepositoryから生データを集計（アーカイブ含む）
+   * @private
+   */
+  _getDashboardDataForCustomer: function(customerId, startYear, startMonth, endYear, endMonth) {
+    // 期間内の全月バケットを0初期値で生成
+    const monthly = [];
+    const monthMap = {}; // "YYYY-MM" → monthly配列のindex
+    let y = startYear, m = startMonth;
+    while (y < endYear || (y === endYear && m <= endMonth)) {
+      const key = y + '-' + m;
+      monthMap[key] = monthly.length;
+      monthly.push({
+        year: y, month: m,
+        invoice_total: 0,
+        payout_total: null, transport_total: null,
+        gross_margin: null, margin_rate: null,
+        job_count: null, assignment_count: null,
+        is_final: false
+      });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+
+    // メインDB: 1回のgetValues + 列インデックス直参照（オブジェクト生成不要）
+    const cidStr = String(customerId);
+    const mainSheet = getSheet('T_Invoices');
+    const mainData = mainSheet.getDataRange().getValues();
+    if (mainData.length > 1) {
+      const h = mainData[0];
+      const col = {
+        cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
+        bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+        del: h.indexOf('is_deleted')
+      };
+      for (let i = 1; i < mainData.length; i++) {
+        const row = mainData[i];
+        if (row[col.del]) continue;
+        if (String(row[col.cid]) !== cidStr) continue;
+        const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+        if (key in monthMap) {
+          monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
+        }
+      }
+    }
+
+    // アーカイブDBからも取得（期間に含まれる会計年度を特定）
+    const fiscalYears = new Set();
+    for (const entry of monthly) {
+      fiscalYears.add(entry.month >= 3 ? entry.year : entry.year - 1);
+    }
+    for (const fy of fiscalYears) {
+      const archiveDbId = ArchiveService.getArchiveDbId(fy);
+      if (!archiveDbId) continue;
+      try {
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheet = findSheetFromDb(archiveDb, 'T_Invoices');
+        if (!sheet) continue;
+        const data = sheet.getDataRange().getValues();
+        if (data.length <= 1) continue;
+        // 列インデックス直参照（オブジェクト生成不要）
+        const h = data[0];
+        const col = {
+          cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
+          bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+          del: h.indexOf('is_deleted')
+        };
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          if (row[col.del]) continue;
+          if (String(row[col.cid]) !== cidStr) continue;
+          const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+          if (key in monthMap) {
+            monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
+          }
+        }
+      } catch (e) {
+        Logger.log('顧客フィルタ: アーカイブ読み込みエラー: ' + e.message);
+      }
+    }
+
+    // 集計
+    let totalInvoice = 0;
+    for (const entry of monthly) {
+      totalInvoice += entry.invoice_total;
+    }
+
+    return {
+      period: {
+        start: { year: startYear, month: startMonth },
+        end: { year: endYear, month: endMonth }
+      },
+      totals: {
+        invoice_total: totalInvoice,
+        payout_total: null,
+        transport_total: null,
+        gross_margin: null,
+        margin_rate: null,
+        job_count: null,
+        assignment_count: null
+      },
+      monthly: monthly
     };
   },
 

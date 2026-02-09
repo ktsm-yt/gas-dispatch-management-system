@@ -789,11 +789,11 @@ const InvoiceRepository = {
   _getArchiveRecords: function(year, month) {
     const archiveRecords = [];
 
-    // 請求年から対象の年度を特定
-    // 1-3月は前年度、4-12月は当年度
+    // 請求年から対象の年度を特定（2月決算: 3月〜翌2月）
+    // 1-2月は前年度、3-12月は当年度
     const targetYears = [];
     if (month) {
-      const fiscalYear = month >= 4 ? year : year - 1;
+      const fiscalYear = month >= 3 ? year : year - 1;
       targetYears.push(fiscalYear);
     } else {
       // 月が指定されていない場合は両方の年度をチェック

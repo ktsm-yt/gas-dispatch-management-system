@@ -399,6 +399,9 @@ function validateCustomer_(customer: Record<string, any>, isNew: boolean = false
 
   if (customer.closing_day !== undefined) {
     validateNumber_(customer.closing_day, '締め日', { min: 1, max: 31, allowDecimal: false });
+    if (customer.closing_day > 28 && customer.closing_day !== 31) {
+      throw new ValidationError('締め日は1〜28日または末日（31）で指定してください');
+    }
   }
 
   if (customer.payment_day !== undefined) {

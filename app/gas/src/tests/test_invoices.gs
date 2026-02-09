@@ -514,7 +514,7 @@ function testFormat2MultiPage() {
   const paymentMonthOffset = customer.payment_month_offset || 1;
 
   // 発行日（末日締め→翌月1日発行）
-  const issueDate = closingDay >= 28 ? '2025-02-01' : `2025-01-${String(closingDay + 1).padStart(2, '0')}`;
+  const issueDate = closingDay === 31 ? '2025-02-01' : `2025-01-${String(closingDay + 1).padStart(2, '0')}`;
 
   // 支払期限（翌月または翌々月の支払日）
   const dueMonth = 1 + paymentMonthOffset;
