@@ -361,6 +361,31 @@
       </div>
     </div>
 
+    <!-- Customer Revenue Section -->
+    <div class="data-table-section" style="margin-bottom: var(--spacing-lg);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+        <h3>顧客別売上</h3>
+        <div style="display: flex; gap: var(--spacing-sm); align-items: center;">
+          <label style="font-size: 13px; color: var(--text-muted);">年度:</label>
+          <select id="customer-fiscal-year" style="padding: var(--spacing-xs) var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px;">
+          </select>
+          <label style="font-size: 13px; color: var(--text-muted); margin-left: var(--spacing-sm);">並び替え:</label>
+          <select id="customer-sort" style="padding: var(--spacing-xs) var(--spacing-sm); border: 1px solid var(--border-color); border-radius: var(--radius-sm); font-size: 13px;">
+            <option value="total_desc">合計額（降順）</option>
+            <option value="name_asc">顧客名（昇順）</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table" id="customer-revenue-table">
+          <thead id="customer-revenue-thead"></thead>
+          <tbody id="customer-revenue-tbody">
+            <tr><td colspan="14" class="loading"><div class="loading-spinner"></div><span>読み込み中...</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Data Table -->
     <div class="data-table-section">
       <h3>月別詳細</h3>
@@ -393,13 +418,103 @@
   <script>
     let monthlyChart = null;
     let currentData = null;
+    let customerRevenueData = null;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
       initNavBar('sales_analytics', '売上分析');
       initFilters();
       loadData();
+      initCustomerSection();
     });
+
+    function initCustomerSection() {
+      var now = new Date();
+      var month = now.getMonth() + 1;
+      var currentFY = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      var select = document.getElementById('customer-fiscal-year');
+      for (var i = 0; i < 3; i++) {
+        var fy = currentFY - i;
+        var opt = document.createElement('option');
+        opt.value = fy;
+        opt.textContent = fy + '年度（' + fy + '/3〜' + (fy + 1) + '/2）';
+        select.appendChild(opt);
+      }
+      select.addEventListener('change', function() { loadCustomerRevenue(Number(this.value)); });
+      document.getElementById('customer-sort').addEventListener('change', function() {
+        if (customerRevenueData) renderCustomerTable(customerRevenueData);
+      });
+      loadCustomerRevenue(currentFY);
+    }
+
+    function loadCustomerRevenue(fiscalYear) {
+      var cacheKey = PageCache.makeKey('customer_revenue', { fiscalYear: fiscalYear });
+      var cached = PageCache.get(cacheKey);
+      if (cached) {
+        handleCustomerRevenueLoaded(cached.data);
+        if (cached.age > PageCache.ANALYTICS_TTL) {
+          fetchCustomerRevenueFromServer(fiscalYear, cacheKey);
+        }
+        return;
+      }
+      document.getElementById('customer-revenue-tbody').innerHTML =
+        '<tr><td colspan="14" class="loading"><div class="loading-spinner"></div><span>読み込み中...</span></td></tr>';
+      fetchCustomerRevenueFromServer(fiscalYear, cacheKey);
+    }
+
+    function fetchCustomerRevenueFromServer(fiscalYear, cacheKey) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.ok) PageCache.set(cacheKey, result);
+          handleCustomerRevenueLoaded(result);
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('customer-revenue-tbody').innerHTML =
+            '<tr><td colspan="14" style="text-align:center;color:var(--color-danger);">取得エラー</td></tr>';
+        })
+        .getCustomerRevenueStats(fiscalYear);
+    }
+
+    function handleCustomerRevenueLoaded(result) {
+      if (!result || !result.ok) {
+        document.getElementById('customer-revenue-tbody').innerHTML =
+          '<tr><td colspan="14" style="text-align:center;color:var(--color-danger);">データの取得に失敗しました</td></tr>';
+        return;
+      }
+      customerRevenueData = result.data;
+      renderCustomerTable(result.data);
+    }
+
+    function renderCustomerTable(data) {
+      var monthOrder = data.monthOrder;
+      var thead = document.getElementById('customer-revenue-thead');
+      thead.innerHTML = '<tr><th>顧客名</th>' +
+        monthOrder.map(function(m) { return '<th>' + m + '月</th>'; }).join('') +
+        '<th>合計</th></tr>';
+
+      var customers = data.customers.slice();
+
+      var sortKey = document.getElementById('customer-sort').value;
+      if (sortKey === 'total_desc') {
+        customers.sort(function(a, b) { return b.total - a.total; });
+      } else if (sortKey === 'name_asc') {
+        customers.sort(function(a, b) { return a.customer_name.localeCompare(b.customer_name, 'ja'); });
+      }
+
+      var tbody = document.getElementById('customer-revenue-tbody');
+      if (customers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="14" style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
+        return;
+      }
+      tbody.innerHTML = customers.map(function(c) {
+        return '<tr><td>' + escapeHtml(c.customer_name) + '</td>' +
+          monthOrder.map(function(m) {
+            var val = c.months[m] || 0;
+            return '<td>' + (val ? formatCurrency(val) : '-') + '</td>';
+          }).join('') +
+          '<td style="font-weight:600;">' + formatCurrency(c.total) + '</td></tr>';
+      }).join('');
+    }
 
     function initFilters() {
       const periodSelect = document.getElementById('period-select');
