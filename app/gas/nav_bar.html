@@ -21,6 +21,14 @@
 
 <script>
 function initNavBar(currentPage, pageTitle) {
+  // テンプレート埋め込みURLでsessionStorageを常に最新化（デプロイ変更対策）
+  if (window.__SCRIPT_URL__) {
+    var cached = sessionStorage.getItem('__SCRIPT_URL__');
+    if (cached !== window.__SCRIPT_URL__) {
+      sessionStorage.setItem('__SCRIPT_URL__', window.__SCRIPT_URL__);
+    }
+  }
+
   // Set page title
   document.getElementById('page-title').textContent = pageTitle;
 

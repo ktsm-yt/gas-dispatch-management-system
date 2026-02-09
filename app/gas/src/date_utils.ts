@@ -104,7 +104,7 @@ function calculateClosingPeriod_(
   month: number,
   closingDay: number
 ): { startDate: string | null; endDate: string | null } {
-  const isMonthEnd = closingDay >= 28;
+  const isMonthEnd = closingDay === 31;
 
   let endDate: Date;
   if (isMonthEnd) {
@@ -271,13 +271,16 @@ function getFiscalYear_(date: Date | string): number {
   const d = typeof date === 'string' ? parseDate_(date)! : date;
   const month = d.getMonth() + 1;
   const year = d.getFullYear();
-  return month >= 4 ? year : year - 1;
+  return month >= 3 ? year : year - 1;
 }
 
 function getFiscalYearRange_(fiscalYear: number): { startDate: string; endDate: string } {
+  // 2月決算: 3月1日〜翌2月末日（うるう年考慮）
+  const endDate = new Date(fiscalYear + 1, 2, 0); // 2月末日
+  const endDateStr = `${fiscalYear + 1}-02-${String(endDate.getDate()).padStart(2, '0')}`;
   return {
-    startDate: `${fiscalYear}-04-01`,
-    endDate: `${fiscalYear + 1}-03-31`
+    startDate: `${fiscalYear}-03-01`,
+    endDate: endDateStr
   };
 }
 
