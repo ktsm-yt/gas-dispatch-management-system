@@ -1697,33 +1697,54 @@ function generateLineTemplate() {
       }).join('、')
     : '';
 
-  // 役割別にグループ化
+  // 作業種別の日本語マッピング
+  const workCategoryLabels = {
+    'jotou': '上棟',
+    'keisagyo': '軽作業',
+    'niage': '荷揚げ'
+  };
+  const workCategoryPrefix = workCategoryLabels[job.work_category] || '';
+
+  // 役割別にグループ化（外注スタッフはまとめてカウント表示）
   const roleGroups = {};
   activeAssignments.forEach(a => {
     const role = a.assignment_role || '未指定';
-    if (!roleGroups[role]) roleGroups[role] = [];
-    roleGroups[role].push(a.staff_name || '名前未設定');
+    if (!roleGroups[role]) roleGroups[role] = { names: [], subCount: 0 };
+    const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+    if (staff?.staff_type === 'subcontract') {
+      roleGroups[role].subCount++;
+    } else {
+      roleGroups[role].names.push(a.staff_name || '名前未設定');
+    }
   });
 
-  // メンバー欄を役割別に生成
+  // メンバー欄を役割別に生成（作業種別プレフィックス付き、外注は「外注○名」）
   const memberLines = [];
-  const roleOrder = ['鳶', '荷揚げ', '鳶揚げ', '未指定'];
+  const roleOrder = ['鳶', '鳶補助', '荷揚げ', '鳶揚げ', '未指定'];
+  const formatRoleMembers = (role, group) => {
+    const parts = [...group.names];
+    if (group.subCount > 0) parts.push(`外注${group.subCount}名`);
+    const label = role === '未指定' ? '' : (workCategoryPrefix + role);
+    if (label) {
+      memberLines.push(`${label}（${parts.join('、')}）`);
+    } else {
+      memberLines.push(parts.join('、'));
+    }
+  };
   roleOrder.forEach(role => {
-    if (roleGroups[role] && roleGroups[role].length > 0) {
-      if (role === '未指定') {
-        memberLines.push(roleGroups[role].join('、'));
-      } else {
-        memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
-      }
+    if (roleGroups[role] && (roleGroups[role].names.length > 0 || roleGroups[role].subCount > 0)) {
+      formatRoleMembers(role, roleGroups[role]);
     }
   });
   // roleOrderにない役割があれば追加
   Object.keys(roleGroups).forEach(role => {
     if (!roleOrder.includes(role)) {
-      memberLines.push(`${role}（${roleGroups[role].join('、')}）`);
+      formatRoleMembers(role, roleGroups[role]);
     }
   });
-  const memberStr = memberLines.join(' ');
+  // 複数行の場合は改行＋全角スペース字下げ
+  const memberPadding = '\n　　　　　　';
+  const memberStr = memberLines.join(memberPadding);
 
   // ヘッダー用メンバー名リスト（シンプル）
   const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
@@ -1774,9 +1795,22 @@ function generateLineTemplate() {
     'other': 'その他'
   };
   const workDetailLabel = job.work_detail ? (workDetailLabels[job.work_detail] || job.work_detail) : '';
-  const workContent = job.work_category
-    ? (workDetailLabel ? `${job.work_category}（${workDetailLabel}）` : job.work_category)
-    : workDetailLabel;
+  // 作業内容：役割グループがある場合は「上棟鳶補助、上棟荷揚げ作業」形式
+  let workContent;
+  if (workCategoryPrefix && memberLines.length > 0) {
+    // memberLinesから役割名を抽出して「〇〇作業」形式に
+    const roleNames = memberLines.map(line => {
+      const match = line.match(/^(.+?)（/);
+      return match ? match[1] : null;
+    }).filter(Boolean);
+    workContent = roleNames.length > 0
+      ? roleNames.join('、') + '作業'
+      : (workCategoryPrefix + (workDetailLabel || '') + '作業');
+  } else {
+    workContent = job.work_category
+      ? (workDetailLabel ? `${workCategoryLabels[job.work_category] || job.work_category}${workDetailLabel}` : (workCategoryLabels[job.work_category] || job.work_category))
+      : workDetailLabel;
+  }
 
   // 最寄駅（配置の transport_station から取得）
   const nearestStation = activeAssignments.map(a => a.transport_station).find(s => s) || '';

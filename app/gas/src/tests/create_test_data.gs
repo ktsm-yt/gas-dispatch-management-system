@@ -943,6 +943,9 @@ function createTestSubcontractors() {
       email: 'first-g@example.com',
       address: '東京都台東区上野1-1-1',
       notes: 'テスト外注先1',
+      basic_rate: 15000,
+      half_day_rate: 8000,
+      full_day_rate: 18000,
       is_active: true
     },
     {
@@ -953,6 +956,9 @@ function createTestSubcontractors() {
       email: 'zeal@example.com',
       address: '東京都墨田区押上2-2-2',
       notes: 'テスト外注先2',
+      basic_rate: 14000,
+      half_day_rate: 7500,
+      full_day_rate: 17000,
       is_active: true
     },
     {
@@ -963,6 +969,9 @@ function createTestSubcontractors() {
       email: 'misawa@example.com',
       address: '東京都江東区豊洲3-3-3',
       notes: 'テスト外注先3',
+      basic_rate: 16000,
+      half_day_rate: 8500,
+      full_day_rate: 19000,
       is_active: true
     }
   ];

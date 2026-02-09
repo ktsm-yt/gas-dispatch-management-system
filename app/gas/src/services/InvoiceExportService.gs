@@ -1258,11 +1258,30 @@ const InvoiceExportService = {
     const billingPeriod = `${invoice.billing_year}/${String(invoice.billing_month).padStart(2, '0')}`;
     sheet.getRange('A23').setValue(billingPeriod);
 
+    // === 行23: 作業費（固定） ===
     sheet.getRange('F23').setValue('作業費');
-    sheet.getRange('F24').setValue('諸経費');
-
     sheet.getRange('AI23').setValue(invoice.subtotal || 0);
-    sheet.getRange('AI24').setValue(invoice.expense_amount || 0);
+
+    // === 行24〜: 諸経費（あれば）→ 調整項目を動的配置 ===
+    var currentRow = 24;
+    var expenseAmount = invoice.expense_amount || 0;
+    if (expenseAmount > 0) {
+      sheet.getRange('F' + currentRow).setValue('諸経費');
+      sheet.getRange('AC' + currentRow).setValue(1);
+      sheet.getRange('AF' + currentRow).setValue('式');
+      sheet.getRange('AI' + currentRow).setValue(expenseAmount);
+      currentRow++;
+    }
+
+    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoice.invoice_id);
+    adjustments.forEach(function(adj, i) {
+      if (i >= 5) return;
+      sheet.getRange('F' + currentRow).setValue(adj.item_name);
+      sheet.getRange('AC' + currentRow).setValue(1);
+      sheet.getRange('AF' + currentRow).setValue('式');
+      sheet.getRange('AI' + currentRow).setValue(adj.amount);
+      currentRow++;
+    });
   },
 
   // ============================================
