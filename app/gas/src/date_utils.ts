@@ -104,7 +104,7 @@ function calculateClosingPeriod_(
   month: number,
   closingDay: number
 ): { startDate: string | null; endDate: string | null } {
-  const isMonthEnd = closingDay >= 28;
+  const isMonthEnd = closingDay === 31;
 
   let endDate: Date;
   if (isMonthEnd) {
