@@ -354,12 +354,13 @@ function testCountBusinessDays() {
 }
 
 function testGetFiscalYear() {
-  // 4月以降は当年
+  // 3月以降は当年（2月決算: 3月〜翌2月）
+  assertEqual(getFiscalYear_(parseDate_('2025-03-01')), 2025, 'March is current FY');
   assertEqual(getFiscalYear_(parseDate_('2025-04-01')), 2025, 'April is current FY');
   assertEqual(getFiscalYear_(parseDate_('2025-12-31')), 2025, 'December is current FY');
 
-  // 3月以前は前年
-  assertEqual(getFiscalYear_(parseDate_('2025-03-31')), 2024, 'March is previous FY');
+  // 2月以前は前年
+  assertEqual(getFiscalYear_(parseDate_('2025-02-28')), 2024, 'February is previous FY');
   assertEqual(getFiscalYear_(parseDate_('2025-01-01')), 2024, 'January is previous FY');
 }
 
