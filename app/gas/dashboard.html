@@ -1382,7 +1382,7 @@
               const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
                              || document.getElementById('job-modal')?.style.display !== 'none';
               if (!modalOpen) {
-                showToast('データが更新されました。再読み込みしてください。');
+                refreshDashboardInBackground(dateStr);
               }
             }
             lastMaxUpdatedAt = response.data.maxUpdatedAt;
