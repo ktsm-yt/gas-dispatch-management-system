@@ -772,6 +772,7 @@
       }
       loadDashboard();
       startPolling();
+      initVisibilityRefresh();
     }
 
     function setupEventListeners() {
@@ -1364,6 +1365,28 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    // ========== B: タブフォーカス時のリフレッシュ ==========
+    let lastRefreshTime = 0;
+    const REFRESH_THROTTLE_MS = 5000; // 5秒スロットリング
+
+    function initVisibilityRefresh() {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+
+        // モーダルが開いている場合はスキップ
+        const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
+                       || document.getElementById('job-modal')?.style.display !== 'none';
+        if (modalOpen) return;
+
+        // スロットリング
+        const now = Date.now();
+        if (now - lastRefreshTime < REFRESH_THROTTLE_MS) return;
+        lastRefreshTime = now;
+
+        refreshDashboardInBackground(formatDate(currentDate));
+      });
     }
 
     // Polling for updates
