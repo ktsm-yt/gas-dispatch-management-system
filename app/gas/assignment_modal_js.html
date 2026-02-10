@@ -24,16 +24,32 @@ const GLOBAL_STAFF_CACHE_EXPIRE_MS = 10 * 60 * 1000;  // 10分
  * @returns {Array|null} キャッシュされたスタッフ配列、または null
  */
 function getGlobalStaffCache() {
-  if (globalStaffCache.staff.length === 0) return null;
-
-  const age = Date.now() - globalStaffCache.timestamp;
-  if (age > GLOBAL_STAFF_CACHE_EXPIRE_MS) {
+  // メモリキャッシュを最優先チェック
+  if (globalStaffCache.staff.length > 0) {
+    const age = Date.now() - globalStaffCache.timestamp;
+    if (age <= GLOBAL_STAFF_CACHE_EXPIRE_MS) {
+      return globalStaffCache.staff;
+    }
     globalStaffCache.staff = [];
     globalStaffCache.timestamp = 0;
-    return null;
   }
 
-  return globalStaffCache.staff;
+  // メモリになければlocalStorageから復元（タブ間共有）
+  try {
+    const stored = localStorage.getItem('staff_cache');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      const age = Date.now() - parsed.timestamp;
+      if (age <= GLOBAL_STAFF_CACHE_EXPIRE_MS && Array.isArray(parsed.staff)) {
+        globalStaffCache.staff = parsed.staff;
+        globalStaffCache.timestamp = parsed.timestamp;
+        return parsed.staff;
+      }
+      localStorage.removeItem('staff_cache');
+    }
+  } catch (e) { /* localStorage unavailable */ }
+
+  return null;
 }
 
 /**
@@ -43,6 +59,11 @@ function getGlobalStaffCache() {
 function saveGlobalStaffCache(staff) {
   globalStaffCache.staff = staff;
   globalStaffCache.timestamp = Date.now();
+
+  // localStorageにも保存（タブ間共有）
+  try {
+    localStorage.setItem('staff_cache', JSON.stringify({ staff, timestamp: globalStaffCache.timestamp }));
+  } catch (e) { /* localStorage unavailable or quota exceeded */ }
 }
 
 // ========== Dashboard Cache Access ==========
