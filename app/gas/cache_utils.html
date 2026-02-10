@@ -142,4 +142,66 @@ const PageCache = {
     return cached && cached.age >= maxAge;
   }
 };
+/**
+ * BroadcastSync - クロスタブ同期ユーティリティ
+ *
+ * BroadcastChannel + visibilitychange による軽量同期。
+ * フィルタ判定・更新ロジックはページ側に委譲（責務分離）。
+ */
+const BroadcastSync = {
+  /**
+   * BroadcastChannelを作成し、onmessageを設定
+   * @param {string} channelName - チャンネル名
+   * @param {function} onMessage - メッセージ受信ハンドラ（モーダル判定はページ側で行う）
+   * @returns {BroadcastChannel|null}
+   */
+  init(channelName, onMessage) {
+    if (typeof BroadcastChannel === 'undefined') return null;
+    try {
+      const channel = new BroadcastChannel(channelName);
+      channel.onmessage = onMessage;
+      return channel;
+    } catch (e) {
+      console.warn('BroadcastSync.init error:', e);
+      return null;
+    }
+  },
+
+  /**
+   * メッセージをブロードキャスト（timestamp自動付与）
+   * @param {BroadcastChannel|null} channel
+   * @param {string} type - メッセージタイプ
+   * @param {Object} data - 送信データ
+   */
+  broadcast(channel, type, data) {
+    if (!channel) return;
+    try {
+      channel.postMessage({ type, data, timestamp: Date.now() });
+    } catch (e) {
+      console.warn('BroadcastSync.broadcast error:', e);
+    }
+  },
+
+  /**
+   * visibilitychange によるバックグラウンド→フォアグラウンド復帰時リフレッシュ
+   * @param {function} onVisible - 復帰時コールバック
+   * @param {Object} options
+   * @param {function} options.isModalOpen - モーダル表示中判定
+   * @param {number} options.throttleMs - スロットル間隔（デフォルト5000ms）
+   */
+  initVisibilityRefresh(onVisible, options = {}) {
+    const throttleMs = options.throttleMs || 5000;
+    const isModalOpen = options.isModalOpen || (() => false);
+    let lastRefresh = 0;
+
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') return;
+      if (isModalOpen()) return;
+      const now = Date.now();
+      if (now - lastRefresh < throttleMs) return;
+      lastRefresh = now;
+      onVisible();
+    });
+  }
+};
 </script>

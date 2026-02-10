@@ -1567,6 +1567,10 @@
     let customersLoading = false;
     let currentInvoiceQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
 
+    // クロスタブ同期
+    let invoiceSyncChannel = null;
+    let pendingInvalidation = false;
+
     // キャッシュキー（PageCache統一）
     const INVOICES_CUSTOMERS_KEY = 'invoices_customers';
     const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分（請求書一覧用）
@@ -1627,6 +1631,7 @@
       initModalHandlers();
       loadBillingFolderLink();
       loadLastExportFromStorage();  // 前回の出力結果を復元
+      initInvoiceSync();
     });
 
     // エクスポートフォルダリンクを読み込み
@@ -2022,6 +2027,111 @@
      * @param {Object} invoice - 請求書オブジェクト
      * @returns {boolean} フィルタに一致すればtrue
      */
+    // ========================================
+    // クロスタブ同期
+    // ========================================
+
+    function initInvoiceSync() {
+      invoiceSyncChannel = BroadcastSync.init('invoice_sync', handleInvoiceSyncMessage);
+      BroadcastSync.initVisibilityRefresh(refreshInvoicesOnVisible, {
+        isModalOpen: isAnyInvoiceModalOpen,
+        throttleMs: 5000
+      });
+    }
+
+    function isAnyInvoiceModalOpen() {
+      const overlays = ['editModal','paymentModal','generateModal','bulkGenerateModal',
+        'billingExportModal','fileOverwriteModal','regenerateConfirmModal',
+        'statusConfirmModal','bulkExportModal','invoiceOverwriteModal'];
+      for (const id of overlays) {
+        if (document.getElementById(id)?.classList.contains('active')) return true;
+      }
+      const confirm = document.getElementById('confirmation-modal-overlay');
+      if (confirm && confirm.style.display !== 'none') return true;
+      return false;
+    }
+
+    function handleInvoiceSyncMessage(event) {
+      const { type, data, timestamp } = event.data;
+      if (isAnyInvoiceModalOpen()) {
+        pendingInvalidation = true;
+        return;
+      }
+      applyInvoiceSyncMessage(type, data, timestamp);
+    }
+
+    function applyInvoiceSyncMessage(type, data, timestamp) {
+      if (type === 'INVOICES_BULK_UPDATED') {
+        PageCache.clearByPrefix('invoices_list');
+        loadInvoices(true);
+        return;
+      }
+
+      if (type === 'INVOICE_UPDATED' && data?.invoice) {
+        const inv = data.invoice;
+        const existingIdx = invoices.findIndex(i => i.invoice_id === inv.invoice_id);
+
+        if (existingIdx !== -1) {
+          // タイムスタンプ検証: ローカルの方が新しければ無視
+          if (timestamp && invoices[existingIdx].updated_at &&
+              new Date(invoices[existingIdx].updated_at).getTime() > timestamp) {
+            return;
+          }
+          invoices[existingIdx] = { ...invoices[existingIdx], ...inv };
+          const tbody = document.getElementById('invoiceTableBody');
+          const row = tbody.querySelector(`tr[data-invoice-id="${inv.invoice_id}"]`);
+          // フィルタ不一致なら行を削除（ステータス変更等で対象外になったケース）
+          if (!matchesCurrentFilter(invoices[existingIdx])) {
+            invoices.splice(existingIdx, 1);
+            if (row) row.remove();
+          } else if (row) {
+            const showOverdueDays = document.getElementById('filterStatus').value === 'unpaid';
+            row.outerHTML = renderSingleInvoiceRow(invoices[existingIdx], showOverdueDays);
+          }
+        } else if (matchesCurrentFilter(inv)) {
+          invoices.unshift(inv);
+          renderInvoices();
+        }
+        // キャッシュ更新
+        if (currentInvoiceQuery) {
+          PageCache.set(PageCache.makeKey('invoices_list', currentInvoiceQuery), invoices);
+        }
+        return;
+      }
+
+      if (type === 'PAYMENT_RECORDED' && data?.invoiceId) {
+        const inv = invoices.find(i => i.invoice_id === data.invoiceId);
+        if (inv) {
+          if (data.totalPaid !== undefined) inv.total_paid = data.totalPaid;
+          if (data.outstanding !== undefined) inv.outstanding = data.outstanding;
+          if (data.status) inv.status = data.status;
+          if (data.updatedAt) inv.updated_at = data.updatedAt;
+          const tbody = document.getElementById('invoiceTableBody');
+          const row = tbody.querySelector(`tr[data-invoice-id="${data.invoiceId}"]`);
+          if (row) {
+            const showOverdueDays = document.getElementById('filterStatus').value === 'unpaid';
+            row.outerHTML = renderSingleInvoiceRow(inv, showOverdueDays);
+          }
+          if (currentInvoiceQuery) {
+            PageCache.set(PageCache.makeKey('invoices_list', currentInvoiceQuery), invoices);
+          }
+        }
+        return;
+      }
+    }
+
+    function refreshInvoicesOnVisible() {
+      PageCache.clearByPrefix('invoices_list');
+      loadInvoices(true);
+    }
+
+    function processPendingInvalidation() {
+      if (pendingInvalidation) {
+        pendingInvalidation = false;
+        loadInvoices(true);
+      }
+    }
+
     function matchesCurrentFilter(invoice) {
       if (!currentInvoiceQuery) return false;
 
@@ -2032,25 +2142,22 @@
 
       // billing_ym_from/to チェック（年月範囲フィルタ）
       if (currentInvoiceQuery.billing_ym_from || currentInvoiceQuery.billing_ym_to) {
-        // 請求書のbilling_ymを構築
-        const invoiceYm = invoice.billing_year && invoice.billing_month
-          ? `${invoice.billing_year}-${String(invoice.billing_month).padStart(2, '0')}`
-          : null;
-        // 空値は一致扱い（既存互換）
-        if (invoiceYm) {
-          if (currentInvoiceQuery.billing_ym_from && invoiceYm < currentInvoiceQuery.billing_ym_from) return false;
-          if (currentInvoiceQuery.billing_ym_to && invoiceYm > currentInvoiceQuery.billing_ym_to) return false;
-        }
+        const year = invoice.billing_year != null ? Number(invoice.billing_year) : null;
+        const month = invoice.billing_month != null ? Number(invoice.billing_month) : null;
+        if (year == null || month == null || isNaN(year) || isNaN(month)) return false;
+        const invoiceYm = `${year}-${String(month).padStart(2, '0')}`;
+        if (currentInvoiceQuery.billing_ym_from && invoiceYm < currentInvoiceQuery.billing_ym_from) return false;
+        if (currentInvoiceQuery.billing_ym_to && invoiceYm > currentInvoiceQuery.billing_ym_to) return false;
       }
 
       // billing_yearチェック (従来互換)
       if (currentInvoiceQuery.billing_year && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
-        if (invoice.billing_year !== currentInvoiceQuery.billing_year) return false;
+        if (String(invoice.billing_year) !== String(currentInvoiceQuery.billing_year)) return false;
       }
 
       // billing_monthチェック (従来互換)
       if (currentInvoiceQuery.billing_month && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
-        if (invoice.billing_month !== currentInvoiceQuery.billing_month) return false;
+        if (String(invoice.billing_month) !== String(currentInvoiceQuery.billing_month)) return false;
       }
 
       // statusチェック（生成直後は常にdraft）
@@ -2184,6 +2291,67 @@
         .searchInvoices(query);
     }
 
+    function renderSingleInvoiceRow(inv, showOverdueDays, customerById) {
+      const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
+      const masterCustomer = customerById ? customerById.get(customerId) : customers.find(c => c.customer_id === customerId);
+      const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
+
+      let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
+        '" data-status="' + inv.status + '" style="cursor: pointer;">';
+      rowHtml += '<td onclick="event.stopPropagation()">' +
+        '<input type="checkbox" class="invoice-checkbox" data-invoice-id="' + inv.invoice_id +
+        '" data-updated-at="' + (inv.updated_at || '') + '" onchange="updateBulkActionBar()">' +
+        '</td>';
+      rowHtml += '<td onclick="event.stopPropagation()">';
+      if (inv.has_assignment_changes) {
+        rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
+          inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+          '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
+          '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
+      }
+      rowHtml += '</td>';
+      rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
+      rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
+      rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
+      rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
+      rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
+      rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
+      const totalPaid = inv.total_paid || 0;
+      const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
+      const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
+      rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
+      if (outstanding === 0 && inv.total_amount > 0) {
+        rowHtml += '<span class="payment-complete">✓ 完済</span>';
+      } else if (totalPaid > 0) {
+        rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
+      } else if (outstanding > 0) {
+        rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
+      } else {
+        rowHtml += '<span class="payment-none">-</span>';
+      }
+      if (isPayable) {
+        rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
+          (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
+      }
+      rowHtml += '</td>';
+      rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
+      if (showOverdueDays) {
+        rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
+      }
+      const isEditable = inv.status === 'unsent' || inv.status === 'hold' || inv.status === 'draft' || inv.status === 'issued';
+      const btnLabel = isEditable ? '確認' : '出力';
+      const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
+      const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
+      rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
+        '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
+        '</td>';
+      rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
+        '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()">' +
+        renderFolderCellHtml(customerId, folderId) + '</td>';
+      rowHtml += '</tr>';
+      return rowHtml;
+    }
+
     function renderInvoices() {
       const tbody = document.getElementById('invoiceTableBody');
       const thead = document.getElementById('invoiceTableHead');
@@ -2222,70 +2390,7 @@
       emptyState.style.display = 'none';
 
       const customerById = new Map(customers.map(c => [c.customer_id, c]));
-      tbody.innerHTML = invoices.map(inv => {
-        const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
-        const masterCustomer = customerById.get(customerId);
-        const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
-
-        let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
-          '" data-status="' + inv.status + '" style="cursor: pointer;">';
-        rowHtml += '<td onclick="event.stopPropagation()">' +
-          '<input type="checkbox" class="invoice-checkbox" data-invoice-id="' + inv.invoice_id +
-          '" data-updated-at="' + (inv.updated_at || '') + '" onchange="updateBulkActionBar()">' +
-          '</td>';
-        rowHtml += '<td onclick="event.stopPropagation()">';
-        if (inv.has_assignment_changes) {
-          rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
-            inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
-            '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
-            '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
-        }
-        rowHtml += '</td>';
-        rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
-        rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
-        rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
-        rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
-        rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
-        rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
-        // 入金状況カラム（コンパクト表示 + ホバーボタン）
-        const totalPaid = inv.total_paid || 0;
-        const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
-        const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
-        rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
-        if (outstanding === 0 && inv.total_amount > 0) {
-          rowHtml += '<span class="payment-complete">✓ 完済</span>';
-        } else if (totalPaid > 0) {
-          rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
-        } else if (outstanding > 0) {
-          rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
-        } else {
-          rowHtml += '<span class="payment-none">-</span>';
-        }
-        if (isPayable) {
-          rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
-            (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
-        }
-        rowHtml += '</td>';
-        // ステータス
-        rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
-        // 滞留日数列（未回収フィルタ時のみ）
-        if (showOverdueDays) {
-          rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
-        }
-        // 帳票出力ボタン（常に表示、編集可否はモーダル内で制御）
-        const isEditable = inv.status === 'unsent' || inv.status === 'hold' || inv.status === 'draft' || inv.status === 'issued';
-        const btnLabel = isEditable ? '確認' : '出力';
-        const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
-        const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
-        rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
-          '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
-          '</td>';
-        rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
-          '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()">' +
-          renderFolderCellHtml(customerId, folderId) + '</td>';
-        rowHtml += '</tr>';
-        return rowHtml;
-      }).join('');
+      tbody.innerHTML = invoices.map(inv => renderSingleInvoiceRow(inv, showOverdueDays, customerById)).join('');
       // チェックボックス状態をリセット
       document.getElementById('selectAll').checked = false;
       updateBulkActionBar();
@@ -2322,13 +2427,15 @@
 
       // セッションキャッシュも更新
       try {
-        const cacheKey = sessionStorage.getItem(SS_INVOICES_KEY);
-        if (cacheKey) {
-          const cacheData = JSON.parse(cacheKey);
-          const cacheIndex = cacheData.data.findIndex(i => i.invoice_id === invoiceId);
-          if (cacheIndex !== -1) {
-            cacheData.data[cacheIndex] = inv;
-            sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify(cacheData));
+        if (currentInvoiceQuery) {
+          const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+          const cached = PageCache.get(cacheKey);
+          if (cached && Array.isArray(cached.data)) {
+            const cacheIndex = cached.data.findIndex(i => i.invoice_id === invoiceId);
+            if (cacheIndex !== -1) {
+              cached.data[cacheIndex] = inv;
+              PageCache.set(cacheKey, cached.data);
+            }
           }
         }
       } catch (e) { /* キャッシュ更新失敗は無視 */ }
@@ -2659,6 +2766,7 @@
     function closeStatusConfirm() {
       document.getElementById('statusConfirmModal').classList.remove('active');
       pendingStatusUpdate = null;
+      processPendingInvalidation();
     }
 
     function executeStatusUpdate() {
@@ -2694,6 +2802,8 @@
             });
             // Clear cache since data changed
             PageCache.clearByPrefix('invoices_list');
+            // クロスタブ同期（一括更新）
+            BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { status });
             clearSelection();
             document.getElementById('bulkStatusSelect').value = '';
           } else {
@@ -2722,6 +2832,7 @@
 
     function closeGenerateModal() {
       document.getElementById('generateModal').classList.remove('active');
+      processPendingInvalidation();
     }
 
     // 上書き確認用の一時データ
@@ -2769,6 +2880,8 @@
                 PageCache.clearByPrefix('invoices_list');
                 loadInvoices(true);
               }
+              // クロスタブ同期
+              BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
             }
           } else if (result.error?.code === 'CONFLICT_ERROR' && result.error?.details?.existingInvoice) {
             hideLoading();
@@ -2794,6 +2907,7 @@
     function closeInvoiceOverwriteModal() {
       document.getElementById('invoiceOverwriteModal').classList.remove('active');
       pendingOverwrite = { customerId: null, ym: null, existingInvoice: null };
+      processPendingInvalidation();
     }
 
     function confirmInvoiceOverwrite() {
@@ -2837,6 +2951,8 @@
                       PageCache.clearByPrefix('invoices_list');
                       loadInvoices(true);
                     }
+                    // クロスタブ同期
+                    BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
                   }
                 } else {
                   showToast(genResult.error?.message || '再生成に失敗しました', 'error');
@@ -2881,7 +2997,10 @@
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
+        // クロスタブ同期（一括生成完了時のみ1回）
+        BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
+      processPendingInvalidation();
     }
 
     function closeBulkGenerateModal() {
@@ -2893,7 +3012,9 @@
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
+        BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
+      processPendingInvalidation();
       // リセット
       document.getElementById('bulkGenerateProgress').style.display = 'none';
       document.getElementById('bulkGenerateResult').style.display = 'none';
@@ -3256,6 +3377,7 @@
     function closeFileOverwriteModal() {
       document.getElementById('fileOverwriteModal').classList.remove('active');
       pendingExport = null;
+      processPendingInvalidation();
     }
 
     function confirmOverwrite() {
@@ -3360,6 +3482,7 @@
      */
     function closeBulkExportModal() {
       document.getElementById('bulkExportModal').classList.remove('active');
+      processPendingInvalidation();
 
       // タイマーを停止
       stopElapsedTimeUpdate();
@@ -3853,6 +3976,7 @@
 
     function closeBillingExportModal() {
       document.getElementById('billingExportModal').classList.remove('active');
+      processPendingInvalidation();
     }
 
     function executeBillingExport() {
@@ -4037,6 +4161,7 @@
     function closeRegenerateConfirm() {
       document.getElementById('regenerateConfirmModal').classList.remove('active');
       pendingRegenerate = null;
+      processPendingInvalidation();
     }
 
     /**
@@ -4070,9 +4195,11 @@
                 invoices[idx] = updatedInvoice;
                 renderInvoices();
                 // キャッシュを更新
-                const cacheKey = 'invoices_list_' + JSON.stringify(currentInvoiceQuery);
+                const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
                 PageCache.set(cacheKey, invoices);
               }
+              // クロスタブ同期
+              BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
             }
           } else {
             const errorMsg = result.error?.message || result.error || '再生成に失敗しました';
@@ -4135,6 +4262,7 @@
     function closePaymentModal() {
       document.getElementById('paymentModal').classList.remove('active');
       currentPaymentInvoice = null;
+      processPendingInvalidation();
     }
 
     // ========================================
@@ -4216,6 +4344,7 @@
     function closeEditModal() {
       document.getElementById('editModal').classList.remove('active');
       currentEditInvoice = null;
+      processPendingInvalidation();
     }
 
     /**
@@ -4331,6 +4460,8 @@
             currentEditInvoice = { ...currentEditInvoice, ...result.data.invoice };
             if (result.data.adjustments) currentEditInvoice.adjustments = result.data.adjustments;
             updateTotalsPreview();
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
           }
           // モーダルは閉じず、出力を促す
           showToast('保存しました。帳票を出力して確認できます', 'success');
@@ -4620,6 +4751,14 @@
               const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
               PageCache.set(cacheKey, invoices);
             }
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'PAYMENT_RECORDED', {
+              invoiceId: invoiceId,
+              totalPaid: result.data.totalPaid,
+              outstanding: result.data.outstanding,
+              status: result.data.statusUpdated ? 'paid' : (inv ? inv.status : null),
+              updatedAt: result.data.newUpdatedAt
+            });
           } else {
             showToast(result.error?.message || result.error || '入金記録に失敗しました', 'error');
           }
@@ -4685,6 +4824,14 @@
               const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
               PageCache.set(cacheKey, invoices);
             }
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'PAYMENT_RECORDED', {
+              invoiceId: invoiceId,
+              totalPaid: result.data.totalPaid,
+              outstanding: result.data.outstanding,
+              status: result.data.statusUpdated ? 'unpaid' : (inv ? inv.status : null),
+              updatedAt: result.data.newUpdatedAt
+            });
           } else {
             showToast(result.error?.message || result.error || '削除に失敗しました', 'error');
           }
