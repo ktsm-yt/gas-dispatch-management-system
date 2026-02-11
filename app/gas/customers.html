@@ -486,6 +486,15 @@
                 <input type="number" id="tax-rate" name="tax_rate" min="0" max="100" step="1" value="10">
               </div>
               <div class="form-group">
+                <label for="tax-rounding-mode">税端数処理</label>
+                <select id="tax-rounding-mode" name="tax_rounding_mode">
+                  <option value="floor">切り捨て</option>
+                  <option value="ceil">切り上げ</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row cols-3">
+              <div class="form-group">
                 <label for="has-transport-fee">交通費請求</label>
                 <div style="display: flex; align-items: center; height: 38px;">
                   <input type="checkbox" id="has-transport-fee" name="has_transport_fee" style="width: auto; margin-right: 8px;">
@@ -838,6 +847,7 @@
         // Set defaults
         document.getElementById('is-active').value = 'true';
         document.getElementById('tax-rate').value = '10';
+        document.getElementById('tax-rounding-mode').value = 'floor';
         document.getElementById('honorific').value = '様';
         document.getElementById('invoice-format').value = 'format1';
         document.getElementById('has-transport-fee').checked = false;
@@ -898,6 +908,7 @@
         document.getElementById('payment-day').value = '31';
       }
       document.getElementById('invoice-format').value = customer.invoice_format || 'format1';
+      document.getElementById('tax-rounding-mode').value = customer.tax_rounding_mode || 'floor';
       document.getElementById('has-transport-fee').checked = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
       document.getElementById('tax-rate').value = customer.tax_rate ?? 10;
       document.getElementById('shipper-name').value = customer.shipper_name || '';
