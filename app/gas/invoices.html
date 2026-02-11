@@ -1603,11 +1603,11 @@
       if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
       if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
       if (!options.skipCustomer && filter.customer !== undefined) {
-        if (filter.customer && filterAutocomplete) {
+        if (filter.customer && filterAutocomplete && customersLoaded && customers.length > 0) {
           // 顧客IDがまだ有効か検証（削除/アーカイブ済みならクリア）
           const match = customers.find(function (c) { return c.customer_id === filter.customer; });
           if (match) {
-            filterAutocomplete.setValue(match.customer_id, match.company_name);
+            filterAutocomplete.setValue(match.customer_id, getCustomerLabel(match));
           } else {
             // 無効なIDはクリア（「全て」にフォールバック）
             document.getElementById('filterCustomer').value = '';
@@ -1625,6 +1625,8 @@
     document.addEventListener('DOMContentLoaded', function () {
       initNavBar('invoices', '請求管理');
       initFilters();
+      // 入力イベントを先に有効化（顧客データは後から setItems で注入）
+      populateCustomerSelects();
       restoreFilterState({ skipCustomer: true });
       initCustomerLazyLoad();
       initCustomersFromCache();
@@ -1684,11 +1686,32 @@
     let filterAutocomplete = null;
     let generateAutocomplete = null;
 
+    function toSafeText(value) {
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    }
+
+    function getCustomerLabel(customer) {
+      if (!customer || typeof customer !== 'object') return '';
+      return toSafeText(customer.company_name || customer.customer_name);
+    }
+
+    function getCustomerSearchText(customer) {
+      const companyName = getCustomerLabel(customer);
+      const branchName = toSafeText(customer && customer.branch_name);
+      const customerCode = toSafeText(customer && customer.customer_code);
+      return [companyName, branchName, customerCode]
+        .filter(function (v) { return !!v; })
+        .join(' ')
+        .toLowerCase();
+    }
+
     function filterCustomers(items, query) {
-      var q = (query || '').trim().toLowerCase();
-      if (!q) return items;
-      return items.filter(function (c) {
-        return c.company_name.toLowerCase().indexOf(q) !== -1;
+      const source = Array.isArray(items) ? items : [];
+      const q = (query || '').trim().toLowerCase();
+      if (!q) return source;
+      return source.filter(function (c) {
+        return getCustomerSearchText(c).indexOf(q) !== -1;
       });
     }
 
@@ -1723,14 +1746,16 @@
         }
 
         filtered.forEach(function (item, i) {
+          const label = getCustomerLabel(item);
+          if (!item || !item.customer_id || !label) return;
           const div = document.createElement('div');
           div.className = 'autocomplete-item';
           if (item.customer_id === hidden.value) div.className += ' selected';
           if (i === highlightIndex) div.className += ' highlighted';
-          div.textContent = item.company_name;
+          div.textContent = label;
           div.addEventListener('mousedown', function (e) {
             e.preventDefault();
-            select(item.customer_id, item.company_name);
+            select(item.customer_id, label);
           });
           dropdown.appendChild(div);
         });
@@ -1826,9 +1851,10 @@
         // blur時に未選択なら値をクリア
         if (!hidden.value && input.value.trim()) {
           // 入力テキストに完全一致する顧客があれば自動選択
-          const match = items.find(function (c) { return c.company_name === input.value.trim(); });
+          const typed = input.value.trim();
+          const match = items.find(function (c) { return getCustomerLabel(c) === typed; });
           if (match) {
-            select(match.customer_id, match.company_name);
+            select(match.customer_id, getCustomerLabel(match));
           } else {
             input.value = '';
           }
@@ -1844,7 +1870,9 @@
 
       return {
         setItems: function (newItems) {
-          items = newItems;
+          items = Array.isArray(newItems)
+            ? newItems.filter(function (item) { return item && item.customer_id && getCustomerLabel(item); })
+            : [];
           if (isOpen) {
             const filtered = filterCustomers(items, input.value);
             render(filtered);
