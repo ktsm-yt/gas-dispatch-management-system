@@ -232,6 +232,25 @@ function testInvoiceCalculations() {
   assertEqual(totals.taxAmount, 4000, 'taxAmount should be 4000');
   assertEqual(totals.totalAmount, 44000, 'totalAmount should be 44000');
   Logger.log('  CalculateInvoiceTotals: OK');
+
+  // 6. 顧客別税端数処理テスト（切り上げ）
+  const floorTotals = InvoiceService._calculateTotals(
+    [{ amount: 10001, item_name: '作業費' }],
+    0.10,
+    0,
+    'format1',
+    'floor'
+  );
+  const ceilTotals = InvoiceService._calculateTotals(
+    [{ amount: 10001, item_name: '作業費' }],
+    0.10,
+    0,
+    'format1',
+    'ceil'
+  );
+  assertEqual(floorTotals.taxAmount, 1000, 'floor tax should be 1000');
+  assertEqual(ceilTotals.taxAmount, 1001, 'ceil tax should be 1001');
+  Logger.log('  Customer tax rounding mode: OK');
 }
 
 // ============================================

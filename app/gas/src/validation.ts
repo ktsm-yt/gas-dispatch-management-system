@@ -79,6 +79,11 @@ const INVOICE_FORMATS = {
   ATAMAGAMI: 'atamagami'
 } as const;
 
+const TAX_ROUNDING_MODES = {
+  FLOOR: 'floor',
+  CEIL: 'ceil'
+} as const;
+
 const INVOICE_STATUSES = {
   UNSENT: 'unsent',
   SENT: 'sent',
@@ -418,6 +423,10 @@ function validateCustomer_(customer: Record<string, any>, isNew: boolean = false
 
   if (customer.tax_rate !== undefined) {
     validateNumber_(customer.tax_rate, '消費税率', { min: 0, max: 100 });
+  }
+
+  if (customer.tax_rounding_mode !== undefined) {
+    validateEnum_(customer.tax_rounding_mode, '消費税端数処理', TAX_ROUNDING_MODES);
   }
 
   if (customer.expense_rate !== undefined) {

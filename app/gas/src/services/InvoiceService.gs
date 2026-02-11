@@ -46,7 +46,8 @@ const InvoiceService = {
       // 5. 合計金額を計算
       const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
       const expenseRate = customer.expense_rate || 0;
-      const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format);
+      const taxRoundingMode = this._getTaxRoundingMode(customer);
+      const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format, taxRoundingMode);
 
       // 6. 請求番号を生成
       const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, customerId);
@@ -261,7 +262,8 @@ const InvoiceService = {
       const customer = this._getCustomer(currentInvoice.customer_id);
       const taxRate = customer?.tax_rate || DEFAULT_TAX_RATE;
       const expenseRate = customer?.expense_rate || 0;
-      const totals = this._calculateTotals(currentLines, taxRate, expenseRate, currentInvoice.invoice_format);
+      const taxRoundingMode = this._getTaxRoundingMode(customer);
+      const totals = this._calculateTotals(currentLines, taxRate, expenseRate, currentInvoice.invoice_format, taxRoundingMode);
 
       // 合計を更新
       InvoiceRepository.update({
@@ -527,7 +529,8 @@ const InvoiceService = {
           // 合計金額を計算
           const taxRate = customer.tax_rate || DEFAULT_TAX_RATE;
           const expenseRate = customer.expense_rate || 0;
-          const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format);
+          const taxRoundingMode = this._getTaxRoundingMode(customer);
+          const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format, taxRoundingMode);
 
           // 請求番号を生成（メモリ上で連番配布）
           maxSeq++;
@@ -790,7 +793,8 @@ const InvoiceService = {
           const customer = this._getCustomer(invoice.customer_id);
           const taxRate = Number(customer.tax_rate) || 0.1;
           const expenseRate = Number(customer.expense_rate) || 0;
-          const totals = this._calculateTotals(newLines, newAdjustments, taxRate, expenseRate, invoice.invoice_format);
+          const taxRoundingMode = this._getTaxRoundingMode(customer);
+          const totals = this._calculateTotals(newLines, newAdjustments, taxRate, expenseRate, invoice.invoice_format, taxRoundingMode);
 
           InvoiceRepository.update({
             invoice_id: result.invoice.invoice_id,
@@ -824,6 +828,15 @@ const InvoiceService = {
    */
   _getCustomer: function(customerId) {
     return getRecordById('M_Customers', 'customer_id', customerId);
+  },
+
+  /**
+   * 顧客別の税端数処理モードを取得
+   * @param {Object|null} customer - 顧客情報
+   * @returns {string} floor | ceil | round
+   */
+  _getTaxRoundingMode: function(customer) {
+    return normalizeRoundingMode_(customer?.tax_rounding_mode);
   },
 
   /**
@@ -1201,22 +1214,30 @@ const InvoiceService = {
    * @param {number} taxRate - 税率
    * @param {number} expenseRate - 諸経費率
    * @param {string} format - 請求書フォーマット
+   * @param {string} [taxRoundingMode] - 税端数処理モード（floor|ceil|round）
    * @returns {Object} { subtotal, expenseAmount, taxAmount, totalAmount }
    */
-  _calculateTotals: function(lines, adjustmentsOrTaxRate, taxRateOrExpenseRate, expenseRateOrFormat, formatArg) {
-    // 後方互換: (lines, taxRate, expenseRate, format) or (lines, adjustments, taxRate, expenseRate, format)
-    let adjustments, taxRate, expenseRate, format;
+  _calculateTotals: function(lines, adjustmentsOrTaxRate, taxRateOrExpenseRate, expenseRateOrFormat, formatOrRoundingArg, roundingModeArg) {
+    // 後方互換:
+    // (lines, taxRate, expenseRate, format)
+    // (lines, taxRate, expenseRate, format, taxRoundingMode)
+    // (lines, adjustments, taxRate, expenseRate, format)
+    // (lines, adjustments, taxRate, expenseRate, format, taxRoundingMode)
+    let adjustments, taxRate, expenseRate, format, taxRoundingMode;
     if (Array.isArray(adjustmentsOrTaxRate)) {
       adjustments = adjustmentsOrTaxRate;
       taxRate = taxRateOrExpenseRate;
       expenseRate = expenseRateOrFormat;
-      format = formatArg;
+      format = formatOrRoundingArg;
+      taxRoundingMode = roundingModeArg;
     } else {
       adjustments = [];
       taxRate = adjustmentsOrTaxRate;
       expenseRate = taxRateOrExpenseRate;
       format = expenseRateOrFormat;
+      taxRoundingMode = formatOrRoundingArg;
     }
+    const normalizedRoundingMode = normalizeRoundingMode_(taxRoundingMode);
 
     // P2-8: 作業費と諸経費を分けて集計
     let workAmount = 0;    // 作業費（諸経費以外）
@@ -1248,7 +1269,7 @@ const InvoiceService = {
     const taxableAmount = workAmount + expenseAmount + adjustmentTotal;
 
     // 消費税
-    const taxAmount = calculateTaxAmount_(taxableAmount, taxRate);
+    const taxAmount = calculateTaxAmount_(taxableAmount, taxRate, normalizedRoundingMode);
 
     // 合計
     const totalAmount = Math.floor(taxableAmount + taxAmount);
@@ -1399,8 +1420,9 @@ const InvoiceService = {
         const customer = this._getCustomer(invoice.customer_id);
         const taxRate = Number(customer.tax_rate) || 0.1;
         const expenseRate = Number(customer.expense_rate) || 0;
+        const taxRoundingMode = this._getTaxRoundingMode(customer);
         // adjustmentsData をそのまま計算に使用（amount フィールドのみ必要）
-        const totals = this._calculateTotals(currentLines, adjustmentsData, taxRate, expenseRate, invoice.invoice_format);
+        const totals = this._calculateTotals(currentLines, adjustmentsData, taxRate, expenseRate, invoice.invoice_format, taxRoundingMode);
 
         if (totals.totalAmount < 0) {
           return { success: false, error: 'NEGATIVE_TOTAL', partialUpdate: true };
