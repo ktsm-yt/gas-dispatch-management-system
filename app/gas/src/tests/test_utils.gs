@@ -204,12 +204,31 @@ function testValidateCustomer() {
     company_name: 'テスト建設株式会社'
   }, true), 'valid customer should not throw');
 
+  // 正常系 - 税端数処理
+  assertNoThrow(() => validateCustomer_({
+    customer_id: 'cus_12345678-1234-1234-1234-123456789012',
+    company_name: '端数処理テスト建設',
+    tax_rounding_mode: 'floor'
+  }, true), 'floor rounding mode should be accepted');
+  assertNoThrow(() => validateCustomer_({
+    customer_id: 'cus_12345678-1234-1234-1234-123456789012',
+    company_name: '端数処理テスト建設',
+    tax_rounding_mode: 'ceil'
+  }, true), 'ceil rounding mode should be accepted');
+
   // 異常系 - 会社名が長すぎる
   const longName = 'あ'.repeat(201);
   assertThrows(() => validateCustomer_({
     customer_id: 'cus_test',
     company_name: longName
   }, true), 'too long company_name should throw');
+
+  // 異常系 - 税端数処理が不正
+  assertThrows(() => validateCustomer_({
+    customer_id: 'cus_test',
+    company_name: '不正端数処理',
+    tax_rounding_mode: 'round'
+  }, true), 'invalid tax rounding mode should throw');
 }
 
 function testValidateStaff() {
@@ -417,6 +436,7 @@ function testCalculateTaxIncluded() {
 
   // 端数処理（10001 * 1.10 = 11001.1 → floor → 11001）
   assertEqual(calculateTaxIncluded_(10001, 0.10), 11001, 'floor applied');
+  assertEqual(calculateTaxIncluded_(10001, 0.10, 'ceil'), 11002, 'ceil applied');
 }
 
 function testCalculateTaxExcluded() {
@@ -432,6 +452,7 @@ function testCalculateTaxAmount() {
 
   // 端数処理（10001 * 0.10 = 1000.1 → floor → 1000）
   assertEqual(calculateTaxAmount_(10001, 0.10), 1000, 'floor applied');
+  assertEqual(calculateTaxAmount_(10001, 0.10, 'ceil'), 1001, 'ceil applied');
 }
 
 function testGetUnitMultiplier() {
