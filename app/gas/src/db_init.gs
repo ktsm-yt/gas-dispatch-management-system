@@ -19,7 +19,7 @@ const TABLE_DEFINITIONS = {
       'unit_price_half', 'unit_price_fullday', 'unit_price_night',
       'closing_day', 'payment_day', 'payment_month_offset',
       'invoice_format', 'include_cover_page', 'has_transport_fee',  // P2-8: 諸経費請求フラグ
-      'tax_rate', 'expense_rate', 'shipper_name',
+      'tax_rate', 'tax_rounding_mode', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted',
       'deleted_at', 'deleted_by'
@@ -1089,6 +1089,55 @@ function migrateCustomerTransportFeeColumn_(ss) {
   sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
 
   Logger.log('顧客設定で「諸経費請求」を有効にするには、該当行に TRUE を設定してください');
+}
+
+/**
+ * 顧客シートに tax_rounding_mode カラムを追加
+ * GASエディタから実行: migrateAddCustomerTaxRoundingModeColumn()
+ */
+function migrateAddCustomerTaxRoundingModeColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('Customers');
+
+  if (!sheet) {
+    Logger.log('✗ 顧客シートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('tax_rounding_mode')) {
+    Logger.log('✓ tax_rounding_mode カラムは既に存在します');
+    return;
+  }
+
+  const taxRateIndex = headers.indexOf('tax_rate');
+  if (taxRateIndex === -1) {
+    Logger.log('✗ tax_rate カラムが見つかりません');
+    return;
+  }
+
+  const insertPosition = taxRateIndex + 2; // 1-based, tax_rate の次
+  sheet.insertColumnAfter(taxRateIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('tax_rounding_mode');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, insertPosition, lastRow - 1, 1).setValue('floor');
+  }
+
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log(`✓ tax_rounding_mode カラムを列 ${insertPosition} に追加しました（既存データは floor で初期化）`);
 }
 
 /**
