@@ -483,32 +483,73 @@
     var _allCustomers = [];
     var _selectedCustomerId = '';
     var _activeIndex = -1;
+    var _customersLoading = false;
+    var _customersLoaded = false;
+
+    function toSafeText(value) {
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    }
+
+    function buildCustomerLabel(customer) {
+      const companyName = toSafeText(customer && (customer.company_name || customer.customer_name));
+      const branchName = toSafeText(customer && customer.branch_name);
+      if (!companyName && !branchName) return '';
+      return companyName + (branchName ? '（' + branchName + '）' : '');
+    }
 
     function initCustomerFilter() {
       var input = document.getElementById('customer-search');
       var list = document.getElementById('customer-search-list');
       var clearBtn = document.getElementById('customer-search-clear');
 
+      _customersLoading = true;
       google.script.run
         .withSuccessHandler(function(result) {
-          if (!result || !result.ok) return;
+          _customersLoading = false;
+          _customersLoaded = true;
+          if (!result || !result.ok) {
+            _allCustomers = [];
+            return;
+          }
           _allCustomers = (result.data.customers || []).map(function(c) {
             return {
-              id: c.customer_id,
-              label: c.company_name + (c.branch_name ? '（' + c.branch_name + '）' : '')
+              id: toSafeText(c.customer_id),
+              label: buildCustomerLabel(c)
             };
+          }).filter(function(c) {
+            return !!c.id && !!c.label;
           });
+
+          // 先に入力されていた場合は候補を再描画
+          if (input && input.value.trim()) {
+            renderCustomerList(input.value);
+          }
+        })
+        .withFailureHandler(function() {
+          _customersLoading = false;
+          _customersLoaded = true;
+          _allCustomers = [];
         })
         .getCustomers();
 
       input.addEventListener('input', function() {
+        var query = this.value;
         _selectedCustomerId = '';
+        clearBtn.style.display = query ? 'inline' : 'none';
         _activeIndex = -1;
-        renderCustomerList(this.value);
+        if (!query.trim()) {
+          list.classList.remove('open');
+          return;
+        }
+        renderCustomerList(query);
       });
 
       input.addEventListener('focus', function() {
-        if (_allCustomers.length > 0) renderCustomerList(this.value);
+        var query = this.value.trim();
+        if (query.length > 0 || _allCustomers.length > 0 || _customersLoading) {
+          renderCustomerList(this.value);
+        }
       });
 
       input.addEventListener('keydown', function(e) {
@@ -547,16 +588,25 @@
 
     function renderCustomerList(query) {
       var list = document.getElementById('customer-search-list');
+      if (_customersLoading && _allCustomers.length === 0) {
+        list.innerHTML = '<div class="customer-search-empty">読み込み中...</div>';
+        _activeIndex = -1;
+        list.classList.add('open');
+        return;
+      }
+
       var q = (query || '').toLowerCase();
       var filtered = _allCustomers.filter(function(c) {
-        return !q || c.label.toLowerCase().indexOf(q) !== -1;
+        return !q || toSafeText(c.label).toLowerCase().indexOf(q) !== -1;
       });
 
       if (filtered.length === 0) {
-        list.innerHTML = '<div class="customer-search-empty">該当なし</div>';
+        list.innerHTML = '<div class="customer-search-empty">' +
+          (_customersLoaded ? '該当なし' : '読み込み中...') +
+          '</div>';
       } else {
         list.innerHTML = filtered.map(function(c) {
-          return '<div class="customer-search-item" data-id="' + escapeHtml(c.id) + '">' + escapeHtml(c.label) + '</div>';
+          return '<div class="customer-search-item" data-id="' + escapeHtml(c.id || '') + '">' + escapeHtml(c.label || '') + '</div>';
         }).join('');
 
         list.querySelectorAll('.customer-search-item').forEach(function(item) {
