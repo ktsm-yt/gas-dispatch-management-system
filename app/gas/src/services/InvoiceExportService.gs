@@ -1095,10 +1095,11 @@ const InvoiceExportService = {
     // 明細行（A3から開始、9列構成：№, 担当工事課, 担当監督名, 物件コード, 現場名, 施工日, 内容, 金額（税抜）, 金額（税込）
     const startRow = 3;
     const taxRate = normalizeTaxRate_(customer.tax_rate);
+    const taxRoundingMode = normalizeRoundingMode_(customer.tax_rounding_mode);
 
     // 明細データを2D配列として構築（バルク処理）
     const rowsData = lines.map((line, i) => {
-      const taxIncluded = calculateTaxIncluded_(line.amount || 0, taxRate);
+      const taxIncluded = calculateTaxIncluded_(line.amount || 0, taxRate, taxRoundingMode);
       return [
         i + 1,                          // A: № (連番)
         line.construction_div || '',    // B: 担当工事課
