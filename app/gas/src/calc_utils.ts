@@ -28,12 +28,25 @@ function normalizeUnit_(unit: string | null | undefined): string {
   return String(unit).toLowerCase().trim();
 }
 
+function normalizeRoundingMode_(mode: string | null | undefined): string {
+  const normalized = String(mode || '').toLowerCase().trim();
+  switch (normalized) {
+    case RoundingMode.CEIL:
+      return RoundingMode.CEIL;
+    case RoundingMode.ROUND:
+      return RoundingMode.ROUND;
+    case RoundingMode.FLOOR:
+    default:
+      return RoundingMode.FLOOR;
+  }
+}
+
 // ============================================
 // 基本的な金額計算
 // ============================================
 
 function applyRounding_(value: number, mode: string = RoundingMode.FLOOR): number {
-  switch (mode) {
+  switch (normalizeRoundingMode_(mode)) {
     case RoundingMode.CEIL:
       return Math.ceil(value);
     case RoundingMode.ROUND:
