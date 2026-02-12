@@ -248,6 +248,49 @@ let assignmentModalState = {
   assignmentMapCache: null    // Map<staff_id, assignment> 配置ルックアップ用
 };
 
+// ========== Work Detail Labels ==========
+/**
+ * 作業詳細のラベルマップ（job.work_detail → 表示ラベル）
+ */
+const WORK_DETAIL_LABELS = {
+  // 資材系
+  'sekkou': 'ボード',
+  'tategu': '建具',
+  'kitchen': 'キッチン',
+  'unit_bath': 'ユニットバス',
+  'flooring': 'フローリング',
+  'habaki': '幅木',
+  'cross': 'クロス',
+  'prefab': 'プレハブ材',
+  'scaffold': '足場材',
+  'material': '資材一般',
+  'sk': 'SK',
+  'toilet': 'トイレ',
+  'furniture': '家具',
+  'appliance': '家電',
+  // 上棟系
+  'tobi': '鳶',
+  'tobi_hojo': '鳶補助',
+  'niage': '荷揚げ',
+  'tobiage': '鳶揚げ',
+  // 作業系
+  'hansyutsu': '搬出',
+  'temoto': '手元',
+  'kaitai': '解体',
+  'seisou': '清掃',
+  'other': 'その他'
+};
+
+/**
+ * 作業内容の表示ラベルを取得
+ * @param {string} workDetail - work_detail値
+ * @returns {string} 表示ラベル（空文字の場合もあり）
+ */
+function getWorkDetailLabel(workDetail) {
+  if (!workDetail) return '';
+  return WORK_DETAIL_LABELS[workDetail] || workDetail;
+}
+
 // ========== Modal UI Reset ==========
 /**
  * モーダルのUI要素を全てリセット（ローディング状態に）
@@ -265,6 +308,8 @@ function resetAssignmentModalUI() {
   if (typeTag) { typeTag.style.display = 'none'; typeTag.textContent = ''; }
   const addrEl = document.getElementById('modal-site-address');
   if (addrEl) addrEl.textContent = '';
+  const workContentEl = document.getElementById('modal-work-content');
+  if (workContentEl) workContentEl.textContent = '';
 
   // 統計バッジ
   document.getElementById('modal-required').textContent = '0';
@@ -398,6 +443,7 @@ function fillAssignmentModalFromCache(cachedData) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
+  updateWorkContent(job.work_detail);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -524,6 +570,7 @@ function handleAssignmentData(response, requestJobId) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
+  updateWorkContent(job.work_detail);
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -1787,35 +1834,7 @@ function generateLineTemplate() {
     : unitTypes.length > 1 ? '混在' : '-';
 
   // 作業内容（種別＋小項目）
-  const workDetailLabels = {
-    // 資材系
-    'sekkou': 'ボード',
-    'tategu': '建具',
-    'kitchen': 'キッチン',
-    'unit_bath': 'ユニットバス',
-    'flooring': 'フローリング',
-    'habaki': '幅木',
-    'cross': 'クロス',
-    'prefab': 'プレハブ材',
-    'scaffold': '足場材',
-    'material': '資材一般',
-    'sk': 'SK',
-    'toilet': 'トイレ',
-    'furniture': '家具',
-    'appliance': '家電',
-    // 上棟系
-    'tobi': '鳶',
-    'tobi_hojo': '鳶補助',
-    'niage': '荷揚げ',
-    'tobiage': '鳶揚げ',
-    // 作業系
-    'hansyutsu': '搬出',
-    'temoto': '手元',
-    'kaitai': '解体',
-    'seisou': '清掃',
-    'other': 'その他'
-  };
-  const workDetailLabel = job.work_detail ? (workDetailLabels[job.work_detail] || job.work_detail) : '';
+  const workDetailLabel = getWorkDetailLabel(job.work_detail);
   // 作業内容：役割グループがある場合は「上棟鳶補助、上棟荷揚げ作業」形式
   let workContent;
   if (workCategoryPrefix && memberLines.length > 0) {
@@ -1953,6 +1972,17 @@ function updateWorkCategoryTag(category) {
 function updateSiteAddress(address) {
   const el = document.getElementById('modal-site-address');
   if (el) el.textContent = address || '';
+}
+
+/**
+ * 作業内容を更新
+ * @param {string} workDetail - work_detail値
+ */
+function updateWorkContent(workDetail) {
+  const el = document.getElementById('modal-work-content');
+  if (!el) return;
+  const label = getWorkDetailLabel(workDetail);
+  el.textContent = label || '';
 }
 
 // ========== Event Listeners Setup ==========
