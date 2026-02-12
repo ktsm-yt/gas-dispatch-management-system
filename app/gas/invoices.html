@@ -4577,7 +4577,8 @@
       });
 
       // 税率（顧客設定から、デフォルト10%）
-      const taxRate = (inv.customer && Number(inv.customer.tax_rate)) || 0.1;
+      // 注意: tax_rate はパーセント単位（10）で保存されているため、100で割って小数に変換
+      const taxRate = ((inv.customer && Number(inv.customer.tax_rate)) || 10) / 100;
 
       // 税込合計を概算
       const taxable = subtotal + expense + adjTotal;
