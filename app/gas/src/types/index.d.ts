@@ -285,10 +285,14 @@ declare global {
     assignments: Record<string, unknown>[],
     staff: Record<string, unknown> | null | undefined
   ): { baseAmount: number; transportAmount: number; totalAmount: number };
+  function normalizeTaxRate_(taxRate: unknown): number;
   function normalizeRoundingMode_(mode: unknown): string;
   function calculateTaxAmount_(amount: number, taxRate: number, roundingMode?: string): number;
+  function calculateTaxIncluded_(amount: unknown, taxRate: number, roundingMode?: string): number;
   function calculateExpense_(workAmount: number, expenseRate: number): number;
   function getUnitPriceByJobType_(customer: Record<string, unknown>, jobType: string): number;
+  function calculateInvoiceForAtagami_(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>): Record<string, unknown>;
+  function formatCurrency_(amount: number | null | undefined): string;
 
   // === 日付ユーティリティ（date_utils.ts） ===
   function calculateClosingPeriod_(year: number, month: number, closingDay: number): { startDate: string | null; endDate: string | null };
