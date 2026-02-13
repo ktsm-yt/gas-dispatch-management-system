@@ -309,6 +309,40 @@ function addIncludeCoverPageColumn() {
 }
 
 /**
+ * Jobsテーブルに work_detail_other_text カラムを追加（マイグレーション）
+ * GASエディタから実行: migrateAddWorkDetailOtherTextColumn()
+ */
+function migrateAddWorkDetailOtherTextColumn() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('Jobs');
+
+  if (!sheet) {
+    Logger.log('✗ Jobsシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('work_detail_other_text')) {
+    Logger.log('✓ work_detail_other_text カラムは既に存在します');
+    return;
+  }
+
+  const workDetailIndex = headers.indexOf('work_detail');
+  if (workDetailIndex === -1) {
+    Logger.log('✗ work_detail カラムが見つかりません');
+    return;
+  }
+
+  // work_detail の次の列に挿入
+  const insertIndex = workDetailIndex + 2; // 1-based
+  sheet.insertColumnAfter(workDetailIndex + 1);
+  sheet.getRange(1, insertIndex).setValue('work_detail_other_text');
+
+  Logger.log('✓ work_detail_other_text カラムを列 ' + insertIndex + ' に追加しました');
+}
+
+/**
  * invoice_format='atamagami' の顧客を format1 + include_cover_page=true に移行
  * GASエディタから実行: migrateAtagamiToFormat1()
  *
