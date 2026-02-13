@@ -368,6 +368,7 @@ function getAvailableStaff(options = {}) {
       name: s.name,
       name_kana: s.name_kana,
       phone: s.phone,
+      ng_customers: s.ng_customers,
       skills: s.skills,
       has_motorbike: s.has_motorbike,
       staff_type: s.staff_type,
