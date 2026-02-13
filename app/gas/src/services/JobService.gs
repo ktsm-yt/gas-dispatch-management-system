@@ -188,12 +188,12 @@ const JobService = {
       jobs: jobsWithCustomer,
       stats: stats,
       maxUpdatedAt: maxUpdatedAt,
-      hasFullAssignments: false  // dashboardキャッシュは軽量版（モーダル詳細はgetJobで取得）
+      hasFullAssignments: true  // 配置データはモーダル初期表示・競合チェックに十分なフィールドを含む
     };
   },
 
   /**
-   * ダッシュボード更新メタ情報を取得
+   * ダッシュボード更新メタ情報を取得（Job + Assignment の両方を検知）
    * @param {string} date - 日付（YYYY-MM-DD形式）
    * @returns {Object} { maxUpdatedAt }
    */
@@ -202,11 +202,24 @@ const JobService = {
       throw new Error('Invalid date format. Expected YYYY-MM-DD');
     }
 
-    const maxUpdatedAt = JobRepository.getMaxUpdatedAt(date);
+    // Jobの最大updated_at
+    let maxUpdatedAt = JobRepository.getMaxUpdatedAt(date);
+
+    // Assignmentの最大updated_atも考慮（配置のみ変更されたケースを検知）
+    const jobs = JobRepository.findByDate(date);
+    const jobIds = jobs.map(j => j.job_id);
+    if (jobIds.length > 0) {
+      const assignments = AssignmentRepository.findByDate(date, jobIds);
+      for (const a of assignments) {
+        if (a.updated_at && (!maxUpdatedAt || a.updated_at > maxUpdatedAt)) {
+          maxUpdatedAt = a.updated_at;
+        }
+      }
+    }
 
     return {
       date: date,
-      maxUpdatedAt: maxUpdatedAt
+      maxUpdatedAt: maxUpdatedAt || null
     };
   },
 
