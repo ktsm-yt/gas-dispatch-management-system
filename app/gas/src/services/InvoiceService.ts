@@ -43,6 +43,8 @@ interface BulkGenerateResults {
 interface InvoiceSearchResult extends InvoiceRecord {
   customer: Record<string, unknown> | null;
   has_assignment_changes: boolean;
+  total_paid?: number;
+  outstanding?: number;
 }
 
 interface InvoiceTotals {
