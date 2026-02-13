@@ -19,7 +19,7 @@ function getCustomers() {
     return result;
   } catch (error: unknown) {
     logErr('getCustomers', error);
-    return buildErrorResponse('SYSTEM_ERROR', (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error));
+    return buildErrorResponse('SYSTEM_ERROR', (error instanceof Error) ? error.message : String(error));
   }
 }
 
@@ -87,7 +87,7 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
 
   } catch (error: unknown) {
     Logger.log(`generateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -122,7 +122,7 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
 
   } catch (error: unknown) {
     Logger.log(`bulkGenerateInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -172,7 +172,7 @@ function searchInvoices(query: Record<string, unknown>) {
 
   } catch (error: unknown) {
     Logger.log(`searchInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -207,7 +207,7 @@ function getInvoice(invoiceId: string) {
 
   } catch (error: unknown) {
     Logger.log(`getInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -247,7 +247,7 @@ function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expecte
 
   } catch (error: unknown) {
     Logger.log(`saveInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -293,7 +293,7 @@ function updateInvoiceStatus(invoiceId: string, status: string, expectedUpdatedA
 
   } catch (error: unknown) {
     Logger.log(`updateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -363,7 +363,7 @@ function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
 
   } catch (error: unknown) {
     Logger.log(`bulkUpdateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -405,7 +405,7 @@ function checkInvoiceExportFile(invoiceId: string, mode: string, options: Record
 
   } catch (error: unknown) {
     Logger.log(`checkInvoiceExportFile error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -462,7 +462,7 @@ function exportInvoice(invoiceId: string, mode: string, options: Record<string, 
 
   } catch (error: unknown) {
     Logger.log(`exportInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -503,7 +503,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
 
   } catch (error: unknown) {
     Logger.log(`deleteInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -545,7 +545,7 @@ function regenerateInvoice(invoiceId: string) {
 
   } catch (error: unknown) {
     Logger.log(`regenerateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -646,7 +646,7 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
 
   } catch (error: unknown) {
     Logger.log(`exportBillingData error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -668,7 +668,7 @@ function getBillingExportFolderUrl() {
 
   } catch (error: unknown) {
     Logger.log(`getBillingExportFolderUrl error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -729,7 +729,7 @@ function checkInvoiceExistsForJob(customerId: string, workDate: string) {
 
   } catch (error: unknown) {
     Logger.log(`checkInvoiceExistsForJob error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -834,7 +834,7 @@ function startBulkExport(params: Record<string, unknown>) {
     logErr('startBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error),
+      (error instanceof Error) ? error.message : String(error),
       {},
       requestId
     );
@@ -868,7 +868,7 @@ function cancelBulkExport(params: Record<string, unknown>) {
     logErr('cancelBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error),
+      (error instanceof Error) ? error.message : String(error),
       {},
       requestId
     );
@@ -976,6 +976,6 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
 
   } catch (error: unknown) {
     Logger.log(`updateInvoiceDetails error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? (error instanceof Error) ? error.message : String(error) : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
