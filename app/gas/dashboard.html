@@ -784,6 +784,10 @@
         currentDate = new Date();
       }
       loadDashboard();
+      // 配置モーダルの初回表示高速化: 全スタッフを先読み
+      if (typeof prefetchGlobalStaffCache === 'function') {
+        prefetchGlobalStaffCache(true); // 強制リフレッシュで古いキャッシュを残さない
+      }
       startPolling();
       initVisibilityRefresh();
     }
@@ -881,6 +885,7 @@
         dashboardData = memoryCached;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
         lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         const sessionCached = PageCache.get(cacheKey);
@@ -897,6 +902,7 @@
         dashboardData = sessionCached.data;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
         lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         if (sessionCached.age > PageCache.DEFAULT_TTL) {
