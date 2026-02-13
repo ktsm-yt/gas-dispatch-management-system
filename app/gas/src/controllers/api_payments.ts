@@ -17,7 +17,7 @@
  * @param {string} expectedUpdatedAt - 請求書の期待するupdated_at（楽観ロック）
  * @returns {Object} APIレスポンス
  */
-function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
+function recordPayment(invoiceId: string, paymentData: Record<string, unknown>, expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -51,7 +51,7 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
       );
     }
 
-    const amount = parseFloat(paymentData.amount);
+    const amount = parseFloat(String(paymentData.amount));
     if (isNaN(amount) || amount <= 0) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -62,7 +62,7 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
     }
 
     // 日付形式チェック
-    if (paymentData.payment_date && !/^\d{4}-\d{2}-\d{2}$/.test(paymentData.payment_date)) {
+    if (paymentData.payment_date && !/^\d{4}-\d{2}-\d{2}$/.test(String(paymentData.payment_date))) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '入金日はYYYY-MM-DD形式で入力してください',
@@ -73,7 +73,7 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
 
     // 入金方法チェック
     const validMethods = ['bank_transfer', 'cash', 'other'];
-    if (paymentData.payment_method && !validMethods.includes(paymentData.payment_method)) {
+    if (paymentData.payment_method && !validMethods.includes(String(paymentData.payment_method))) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '無効な入金方法です',
@@ -83,17 +83,17 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
     }
 
     // 3. Service呼び出し
-    const result = PaymentService.recordPayment(invoiceId, paymentData, expectedUpdatedAt);
+    const result = PaymentService.recordPayment(invoiceId, paymentData as unknown as PaymentInput, expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT' ? ERROR_CODES.CONFLICT_ERROR : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.message || result.error, result, requestId);
+      return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`recordPayment error: ${error.message}`);
+    Logger.log(`recordPayment error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
@@ -103,7 +103,7 @@ function recordPayment(invoiceId, paymentData, expectedUpdatedAt) {
  * @param {string} invoiceId - 請求書ID
  * @returns {Object} APIレスポンス { payments, totalPaid, outstanding }
  */
-function getPaymentsByInvoice(invoiceId) {
+function getPaymentsByInvoice(invoiceId: string) {
   const requestId = generateRequestId();
 
   try {
@@ -132,13 +132,13 @@ function getPaymentsByInvoice(invoiceId) {
     const result = PaymentService.getPaymentsByInvoice(invoiceId);
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.NOT_FOUND, result.message || result.error, {}, requestId);
+      return buildErrorResponse(ERROR_CODES.NOT_FOUND, result.message || result.error || "エラー", {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`getPaymentsByInvoice error: ${error.message}`);
+    Logger.log(`getPaymentsByInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
@@ -149,7 +149,7 @@ function getPaymentsByInvoice(invoiceId) {
  * @param {string} invoiceExpectedUpdatedAt - 請求書の期待するupdated_at（楽観ロック）
  * @returns {Object} APIレスポンス
  */
-function deletePayment(paymentId, invoiceExpectedUpdatedAt) {
+function deletePayment(paymentId: string, invoiceExpectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -179,13 +179,13 @@ function deletePayment(paymentId, invoiceExpectedUpdatedAt) {
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT' ? ERROR_CODES.CONFLICT_ERROR : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.message || result.error, result, requestId);
+      return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`deletePayment error: ${error.message}`);
+    Logger.log(`deletePayment error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '予期しないエラーが発生しました。しばらくしてから再度お試しください。', {}, requestId);
   }
 }
