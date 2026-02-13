@@ -286,8 +286,9 @@ const WORK_DETAIL_LABELS = {
  * @param {string} workDetail - work_detail値
  * @returns {string} 表示ラベル（空文字の場合もあり）
  */
-function getWorkDetailLabel(workDetail) {
+function getWorkDetailLabel(workDetail, otherText) {
   if (!workDetail) return '';
+  if (workDetail === 'other' && otherText) return otherText;
   return WORK_DETAIL_LABELS[workDetail] || workDetail;
 }
 
@@ -443,7 +444,7 @@ function fillAssignmentModalFromCache(cachedData) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
-  updateWorkContent(job.work_detail);
+  updateWorkContent(job.work_detail, job.work_detail_other_text);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -570,7 +571,7 @@ function handleAssignmentData(response, requestJobId) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
-  updateWorkContent(job.work_detail);
+  updateWorkContent(job.work_detail, job.work_detail_other_text);
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -1834,7 +1835,7 @@ function generateLineTemplate() {
     : unitTypes.length > 1 ? '混在' : '-';
 
   // 作業内容（種別＋小項目）
-  const workDetailLabel = getWorkDetailLabel(job.work_detail);
+  const workDetailLabel = getWorkDetailLabel(job.work_detail, job.work_detail_other_text);
   // 作業内容：役割グループがある場合は「上棟鳶補助、上棟荷揚げ作業」形式
   let workContent;
   if (workCategoryPrefix && memberLines.length > 0) {
@@ -1978,10 +1979,10 @@ function updateSiteAddress(address) {
  * 作業内容を更新
  * @param {string} workDetail - work_detail値
  */
-function updateWorkContent(workDetail) {
+function updateWorkContent(workDetail, otherText) {
   const el = document.getElementById('modal-work-content');
   if (!el) return;
-  const label = getWorkDetailLabel(workDetail);
+  const label = getWorkDetailLabel(workDetail, otherText);
   el.textContent = label || '';
 }
 

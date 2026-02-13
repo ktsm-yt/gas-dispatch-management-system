@@ -134,7 +134,7 @@
           </div>
           <div class="form-group">
             <label for="work-detail">作業詳細</label>
-            <select id="work-detail" name="work_detail">
+            <select id="work-detail" name="work_detail" onchange="toggleWorkDetailOtherText(this.value)">
               <option value="">選択してください</option>
               <!-- 資材系 -->
               <option value="sekkou">ボード</option>
@@ -163,6 +163,10 @@
               <option value="seisou">清掃</option>
               <option value="other">その他</option>
             </select>
+            <input type="text" id="work-detail-other-text" name="work_detail_other_text"
+                   placeholder="具体的な作業内容を入力"
+                   maxlength="100"
+                   style="display:none; margin-top:6px;">
           </div>
         </div>
 
