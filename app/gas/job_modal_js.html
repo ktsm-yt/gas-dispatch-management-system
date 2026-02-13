@@ -100,6 +100,9 @@ function openJobModal(jobId = null, options = {}) {
   document.getElementById('customer-id').value = '';
   document.getElementById('customer-search').value = '';
 
+  // Reset other text input
+  toggleWorkDetailOtherText('');
+
   // Reset time slot hint
   const startTimeHint = document.getElementById('start-time-hint');
   if (startTimeHint) startTimeHint.style.display = 'none';
@@ -144,7 +147,7 @@ function openJobModal(jobId = null, options = {}) {
         saveJobToCache(jobId, options.cachedJob);
       }
     }
-    // 完全なデータをバックグラウンドで取得
+    // 編集モーダル向けの最新データをバックグラウンドで取得
     loadJobData(jobId);
   }
 }
@@ -156,27 +159,42 @@ function openJobModal(jobId = null, options = {}) {
 function fillFormFromCache(job) {
   if (!job) return;
 
+  jobModalState.job = job;
+  jobModalState.jobUpdatedAt = job.updated_at || null;
+  jobModalState.slots = job.slots || [];
+
   document.getElementById('job-id').value = job.job_id || '';
+  document.getElementById('job-updated-at').value = job.updated_at || '';
   document.getElementById('customer-id').value = job.customer_id || '';
   document.getElementById('customer-search').value = job.customer_name || '';
   document.getElementById('site-name').value = job.site_name || '';
   document.getElementById('site-address').value = job.site_address || '';
-  document.getElementById('work-date').value = job.work_date || '';
+  const cachedWorkDate = job.work_date || window.dashboardData?.date || '';
+  document.getElementById('work-date').value = cachedWorkDate;
   document.getElementById('time-slot').value = job.time_slot || 'am';
   document.getElementById('start-time').value = formatStartTimeForModal(job.start_time);
   document.getElementById('work-category').value = job.work_category || '';
+  document.getElementById('work-detail').value = job.work_detail || '';
+  toggleWorkDetailOtherText(job.work_detail, job.work_detail_other_text || '');
   document.getElementById('status').value = job.status || 'pending';
   document.getElementById('supervisor-name').value = job.supervisor_name || '';
+  document.getElementById('order-number').value = job.order_number || '';
+  document.getElementById('branch-office').value = job.branch_office || '';
+  document.getElementById('property-code').value = job.property_code || '';
+  document.getElementById('construction-div').value = job.construction_div || '';
   document.getElementById('notes').value = job.notes || '';
 
   // pay_unit正規化: 'half'(旧) → 'halfday'(新)
-  const normalizedPayUnit = job.pay_unit === 'half' ? 'halfday' : (job.pay_unit || '');
+  const cachedPayUnit = job.pay_unit || (job.slots && job.slots[0] ? job.slots[0].slot_pay_unit : '');
+  const normalizedPayUnit = cachedPayUnit === 'half' ? 'halfday' : (cachedPayUnit || '');
   document.getElementById('pay-unit').value = normalizedPayUnit;
   document.getElementById('required-count').value = job.required_count || 1;
 
   // キャッシュにスロットがあれば即座にロード
   if (job.slots && job.slots.length > 0) {
     loadSlotsToUI(job.slots);
+  } else {
+    resetSlotsUI();
   }
 
   // 時間区分と開始時間の整合性チェック
@@ -240,6 +258,7 @@ function loadJobData(jobId) {
       document.getElementById('start-time').value = formatStartTimeForModal(job.start_time);
       document.getElementById('work-category').value = job.work_category || '';
       document.getElementById('work-detail').value = job.work_detail || '';
+      toggleWorkDetailOtherText(job.work_detail, job.work_detail_other_text || '');
       document.getElementById('status').value = job.status || 'pending';
       document.getElementById('supervisor-name').value = job.supervisor_name || '';
       document.getElementById('order-number').value = job.order_number || '';
@@ -279,7 +298,7 @@ function loadJobData(jobId) {
       jobModalState.isLoadingJob = false;
       showToast(error.message, 'error');
     })
-    .getJob(jobId);
+    .getJobForEdit(jobId);
 }
 
 function submitJobModal(saveAndContinue = false) {
@@ -310,6 +329,11 @@ function submitJobModal(saveAndContinue = false) {
 
   if (job.required_count) {
     job.required_count = parseInt(job.required_count, 10);
+  }
+
+  // 「その他」以外なら自由テキストを空文字で明示送信（DB上もクリア）
+  if (job.work_detail !== 'other') {
+    job.work_detail_other_text = '';
   }
 
   const jobId = document.getElementById('job-id').value;
@@ -397,6 +421,7 @@ function resetJobFormForNext(date, customerId, customerName) {
   if (customerName) document.getElementById('customer-search').value = customerName;
 
   resetSlotsUI();
+  toggleWorkDetailOtherText('');
   document.getElementById('job-modal-title').textContent = '案件登録';
 }
 
@@ -905,6 +930,21 @@ function validateTimeSlotStartTime() {
 }
 
 // ========== Event Listeners Setup ==========
+
+/**
+ * 作業詳細が「その他」の場合にフリーテキスト入力欄を表示
+ */
+function toggleWorkDetailOtherText(workDetail, text) {
+  const input = document.getElementById('work-detail-other-text');
+  if (!input) return;
+  if (workDetail === 'other') {
+    input.style.display = 'block';
+    if (text !== undefined) input.value = text;
+  } else {
+    input.style.display = 'none';
+    input.value = '';
+  }
+}
 
 function setupJobModalEventListeners() {
   // Close modal on overlay click

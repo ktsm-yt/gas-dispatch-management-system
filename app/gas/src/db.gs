@@ -25,13 +25,21 @@ const TABLE_SHEET_MAP = {
   'T_InvoiceAdjustments': 'InvoiceAdjustments'
 };
 
+// リクエスト内キャッシュ（同一実行内でのopenById/getSheetByName重複を削減）
+let REQUEST_DB_CACHE = null;
+const REQUEST_SHEET_CACHE = {};
+
 /**
  * DB Spreadsheetを取得
  * ID取得は config.ts::getSpreadsheetId() に委譲
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} Spreadsheetオブジェクト
  */
 function getDb() {
-  return SpreadsheetApp.openById(getSpreadsheetId());
+  if (REQUEST_DB_CACHE) {
+    return REQUEST_DB_CACHE;
+  }
+  REQUEST_DB_CACHE = SpreadsheetApp.openById(getSpreadsheetId());
+  return REQUEST_DB_CACHE;
 }
 
 /**
@@ -49,6 +57,10 @@ function getEnv() {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} シートオブジェクト
  */
 function getSheet(tableName) {
+  if (REQUEST_SHEET_CACHE[tableName]) {
+    return REQUEST_SHEET_CACHE[tableName];
+  }
+
   const sheetName = TABLE_SHEET_MAP[tableName];
   if (!sheetName) {
     throw new Error(`不明なテーブル名: ${tableName}`);
@@ -61,6 +73,7 @@ function getSheet(tableName) {
     throw new Error(`シートが見つかりません: ${sheetName}`);
   }
 
+  REQUEST_SHEET_CACHE[tableName] = sheet;
   return sheet;
 }
 

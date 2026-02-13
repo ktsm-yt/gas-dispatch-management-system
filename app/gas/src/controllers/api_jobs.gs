@@ -178,6 +178,61 @@ function getJob(jobId) {
 }
 
 /**
+ * 案件編集モーダル向けに案件単体を取得（軽量: 配置情報なし）
+ * @param {string} jobId - 案件ID
+ * @returns {Object} APIレスポンス
+ */
+function getJobForEdit(jobId) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message,
+        {},
+        requestId
+      );
+    }
+
+    // 入力検証
+    if (!jobId) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'jobId is required',
+        {},
+        requestId
+      );
+    }
+
+    // Service呼び出し
+    const result = JobService.getForEdit(jobId);
+
+    if (!result) {
+      return buildErrorResponse(
+        ERROR_CODES.NOT_FOUND,
+        `Job not found: ${jobId}`,
+        {},
+        requestId
+      );
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    Logger.log(`getJobForEdit error: ${error.message}`);
+    return buildErrorResponse(
+      ERROR_CODES.SYSTEM_ERROR,
+      error.message,
+      {},
+      requestId
+    );
+  }
+}
+
+/**
  * 案件を保存（新規/更新）
  * @param {Object} job - 案件データ
  * @param {string|null} expectedUpdatedAt - 期待するupdated_at（更新時）
