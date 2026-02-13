@@ -10,6 +10,7 @@
 let assignmentJobCache = {};
 const ASSIGNMENT_CACHE_MAX_SIZE = 10;  // 最大10件
 const ASSIGNMENT_CACHE_EXPIRE_MS = 5 * 60 * 1000;  // 5分
+const STAFF_SEARCH_DEBOUNCE_MS = 120;
 
 // ========== Global Staff Cache ==========
 // スタッフマスタのグローバルキャッシュ（全案件で共有）
@@ -17,7 +18,16 @@ let globalStaffCache = {
   staff: [],
   timestamp: 0
 };
-const GLOBAL_STAFF_CACHE_EXPIRE_MS = 10 * 60 * 1000;  // 10分
+let globalStaffFetchInFlight = false;
+let globalStaffFetchWaiters = [];
+let staffSearchDebounceTimer = null;
+let staffListRenderRafId = null;
+let dayConflictIndexCache = {
+  date: null,
+  bySignature: new Map()
+};
+const GLOBAL_STAFF_CACHE_KEY = 'staff_cache';
+const GLOBAL_STAFF_CACHE_VERSION = 2; // v2: 全スタッフ(未フィルタ)を保持
 
 /**
  * グローバルスタッフキャッシュを取得
@@ -26,26 +36,24 @@ const GLOBAL_STAFF_CACHE_EXPIRE_MS = 10 * 60 * 1000;  // 10分
 function getGlobalStaffCache() {
   // メモリキャッシュを最優先チェック
   if (globalStaffCache.staff.length > 0) {
-    const age = Date.now() - globalStaffCache.timestamp;
-    if (age <= GLOBAL_STAFF_CACHE_EXPIRE_MS) {
-      return globalStaffCache.staff;
-    }
-    globalStaffCache.staff = [];
-    globalStaffCache.timestamp = 0;
+    return globalStaffCache.staff;
   }
 
   // メモリになければlocalStorageから復元（タブ間共有）
   try {
-    const stored = localStorage.getItem('staff_cache');
+    const stored = localStorage.getItem(GLOBAL_STAFF_CACHE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      const age = Date.now() - parsed.timestamp;
-      if (age <= GLOBAL_STAFF_CACHE_EXPIRE_MS && Array.isArray(parsed.staff)) {
+      const isValidPayload = parsed &&
+        parsed.version === GLOBAL_STAFF_CACHE_VERSION &&
+        parsed.scope === 'all' &&
+        Array.isArray(parsed.staff);
+      if (isValidPayload) {
         globalStaffCache.staff = parsed.staff;
-        globalStaffCache.timestamp = parsed.timestamp;
+        globalStaffCache.timestamp = parsed.timestamp || Date.now();
         return parsed.staff;
       }
-      localStorage.removeItem('staff_cache');
+      localStorage.removeItem(GLOBAL_STAFF_CACHE_KEY);
     }
   } catch (e) { /* localStorage unavailable */ }
 
@@ -62,8 +70,91 @@ function saveGlobalStaffCache(staff) {
 
   // localStorageにも保存（タブ間共有）
   try {
-    localStorage.setItem('staff_cache', JSON.stringify({ staff, timestamp: globalStaffCache.timestamp }));
+    localStorage.setItem(GLOBAL_STAFF_CACHE_KEY, JSON.stringify({
+      version: GLOBAL_STAFF_CACHE_VERSION,
+      scope: 'all',
+      staff,
+      timestamp: globalStaffCache.timestamp
+    }));
   } catch (e) { /* localStorage unavailable or quota exceeded */ }
+}
+
+/**
+ * 全スタッフをサーバーから取得してグローバルキャッシュ更新（in-flight重複抑止）
+ * @param {Object} [options]
+ * @param {Function} [options.onSuccess] - (staff: Array, usedCache: boolean) => void
+ * @param {Function} [options.onFailure] - (error: any) => void
+ * @param {boolean} [options.force=false] - trueならキャッシュを無視して取得
+ */
+function fetchGlobalStaff(options = {}) {
+  const { onSuccess, onFailure, force = false } = options;
+
+  if (!force) {
+    const cached = getGlobalStaffCache();
+    if (cached && cached.length > 0) {
+      if (typeof onSuccess === 'function') onSuccess(cached, true);
+      return;
+    }
+  }
+
+  if (globalStaffFetchInFlight) {
+    globalStaffFetchWaiters.push({ onSuccess, onFailure });
+    return;
+  }
+
+  globalStaffFetchInFlight = true;
+  globalStaffFetchWaiters.push({ onSuccess, onFailure });
+  google.script.run
+    .withSuccessHandler(function(response) {
+      globalStaffFetchInFlight = false;
+      const waiters = globalStaffFetchWaiters;
+      globalStaffFetchWaiters = [];
+
+      if (!response?.ok) {
+        waiters.forEach(w => {
+          if (typeof w.onFailure === 'function') {
+            w.onFailure(response?.error || new Error('スタッフの取得に失敗しました'));
+          }
+        });
+        return;
+      }
+
+      const freshStaff = response.data?.staff || [];
+      saveGlobalStaffCache(freshStaff);
+      waiters.forEach(w => {
+        if (typeof w.onSuccess === 'function') {
+          w.onSuccess(freshStaff, false);
+        }
+      });
+    })
+    .withFailureHandler(function(error) {
+      globalStaffFetchInFlight = false;
+      const waiters = globalStaffFetchWaiters;
+      globalStaffFetchWaiters = [];
+      waiters.forEach(w => {
+        if (typeof w.onFailure === 'function') {
+          w.onFailure(error);
+        }
+      });
+    })
+    .getAvailableStaff({ excludeAssigned: false });
+}
+
+/**
+ * ダッシュボード表示中に全スタッフを先読みしておく
+ * @param {boolean} [force=false]
+ */
+function prefetchGlobalStaffCache(force = false) {
+  fetchGlobalStaff({ force });
+}
+
+function resetDayConflictIndexCache(date = null) {
+  dayConflictIndexCache.date = date;
+  dayConflictIndexCache.bySignature = new Map();
+}
+
+function getJobTimeSignature(job) {
+  return `${job?.time_slot || ''}|${job?.start_time || ''}`;
 }
 
 // ========== Dashboard Cache Access ==========
@@ -197,7 +288,7 @@ function getAssignmentJobFromCache(jobId) {
 /**
  * キャッシュに案件データを保存
  * @param {string} jobId
- * @param {Object} data - {job, assignments, slots, slotStatus, allStaff}
+ * @param {Object} data - {job, assignments, slots, slotStatus, allStaffRaw}
  */
 function saveAssignmentJobToCache(jobId, data) {
   // キャッシュサイズ制限（古いものから削除）
@@ -228,11 +319,13 @@ let assignmentModalState = {
   assignments: [],        // サーバーからの現在の配置データ
   slots: [],              // 案件の枠データ
   slotStatus: null,       // 枠ごとの充足状況
-  allStaff: [],
+  allStaffRaw: [],        // 全スタッフ（未フィルタ）
+  allStaff: [],           // 現在案件向けにフィルタ済みスタッフ
   filteredStaff: [],
   transportAreas: [],
   jobUpdatedAt: null,
   selectedStaffIds: [],   // 選択中のスタッフID（追加/更新対象）
+  selectedStaffSet: new Set(),  // selectedStaffIdsのSet版（O(1)ルックアップ用）
   stagedDeletes: [],      // 削除予定の配置ID
   stagedDeletesSet: new Set(),  // stagedDeletesのSet版（O(1)ルックアップ用）
   isSaving: false,
@@ -244,9 +337,63 @@ let assignmentModalState = {
   dayAssignmentsLoaded: false,
   dayAssignmentsDate: null,   // キャッシュ対象の日付
   // パフォーマンス最適化キャッシュ
-  conflictMap: null,          // Map<staff_id, assignment[]> 競合チェック用
+  conflictMap: null,          // Map<staff_id, conflict> 競合スタッフ先計算Map
   assignmentMapCache: null    // Map<staff_id, assignment> 配置ルックアップ用
 };
+
+/**
+ * 案件のNG顧客設定でスタッフを絞り込む
+ * @param {Array} staffList
+ * @param {Object|null} job
+ * @returns {Array}
+ */
+function filterStaffByJob(staffList, job) {
+  if (!Array.isArray(staffList) || staffList.length === 0) return [];
+  const customerId = job?.customer_id;
+  if (!customerId) return staffList;
+
+  return staffList.filter(staff => {
+    if (!staff.ng_customers) return true;
+    const ngCustomers = String(staff.ng_customers)
+      .split(',')
+      .map(c => c.trim())
+      .filter(Boolean);
+    return !ngCustomers.includes(customerId);
+  });
+}
+
+/**
+ * モーダル内スタッフ状態を更新（raw保持 + 案件フィルタ適用）
+ * @param {Array} rawStaffList
+ */
+function setModalStaff(rawStaffList) {
+  assignmentModalState.allStaffRaw = Array.isArray(rawStaffList) ? rawStaffList : [];
+  assignmentModalState.allStaff = filterStaffByJob(assignmentModalState.allStaffRaw, assignmentModalState.job);
+  populateSkillFilter();
+}
+
+/**
+ * 現在案件条件でスタッフを再フィルタし、スタッフリストを再描画
+ */
+function refreshModalStaffFilter() {
+  assignmentModalState.allStaff = filterStaffByJob(assignmentModalState.allStaffRaw, assignmentModalState.job);
+  populateSkillFilter();
+  // フィルタ結果が変わった可能性があるため再描画
+  if (assignmentModalState.assignmentsLoaded) {
+    filterStaffList();
+  }
+}
+
+/**
+ * スタッフ情報を取得（フィルタ済み優先、配置済みスタッフはraw参照）
+ * @param {string} staffId
+ * @returns {Object|null}
+ */
+function getStaffById(staffId) {
+  return assignmentModalState.allStaff.find(s => s.staff_id === staffId)
+    || assignmentModalState.allStaffRaw.find(s => s.staff_id === staffId)
+    || null;
+}
 
 // ========== Work Detail Labels ==========
 /**
@@ -286,8 +433,9 @@ const WORK_DETAIL_LABELS = {
  * @param {string} workDetail - work_detail値
  * @returns {string} 表示ラベル（空文字の場合もあり）
  */
-function getWorkDetailLabel(workDetail) {
+function getWorkDetailLabel(workDetail, otherText) {
   if (!workDetail) return '';
+  if (workDetail === 'other' && otherText) return otherText;
   return WORK_DETAIL_LABELS[workDetail] || workDetail;
 }
 
@@ -297,6 +445,15 @@ function getWorkDetailLabel(workDetail) {
  * 新しいフィールド追加時はここに追記すること
  */
 function resetAssignmentModalUI() {
+  if (staffSearchDebounceTimer) {
+    clearTimeout(staffSearchDebounceTimer);
+    staffSearchDebounceTimer = null;
+  }
+  if (staffListRenderRafId) {
+    cancelAnimationFrame(staffListRenderRafId);
+    staffListRenderRafId = null;
+  }
+
   // ヘッダー情報
   document.getElementById('modal-customer-name').textContent = '';
   document.getElementById('modal-job-name').textContent = '読み込み中...';
@@ -321,7 +478,9 @@ function resetAssignmentModalUI() {
   hideInvoiceExistsBanner();
 
   // スタッフリスト
-  document.getElementById('staff-list').innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  const staffListEl = document.getElementById('staff-list');
+  staffListEl.innerHTML = '<div class="loading-spinner">読み込み中...</div>';
+  staffListEl.scrollTop = 0;
   document.getElementById('selected-count').textContent = '';
 
   // 枠選択
@@ -360,20 +519,21 @@ function resetAssignmentModalState(jobId) {
   assignmentModalState.assignments = [];
   assignmentModalState.slots = [];
   assignmentModalState.slotStatus = null;
+  assignmentModalState.allStaffRaw = [];
   assignmentModalState.allStaff = [];
   assignmentModalState.filteredStaff = [];
   assignmentModalState.jobUpdatedAt = null;
   assignmentModalState.selectedStaffIds = [];
+  assignmentModalState.selectedStaffSet = new Set();
   assignmentModalState.stagedDeletes = [];
   assignmentModalState.stagedDeletesSet = new Set();
   assignmentModalState.isSaving = false;
   assignmentModalState.isLoadingJob = false;
   assignmentModalState.isLoadingStaff = false;
   assignmentModalState.assignmentsLoaded = false;
-  // 日次キャッシュはリセット（案件ごとに日付が異なる可能性）
-  assignmentModalState.dayAssignments = [];
-  assignmentModalState.dayAssignmentsLoaded = false;
-  assignmentModalState.dayAssignmentsDate = null;
+  // 日次キャッシュは保持（同日ならリードワンスで再利用）
+  // 日付が異なる場合は handleAssignmentData 内の日付チェックで自動的に再ロード
+  resetDayConflictIndexCache(null);
   // パフォーマンス最適化キャッシュをリセット
   assignmentModalState.conflictMap = null;
   assignmentModalState.assignmentMapCache = null;
@@ -419,12 +579,13 @@ function openJobAssignments(jobId, options = {}) {
 
 /**
  * キャッシュされたデータでモーダルを埋める（即座に表示）
- * @param {Object} cachedData - {job, assignments, slots, slotStatus, allStaff}
+ * @param {Object} cachedData - {job, assignments, slots, slotStatus, allStaffRaw|allStaff}
  */
 function fillAssignmentModalFromCache(cachedData) {
   if (!cachedData) return;
 
-  const { job, assignments, slots, slotStatus, allStaff } = cachedData;
+  const { job, assignments, slots, slotStatus } = cachedData;
+  const rawStaff = cachedData.allStaffRaw || cachedData.allStaff || [];
 
   // 状態を更新
   assignmentModalState.job = job;
@@ -432,8 +593,11 @@ function fillAssignmentModalFromCache(cachedData) {
   assignmentModalState.slots = slots || [];
   assignmentModalState.slotStatus = slotStatus || null;
   assignmentModalState.jobUpdatedAt = job.updated_at;
-  assignmentModalState.allStaff = allStaff || [];
+  assignmentModalState.allStaffRaw = Array.isArray(rawStaff) ? rawStaff : [];
+  assignmentModalState.allStaff = filterStaffByJob(assignmentModalState.allStaffRaw, job);
   assignmentModalState.assignmentsLoaded = true;
+  assignmentModalState.assignmentMapCache = null;
+  assignmentModalState.conflictMap = null;
 
   // ヘッダー更新
   document.getElementById('modal-customer-name').textContent = job.customer_name || '-';
@@ -443,7 +607,7 @@ function fillAssignmentModalFromCache(cachedData) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
-  updateWorkContent(job.work_detail);
+  updateWorkContent(job.work_detail, job.work_detail_other_text);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -478,11 +642,13 @@ function closeAssignmentModal() {
     assignments: [],
     slots: [],
     slotStatus: null,
+    allStaffRaw: [],
     allStaff: [],
     filteredStaff: [],
     transportAreas: assignmentModalState.transportAreas,
     jobUpdatedAt: null,
     selectedStaffIds: [],
+    selectedStaffSet: new Set(),
     stagedDeletes: [],
     stagedDeletesSet: new Set(),
     isSaving: false,
@@ -493,6 +659,7 @@ function closeAssignmentModal() {
     conflictMap: null,
     assignmentMapCache: null
   };
+  resetDayConflictIndexCache(null);
 }
 
 function loadAssignmentModalData(jobId, hasCache = false) {
@@ -505,10 +672,8 @@ function loadAssignmentModalData(jobId, hasCache = false) {
   // グローバルスタッフキャッシュを先にチェック（即座に表示）
   const cachedStaff = getGlobalStaffCache();
   if (cachedStaff && cachedStaff.length > 0) {
-    assignmentModalState.allStaff = cachedStaff;
+    setModalStaff(cachedStaff);
     assignmentModalState.isLoadingStaff = false;  // キャッシュ済みなのでロード完了扱い
-    populateSkillFilter();
-    // 注: 案件データはまだないので描画は handleAssignmentData で行う
   }
 
   // Show loading only if no cache (案件キャッシュもスタッフキャッシュもない場合のみ)
@@ -531,13 +696,15 @@ function loadAssignmentModalData(jobId, hasCache = false) {
       .getJob(jobId);
   }
 
-  // Load available staff（バックグラウンドで最新データを取得、NG顧客フィルタ適用）
-  google.script.run
-    .withSuccessHandler(function(response) {
-      handleStaffData(response, currentJobId, !!cachedStaff);
-    })
-    .withFailureHandler(handleAssignmentModalError)
-    .getAvailableStaff({ jobId: jobId, excludeAssigned: false });
+  // スタッフは「全件キャッシュ」を利用（未取得時のみサーバー取得）
+  fetchGlobalStaff({
+    onSuccess: function(staff, usedCache) {
+      handleStaffData({ ok: true, data: { staff } }, currentJobId, usedCache);
+    },
+    onFailure: function(error) {
+      handleStaffData({ ok: false, error: { message: error?.message || String(error) } }, currentJobId, !!cachedStaff);
+    }
+  });
 }
 
 function handleAssignmentData(response, requestJobId) {
@@ -561,6 +728,8 @@ function handleAssignmentData(response, requestJobId) {
   assignmentModalState.slotStatus = slotStatus || null;
   assignmentModalState.jobUpdatedAt = job.updated_at;
   assignmentModalState.assignmentMapCache = null;  // assignments変更時にキャッシュ無効化
+  assignmentModalState.conflictMap = null;
+  refreshModalStaffFilter();
 
   // Update header
   document.getElementById('modal-customer-name').textContent = job.customer_name || '-';
@@ -570,7 +739,7 @@ function handleAssignmentData(response, requestJobId) {
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
-  updateWorkContent(job.work_detail);
+  updateWorkContent(job.work_detail, job.work_detail_other_text);
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -585,10 +754,12 @@ function handleAssignmentData(response, requestJobId) {
       // ダッシュボードキャッシュがない場合のみRPC
       loadDayAssignmentsForConflictCheck(job.work_date, requestJobId);
     }
+  } else if (assignmentModalState.dayAssignmentsLoaded) {
+    buildConflictMap();
   }
 
   // 両方のデータが揃った場合のみ描画
-  if (!assignmentModalState.isLoadingStaff && assignmentModalState.allStaff.length > 0) {
+  if (!assignmentModalState.isLoadingStaff) {
     assignmentModalState.assignmentsLoaded = true;
     filterStaffList();
 
@@ -598,7 +769,7 @@ function handleAssignmentData(response, requestJobId) {
       assignments: assignmentModalState.assignments,
       slots: assignmentModalState.slots,
       slotStatus: assignmentModalState.slotStatus,
-      allStaff: assignmentModalState.allStaff
+      allStaffRaw: assignmentModalState.allStaffRaw
     });
   }
 }
@@ -606,7 +777,7 @@ function handleAssignmentData(response, requestJobId) {
 function handleStaffData(response, requestJobId, usedGlobalCache = false) {
   // 古いリクエストの結果を無視
   if (assignmentModalState.jobId !== requestJobId) {
-    console.log('Ignoring stale getAvailableStaff response for:', requestJobId);
+    console.log('Ignoring stale staff response for:', requestJobId);
     return;
   }
 
@@ -614,7 +785,7 @@ function handleStaffData(response, requestJobId, usedGlobalCache = false) {
 
   if (!response.ok) {
     // キャッシュを使っていた場合はエラーを無視（キャッシュデータで継続）
-    if (usedGlobalCache && assignmentModalState.allStaff.length > 0) {
+    if (usedGlobalCache && assignmentModalState.allStaffRaw.length > 0) {
       console.log('Staff refresh failed, using cached data');
       return;
     }
@@ -623,15 +794,7 @@ function handleStaffData(response, requestJobId, usedGlobalCache = false) {
   }
 
   const freshStaff = response.data.staff || [];
-
-  // グローバルキャッシュを更新（次回のモーダル表示で使用）
-  saveGlobalStaffCache(freshStaff);
-
-  // 最新データで更新（NG顧客フィルタ済み）
-  assignmentModalState.allStaff = freshStaff;
-
-  // スキルフィルターを動的生成
-  populateSkillFilter();
+  setModalStaff(freshStaff);
 
   // 両方のデータが揃った場合のみ描画
   if (!assignmentModalState.isLoadingJob && assignmentModalState.job) {
@@ -644,9 +807,9 @@ function handleStaffData(response, requestJobId, usedGlobalCache = false) {
       assignments: assignmentModalState.assignments,
       slots: assignmentModalState.slots,
       slotStatus: assignmentModalState.slotStatus,
-      allStaff: assignmentModalState.allStaff
+      allStaffRaw: assignmentModalState.allStaffRaw
     });
-  } else if (usedGlobalCache) {
+  } else if (usedGlobalCache && assignmentModalState.job) {
     // キャッシュ使用後に最新データが来た場合、再描画
     filterStaffList();
   }
@@ -662,34 +825,70 @@ function handleAssignmentModalError(error) {
 
 // ========== Day Assignments for Conflict Check ==========
 /**
+ * dashboardData から日次配置キャッシュを再構築（dashboardDayAssignmentsCache欠落時のフォールバック）
+ * @param {string} date - 日付（YYYY-MM-DD形式）
+ * @returns {boolean} 再構築に成功した場合 true
+ */
+function rebuildDayAssignmentsCacheFromDashboardData(date) {
+  const data = window.dashboardData;
+  if (!data || data.date !== date || !Array.isArray(data.jobs) || !data.hasFullAssignments) {
+    return false;
+  }
+
+  const dayAssignments = [];
+  for (const job of data.jobs) {
+    if (job.status === 'cancelled') continue;
+    if (!Array.isArray(job.assignments)) continue;
+
+    for (const a of job.assignments) {
+      if (a.status === 'CANCELLED') continue;
+      dayAssignments.push({
+        assignment_id: a.assignment_id,
+        job_id: job.job_id,
+        staff_id: a.staff_id,
+        status: a.status,
+        work_date: data.date,
+        time_slot: job.time_slot,
+        start_time: job.start_time || '',
+        site_name: job.site_name || ''
+      });
+    }
+  }
+
+  window.dashboardDayAssignmentsCache = {
+    date: data.date,
+    assignments: dayAssignments,
+    timestamp: Date.now()
+  };
+  return true;
+}
+
+/**
  * ダッシュボードキャッシュから日次配置を取得（RPC不要）
  * @param {string} date - 日付（YYYY-MM-DD形式）
  * @returns {boolean} キャッシュが有効で使用された場合 true
  */
 function loadDayAssignmentsFromDashboardCache(date) {
-  const cache = window.dashboardDayAssignmentsCache;
+  let cache = window.dashboardDayAssignmentsCache;
 
   // キャッシュがない、または日付が異なる場合は使用しない
   if (!cache || cache.date !== date) {
-    return false;
-  }
-
-  // キャッシュが古すぎる場合は使用しない（5分）
-  const age = Date.now() - cache.timestamp;
-  if (age > 5 * 60 * 1000) {
-    return false;
+    if (!rebuildDayAssignmentsCacheFromDashboardData(date)) {
+      return false;
+    }
+    cache = window.dashboardDayAssignmentsCache;
   }
 
   // キャッシュを使用
   assignmentModalState.dayAssignments = cache.assignments || [];
   assignmentModalState.dayAssignmentsLoaded = true;
   assignmentModalState.dayAssignmentsDate = date;
+  resetDayConflictIndexCache(date);
   assignmentModalState.conflictMap = null;  // conflictMap再構築を促す
-
-  // スタッフリストが既に描画済みなら再描画して競合警告を表示
-  if (assignmentModalState.assignmentsLoaded) {
-    setTimeout(() => filterStaffList(), 0);  // 次のイベントループで実行
+  if (assignmentModalState.job) {
+    buildConflictMap();
   }
+
   return true;
 }
 
@@ -722,7 +921,11 @@ function updateDayAssignmentsCacheForCurrentJob() {
     }));
 
   assignmentModalState.dayAssignments = [...otherAssignments, ...currentJobAssignments];
+  resetDayConflictIndexCache(assignmentModalState.dayAssignmentsDate);
   assignmentModalState.conflictMap = null;  // conflictMap再構築を促す
+  if (assignmentModalState.job) {
+    buildConflictMap();
+  }
 }
 
 /**
@@ -742,7 +945,11 @@ function loadDayAssignmentsForConflictCheck(date, requestJobId) {
         assignmentModalState.dayAssignments = response.data.assignments || [];
         assignmentModalState.dayAssignmentsLoaded = true;
         assignmentModalState.dayAssignmentsDate = date;
+        resetDayConflictIndexCache(date);
         assignmentModalState.conflictMap = null;  // conflictMap再構築を促す
+        if (assignmentModalState.job) {
+          buildConflictMap();
+        }
 
         // スタッフリストを再描画して競合警告を表示
         if (assignmentModalState.assignmentsLoaded) {
@@ -758,26 +965,52 @@ function loadDayAssignmentsForConflictCheck(date, requestJobId) {
 }
 
 /**
- * conflictMapを構築（dayAssignments ロード/更新時に1回だけ呼ぶ）
- * Map<staff_id, assignment[]> で他案件の配置をグループ化
+ * conflictMapを構築（dayAssignments / currentJob 更新時に1回だけ呼ぶ）
+ * 同一 time_slot/start_time シグネチャで事前計算したインデックスを再利用
  */
 function buildConflictMap() {
-  const currentJobId = assignmentModalState.job?.job_id;
-  const map = new Map();
+  const currentJob = assignmentModalState.job;
+  if (!currentJob) {
+    assignmentModalState.conflictMap = new Map();
+    return;
+  }
 
-  for (const a of assignmentModalState.dayAssignments) {
-    if (a.job_id === currentJobId) continue;
-    if (!map.has(a.staff_id)) {
-      map.set(a.staff_id, []);
+  const currentDate = assignmentModalState.dayAssignmentsDate || currentJob.work_date || null;
+  if (dayConflictIndexCache.date !== currentDate) {
+    resetDayConflictIndexCache(currentDate);
+  }
+
+  const signature = getJobTimeSignature(currentJob);
+  let map = dayConflictIndexCache.bySignature.get(signature);
+  if (!map) {
+    const signatureJob = {
+      time_slot: currentJob.time_slot,
+      start_time: currentJob.start_time || ''
+    };
+
+    map = new Map();
+    for (const a of assignmentModalState.dayAssignments) {
+      if (!isTimeSlotConflictWithStartTime(
+        signatureJob,
+        { time_slot: a.time_slot, start_time: a.start_time }
+      )) {
+        continue;
+      }
+
+      if (!map.has(a.staff_id)) {
+        map.set(a.staff_id, []);
+      }
+      map.get(a.staff_id).push(a);
     }
-    map.get(a.staff_id).push(a);
+
+    dayConflictIndexCache.bySignature.set(signature, map);
   }
 
   assignmentModalState.conflictMap = map;
 }
 
 /**
- * スタッフの競合をチェック（conflictMap経由、O(1)ルックアップ）
+ * スタッフの競合をチェック（先計算済みconflictMap経由、O(1)ルックアップ）
  * @param {string} staffId - スタッフID
  * @returns {Object|null} 競合情報 { conflictingSite, timeSlot, startTime } または null
  */
@@ -790,32 +1023,24 @@ function checkStaffConflicts(staffId) {
   const currentJob = assignmentModalState.job;
   if (!currentJob) return null;
 
-  const currentTimeSlot = currentJob.time_slot;
-  const currentStartTime = currentJob.start_time || '';
-
   // conflictMapがなければ構築
   if (!assignmentModalState.conflictMap) {
     buildConflictMap();
   }
 
-  // O(1) ルックアップ
-  const otherAssignments = assignmentModalState.conflictMap.get(staffId);
-  if (!otherAssignments || otherAssignments.length === 0) {
+  const currentJobId = currentJob.job_id;
+  const candidates = assignmentModalState.conflictMap.get(staffId);
+  if (!candidates || candidates.length === 0) {
     return null;
   }
 
-  // 競合判定（start_time考慮版）
-  for (const a of otherAssignments) {
-    if (isTimeSlotConflictWithStartTime(
-      { time_slot: currentTimeSlot, start_time: currentStartTime },
-      { time_slot: a.time_slot, start_time: a.start_time }
-    )) {
-      return {
-        conflictingSite: a.site_name || '（現場名なし）',
-        timeSlot: a.time_slot,
-        startTime: a.start_time || ''
-      };
-    }
+  for (const a of candidates) {
+    if (a.job_id === currentJobId) continue;
+    return {
+      conflictingSite: a.site_name || '（現場名なし）',
+      timeSlot: a.time_slot,
+      startTime: a.start_time || ''
+    };
   }
 
   return null;
@@ -1058,16 +1283,33 @@ function updateSlotStatusHint() {
   }
 }
 
-function filterStaffList() {
+function onStaffSearchInput() {
+  if (staffSearchDebounceTimer) {
+    clearTimeout(staffSearchDebounceTimer);
+  }
+  staffSearchDebounceTimer = setTimeout(() => {
+    filterStaffList(true);
+  }, STAFF_SEARCH_DEBOUNCE_MS);
+}
+
+function onStaffListScroll() {
+  // content-visibility: auto により描画はブラウザが自動管理
+  // スクロール時の手動再描画は不要
+}
+
+function filterStaffList(resetScroll = false) {
   const searchQuery = document.getElementById('staff-search').value.toLowerCase();
   const skillFilter = document.getElementById('staff-skill-filter').value;
   const typeFilter = document.getElementById('staff-type-filter').value;
 
   // Get assigned staff IDs (excluding staged deletes)
   const stagedDeletesSet = assignmentModalState.stagedDeletesSet;
-  const assignedIds = assignmentModalState.assignments
-    .filter(a => a.status !== 'CANCELLED' && !stagedDeletesSet.has(a.assignment_id))
-    .map(a => a.staff_id);
+  const assignedIdSet = new Set();
+  for (const a of assignmentModalState.assignments) {
+    if (a.status !== 'CANCELLED' && !stagedDeletesSet.has(a.assignment_id)) {
+      assignedIdSet.add(a.staff_id);
+    }
+  }
 
   // Filter staff
   let filtered = assignmentModalState.allStaff.filter(s => {
@@ -1094,8 +1336,8 @@ function filterStaffList() {
 
   // Sort: assigned first, then by kana
   filtered.sort((a, b) => {
-    const aAssigned = assignedIds.includes(a.staff_id) ? 0 : 1;
-    const bAssigned = assignedIds.includes(b.staff_id) ? 0 : 1;
+    const aAssigned = assignedIdSet.has(a.staff_id) ? 0 : 1;
+    const bAssigned = assignedIdSet.has(b.staff_id) ? 0 : 1;
     if (aAssigned !== bAssigned) return aAssigned - bAssigned;
     const nameA = a.name_kana || a.name || '';
     const nameB = b.name_kana || b.name || '';
@@ -1103,13 +1345,85 @@ function filterStaffList() {
   });
 
   assignmentModalState.filteredStaff = filtered;
+  if (resetScroll) {
+    const container = document.getElementById('staff-list');
+    if (container) container.scrollTop = 0;
+  }
   renderStaffList();
+}
+
+function renderStaffRowHtml(staff, ctx) {
+  const { workCategory, selectedStaffSet, assignmentMap, typeLabels } = ctx;
+  const s = staff;
+  const typeLabel = typeLabels[s.staff_type] || s.staff_type;
+  const typeClass = s.staff_type || 'employee';
+  const assignment = assignmentMap[s.staff_id];
+  const isAssigned = !!assignment;
+  const isSelected = selectedStaffSet.has(s.staff_id);
+  const isStagedForDelete = isAssigned && assignmentModalState.stagedDeletesSet.has(assignment.assignment_id);
+  const skills = s.skills ? s.skills.split(',').map(sk => sk.trim()) : [];
+
+  // 競合チェック（配置済みでないスタッフのみ）
+  const conflict = !isAssigned ? checkStaffConflicts(s.staff_id) : null;
+  const hasConflict = !!conflict;
+
+  // 配置済みスタッフの追加情報
+  const roleLabel = isAssigned ? (assignment.assignment_role || '') : '';
+  const leaderBadge = isAssigned && assignment.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
+
+  // 競合警告バッジ
+  const conflictBadge = hasConflict
+    ? `<span class="conflict-badge" title="${escapeHtml(conflict.conflictingSite)}（${formatTimeSlotLabel(conflict.timeSlot)}${conflict.startTime ? ' ' + conflict.startTime : ''}）に配置済み">⚠️</span>`
+    : '';
+
+  // クラス設定
+  let itemClasses = 'staff-list-item';
+  if (isStagedForDelete) {
+    itemClasses += ' staged-delete';
+  } else if (isAssigned) {
+    itemClasses += ' assigned';
+    if (isSelected) itemClasses += ' selected';
+  } else if (isSelected) {
+    itemClasses += ' selected';
+  }
+  if (hasConflict) {
+    itemClasses += ' has-conflict';
+  }
+
+  // 削除ボタン（配置済みで削除予定でないもののみ）
+  const deleteBtn = isAssigned && !isStagedForDelete
+    ? `<button class="btn-icon btn-delete" onclick="event.stopPropagation(); stageDeleteByStaff('${s.staff_id}')" title="削除">×</button>`
+    : '';
+
+  // 削除取り消しボタン（削除予定のもののみ）
+  const undoBtn = isStagedForDelete
+    ? `<button class="btn-icon btn-undo" onclick="event.stopPropagation(); unstageDeleteByStaff('${s.staff_id}')" title="削除取消">↩</button>`
+    : '';
+
+  // チェックボックスの状態（選択中のみチェック、配置済みは背景色で表示）
+  const checkboxChecked = isSelected;
+
+  return `
+    <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
+      <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
+      <div class="staff-list-info">
+        <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}${conflictBadge}</span>
+        <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
+        ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
+        ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+      </div>
+      <div class="staff-list-actions">
+        ${deleteBtn}${undoBtn}
+      </div>
+    </div>
+  `;
 }
 
 function renderStaffList() {
   const container = document.getElementById('staff-list');
   const staff = assignmentModalState.filteredStaff;
   const workCategory = assignmentModalState.job?.work_category;
+  const selectedStaffSet = assignmentModalState.selectedStaffSet;
 
   // Build assignment map for quick lookup（キャッシュ利用）
   if (!assignmentModalState.assignmentMapCache) {
@@ -1134,70 +1448,12 @@ function renderStaffList() {
     'subcontract': '外注'
   };
 
-  container.innerHTML = staff.map(s => {
-    const typeLabel = typeLabels[s.staff_type] || s.staff_type;
-    const typeClass = s.staff_type || 'employee';
-    const assignment = assignmentMap[s.staff_id];
-    const isAssigned = !!assignment;
-    const isSelected = assignmentModalState.selectedStaffIds.includes(s.staff_id);
-    const isStagedForDelete = isAssigned && assignmentModalState.stagedDeletesSet.has(assignment.assignment_id);
-    const skills = s.skills ? s.skills.split(',').map(sk => sk.trim()) : [];
+  const ctx = { workCategory, selectedStaffSet, assignmentMap, typeLabels };
+  const rowsHtml = staff
+    .map(s => renderStaffRowHtml(s, ctx))
+    .join('');
 
-    // 競合チェック（配置済みでないスタッフのみ）
-    const conflict = !isAssigned ? checkStaffConflicts(s.staff_id) : null;
-    const hasConflict = !!conflict;
-
-    // 配置済みスタッフの追加情報
-    const roleLabel = isAssigned ? (assignment.assignment_role || '') : '';
-    const leaderBadge = isAssigned && assignment.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
-
-    // 競合警告バッジ
-    const conflictBadge = hasConflict
-      ? `<span class="conflict-badge" title="${escapeHtml(conflict.conflictingSite)}（${formatTimeSlotLabel(conflict.timeSlot)}${conflict.startTime ? ' ' + conflict.startTime : ''}）に配置済み">⚠️</span>`
-      : '';
-
-    // クラス設定
-    let itemClasses = 'staff-list-item';
-    if (isStagedForDelete) {
-      itemClasses += ' staged-delete';
-    } else if (isAssigned) {
-      itemClasses += ' assigned';
-      if (isSelected) itemClasses += ' selected';
-    } else if (isSelected) {
-      itemClasses += ' selected';
-    }
-    if (hasConflict) {
-      itemClasses += ' has-conflict';
-    }
-
-    // 削除ボタン（配置済みで削除予定でないもののみ）
-    const deleteBtn = isAssigned && !isStagedForDelete
-      ? `<button class="btn-icon btn-delete" onclick="event.stopPropagation(); stageDeleteByStaff('${s.staff_id}')" title="削除">×</button>`
-      : '';
-
-    // 削除取り消しボタン（削除予定のもののみ）
-    const undoBtn = isStagedForDelete
-      ? `<button class="btn-icon btn-undo" onclick="event.stopPropagation(); unstageDeleteByStaff('${s.staff_id}')" title="削除取消">↩</button>`
-      : '';
-
-    // チェックボックスの状態（選択中のみチェック、配置済みは背景色で表示）
-    const checkboxChecked = isSelected;
-
-    return `
-      <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
-        <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
-        <div class="staff-list-info">
-          <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}${conflictBadge}</span>
-          <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
-          ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
-          ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
-        </div>
-        <div class="staff-list-actions">
-          ${deleteBtn}${undoBtn}
-        </div>
-      </div>
-    `;
-  }).join('');
+  container.innerHTML = rowsHtml;
 
   updateSelectedCount();
 }
@@ -1214,13 +1470,13 @@ function toggleStaffSelection(staffId) {
   }
 
   // 選択状態をトグル
-  const idx = assignmentModalState.selectedStaffIds.indexOf(staffId);
-  if (idx === -1) {
+  const selectedStaffSet = assignmentModalState.selectedStaffSet;
+  if (!selectedStaffSet.has(staffId)) {
     // 新規選択時：競合チェック（配置済みスタッフは既にこの案件に割り当て済みなのでスキップ）
     if (!assignment) {
       const conflict = checkStaffConflicts(staffId);
       if (conflict) {
-        const staffName = assignmentModalState.allStaff.find(s => s.staff_id === staffId)?.name || 'このスタッフ';
+        const staffName = getStaffById(staffId)?.name || 'このスタッフ';
         const timeLabel = formatTimeSlotLabel(conflict.timeSlot);
         const startTimeInfo = conflict.startTime ? `（${conflict.startTime}〜）` : '';
 
@@ -1239,10 +1495,11 @@ function toggleStaffSelection(staffId) {
         return;
       }
     }
-
-    assignmentModalState.selectedStaffIds.push(staffId);
+    selectedStaffSet.add(staffId);
+    assignmentModalState.selectedStaffIds = Array.from(selectedStaffSet);
   } else {
-    assignmentModalState.selectedStaffIds.splice(idx, 1);
+    selectedStaffSet.delete(staffId);
+    assignmentModalState.selectedStaffIds = Array.from(selectedStaffSet);
   }
 
   renderStaffList();
@@ -1255,7 +1512,8 @@ function toggleStaffSelection(staffId) {
  * @param {string} staffId
  */
 function addStaffToSelection(staffId) {
-  if (!assignmentModalState.selectedStaffIds.includes(staffId)) {
+  if (!assignmentModalState.selectedStaffSet.has(staffId)) {
+    assignmentModalState.selectedStaffSet.add(staffId);
     assignmentModalState.selectedStaffIds.push(staffId);
   }
   renderStaffList();
@@ -1385,7 +1643,7 @@ function checkAllConflictsBeforeSave(selectedIds) {
 
     const conflict = checkStaffConflicts(staffId);
     if (conflict) {
-      const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
+      const staff = getStaffById(staffId);
       conflicts.push({
         staffId: staffId,
         staffName: staff?.name || '不明',
@@ -1430,7 +1688,7 @@ function doSaveAllChanges() {
   // pay_unit = invoice_unit（強制同期）
   // wage_rate, invoice_rate = null（マスタ参照）
   const upserts = selectedIds.map(staffId => {
-    const staff = assignmentModalState.allStaff.find(s => s.staff_id === staffId);
+    const staff = getStaffById(staffId);
     const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'STAFF';
 
     const data = {
@@ -1484,6 +1742,7 @@ function doSaveAllChanges() {
 
         // Clear staged changes
         assignmentModalState.selectedStaffIds = [];
+        assignmentModalState.selectedStaffSet = new Set();
         assignmentModalState.stagedDeletes = [];
         assignmentModalState.stagedDeletesSet = new Set();
 
@@ -1758,7 +2017,7 @@ function generateLineTemplate() {
   const leaderNames = leaders.map(a => a.staff_name || '名前未設定').join('、');
   const leaderWithPhone = leaders.length > 0
     ? leaders.map(a => {
-        const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+        const staff = getStaffById(a.staff_id);
         const phone = staff?.phone || a.staff_phone || '';
         const name = a.staff_name || '名前未設定';
         return phone ? `${name}（${phone}）` : name;
@@ -1778,7 +2037,7 @@ function generateLineTemplate() {
   activeAssignments.forEach(a => {
     const role = a.assignment_role || '未指定';
     if (!roleGroups[role]) roleGroups[role] = { names: [], subCount: 0 };
-    const staff = assignmentModalState.allStaff.find(s => s.staff_id === a.staff_id);
+    const staff = getStaffById(a.staff_id);
     if (staff?.staff_type === 'subcontract') {
       roleGroups[role].subCount++;
     } else {
@@ -1834,7 +2093,7 @@ function generateLineTemplate() {
     : unitTypes.length > 1 ? '混在' : '-';
 
   // 作業内容（種別＋小項目）
-  const workDetailLabel = getWorkDetailLabel(job.work_detail);
+  const workDetailLabel = getWorkDetailLabel(job.work_detail, job.work_detail_other_text);
   // 作業内容：役割グループがある場合は「上棟鳶補助、上棟荷揚げ作業」形式
   let workContent;
   if (workCategoryPrefix && memberLines.length > 0) {
@@ -1978,10 +2237,10 @@ function updateSiteAddress(address) {
  * 作業内容を更新
  * @param {string} workDetail - work_detail値
  */
-function updateWorkContent(workDetail) {
+function updateWorkContent(workDetail, otherText) {
   const el = document.getElementById('modal-work-content');
   if (!el) return;
-  const label = getWorkDetailLabel(workDetail);
+  const label = getWorkDetailLabel(workDetail, otherText);
   el.textContent = label || '';
 }
 
@@ -2005,6 +2264,16 @@ function setupAssignmentModalEventListeners() {
   const templateTextarea = document.getElementById('line-template-textarea');
   if (templateTextarea) {
     templateTextarea.addEventListener('input', debouncedSaveTemplate);
+  }
+
+  const staffSearchInput = document.getElementById('staff-search');
+  if (staffSearchInput) {
+    staffSearchInput.addEventListener('input', onStaffSearchInput);
+  }
+
+  const staffListContainer = document.getElementById('staff-list');
+  if (staffListContainer) {
+    staffListContainer.addEventListener('scroll', onStaffListScroll, { passive: true });
   }
 
   // Close modals on Escape key

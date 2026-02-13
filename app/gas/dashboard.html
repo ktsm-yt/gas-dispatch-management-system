@@ -784,6 +784,10 @@
         currentDate = new Date();
       }
       loadDashboard();
+      // 配置モーダルの初回表示高速化: 全スタッフを先読み
+      if (typeof prefetchGlobalStaffCache === 'function') {
+        prefetchGlobalStaffCache(true); // 強制リフレッシュで古いキャッシュを残さない
+      }
       startPolling();
       initVisibilityRefresh();
     }
@@ -880,7 +884,8 @@
       if (memoryCached) {
         dashboardData = memoryCached;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
-        lastMaxUpdatedAt = null;
+        lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         const sessionCached = PageCache.get(cacheKey);
@@ -896,7 +901,8 @@
         dateMemoryCache.set(cacheKey, sessionCached.data);
         dashboardData = sessionCached.data;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
-        lastMaxUpdatedAt = null;
+        lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         if (sessionCached.age > PageCache.DEFAULT_TTL) {
@@ -939,13 +945,13 @@
         return;
       }
 
-      // キャッシュと比較して変更があれば更新
-      // hasFullAssignments フラグが異なる場合も更新（キャッシュ互換性のため）
-      const jobsChanged = JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs);
+      // maxUpdatedAtベースで差分判定（巨大データのJSON.stringifyコストを回避）
+      const jobsChanged = (dashboardData?.maxUpdatedAt || null) !== (newData.maxUpdatedAt || null);
       const flagsChanged = dashboardData?.hasFullAssignments !== newData.hasFullAssignments;
       if (jobsChanged || flagsChanged) {
         dashboardData = newData;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
+        lastMaxUpdatedAt = newData.maxUpdatedAt || null;
         saveToCachedDate(newData.date, newData);
         // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
         buildDayAssignmentsCache();
@@ -956,6 +962,7 @@
         // データは同じだがキャッシュがない場合は構築
         dashboardData = newData;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
+        lastMaxUpdatedAt = newData.maxUpdatedAt || null;
         buildDayAssignmentsCache();
       }
     }
@@ -1001,7 +1008,7 @@
 
       dashboardData = newData;
       window.dashboardData = dashboardData;  // 配置モーダル用に公開
-      lastMaxUpdatedAt = null; // Reset for polling
+      lastMaxUpdatedAt = newData.maxUpdatedAt || null;
 
       // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
       buildDayAssignmentsCache();
@@ -1117,13 +1124,21 @@
         customer_name: customerName,
         site_name: savedJob.site_name || '',
         site_address: savedJob.site_address || '',
+        work_date: savedJob.work_date || dashboardData.date,
         time_slot: savedJob.time_slot,
         start_time: savedJob.start_time || '',
         work_category: savedJob.work_category,
+        work_detail: savedJob.work_detail || '',
+        work_detail_other_text: savedJob.work_detail_other_text || '',
         required_count: savedJob.required_count,
+        pay_unit: savedJob.pay_unit || '',
         assigned_count: 0,
         status: savedJob.status,
         supervisor_name: savedJob.supervisor_name || '',
+        order_number: savedJob.order_number || '',
+        branch_office: savedJob.branch_office || '',
+        property_code: savedJob.property_code || '',
+        construction_div: savedJob.construction_div || '',
         notes: savedJob.notes || '',
         staff_names: [],
         assignments: [],  // 配置キャッシュ用（新規は空）
@@ -1466,16 +1481,17 @@
 
       google.script.run
         .withSuccessHandler((response) => {
-          if (response.ok && response.data.maxUpdatedAt) {
-            if (lastMaxUpdatedAt && response.data.maxUpdatedAt !== lastMaxUpdatedAt) {
-              // モーダルが開いている間はトーストを表示しない（モーダル内で更新されるため）
+          if (response.ok) {
+            const latestMaxUpdatedAt = response.data.maxUpdatedAt || null;
+            if (latestMaxUpdatedAt !== lastMaxUpdatedAt) {
+              // モーダルが開いている間は更新をスキップ（モーダル内で更新されるため）
               const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
                              || document.getElementById('job-modal')?.style.display !== 'none';
               if (!modalOpen) {
                 refreshDashboardInBackground(dateStr);
               }
             }
-            lastMaxUpdatedAt = response.data.maxUpdatedAt;
+            lastMaxUpdatedAt = latestMaxUpdatedAt;
           }
         })
         .getDashboardMeta(dateStr);

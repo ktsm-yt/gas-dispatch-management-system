@@ -43,12 +43,12 @@
           <span class="selected-count" id="selected-count"></span>
         </div>
         <div class="staff-filter">
-          <input type="text" class="staff-search" id="staff-search" placeholder="名前で検索..." oninput="filterStaffList()">
-          <select id="staff-skill-filter" onchange="filterStaffList()">
+          <input type="text" class="staff-search" id="staff-search" placeholder="名前で検索...">
+          <select id="staff-skill-filter" onchange="filterStaffList(true)">
             <option value="">全スキル</option>
             <!-- スキル選択肢はJSで動的に生成 -->
           </select>
-          <select id="staff-type-filter" onchange="filterStaffList()">
+          <select id="staff-type-filter" onchange="filterStaffList(true)">
             <option value="">全タイプ</option>
             <option value="regular">自社</option>
             <option value="student">学生</option>

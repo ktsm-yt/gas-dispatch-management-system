@@ -701,7 +701,8 @@ const AssignmentService = {
   getDayAssignmentsForConflictCheck: function(date) {
     // バルク処理：その日の全案件と全配置を一括取得
     const jobs = JobRepository.findByDate(date);
-    const assignments = AssignmentRepository.findByDate(date);
+    const jobIds = jobs.map(job => job.job_id);
+    const assignments = AssignmentRepository.findByDate(date, jobIds);
 
     // 案件IDをキーにした高速ルックアップ
     const jobMap = {};
