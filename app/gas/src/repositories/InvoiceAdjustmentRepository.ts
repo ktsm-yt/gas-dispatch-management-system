@@ -4,16 +4,19 @@
  * 請求書の調整項目（材料費・値引きなど）のCRUD操作
  */
 
+interface AdjustmentInput {
+  adjustment_id?: string;
+  item_name: string;
+  amount: number;
+  sort_order?: number;
+  notes?: string;
+}
+
 const InvoiceAdjustmentRepository = {
   TABLE_NAME: 'T_InvoiceAdjustments',
   ID_COLUMN: 'adjustment_id',
 
-  /**
-   * 請求書IDで調整項目を取得（sort_order ASC）
-   * @param {string} invoiceId - 請求書ID
-   * @returns {Object[]} 調整項目の配列
-   */
-  findByInvoiceId: function(invoiceId) {
+  findByInvoiceId: function(invoiceId: string): InvoiceAdjustmentRecord[] {
     const records = getAllRecords(this.TABLE_NAME);
     const filtered = records
       .filter(r => r.invoice_id === invoiceId && !r.is_deleted)
@@ -22,42 +25,28 @@ const InvoiceAdjustmentRepository = {
     return filtered;
   },
 
-  /**
-   * IDで調整項目を取得
-   * @param {string} adjustmentId - 調整項目ID
-   * @returns {Object|null} 調整項目またはnull
-   */
-  findById: function(adjustmentId) {
+  findById: function(adjustmentId: string): InvoiceAdjustmentRecord | null {
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, adjustmentId);
     if (!record || record.is_deleted) return null;
     return this._normalizeRecord(record);
   },
 
-  /**
-   * 一括更新/挿入（差分方式）
-   * 送信された項目を upsert し、送信されなかった既存項目は論理削除
-   * @param {string} invoiceId - 請求書ID
-   * @param {Object[]} adjustments - 調整項目の配列 [{ adjustment_id?, item_name, amount, sort_order?, notes? }]
-   * @returns {Object} { success: boolean, adjustments?: Object[], error?: string }
-   */
-  bulkUpsert: function(invoiceId, adjustments) {
+  bulkUpsert: function(invoiceId: string, adjustments: AdjustmentInput[]): { success: boolean; adjustments?: InvoiceAdjustmentRecord[]; error?: string } {
     const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 
-    // 既存の調整項目を取得
     const existing = this.findByInvoiceId(invoiceId);
     const existingIds = new Set(existing.map(r => r.adjustment_id));
-    const sentIds = new Set();
+    const sentIds = new Set<string>();
 
-    const toInsert = [];
-    const toUpdate = [];
+    const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: Record<string, unknown>[] = [];
 
     for (let i = 0; i < adjustments.length; i++) {
       const adj = adjustments[i];
       const sortOrder = adj.sort_order !== undefined ? adj.sort_order : i + 1;
 
       if (adj.adjustment_id && existingIds.has(adj.adjustment_id)) {
-        // 既存レコードの更新
         sentIds.add(adj.adjustment_id);
         toUpdate.push({
           adjustment_id: adj.adjustment_id,
@@ -69,7 +58,6 @@ const InvoiceAdjustmentRepository = {
           updated_by: user
         });
       } else {
-        // 新規レコードの挿入
         const newId = generateId('adj');
         sentIds.add(newId);
         toInsert.push({
@@ -107,21 +95,21 @@ const InvoiceAdjustmentRepository = {
     const sheet = getSheet(this.TABLE_NAME);
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0] as string[];
 
     // 既存行の更新
     if (toUpdate.length > 0 && lastRow > 1) {
       const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
       const idCol = headers.indexOf('adjustment_id');
 
-      const updateMap = {};
+      const updateMap: Record<string, Record<string, unknown>> = {};
       for (const upd of toUpdate) {
-        updateMap[upd.adjustment_id] = upd;
+        updateMap[upd.adjustment_id as string] = upd;
       }
 
       let modified = false;
       for (let i = 0; i < data.length; i++) {
-        const rowId = data[i][idCol];
+        const rowId = data[i][idCol] as string;
         if (updateMap[rowId]) {
           const upd = updateMap[rowId];
           for (const [key, val] of Object.entries(upd)) {
@@ -140,7 +128,7 @@ const InvoiceAdjustmentRepository = {
       }
     }
 
-    // 新規行の挿入（insertRecords はオブジェクト配列を期待）
+    // 新規行の挿入
     if (toInsert.length > 0) {
       insertRecords(this.TABLE_NAME, toInsert);
     }
@@ -150,12 +138,7 @@ const InvoiceAdjustmentRepository = {
     return { success: true, adjustments: result };
   },
 
-  /**
-   * 請求書IDで調整項目を一括論理削除
-   * @param {string} invoiceId - 請求書ID
-   * @returns {Object} { success: boolean, deleted: number }
-   */
-  softDeleteByInvoiceId: function(invoiceId) {
+  softDeleteByInvoiceId: function(invoiceId: string): { success: boolean; deleted: number } {
     const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 
@@ -164,7 +147,7 @@ const InvoiceAdjustmentRepository = {
     if (lastRow <= 1) return { success: true, deleted: 0 };
 
     const lastCol = sheet.getLastColumn();
-    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0] as string[];
     const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
 
     const invoiceIdCol = headers.indexOf('invoice_id');
@@ -193,13 +176,7 @@ const InvoiceAdjustmentRepository = {
     return { success: true, deleted: deleted };
   },
 
-  /**
-   * 調整項目を別の請求書にコピー（再生成時用）
-   * @param {string} fromInvoiceId - コピー元請求書ID
-   * @param {string} toInvoiceId - コピー先請求書ID
-   * @returns {Object} { success: boolean, copied: number }
-   */
-  copyToInvoice: function(fromInvoiceId, toInvoiceId) {
+  copyToInvoice: function(fromInvoiceId: string, toInvoiceId: string): { success: boolean; copied: number } {
     const source = this.findByInvoiceId(fromInvoiceId);
     if (source.length === 0) return { success: true, copied: 0 };
 
@@ -226,17 +203,12 @@ const InvoiceAdjustmentRepository = {
     return { success: true, copied: source.length };
   },
 
-  /**
-   * レコードを正規化
-   * @param {Object} record - レコード
-   * @returns {Object} 正規化されたレコード
-   */
-  _normalizeRecord: function(record) {
+  _normalizeRecord: function(record: Record<string, unknown>): InvoiceAdjustmentRecord {
     return {
       ...record,
       amount: Number(record.amount) || 0,
       sort_order: Number(record.sort_order) || 0,
       is_deleted: record.is_deleted === true || record.is_deleted === 'true'
-    };
+    } as InvoiceAdjustmentRecord;
   }
 };
