@@ -760,11 +760,8 @@ const InvoiceExportService = {
     // PDFページ分割用シート作成（format1/format2共通）
     let hasPrintSheets = false;
     if (lines.length > 0 && forPdf) {
-      if (invoice.invoice_format === 'format1') {
-        this._createPrintSheetsForFormat1(spreadsheet, sheet, lines, invoice);
-        hasPrintSheets = true;
-      } else if (invoice.invoice_format === 'format2') {
-        this._createPrintSheetsForFormat2(spreadsheet, sheet, lines, invoice);
+      if (['format1', 'format2'].includes(invoice.invoice_format)) {
+        this._createFixedPageSheets(spreadsheet, sheet, lines, invoice, invoice.invoice_format);
         hasPrintSheets = true;
       }
     }
@@ -1400,6 +1397,145 @@ const InvoiceExportService = {
     fullRange.setBorder(null, null, null, null, null, false);
 
     console.log(`書式を一括拡張: 行${targetStartRow} から ${targetRowCount}行`);
+  },
+
+  /**
+   * 固定ページシート方式（format1/format2共通、PDF専用）
+   * 各ページを独立したシートとして作成し、罫線をテンプレート書式で100%正確に再現。
+   * _batchExtendFormat による横罫線削除の影響を受けない。
+   *
+   * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet - スプレッドシート
+   * @param {GoogleAppsScript.Spreadsheet.Sheet} dataSheet - データ入力済みのメインシート
+   * @param {Array} lines - 明細行データ
+   * @param {Object} invoice - 請求書データ
+   * @param {string} format - 'format1' or 'format2'
+   */
+  _createFixedPageSheets: function(spreadsheet, dataSheet, lines, invoice, format) {
+    const COLS = 10;
+    const DATA_START_ROW = 10;
+    const HEADER_ROWS = 9;
+
+    // 実描画行数ベースのページ定数（A4縦、テンプレート実測値）
+    // firstPageRows: ヘッダー9行の後に入るデータ行数
+    // subsequentPageRows: 列ヘッダー1行の後に入るデータ行数
+    const PAGE_CONFIG = {
+      format1: { firstPageRows: 54, subsequentPageRows: 70 },
+      format2: { firstPageRows: 54, subsequentPageRows: 70 },
+    };
+    const config = PAGE_CONFIG[format];
+
+    // 実描画行数を計算（job切替空行を含む）
+    let jobTransitions = 0;
+    let prevJobId = null;
+    for (const line of lines) {
+      if (prevJobId !== null && line.job_id !== prevJobId) jobTransitions++;
+      prevJobId = line.job_id;
+    }
+    const totalDataRows = lines.length + jobTransitions;
+
+    // 合計行の位置（source sheet）
+    // _populateFormat1/2: totalRow = (DATA_START_ROW + totalDataRows - 1) + 2
+    const totalRowInSource = DATA_START_ROW + totalDataRows + 1;
+
+    console.log(`=== 固定ページシート作成 (${format}) ===`);
+    console.log(`明細件数: ${lines.length}, job切替: ${jobTransitions}, 実描画行数: ${totalDataRows}`);
+    console.log(`合計行位置(source): ${totalRowInSource}`);
+
+    // データ行をページ単位に分割
+    const pages = [];
+    let rowOffset = 0;
+    while (rowOffset < totalDataRows) {
+      const isFirstPage = pages.length === 0;
+      const maxRows = isFirstPage ? config.firstPageRows : config.subsequentPageRows;
+      const rowsOnThisPage = Math.min(maxRows, totalDataRows - rowOffset);
+      pages.push({
+        sourceStartRow: DATA_START_ROW + rowOffset,
+        dataRowCount: rowsOnThisPage,
+        isFirstPage: isFirstPage,
+        isLastPage: (rowOffset + rowsOnThisPage >= totalDataRows)
+      });
+      rowOffset += rowsOnThisPage;
+    }
+
+    console.log(`ページ数: ${pages.length}`);
+
+    // 各ページのシートを作成
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      const page = pages[pageIndex];
+      const sheetName = pageIndex === 0 ? '表紙' : '明細' + pageIndex;
+      const pageSheet = spreadsheet.insertSheet(sheetName);
+
+      // 列幅をコピー
+      for (let col = 1; col <= COLS; col++) {
+        pageSheet.setColumnWidth(col, dataSheet.getColumnWidth(col));
+      }
+
+      let targetRow = 1;
+
+      if (page.isFirstPage) {
+        // ヘッダー（行1-9）をコピー（値+書式）
+        const headerRange = dataSheet.getRange(1, 1, HEADER_ROWS, COLS);
+        headerRange.copyTo(pageSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        headerRange.copyTo(pageSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        for (let r = 1; r <= HEADER_ROWS; r++) {
+          pageSheet.setRowHeight(r, dataSheet.getRowHeight(r));
+        }
+        targetRow = DATA_START_ROW;
+      } else {
+        // 列ヘッダー（行9）を1行目にコピー
+        const colHeaderRange = dataSheet.getRange(9, 1, 1, COLS);
+        colHeaderRange.copyTo(pageSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        colHeaderRange.copyTo(pageSheet.getRange(1, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        pageSheet.setRowHeight(1, dataSheet.getRowHeight(9));
+        targetRow = 2;
+      }
+
+      // データ行をコピー（値+書式）
+      if (page.dataRowCount > 0) {
+        const srcRange = dataSheet.getRange(page.sourceStartRow, 1, page.dataRowCount, COLS);
+        const tgtRange = pageSheet.getRange(targetRow, 1, page.dataRowCount, COLS);
+        srcRange.copyTo(tgtRange, SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        srcRange.copyTo(tgtRange, SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+
+        // 行高さをバッチコピー（2行パターン最適化）
+        this._batchSetRowHeights(dataSheet, pageSheet, page.sourceStartRow, targetRow, page.dataRowCount);
+      }
+
+      const lastDataTargetRow = targetRow + page.dataRowCount - 1;
+
+      // 最終データ行に下罫線を設定（ページ境界の罫線問題を解決）
+      pageSheet.getRange(lastDataTargetRow, 1, 1, COLS).setBorder(
+        null, null, true, null, null, null,
+        '#000000', SpreadsheetApp.BorderStyle.SOLID
+      );
+
+      // 最終ページに合計行を追加
+      if (page.isLastPage) {
+        const totalTargetRow = lastDataTargetRow + 2;
+        const totalRange = dataSheet.getRange(totalRowInSource, 1, 1, COLS);
+        totalRange.copyTo(pageSheet.getRange(totalTargetRow, 1), SpreadsheetApp.CopyPasteType.PASTE_VALUES, false);
+        totalRange.copyTo(pageSheet.getRange(totalTargetRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
+        pageSheet.setRowHeight(totalTargetRow, dataSheet.getRowHeight(totalRowInSource));
+      }
+
+      // 余分な行を削除（PDFに空白ページが出ないように）
+      const lastUsedRow = page.isLastPage ? lastDataTargetRow + 2 : lastDataTargetRow;
+      const maxRows = pageSheet.getMaxRows();
+      if (maxRows > lastUsedRow) {
+        pageSheet.deleteRows(lastUsedRow + 1, maxRows - lastUsedRow);
+      }
+
+      console.log(`ページ${pageIndex + 1}作成完了: ${sheetName} (データ${page.dataRowCount}行, target行${targetRow}-${lastDataTargetRow})`);
+    }
+
+    // 元のデータシートを非表示（PDF出力から除外）
+    dataSheet.hideSheet();
+    const refDataSheet = spreadsheet.getSheetByName('データ');
+    if (refDataSheet) {
+      refDataSheet.hideSheet();
+    }
+
+    console.log(`固定ページシート作成完了: ${pages.length}ページ`);
   },
 
   /**
