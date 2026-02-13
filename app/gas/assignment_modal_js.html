@@ -531,10 +531,8 @@ function resetAssignmentModalState(jobId) {
   assignmentModalState.isLoadingJob = false;
   assignmentModalState.isLoadingStaff = false;
   assignmentModalState.assignmentsLoaded = false;
-  // 日次キャッシュはリセット（案件ごとに日付が異なる可能性）
-  assignmentModalState.dayAssignments = [];
-  assignmentModalState.dayAssignmentsLoaded = false;
-  assignmentModalState.dayAssignmentsDate = null;
+  // 日次キャッシュは保持（同日ならリードワンスで再利用）
+  // 日付が異なる場合は handleAssignmentData 内の日付チェックで自動的に再ロード
   resetDayConflictIndexCache(null);
   // パフォーマンス最適化キャッシュをリセット
   assignmentModalState.conflictMap = null;
@@ -891,10 +889,6 @@ function loadDayAssignmentsFromDashboardCache(date) {
     buildConflictMap();
   }
 
-  // スタッフリストが既に描画済みなら再描画して競合警告を表示
-  if (assignmentModalState.assignmentsLoaded) {
-    setTimeout(() => filterStaffList(), 0);  // 次のイベントループで実行
-  }
   return true;
 }
 
