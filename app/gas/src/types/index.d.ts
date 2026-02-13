@@ -280,10 +280,21 @@ declare global {
   };
 
   // === 計算ユーティリティ（calc_utils.ts） ===
+  // DEFAULT_TAX_RATE は calc_utils.ts で定義済み（ambient不要）
   function calculateMonthlyPayout_(
     assignments: Record<string, unknown>[],
     staff: Record<string, unknown> | null | undefined
   ): { baseAmount: number; transportAmount: number; totalAmount: number };
+  function normalizeRoundingMode_(mode: unknown): string;
+  function calculateTaxAmount_(amount: number, taxRate: number, roundingMode?: string): number;
+  function calculateExpense_(workAmount: number, expenseRate: number): number;
+  function getUnitPriceByJobType_(customer: Record<string, unknown>, jobType: string): number;
+
+  // === 日付ユーティリティ（date_utils.ts） ===
+  function calculateClosingPeriod_(year: number, month: number, closingDay: number): { startDate: string | null; endDate: string | null };
+
+  // === ステータスルール（status_rules.ts） ===
+  function isInvoiceEditable_(status: string): boolean;
 
   // === 未移行リポジトリのambient宣言（TS移行時に削除して実装に置き換え） ===
   const JobRepository: {
@@ -322,8 +333,8 @@ declare global {
   };
 
   // === 顧客系関数（master_service.gs） ===
-  function listCustomers(options?: { activeOnly?: boolean }): { ok: boolean; customers: Record<string, unknown>[] };
-  function listTransportFees(): Record<string, unknown>[];
+  function listCustomers(options?: { activeOnly?: boolean }): { ok: boolean; data?: { items: Record<string, unknown>[] }; customers?: Record<string, unknown>[] };
+  function listTransportFees(): { ok: boolean; data?: { items: Record<string, unknown>[] } } | Record<string, unknown>[];
   function getCompany(): Record<string, unknown> | null;
 
 }
