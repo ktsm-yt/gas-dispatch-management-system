@@ -47,6 +47,33 @@ const JobService = {
   },
 
   /**
+   * 案件編集モーダル向けの軽量データを取得（配置情報なし）
+   * @param {string} jobId - 案件ID
+   * @returns {Object|null} { job, slots[] } または null
+   */
+  getForEdit: function(jobId) {
+    const job = JobRepository.findById(jobId);
+
+    if (!job) {
+      return null;
+    }
+
+    const customerMap = this._getCustomerMap();
+    const jobWithCustomer = {
+      ...job,
+      customer_name: customerMap[job.customer_id] || ''
+    };
+
+    const slotsData = SlotService.getSlotsByJobId(jobId);
+    const slots = slotsData.slots || [];
+
+    return {
+      job: jobWithCustomer,
+      slots: slots
+    };
+  },
+
+  /**
    * ダッシュボードデータを取得
    * @param {string} date - 日付（YYYY-MM-DD形式）
    * @returns {Object} { jobs[], stats }
@@ -70,19 +97,18 @@ const JobService = {
 
     // スタッフマスターを取得（MasterCacheでキャッシュ）
     const staffMapFull = MasterCache.getStaffMap();
-    // staff_id -> name のマップに変換
-    const staffMap = {};
-    for (const staffId in staffMapFull) {
-      staffMap[staffId] = staffMapFull[staffId].name;
-    }
 
     // 案件ごとの配置をグループ化
     const assignmentsByJob = {};
+    let maxUpdatedAt = null;
     for (const a of allAssignments) {
       if (!assignmentsByJob[a.job_id]) {
         assignmentsByJob[a.job_id] = [];
       }
       assignmentsByJob[a.job_id].push(a);
+      if (a.updated_at && (!maxUpdatedAt || a.updated_at > maxUpdatedAt)) {
+        maxUpdatedAt = a.updated_at;
+      }
     }
 
     // スロットデータを一括取得（jobIdsは上で既に取得済み）
@@ -92,8 +118,9 @@ const JobService = {
     const jobsWithCustomer = jobs.map(job => {
       const jobAssignments = assignmentsByJob[job.job_id] || [];
 
-      // 配置データをenrich（staff_name, staff_phone付加、モーダル互換の全フィールド）
-      const enrichedAssignments = jobAssignments.map(a => {
+      // ダッシュボード用の軽量配置データ
+      // モーダルの詳細編集は getJob で最新の完全データを取得する。
+      const dashboardAssignments = jobAssignments.map(a => {
         const staff = staffMapFull[a.staff_id];
         return {
           assignment_id: a.assignment_id,
@@ -101,36 +128,27 @@ const JobService = {
           staff_id: a.staff_id,
           staff_name: staff ? staff.name : '（削除済み）',
           staff_phone: staff ? staff.phone : '',
-          worker_type: a.worker_type || 'STAFF',
-          subcontractor_id: a.subcontractor_id || null,
           slot_id: a.slot_id || null,
-          display_time_slot: a.display_time_slot || job.time_slot,
-          pay_unit: a.pay_unit,
-          invoice_unit: a.invoice_unit,
-          wage_rate: a.wage_rate || 0,
-          invoice_rate: a.invoice_rate || 0,
-          transport_area: a.transport_area || '',
-          transport_amount: a.transport_amount || 0,
-          transport_is_manual: a.transport_is_manual || false,
+          pay_unit: a.pay_unit || '',
+          invoice_unit: a.invoice_unit || '',
           transport_station: a.transport_station || '',
-          transport_has_bus: a.transport_has_bus || false,
-          site_role: a.site_role || null,
           assignment_role: a.assignment_role || null,
           is_leader: a.is_leader || false,
-          entry_date: a.entry_date || null,
-          safety_training_date: a.safety_training_date || null,
           status: a.status,
-          created_at: a.created_at,
           updated_at: a.updated_at
         };
       });
 
       // アクティブな配置でカウント
-      const activeAssignments = enrichedAssignments.filter(a => a.status !== 'CANCELLED');
+      const activeAssignments = dashboardAssignments.filter(a => a.status !== 'CANCELLED');
       const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
+      const staffNames = activeAssignments.map(a => a.staff_name);
 
       // スロットデータを含める
       const jobSlots = slotsByJob[job.job_id] || [];
+      if (job.updated_at && (!maxUpdatedAt || job.updated_at > maxUpdatedAt)) {
+        maxUpdatedAt = job.updated_at;
+      }
 
       return {
         job_id: job.job_id,
@@ -138,17 +156,25 @@ const JobService = {
         customer_name: customerMap[job.customer_id] || '',
         site_name: job.site_name,
         site_address: job.site_address || '',
+        work_date: date,
         time_slot: job.time_slot,
         start_time: job.start_time,
         work_category: job.work_category,
         work_detail: job.work_detail || '',
+        work_detail_other_text: job.work_detail_other_text || '',
         required_count: job.required_count,
+        pay_unit: job.pay_unit || '',
         assigned_count: uniqueStaffIds.size,
         status: job.status,
         supervisor_name: job.supervisor_name || '',
         supervisor_phone: job.supervisor_phone || '',
+        order_number: job.order_number || '',
+        branch_office: job.branch_office || '',
+        property_code: job.property_code || '',
+        construction_div: job.construction_div || '',
         notes: job.notes || '',
-        assignments: enrichedAssignments,
+        staff_names: staffNames,
+        assignments: dashboardAssignments,
         updated_at: job.updated_at,
         slots: jobSlots
       };
@@ -161,7 +187,8 @@ const JobService = {
       date: date,
       jobs: jobsWithCustomer,
       stats: stats,
-      hasFullAssignments: true  // キャッシュ互換性フラグ（古いキャッシュには存在しない）
+      maxUpdatedAt: maxUpdatedAt,
+      hasFullAssignments: false  // dashboardキャッシュは軽量版（モーダル詳細はgetJobで取得）
     };
   },
 
@@ -249,11 +276,12 @@ const JobService = {
    */
   _getCustomerMap: function() {
     try {
-      const customers = getAllRecords('M_Customers');
+      const customers = MasterCache.getCustomerMap();
       const map = {};
-      for (const c of customers) {
+      for (const customerId in customers) {
+        const c = customers[customerId];
         if (c.customer_id && !c.is_deleted) {
-          map[c.customer_id] = c.company_name + (c.branch_name ? ' ' + c.branch_name : '');
+          map[c.customer_id] = (c.company_name || '') + (c.branch_name ? ' ' + c.branch_name : '');
         }
       }
       return map;
