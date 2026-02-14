@@ -46,7 +46,8 @@ declare global {
 
   // === エラー系（errors.ts） ===
   type ErrorCode = 'VALIDATION_ERROR' | 'PERMISSION_DENIED' | 'NOT_FOUND'
-    | 'CONFLICT_ERROR' | 'BUSY_ERROR' | 'SYSTEM_ERROR' | 'BUSINESS_ERROR';
+    | 'CONFLICT_ERROR' | 'BUSY_ERROR' | 'SYSTEM_ERROR' | 'BUSINESS_ERROR'
+    | 'INVALID_INPUT';
 
   // エラークラスは errors.ts に実装として定義
 
@@ -63,8 +64,8 @@ declare global {
 
   // === 外部関数宣言（utils.gs, auth.gs, errors.ts 等） ===
   function generateRequestId(): string;
-  function buildSuccessResponse(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string };
-  function buildErrorResponse(code: string, message: string, details: unknown, requestId: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string };
+  function buildSuccessResponse(data: unknown, requestId?: string): { ok: true; data: unknown; serverTime: string; requestId: string };
+  function buildErrorResponse(code: string, message: string, details?: unknown, requestId?: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string };
   function checkPermission(requiredRole: string): { allowed: boolean; message: string };
   function requirePermission(requiredRole: string): { allowed: boolean; message: string };
   function logErr(context: string, error: unknown, requestId?: string): void;
@@ -160,27 +161,159 @@ declare global {
   // === 認証定数（auth.gs） ===
   const ROLES: { ADMIN: string; MANAGER: string; STAFF: string };
 
+  // === Invoiceドメイン型 ===
+  type InvoiceFormat = 'format1' | 'format2';
+
+  interface InvoiceRecord {
+    invoice_id: string;
+    invoice_number: string;
+    customer_id: string;
+    billing_year: number;
+    billing_month: number;
+    issue_date: string;
+    due_date: string;
+    subtotal: number;
+    expense_amount: number;
+    tax_amount: number;
+    total_amount: number;
+    adjustment_total: number;
+    invoice_format: string;
+    shipper_name: string;
+    pdf_file_id: string;
+    excel_file_id: string;
+    sheet_file_id: string;
+    status: InvoiceStatus | InvoiceLegacyStatus;
+    notes: string;
+    created_at: string;
+    created_by: string;
+    updated_at: string;
+    updated_by: string;
+    is_deleted: boolean;
+    deleted_at: string;
+    deleted_by: string;
+    // アーカイブメタフィールド（_getArchiveRecordsで付与）
+    _archived?: boolean;
+    _archiveFiscalYear?: number;
+  }
+
+  interface InvoiceLineRecord {
+    line_id: string;
+    invoice_id: string;
+    line_number: number;
+    work_date: string;
+    job_id: string;
+    assignment_id: string;
+    site_name: string;
+    item_name: string;
+    time_note: string;
+    quantity: number;
+    unit: string;
+    unit_price: number;
+    amount: number;
+    order_number: string;
+    branch_office: string;
+    construction_div: string;
+    supervisor_name: string;
+    property_code: string;
+    tax_amount: number;
+    created_at: string;
+    created_by: string;
+    updated_at: string;
+    updated_by: string;
+    is_deleted: boolean;
+    deleted_at: string;
+    deleted_by: string;
+  }
+
+  interface InvoiceAdjustmentRecord {
+    adjustment_id: string;
+    invoice_id: string;
+    item_name: string;
+    amount: number;
+    sort_order: number;
+    notes: string;
+    created_at: string;
+    created_by: string;
+    updated_at: string;
+    updated_by: string;
+    is_deleted: boolean;
+    deleted_at: string;
+    deleted_by: string;
+  }
+
+  interface PaymentRecord {
+    payment_id: string;
+    invoice_id: string;
+    payment_date: string;
+    amount: number;
+    payment_method: string;
+    bank_ref: string;
+    notes: string;
+    is_deleted: boolean;
+    created_at: string;
+    created_by: string;
+    deleted_at: string;
+    deleted_by: string;
+  }
+
+  interface InvoiceSearchQuery {
+    customer_id?: string;
+    billing_year?: number;
+    billing_month?: number;
+    billing_ym_from?: string;
+    billing_ym_to?: string;
+    status?: string;
+    invoice_format?: string;
+    sort_order?: 'asc' | 'desc';
+    limit?: number;
+    includeArchive?: boolean;
+  }
+
   // === MasterCache（utils.gs） ===
   const MasterCache: {
     getStaff(): Record<string, unknown>[];
     getStaffMap(): Record<string, Record<string, unknown>>;
     getSubcontractors(): Record<string, unknown>[];
+    getCustomers(): Record<string, unknown>[];
+    getCustomerMap(): Record<string, Record<string, unknown>>;
+    getCompany(): Record<string, unknown> | null;
   };
 
   // === 計算ユーティリティ（calc_utils.ts） ===
+  // DEFAULT_TAX_RATE は calc_utils.ts で定義済み（ambient不要）
   function calculateMonthlyPayout_(
     assignments: Record<string, unknown>[],
     staff: Record<string, unknown> | null | undefined
   ): { baseAmount: number; transportAmount: number; totalAmount: number };
+  function normalizeTaxRate_(taxRate: unknown): number;
+  function normalizeRoundingMode_(mode: unknown): string;
+  function calculateTaxAmount_(amount: number, taxRate: number, roundingMode?: string): number;
+  function calculateTaxIncluded_(amount: unknown, taxRate: number, roundingMode?: string): number;
+  function calculateExpense_(workAmount: number, expenseRate: number): number;
+  function getUnitPriceByJobType_(customer: Record<string, unknown>, jobType: string): number;
+  function calculateInvoiceForAtagami_(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>): Record<string, unknown>;
+  function formatCurrency_(amount: number | null | undefined): string;
+
+  // === 日付ユーティリティ（date_utils.ts） ===
+  function calculateClosingPeriod_(year: number, month: number, closingDay: number): { startDate: string | null; endDate: string | null };
+
+  // === ステータスルール（status_rules.ts） ===
+  function isInvoiceEditable_(status: string): boolean;
 
   // === 未移行リポジトリのambient宣言（TS移行時に削除して実装に置き換え） ===
   const JobRepository: {
+    findById(jobId: string): Record<string, unknown> | null;
     search(query: Record<string, unknown>): Record<string, unknown>[];
   };
   const AssignmentRepository: {
     findByStaffId(staffId: string): Record<string, unknown>[];
+    findByJobId(jobId: string): Record<string, unknown>[];
     search(query: Record<string, unknown>): Record<string, unknown>[];
     bulkUpdatePayoutId(updates: { assignment_id: string; payout_id: string | null }[]): { success: number };
+  };
+  const CustomerRepository: {
+    findById(id: string): Record<string, unknown> | null;
+    search(query: Record<string, unknown>): Record<string, unknown>[];
   };
   const StaffRepository: {
     findById(staffId: string): Record<string, unknown> | null;
@@ -192,4 +325,20 @@ declare global {
     findByIds(ids: string[]): Map<string, Record<string, unknown>>;
     search(query: Record<string, unknown>): Record<string, unknown>[];
   };
+
+  // === 未移行サービスのambient宣言 ===
+  const ArchiveService: {
+    getArchiveDbId(fiscalYear: number): string | null;
+  };
+  const CustomerFolderService: {
+    getInvoiceFolder(customer: Record<string, unknown>): GoogleAppsScript.Drive.Folder | null;
+    createCustomerFolder(customer: Record<string, unknown>): { folderId: string; folderUrl: string; invoiceFolderId: string; created: boolean };
+    _updateCustomerFolderId(customerId: string, folderId: string): string;
+  };
+
+  // === 顧客系関数（master_service.gs） ===
+  function listCustomers(options?: { activeOnly?: boolean }): { ok: boolean; data?: { items: Record<string, unknown>[] }; customers?: Record<string, unknown>[] };
+  function listTransportFees(): { ok: boolean; data?: { items: Record<string, unknown>[] } } | Record<string, unknown>[];
+  function getCompany(): Record<string, unknown> | null;
+
 }
