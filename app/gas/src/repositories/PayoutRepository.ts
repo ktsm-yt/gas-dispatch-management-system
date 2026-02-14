@@ -358,7 +358,7 @@ const PayoutRepository = {
    * @param expectedUpdatedAt - 期待するupdated_at
    * @returns 更新結果
    */
-  update: function(payout: Partial<PayoutRecord> & { payout_id: string }, expectedUpdatedAt?: string): PayoutUpdateResult {
+  update: function(payout: Partial<PayoutRecord> & Record<string, unknown> & { payout_id: string }, expectedUpdatedAt?: string): PayoutUpdateResult {
     if (!payout.payout_id) {
       return { success: false, error: 'payout_id is required' };
     }
@@ -389,7 +389,7 @@ const PayoutRepository = {
       return {
         success: false,
         error: 'CONFLICT_ERROR',
-        currentUpdatedAt: currentPayout.updated_at as string
+        currentUpdatedAt: String(currentPayout.updated_at)
       };
     }
 
@@ -664,12 +664,12 @@ const PayoutRepository = {
    * @param {string} expectedUpdatedAt - 期待するupdated_at
    * @returns {Object} 更新結果 { success: boolean, payout?: Object, error?: string }
    */
-  _updateArchiveRecord: function(payout, expectedUpdatedAt) {
-    const fiscalYear = payout._archiveFiscalYear;
+  _updateArchiveRecord: function(payout: Record<string, unknown>, expectedUpdatedAt?: string): PayoutUpdateResult {
+    const fiscalYear = Number(payout._archiveFiscalYear);
     const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
 
     if (!archiveDbId) {
-      return { success: false, error: 'ARCHIVE_DB_NOT_FOUND', message: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
+      return { success: false, error: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
     }
 
     try {
@@ -678,7 +678,7 @@ const PayoutRepository = {
       const sheet = archiveDb.getSheetByName(sheetName);
 
       if (!sheet) {
-        return { success: false, error: 'ARCHIVE_SHEET_NOT_FOUND', message: `アーカイブDBに${sheetName}シートが見つかりません。` };
+        return { success: false, error: `アーカイブDBに${sheetName}シートが見つかりません。` };
       }
 
       const headers = getHeaders(sheet);
@@ -686,7 +686,7 @@ const PayoutRepository = {
       const updatedAtColIndex = headers.indexOf('updated_at');
 
       if (idColIndex === -1) {
-        return { success: false, error: 'SCHEMA_ERROR', message: 'アーカイブDBのスキーマが不正です。' };
+        return { success: false, error: 'アーカイブDBのスキーマが不正です。' };
       }
 
       // IDで行を検索
@@ -697,7 +697,7 @@ const PayoutRepository = {
 
       const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
       let targetRowIndex = -1;
-      let currentRecord = null;
+      let currentRecord: Record<string, unknown> | null = null;
 
       for (let i = 0; i < data.length; i++) {
         if (data[i][idColIndex] === payout.payout_id) {
@@ -712,11 +712,11 @@ const PayoutRepository = {
       }
 
       // 楽観ロックチェック
-      if (expectedUpdatedAt && currentRecord.updated_at !== expectedUpdatedAt) {
+      if (expectedUpdatedAt && currentRecord && currentRecord.updated_at !== expectedUpdatedAt) {
         return {
           success: false,
           error: 'CONFLICT_ERROR',
-          currentUpdatedAt: currentRecord.updated_at
+          currentUpdatedAt: String(currentRecord.updated_at)
         };
       }
 
@@ -746,19 +746,20 @@ const PayoutRepository = {
       sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
 
       // アーカイブフラグを付与して返す
-      const result = this._normalizeRecord(updatedPayout);
+      const result = this._normalizeRecord(updatedPayout) as PayoutRecord & { _archived?: boolean; _archiveFiscalYear?: number };
       result._archived = true;
-      result._archiveFiscalYear = fiscalYear;
+      result._archiveFiscalYear = fiscalYear as number;
 
       return {
         success: true,
         payout: result,
-        before: currentRecord
+        before: currentRecord ?? undefined
       };
 
     } catch (e) {
-      Logger.log(`アーカイブDB更新エラー: ${e.message}`);
-      return { success: false, error: 'ARCHIVE_UPDATE_ERROR', message: e.message };
+      const msg = e instanceof Error ? e.message : String(e);
+      Logger.log(`アーカイブDB更新エラー: ${msg}`);
+      return { success: false, error: msg };
     }
   },
 
@@ -767,7 +768,7 @@ const PayoutRepository = {
    * @param {string} payoutId - 支払ID
    * @returns {Object|null} 支払いレコード（_archived, _archiveFiscalYear付き）またはnull
    */
-  _findInArchive: function(payoutId) {
+  _findInArchive: function(payoutId: string): PayoutRecord | null {
     const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
 
     // 直近3年度分のアーカイブを検索（新しい年度から）
@@ -790,7 +791,7 @@ const PayoutRepository = {
 
         for (let i = 1; i < data.length; i++) {
           if (data[i][idColIndex] === payoutId) {
-            const record = {};
+            const record: Record<string, unknown> = {};
             for (let j = 0; j < headers.length; j++) {
               record[headers[j]] = data[i][j];
             }
@@ -803,7 +804,8 @@ const PayoutRepository = {
           }
         }
       } catch (e) {
-        Logger.log(`アーカイブDB検索エラー (${y}): ${e.message}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`アーカイブDB検索エラー (${y}): ${msg}`);
       }
     }
 

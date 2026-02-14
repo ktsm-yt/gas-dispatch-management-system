@@ -249,13 +249,18 @@ const InvoiceService = {
    */
   save: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[] | null, expectedUpdatedAt: string): InvoiceSaveResult {
     try {
+      // アーカイブデータの明細変更はブロック
+      if (invoice._archived && lines && lines.length > 0) {
+        return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
+      }
+
       // 請求書を更新
       const invoiceResult = InvoiceRepository.update(invoice, expectedUpdatedAt);
       if (!invoiceResult.success) {
         return invoiceResult;
       }
 
-      const invoiceId = invoice.invoice_id as string;
+      const invoiceId = String(invoice.invoice_id ?? '');
 
       // 明細を更新（差分適用）
       if (lines && lines.length > 0) {
@@ -934,8 +939,8 @@ const InvoiceService = {
 
     const jobs = JobRepository.search({
       customer_id: customerId,
-      work_date_from: period.startDate,
-      work_date_to: period.endDate
+      work_date_from: period.startDate ?? undefined,
+      work_date_to: period.endDate ?? undefined
     });
 
     if (jobs.length === 0) {
@@ -1258,7 +1263,7 @@ const InvoiceService = {
     const paymentMonthOffset = Number(customer.payment_month_offset) || 1;
 
     // 発行日
-    let issueDate: string;
+    let issueDate: string | undefined;
     if (closingDay === 31) {
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
@@ -1284,7 +1289,7 @@ const InvoiceService = {
 
     const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
 
-    return { issueDate, dueDate };
+    return { issueDate: issueDate ?? '', dueDate };
   },
 
   /**
