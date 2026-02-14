@@ -160,8 +160,10 @@ function searchInvoices(query: Record<string, unknown>) {
       console.warn('autoMarkOverdue error:', (overdueError instanceof Error) ? overdueError.message : String(overdueError));
     }
 
-    // Service呼び出し
-    const invoices = InvoiceService.search(query || {});
+    // Service呼び出し（変更検知はバックグラウンドで別途取得するためスキップ）
+    console.time('searchInvoices');
+    const invoices = InvoiceService.search({ ...(query || {}), includeChangeDetection: false });
+    console.timeEnd('searchInvoices');
 
     // 入金情報を一括取得（パフォーマンス最適化）
     if (invoices.length > 0) {
@@ -767,6 +769,73 @@ function calculateBillingPeriodFromWorkDate_(workDate: Date, closingDay: number)
 
   // 締め日以前の作業日 → 当月請求
   return { billingYear: year, billingMonth: month };
+}
+
+/**
+ * 請求書の配置変更フラグを取得（バックグラウンド変更検知用）
+ * @param {string[]} invoiceIds - 請求IDリスト
+ * @returns {Object} APIレスポンス { flags: { [invoiceId]: boolean } }
+ */
+function getInvoiceChangeFlags(invoiceIds: string[]) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（staff以上）
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+      return buildSuccessResponse({ flags: {} }, requestId);
+    }
+
+    // CacheServiceで5分キャッシュ
+    const cache = CacheService.getScriptCache();
+    const cacheKey = 'changeFlags_' + Utilities.computeDigest(
+      Utilities.DigestAlgorithm.MD5,
+      invoiceIds.slice().sort().join(',')
+    ).map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
+
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      return buildSuccessResponse({ flags: JSON.parse(cached) }, requestId);
+    }
+
+    console.time('getInvoiceChangeFlags');
+
+    // 全件1回読みでN+1を回避
+    const idSet = new Set(invoiceIds);
+    const allInvoices = getAllRecords('T_Invoices') as unknown as InvoiceRecord[];
+    const invoices = allInvoices.filter(inv => !inv.is_deleted && idSet.has(inv.invoice_id));
+
+    // 変更検知実行
+    const assignmentUpdates = InvoiceService._getAssignmentUpdatesForInvoices(invoices);
+
+    // boolean フラグに変換
+    const flags: Record<string, boolean> = {};
+    for (const inv of invoices) {
+      const latestUpdate = assignmentUpdates[inv.invoice_id];
+      if (latestUpdate && inv.created_at) {
+        const invoiceCreatedAt = new Date(inv.created_at).getTime();
+        const assignmentUpdatedAt = new Date(latestUpdate).getTime();
+        flags[inv.invoice_id] = assignmentUpdatedAt > invoiceCreatedAt;
+      } else {
+        flags[inv.invoice_id] = false;
+      }
+    }
+
+    console.timeEnd('getInvoiceChangeFlags');
+
+    // 5分キャッシュ
+    cache.put(cacheKey, JSON.stringify(flags), 5 * 60);
+
+    return buildSuccessResponse({ flags }, requestId);
+
+  } catch (error: unknown) {
+    Logger.log(`getInvoiceChangeFlags error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+  }
 }
 
 // ============================================================
