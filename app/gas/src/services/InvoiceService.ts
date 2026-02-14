@@ -173,7 +173,11 @@ const InvoiceService = {
         success: true,
         invoice: {
           ...invoice,
-          customer_name: customer.company_name || ''
+          customer: {
+            customer_id: customer.customer_id,
+            company_name: customer.company_name,
+            folder_id: customer.folder_id
+          }
         },
         lines: createdLines
       };
