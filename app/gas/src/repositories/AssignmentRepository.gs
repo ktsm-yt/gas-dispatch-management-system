@@ -106,6 +106,11 @@ const AssignmentRepository = {
       records = records.filter(r => r.status === query.status);
     }
 
+    // payout_idで絞り込み（確認済み/支払済み配置の取得用）
+    if (query.payout_id) {
+      records = records.filter(r => r.payout_id === query.payout_id);
+    }
+
     return records;
   },
 
@@ -115,7 +120,7 @@ const AssignmentRepository = {
    * @returns {Object} 作成した配置
    */
   insert: function(assignment) {
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const newAssignment = {
@@ -179,7 +184,7 @@ const AssignmentRepository = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
@@ -236,7 +241,7 @@ const AssignmentRepository = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const updatedAssignment = {
@@ -258,6 +263,220 @@ const AssignmentRepository = {
   },
 
   /**
+   * 複数配置を一括更新（パフォーマンス最適化版）
+   * 全データを一括読み込み → メモリ上で更新 → 一括書き込み
+   * @param {Object[]} assignments - 更新する配置データ配列（assignment_id必須）
+   * @returns {Object} 更新結果 { success: boolean, updated: number, results: Object[], errors: string[] }
+   */
+  bulkUpdate: function(assignments) {
+    if (!assignments || assignments.length === 0) {
+      return { success: true, updated: 0, results: [], errors: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: false,
+        updated: 0,
+        results: [],
+        errors: assignments.map(a => `${a.assignment_id}: NOT_FOUND`)
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const updatedByIndex = headers.indexOf('updated_by');
+
+    // 更新可能フィールドのインデックスマップ
+    const updatableFields = [
+      'staff_id', 'worker_type', 'subcontractor_id', 'display_time_slot',
+      'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
+      'transport_area', 'transport_amount', 'transport_is_manual',
+      'transport_station', 'transport_has_bus',
+      'site_role', 'assignment_role', 'is_leader',
+      'entry_date', 'safety_training_date',
+      'status', 'payout_id',
+      'notes'
+    ];
+    const fieldIndexMap = {};
+    for (const field of updatableFields) {
+      const idx = headers.indexOf(field);
+      if (idx !== -1) {
+        fieldIndexMap[field] = idx;
+      }
+    }
+
+    // 3. 更新対象のMapを作成 (assignment_id -> assignment data)
+    const updateMap = new Map(assignments.map(a => [a.assignment_id, a]));
+
+    const user = getCurrentUserEmail() || 'system';
+    const now = getCurrentTimestamp();
+    const errors = [];
+    const results = [];
+    let updated = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const assignmentId = row[idIndex];
+
+      if (!updateMap.has(assignmentId)) continue;
+
+      const assignmentData = updateMap.get(assignmentId);
+
+      // 論理削除済みチェック
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        errors.push(`${assignmentId}: DELETED`);
+        updateMap.delete(assignmentId);
+        continue;
+      }
+
+      // 更新前の状態を保存（監査ログ用）
+      const before = rowToObject(headers, row);
+
+      // フィールドを更新
+      for (const field of updatableFields) {
+        if (assignmentData[field] !== undefined && fieldIndexMap[field] !== undefined) {
+          row[fieldIndexMap[field]] = assignmentData[field];
+        }
+      }
+
+      // updated_at/updated_byを更新
+      if (updatedAtIndex !== -1) row[updatedAtIndex] = now;
+      if (updatedByIndex !== -1) row[updatedByIndex] = user;
+
+      // 更新後の状態
+      const after = rowToObject(headers, row);
+
+      results.push({ assignmentId, before, after });
+      hasChanges = true;
+      updated++;
+      updateMap.delete(assignmentId);
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const [assignmentId] of updateMap) {
+      errors.push(`${assignmentId}: NOT_FOUND`);
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success: errors.length === 0,
+      updated,
+      results,
+      errors
+    };
+  },
+
+  /**
+   * 複数配置を一括論理削除（パフォーマンス最適化版）
+   * @param {string[]} assignmentIds - 削除する配置IDの配列
+   * @returns {Object} 削除結果 { success: boolean, deleted: number, results: Object[], errors: string[] }
+   */
+  bulkSoftDelete: function(assignmentIds) {
+    if (!assignmentIds || assignmentIds.length === 0) {
+      return { success: true, deleted: 0, results: [], errors: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return {
+        success: false,
+        deleted: 0,
+        results: [],
+        errors: assignmentIds.map(id => `${id}: NOT_FOUND`)
+      };
+    }
+
+    // 1. 全データを一括読み込み
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    // 2. カラムインデックスを取得
+    const idIndex = headers.indexOf(this.ID_COLUMN);
+    const isDeletedIndex = headers.indexOf('is_deleted');
+    const statusIndex = headers.indexOf('status');
+    const updatedAtIndex = headers.indexOf('updated_at');
+    const updatedByIndex = headers.indexOf('updated_by');
+
+    // 3. 削除対象のSetを作成
+    const deleteSet = new Set(assignmentIds);
+
+    const user = getCurrentUserEmail() || 'system';
+    const now = getCurrentTimestamp();
+    const errors = [];
+    const results = [];
+    let deleted = 0;
+    let hasChanges = false;
+
+    // 4. メモリ上でデータを更新
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const assignmentId = row[idIndex];
+
+      if (!deleteSet.has(assignmentId)) continue;
+
+      // 既に論理削除済みの場合はスキップ
+      if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
+        errors.push(`${assignmentId}: ALREADY_DELETED`);
+        deleteSet.delete(assignmentId);
+        continue;
+      }
+
+      // 削除前の状態を保存（監査ログ用）
+      const before = rowToObject(headers, row);
+
+      // 論理削除
+      if (isDeletedIndex !== -1) row[isDeletedIndex] = true;
+      if (statusIndex !== -1) row[statusIndex] = 'CANCELLED';
+      if (updatedAtIndex !== -1) row[updatedAtIndex] = now;
+      if (updatedByIndex !== -1) row[updatedByIndex] = user;
+
+      // 削除後の状態
+      const after = rowToObject(headers, row);
+
+      results.push({ assignmentId, before, after });
+      hasChanges = true;
+      deleted++;
+      deleteSet.delete(assignmentId);
+    }
+
+    // 5. 見つからなかったIDをエラーとして追加
+    for (const assignmentId of deleteSet) {
+      errors.push(`${assignmentId}: NOT_FOUND`);
+    }
+
+    // 6. 変更があれば一括書き込み
+    if (hasChanges) {
+      dataRange.setValues(allData);
+    }
+
+    return {
+      success: errors.length === 0,
+      deleted,
+      results,
+      errors
+    };
+  },
+
+  /**
    * 複数配置を一括挿入
    * @param {Object[]} assignments - 配置データ配列
    * @returns {Object[]} 作成した配置配列
@@ -267,7 +486,7 @@ const AssignmentRepository = {
       return [];
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
     const sheet = getSheet(this.TABLE_NAME);
     const headers = getHeaders(sheet);
@@ -318,9 +537,9 @@ const AssignmentRepository = {
    * Note: payout_idはメタデータであり、配置の実質的な内容変更ではないため
    *       updated_at/updated_by は更新しない（請求変更検知の誤検知防止）
    *
-   * ★ パフォーマンス改善: 全行setValuesではなく対象セルのみsetValue
+   * ★ パフォーマンス改善: 連続範囲をバッチ化してsetValues
    *   - 読み込み: 全行（対象行を特定するため）
-   *   - 書き込み: 対象セルのみ（数万行の書き戻しを回避）
+   *   - 書き込み: 連続範囲ごとにsetValues（API呼び出し回数を大幅削減）
    */
   bulkUpdatePayoutId: function(updates) {
     if (!updates || updates.length === 0) {
@@ -347,27 +566,64 @@ const AssignmentRepository = {
     const payoutIdColNum = payoutIdColIdx + 1;  // 1-indexed for getRange
     Logger.log(`[bulkUpdatePayoutId] Starting: ${updates.length} updates, payoutIdColNum=${payoutIdColNum}`);
 
-    let successCount = 0;
-
-    // ヘッダー行をスキップして処理
-    // payout_idのみ更新（updated_at/updated_byは更新しない）
+    // Phase 1: 更新対象を収集
+    const updateBatch = [];
     for (let i = 1; i < allRows.length; i++) {
       const assignmentId = allRows[i][idColIdx];
       if (updateMap.has(assignmentId)) {
-        const rowNum = i + 1;  // 1-indexed for getRange
-        // ★ 対象セルのみ更新（全行setValuesを回避）
-        sheet.getRange(rowNum, payoutIdColNum).setValue(updateMap.get(assignmentId));
-        successCount++;
-
-        // 全件更新したら早期終了
-        if (successCount >= updates.length) {
+        updateBatch.push({
+          rowNum: i + 1,  // 1-indexed for getRange
+          value: updateMap.get(assignmentId)
+        });
+        // 全件見つかったら早期終了
+        if (updateBatch.length >= updates.length) {
           break;
         }
       }
     }
 
-    Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated`);
+    // Phase 2: 連続範囲にグループ化してバッチ書き込み
+    const ranges = this._groupContiguousRanges(updateBatch);
+    let successCount = 0;
+
+    for (const range of ranges) {
+      const values = range.map(r => [r.value]);
+      sheet.getRange(range[0].rowNum, payoutIdColNum, range.length, 1).setValues(values);
+      successCount += range.length;
+    }
+
+    Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated (${ranges.length} batch writes)`);
     return { success: successCount, failed: updates.length - successCount };
+  },
+
+  /**
+   * 連続する行番号をグループ化
+   * @param {Object[]} updateBatch - { rowNum, value } の配列
+   * @returns {Object[][]} グループ化された配列の配列
+   * @private
+   */
+  _groupContiguousRanges: function(updateBatch) {
+    if (updateBatch.length === 0) return [];
+
+    // 行番号でソート
+    const sorted = updateBatch.slice().sort((a, b) => a.rowNum - b.rowNum);
+
+    const ranges = [];
+    let currentRange = [sorted[0]];
+
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].rowNum === sorted[i - 1].rowNum + 1) {
+        // 連続 → 現在のグループに追加
+        currentRange.push(sorted[i]);
+      } else {
+        // 不連続 → 新しいグループを開始
+        ranges.push(currentRange);
+        currentRange = [sorted[i]];
+      }
+    }
+    ranges.push(currentRange);
+
+    return ranges;
   },
 
   /**

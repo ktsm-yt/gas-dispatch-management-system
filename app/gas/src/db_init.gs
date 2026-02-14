@@ -11,7 +11,7 @@
 const TABLE_DEFINITIONS = {
   // マスターテーブル
   M_Customers: {
-    sheetName: '顧客',
+    sheetName: 'Customers',
     headers: [
       'customer_id', 'company_name', 'branch_name', 'department_name',
       'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax',
@@ -19,14 +19,14 @@ const TABLE_DEFINITIONS = {
       'unit_price_half', 'unit_price_fullday', 'unit_price_night',
       'closing_day', 'payment_day', 'payment_month_offset',
       'invoice_format', 'include_cover_page', 'has_transport_fee',  // P2-8: 諸経費請求フラグ
-      'tax_rate', 'expense_rate', 'shipper_name',
+      'tax_rate', 'tax_rounding_mode', 'expense_rate', 'shipper_name',
       'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted',
       'deleted_at', 'deleted_by'
     ]
   },
   M_Staff: {
-    sheetName: 'スタッフ',
+    sheetName: 'Staff',
     headers: [
       'staff_id', 'name', 'name_kana', 'phone', 'line_id', 'postal_code',
       'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
@@ -42,22 +42,22 @@ const TABLE_DEFINITIONS = {
     ]
   },
   M_Subcontractors: {
-    sheetName: '外注先',
+    sheetName: 'Subcontractors',
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
-      'half_day_rate', 'full_day_rate',
+      'basic_rate', 'half_day_rate', 'full_day_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   M_TransportFee: {
-    sheetName: '交通費',
+    sheetName: 'TransportFees',
     headers: [
       'area_code', 'area_name', 'default_fee'
     ]
   },
   M_Company: {
-    sheetName: '自社情報',
+    sheetName: 'Company',
     headers: [
       'company_id', 'company_name', 'postal_code', 'address', 'phone', 'fax',
       'invoice_registration_number', 'bank_name', 'bank_branch',
@@ -67,11 +67,11 @@ const TABLE_DEFINITIONS = {
   },
   // トランザクションテーブル
   T_Jobs: {
-    sheetName: '案件',
+    sheetName: 'Jobs',
     headers: [
       'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
       'time_slot', 'start_time', 'required_count',
-      'pay_unit', 'work_category', 'work_detail',
+      'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
       'status', 'is_damaged', 'is_uncollected', 'is_claimed',
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted',
@@ -79,7 +79,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_JobSlots: {
-    sheetName: '案件枠',
+    sheetName: 'JobSlots',
     headers: [
       'slot_id', 'job_id', 'slot_time_slot', 'slot_pay_unit', 'slot_count',
       'sort_order', 'notes',
@@ -88,7 +88,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_JobAssignments: {
-    sheetName: '配置',
+    sheetName: 'Assignments',
     headers: [
       'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
       'slot_id',  // 枠システム: 配置が紐づく枠のID（NULL許可）
@@ -104,17 +104,17 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_Invoices: {
-    sheetName: '請求',
+    sheetName: 'Invoices',
     headers: [
       'invoice_id', 'invoice_number', 'customer_id', 'billing_year', 'billing_month',
       'issue_date', 'due_date', 'subtotal', 'expense_amount', 'tax_amount',
-      'total_amount', 'invoice_format', 'shipper_name', 'pdf_file_id',
+      'total_amount', 'adjustment_total', 'invoice_format', 'shipper_name', 'pdf_file_id',
       'excel_file_id', 'sheet_file_id', 'status', 'notes', 'created_at',
       'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },
   T_InvoiceLines: {
-    sheetName: '請求明細',
+    sheetName: 'InvoiceLines',
     headers: [
       'line_id', 'invoice_id', 'line_number', 'work_date', 'job_id',
       'assignment_id', 'site_name', 'item_name', 'time_note', 'quantity', 'unit',
@@ -124,7 +124,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_Payouts: {
-    sheetName: '支払',
+    sheetName: 'Payouts',
     headers: [
       'payout_id', 'payout_type', 'staff_id', 'subcontractor_id',
       'period_start', 'period_end', 'assignment_count',  // P2-3: 差分支払い方式
@@ -134,7 +134,7 @@ const TABLE_DEFINITIONS = {
     ]
   },
   T_AuditLog: {
-    sheetName: 'ログ',
+    sheetName: 'AuditLog',
     headers: [
       'log_id', 'timestamp', 'user_email', 'action', 'table_name', 'record_id',
       'before_data', 'after_data'
@@ -142,16 +142,26 @@ const TABLE_DEFINITIONS = {
   },
   // P3: 入金記録テーブル（売掛管理用）
   T_Payments: {
-    sheetName: '入金記録',
+    sheetName: 'Payments',
     headers: [
       'payment_id', 'invoice_id', 'payment_date', 'amount', 'payment_method',
       'bank_ref', 'notes', 'is_deleted', 'created_at', 'created_by',
       'deleted_at', 'deleted_by'
     ]
   },
+  // 調整項目テーブル（請求書の金額調整用）
+  T_InvoiceAdjustments: {
+    sheetName: 'InvoiceAdjustments',
+    headers: [
+      'adjustment_id', 'invoice_id', 'item_name', 'amount',
+      'sort_order', 'notes',
+      'created_at', 'created_by', 'updated_at', 'updated_by',
+      'is_deleted', 'deleted_at', 'deleted_by'
+    ]
+  },
   // P2-6: 月次統計テーブル（売上分析ダッシュボード用）
   T_MonthlyStats: {
-    sheetName: '月次統計',
+    sheetName: 'MonthlyStats',
     headers: [
       'stat_id', 'year', 'month',
       // 案件・配置
@@ -266,7 +276,7 @@ function createSheet(ss, tableName, definition) {
  */
 function addIncludeCoverPageColumn() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -299,6 +309,40 @@ function addIncludeCoverPageColumn() {
 }
 
 /**
+ * Jobsテーブルに work_detail_other_text カラムを追加（マイグレーション）
+ * GASエディタから実行: migrateAddWorkDetailOtherTextColumn()
+ */
+function migrateAddWorkDetailOtherTextColumn() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('Jobs');
+
+  if (!sheet) {
+    Logger.log('✗ Jobsシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('work_detail_other_text')) {
+    Logger.log('✓ work_detail_other_text カラムは既に存在します');
+    return;
+  }
+
+  const workDetailIndex = headers.indexOf('work_detail');
+  if (workDetailIndex === -1) {
+    Logger.log('✗ work_detail カラムが見つかりません');
+    return;
+  }
+
+  // work_detail の次の列に挿入
+  const insertIndex = workDetailIndex + 2; // 1-based
+  sheet.insertColumnAfter(workDetailIndex + 1);
+  sheet.getRange(1, insertIndex).setValue('work_detail_other_text');
+
+  Logger.log('✓ work_detail_other_text カラムを列 ' + insertIndex + ' に追加しました');
+}
+
+/**
  * invoice_format='atamagami' の顧客を format1 + include_cover_page=true に移行
  * GASエディタから実行: migrateAtagamiToFormat1()
  *
@@ -308,7 +352,7 @@ function addIncludeCoverPageColumn() {
  */
 function migrateAtagamiToFormat1() {
   const ss = SpreadsheetApp.openById(getSpreadsheetId());
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -442,9 +486,9 @@ function addJobsSheetToExistingDb() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 案件シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('案件');
+  const existingSheet = ss.getSheetByName('Jobs');
   if (existingSheet) {
-    Logger.log('案件シートは既に存在します');
+    Logger.log('Jobs シートは既に存在します');
     return;
   }
 
@@ -452,18 +496,18 @@ function addJobsSheetToExistingDb() {
   const jobsHeaders = [
     'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
     'time_slot', 'start_time', 'required_count',
-    'pay_unit', 'work_category', 'work_detail',
+    'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
     'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
     'status', 'is_damaged', 'is_uncollected', 'is_claimed',
     'notes', 'created_at', 'updated_at', 'is_deleted'
   ];
 
-  const sheet = ss.insertSheet('案件');
+  const sheet = ss.insertSheet('Jobs');
   sheet.getRange(1, 1, 1, jobsHeaders.length).setValues([jobsHeaders]);
   sheet.setFrozenRows(1);
   sheet.getRange(1, 1, 1, jobsHeaders.length).setFontWeight('bold');
 
-  Logger.log('✓ 案件シートを追加しました');
+  Logger.log('✓ Jobs シートを追加しました');
 }
 
 /**
@@ -502,7 +546,7 @@ function migrateAddAssignmentRoleColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -564,7 +608,7 @@ function migrateAddPayoutIdColumn() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -623,7 +667,7 @@ function migrateAddJobSlotsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 案件枠シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('案件枠');
+  const existingSheet = ss.getSheetByName('JobSlots');
   if (existingSheet) {
     Logger.log('✓ 案件枠シートは既に存在します');
     return;
@@ -651,7 +695,7 @@ function migrateAddSlotIdColumn() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -726,7 +770,7 @@ function migrateStaffEmergencyContactColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('スタッフ');
+  const sheet = ss.getSheetByName('Staff');
 
   if (!sheet) {
     Logger.log('ERROR: スタッフシートが見つかりません');
@@ -795,15 +839,15 @@ function migrateAddDeletedAtColumns() {
 
   // 対象シートと日本語名のマッピング
   const sheetsToMigrate = [
-    { name: '顧客', tableName: 'M_Customers' },
-    { name: 'スタッフ', tableName: 'M_Staff' },
-    { name: '外注先', tableName: 'M_Subcontractors' },
-    { name: '案件', tableName: 'T_Jobs' },
-    { name: '案件枠', tableName: 'T_JobSlots' },
-    { name: '配置', tableName: 'T_JobAssignments' },
-    { name: '請求', tableName: 'T_Invoices' },
-    { name: '請求明細', tableName: 'T_InvoiceLines' },
-    { name: '支払', tableName: 'T_Payouts' }
+    { name: 'Customers', tableName: 'M_Customers' },
+    { name: 'Staff', tableName: 'M_Staff' },
+    { name: 'Subcontractors', tableName: 'M_Subcontractors' },
+    { name: 'Jobs', tableName: 'T_Jobs' },
+    { name: 'JobSlots', tableName: 'T_JobSlots' },
+    { name: 'Assignments', tableName: 'T_JobAssignments' },
+    { name: 'Invoices', tableName: 'T_Invoices' },
+    { name: 'InvoiceLines', tableName: 'T_InvoiceLines' },
+    { name: 'Payouts', tableName: 'T_Payouts' }
   ];
 
   Logger.log('=== deleted_at/deleted_by カラム追加マイグレーション ===\n');
@@ -871,7 +915,7 @@ function migrateAddMonthlyStatsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 月次統計シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('月次統計');
+  const existingSheet = ss.getSheetByName('MonthlyStats');
   if (existingSheet) {
     Logger.log('✓ 月次統計シートは既に存在します');
     return;
@@ -901,7 +945,7 @@ function migrateAddSubcontractorRateColumns() {
   }
 
   const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('外注先');
+  const sheet = ss.getSheetByName('Subcontractors');
 
   if (!sheet) {
     Logger.log('✗ 外注先シートが見つかりません');
@@ -918,7 +962,7 @@ function migrateAddSubcontractorRateColumns() {
   Logger.log(`現在のヘッダー: ${headers.join(', ')}`);
 
   // 追加するカラム
-  const columnsToAdd = ['half_day_rate', 'full_day_rate'];
+  const columnsToAdd = ['basic_rate', 'half_day_rate', 'full_day_rate'];
   let addedCount = 0;
 
   // notesの後に挿入（notesの位置を見つける）
@@ -955,6 +999,7 @@ function migrateAddSubcontractorRateColumns() {
 
   Logger.log('\n=== P2-8 マイグレーション完了 ===');
   Logger.log(`${addedCount}個のカラムを追加しました（外注先単価管理用）`);
+  Logger.log('basic_rate: 基本単価');
   Logger.log('half_day_rate: ハーフ単価');
   Logger.log('full_day_rate: 終日単価');
 }
@@ -991,7 +1036,7 @@ function migrateAddTransportExpenseColumns() {
  * 配置シートに transport_station, transport_has_bus カラムを追加
  */
 function migrateAssignmentTransportColumns_(ss) {
-  const sheet = ss.getSheetByName('配置');
+  const sheet = ss.getSheetByName('Assignments');
 
   if (!sheet) {
     Logger.log('✗ 配置シートが見つかりません');
@@ -1039,7 +1084,7 @@ function migrateAssignmentTransportColumns_(ss) {
  * 顧客シートに has_transport_fee カラムを追加
  */
 function migrateCustomerTransportFeeColumn_(ss) {
-  const sheet = ss.getSheetByName('顧客');
+  const sheet = ss.getSheetByName('Customers');
 
   if (!sheet) {
     Logger.log('✗ 顧客シートが見つかりません');
@@ -1081,6 +1126,55 @@ function migrateCustomerTransportFeeColumn_(ss) {
 }
 
 /**
+ * 顧客シートに tax_rounding_mode カラムを追加
+ * GASエディタから実行: migrateAddCustomerTaxRoundingModeColumn()
+ */
+function migrateAddCustomerTaxRoundingModeColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('Customers');
+
+  if (!sheet) {
+    Logger.log('✗ 顧客シートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('tax_rounding_mode')) {
+    Logger.log('✓ tax_rounding_mode カラムは既に存在します');
+    return;
+  }
+
+  const taxRateIndex = headers.indexOf('tax_rate');
+  if (taxRateIndex === -1) {
+    Logger.log('✗ tax_rate カラムが見つかりません');
+    return;
+  }
+
+  const insertPosition = taxRateIndex + 2; // 1-based, tax_rate の次
+  sheet.insertColumnAfter(taxRateIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('tax_rounding_mode');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, insertPosition, lastRow - 1, 1).setValue('floor');
+  }
+
+  const newLastCol = sheet.getLastColumn();
+  sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log(`✓ tax_rounding_mode カラムを列 ${insertPosition} に追加しました（既存データは floor で初期化）`);
+}
+
+/**
  * P3 マイグレーション: T_Payments シートを追加（入金記録用）
  * GASエディタから実行: migrateAddPaymentsSheet()
  */
@@ -1096,7 +1190,7 @@ function migrateAddPaymentsSheet() {
   const ss = SpreadsheetApp.openById(spreadsheetId);
 
   // 入金記録シートが既にあるか確認
-  const existingSheet = ss.getSheetByName('入金記録');
+  const existingSheet = ss.getSheetByName('Payments');
   if (existingSheet) {
     Logger.log('✓ 入金記録シートは既に存在します');
     return;
@@ -1110,4 +1204,67 @@ function migrateAddPaymentsSheet() {
   Logger.log('✓ 入金記録シートを追加しました');
   Logger.log('カラム: payment_id, invoice_id, payment_date, amount, payment_method, ...');
   Logger.log('用途: 請求書に対する入金記録、売掛金管理');
+}
+
+/**
+ * 調整項目マイグレーション:
+ * 1. T_InvoiceAdjustments シートを追加
+ * 2. T_Invoices に adjustment_total カラムを追加
+ * GASエディタから実行: migrateAddInvoiceAdjustments()
+ */
+function migrateAddInvoiceAdjustments() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+
+  Logger.log('=== 調整項目マイグレーション ===\n');
+
+  // 1. T_InvoiceAdjustments シート追加
+  const existingSheet = ss.getSheetByName('InvoiceAdjustments');
+  if (existingSheet) {
+    Logger.log('✓ InvoiceAdjustments シートは既に存在します');
+  } else {
+    const definition = TABLE_DEFINITIONS.T_InvoiceAdjustments;
+    createSheet(ss, 'T_InvoiceAdjustments', definition);
+    Logger.log('✓ InvoiceAdjustments シートを追加しました');
+  }
+
+  // 2. T_Invoices に adjustment_total カラム追加
+  const invoiceSheet = ss.getSheetByName('Invoices');
+  if (!invoiceSheet) {
+    Logger.log('✗ Invoices シートが見つかりません');
+    return;
+  }
+
+  const lastCol = invoiceSheet.getLastColumn();
+  const headers = invoiceSheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+  if (headers.includes('adjustment_total')) {
+    Logger.log('✓ adjustment_total カラムは既に存在します');
+  } else {
+    // total_amount の後に挿入
+    const totalAmountIndex = headers.indexOf('total_amount');
+    if (totalAmountIndex === -1) {
+      Logger.log('✗ total_amount カラムが見つかりません');
+      return;
+    }
+
+    const insertPosition = totalAmountIndex + 2; // 1-indexed
+    invoiceSheet.insertColumnAfter(totalAmountIndex + 1);
+    invoiceSheet.getRange(1, insertPosition).setValue('adjustment_total');
+
+    // ヘッダー行のスタイルを適用
+    const newLastCol = invoiceSheet.getLastColumn();
+    invoiceSheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log(`✓ adjustment_total カラムを列 ${insertPosition} に追加しました`);
+  }
+
+  Logger.log('\n=== 調整項目マイグレーション完了 ===');
 }

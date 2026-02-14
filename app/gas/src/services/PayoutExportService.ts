@@ -5,14 +5,41 @@
  * InvoiceExportServiceのパターン（動的Sheets作成 → xlsx変換）を踏襲
  */
 
+interface PayoutExportResult {
+  fileId: string;
+  url: string;
+  fileName: string;
+  recordCount: number;
+}
+
+interface ExistingFileCheckResult {
+  exists: boolean;
+  existingFile?: {
+    id: string;
+    name: string;
+    url: string;
+    modifiedDate: string;
+  };
+  error?: string;
+}
+
+interface ExportFolderStatus {
+  configured: boolean;
+  folderId?: string;
+  folderName?: string;
+  url?: string;
+  error?: string;
+  setupGuide?: string;
+}
+
 const PayoutExportService = {
   /**
    * 同名ファイルの存在をチェック
-   * @param {string} fromDate - 開始日（YYYY-MM-DD）
-   * @param {string} toDate - 終了日（YYYY-MM-DD）
-   * @returns {Object} { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+   * @param fromDate - 開始日（YYYY-MM-DD）
+   * @param toDate - 終了日（YYYY-MM-DD）
+   * @returns チェック結果
    */
-  checkExistingFile: function(fromDate, toDate) {
+  checkExistingFile: function(fromDate: string, toDate: string): ExistingFileCheckResult {
     try {
       const folder = this._getOutputFolder();
       const fileName = this._generateFileName(fromDate, toDate);
@@ -31,20 +58,21 @@ const PayoutExportService = {
         };
       }
       return { exists: false };
-    } catch (error) {
-      console.error('checkExistingFile error:', error);
-      return { exists: false, error: error.message };
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      logErr('checkExistingFile', error);
+      return { exists: false, error: msg };
     }
   },
 
   /**
    * ファイル名を生成
-   * @param {string} fromDate - 開始日（YYYY-MM-DD）
-   * @param {string} toDate - 終了日（YYYY-MM-DD）
-   * @param {Object} options - オプション（addTimestamp: true で日付を追加）
-   * @returns {string} ファイル名
+   * @param fromDate - 開始日（YYYY-MM-DD）
+   * @param toDate - 終了日（YYYY-MM-DD）
+   * @param options - オプション（addTimestamp: true で日付を追加）
+   * @returns ファイル名
    */
-  _generateFileName: function(fromDate, toDate, options = {}) {
+  _generateFileName: function(fromDate: string, toDate: string, options: { addTimestamp?: boolean } = {}): string {
     const timestamp = options.addTimestamp
       ? '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd')
       : '';
@@ -53,12 +81,12 @@ const PayoutExportService = {
 
   /**
    * Excel出力のメインエントリーポイント
-   * @param {string} fromDate - 開始日（YYYY-MM-DD）
-   * @param {string} toDate - 終了日（YYYY-MM-DD）
-   * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
-   * @returns {Object} { fileId, url, fileName }
+   * @param fromDate - 開始日（YYYY-MM-DD）
+   * @param toDate - 終了日（YYYY-MM-DD）
+   * @param options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
+   * @returns エクスポート結果
    */
-  exportToExcel: function(fromDate, toDate, options = {}) {
+  exportToExcel: function(fromDate: string, toDate: string, options: { action?: string } = {}): PayoutExportResult {
     // 1. データ取得
     const payouts = PayoutService.getPayoutReport(fromDate, toDate);
 
@@ -108,18 +136,19 @@ const PayoutExportService = {
       // 7. 一時SSを必ず削除（成功・失敗に関わらず）
       try {
         DriveApp.getFileById(ssId).setTrashed(true);
-      } catch (e) {
-        console.warn('Failed to trash temp spreadsheet: ' + e.message);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.warn('Failed to trash temp spreadsheet: ' + msg);
       }
     }
   },
 
   /**
    * 支払い一覧シートにデータを書き込み
-   * @param {Sheet} sheet - 対象シート
-   * @param {Object[]} payouts - 支払いデータ配列
+   * @param sheet - 対象シート
+   * @param payouts - 支払いデータ配列
    */
-  _populatePayoutList: function(sheet, payouts) {
+  _populatePayoutList: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, payouts: (PayoutRecord & { target_name: string })[]): void {
     // ヘッダー（源泉徴収を含む）
     const headers = ['支払日', '支払先名', '区分', '基本金額', '交通費', '調整額', '源泉徴収', '合計金額', '備考'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -168,15 +197,15 @@ const PayoutExportService = {
 
   /**
    * 月別集計シートにデータを書き込み
-   * @param {Sheet} sheet - 対象シート
-   * @param {Object[]} payouts - 支払いデータ配列
+   * @param sheet - 対象シート
+   * @param payouts - 支払いデータ配列
    */
-  _populateMonthlyAggregation: function(sheet, payouts) {
+  _populateMonthlyAggregation: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, payouts: (PayoutRecord & { target_name: string })[]): void {
     // 月別に集計（源泉徴収を含む）
-    var monthly = {};
+    const monthly: Record<string, { count: number; base: number; transport: number; adjustment: number; tax: number; total: number }> = {};
     payouts.forEach(function(p) {
       if (!p.paid_date) return;
-      var ym = p.paid_date.substring(0, 7); // YYYY-MM
+      const ym = p.paid_date.substring(0, 7); // YYYY-MM
       if (!monthly[ym]) {
         monthly[ym] = { count: 0, base: 0, transport: 0, adjustment: 0, tax: 0, total: 0 };
       }
@@ -198,12 +227,12 @@ const PayoutExportService = {
     headerRange.setFontWeight('bold');
 
     // データ行（源泉徴収を含む）
-    var sortedKeys = Object.keys(monthly).sort();
+    const sortedKeys = Object.keys(monthly).sort();
     if (sortedKeys.length === 0) {
       return;
     }
 
-    var rows = sortedKeys.map(function(ym) {
+    const rows = sortedKeys.map(function(ym) {
       return [
         ym,
         monthly[ym].count,
@@ -224,8 +253,8 @@ const PayoutExportService = {
     });
 
     // 合計行を追加
-    var totalRow = rows.length + 2;
-    var totals = sortedKeys.reduce(function(acc, ym) {
+    const totalRow = rows.length + 2;
+    const totals = sortedKeys.reduce(function(acc, ym) {
       acc.count += monthly[ym].count;
       acc.base += monthly[ym].base;
       acc.transport += monthly[ym].transport;
@@ -246,7 +275,7 @@ const PayoutExportService = {
     ]]);
 
     // 合計行のスタイル
-    var totalRange = sheet.getRange(totalRow, 1, 1, headers.length);
+    const totalRange = sheet.getRange(totalRow, 1, 1, headers.length);
     totalRange.setFontWeight('bold');
     totalRange.setBackground('#EDF2F7');
 
@@ -267,13 +296,13 @@ const PayoutExportService = {
 
   /**
    * スプレッドシートをxlsx形式に変換
-   * @param {string} spreadsheetId - スプレッドシートID
-   * @returns {Blob} xlsxのBlob
+   * @param spreadsheetId - スプレッドシートID
+   * @returns xlsxのBlob
    */
-  _exportToXlsx: function(spreadsheetId) {
-    var url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx';
-    var token = ScriptApp.getOAuthToken();
-    var response = UrlFetchApp.fetch(url, {
+  _exportToXlsx: function(spreadsheetId: string): GoogleAppsScript.Base.Blob {
+    const url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx';
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
     return response.getBlob().setContentType(
@@ -289,19 +318,11 @@ const PayoutExportService = {
   /**
    * 出力先フォルダを取得
    * ScriptPropertiesから取得、未設定時はエラー
-   * @returns {Folder} 出力先フォルダ
+   * @returns 出力先フォルダ
    */
-  _getOutputFolder: function() {
-    var props = PropertiesService.getScriptProperties();
-    var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
-
-    // フォールバック: 旧キー OUTPUT_FOLDER_ID も確認
-    if (!folderId) {
-      folderId = props.getProperty('OUTPUT_FOLDER_ID');
-      if (folderId) {
-        Logger.log('Using legacy OUTPUT_FOLDER_ID for payout export');
-      }
-    }
+  _getOutputFolder: function(): GoogleAppsScript.Drive.Folder {
+    const props = PropertiesService.getScriptProperties();
+    const folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
 
     if (!folderId) {
       throw new Error(
@@ -322,11 +343,11 @@ const PayoutExportService = {
 
   /**
    * エクスポートフォルダの設定状況を確認
-   * @returns {Object} { configured: boolean, folderId: string, url: string }
+   * @returns フォルダステータス
    */
-  getExportFolderStatus: function() {
-    var props = PropertiesService.getScriptProperties();
-    var folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
+  getExportFolderStatus: function(): ExportFolderStatus {
+    const props = PropertiesService.getScriptProperties();
+    const folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
 
     if (!folderId) {
       return {
@@ -336,7 +357,7 @@ const PayoutExportService = {
     }
 
     try {
-      var folder = DriveApp.getFolderById(folderId);
+      const folder = DriveApp.getFolderById(folderId);
       return {
         configured: true,
         folderId: folderId,
@@ -359,8 +380,8 @@ const PayoutExportService = {
  * gas-dispatch-system > 出力 > 給与明細
  * https://drive.google.com/drive/folders/1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI
  */
-function setPayoutExportFolderId() {
-  var folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+function setPayoutExportFolderId(): void {
+  const folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
   PropertiesService.getScriptProperties().setProperty('PAYOUT_EXPORT_FOLDER_ID', folderId);
   Logger.log('Payout export folder set to: ' + folderId);
   Logger.log('URL: https://drive.google.com/drive/folders/' + folderId);

@@ -22,24 +22,7 @@ const AUDIT_ACTIONS = {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} ログシート
  */
 function getAuditLogSheet() {
-  const prop = PropertiesService.getScriptProperties();
-  const env = prop.getProperty('ENV') || 'dev';
-  const spreadsheetId = env === 'prod'
-    ? prop.getProperty('SPREADSHEET_ID_PROD')
-    : prop.getProperty('SPREADSHEET_ID_DEV');
-
-  if (!spreadsheetId) {
-    throw new Error('DB Spreadsheet ID が設定されていません');
-  }
-
-  const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('ログ');
-
-  if (!sheet) {
-    throw new Error('ログシートが見つかりません');
-  }
-
-  return sheet;
+  return getSheet('T_AuditLog');
 }
 
 /**
@@ -62,7 +45,7 @@ function generateUuid() {
 function logToAudit(action, tableName, recordId, beforeData, afterData) {
   try {
     const sheet = getAuditLogSheet();
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail();
     const timestamp = new Date().toISOString();
     const logId = generateUuid();
 
@@ -107,7 +90,7 @@ function logBatch(logs) {
 
   try {
     const sheet = getAuditLogSheet();
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail();
 
     const rows = [];
     const results = [];
@@ -157,6 +140,46 @@ function logBatch(logs) {
  */
 function logCreate(tableName, recordId, data) {
   return logToAudit(AUDIT_ACTIONS.CREATE, tableName, recordId, null, data);
+}
+
+/**
+ * CREATE操作のログを一括記録（バルク版）
+ * @param {string} tableName - テーブル名
+ * @param {Object[]} records - レコード配列 [{ recordId, data }, ...]
+ * @returns {Object[]|null} 記録したログ情報の配列
+ */
+function logCreateBulk(tableName, records) {
+  if (!records || records.length === 0) {
+    return [];
+  }
+  const logs = records.map(r => ({
+    action: AUDIT_ACTIONS.CREATE,
+    table_name: tableName,
+    record_id: r.recordId,
+    before: null,
+    after: r.data
+  }));
+  return logBatch(logs);
+}
+
+/**
+ * UPDATE操作のログを一括記録（バルク版）
+ * @param {string} tableName - テーブル名
+ * @param {Object[]} records - レコード配列 [{ recordId, before, after }, ...]
+ * @returns {Object[]|null} 記録したログ情報の配列
+ */
+function logUpdateBulk(tableName, records) {
+  if (!records || records.length === 0) {
+    return [];
+  }
+  const logs = records.map(r => ({
+    action: AUDIT_ACTIONS.UPDATE,
+    table_name: tableName,
+    record_id: r.recordId,
+    before: r.before,
+    after: r.after
+  }));
+  return logBatch(logs);
 }
 
 /**

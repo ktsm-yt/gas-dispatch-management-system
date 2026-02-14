@@ -1,4 +1,7 @@
 {
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "env:init": "node tools/init-env.js",
     "env:check": "node tools/env-check.js",
@@ -8,12 +11,23 @@
     "hooks:install": "bash scripts/install-hooks.sh",
     "e2e:chrome": "open -na 'Google Chrome' --args --remote-debugging-port=9222 --user-data-dir=\"$HOME/Dev/DevProject/gas-dispatch-system/e2e/auth/chrome-debug-profile\"",
     "e2e:connect": "npx tsx e2e/scripts/screenshot-connect.ts",
-    "gas:push": "cd app/gas && npx clasp push",
-    "gas:deploy": "bash scripts/deploy-prod.sh"
+    "build": "bash scripts/build-gas.sh",
+    "gas:push": "npm run build && cd app/gas && npx clasp push",
+    "gas:push:legacy": "cd app/gas && npx clasp push",
+    "gas:deploy": "bash scripts/deploy-prod.sh",
+    "typecheck": "tsc -p app/gas/tsconfig.json --noEmit",
+    "lint": "eslint app/gas/src/ --ext .js,.gs,.ts",
+    "lint:fix": "eslint app/gas/src/ --ext .js,.gs,.ts --fix",
+    "check": "npm run typecheck && npm run lint"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.0",
+    "@types/google-apps-script": "1.0.83",
+    "@typescript-eslint/eslint-plugin": "6.21.0",
+    "@typescript-eslint/parser": "6.21.0",
+    "eslint": "8.56.0",
     "tsx": "^4.21.0",
+    "typescript": "5.3.3",
     "xlsx": "^0.18.5"
   }
 }

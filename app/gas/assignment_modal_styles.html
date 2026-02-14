@@ -124,6 +124,11 @@ border-radius: var(--radius-sm);
 background: var(--bg-card);
 }
 
+.staff-list-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 42px;
+}
+
 /* Staff Selector */
 .staff-filter {
 display: flex;
@@ -529,4 +534,38 @@ cursor: help;
 .start-time-badge {
   font-weight: 600;
   color: var(--color-primary);
+}
+
+/* Work Category Tag in Header */
+.work-category-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 2px;
+  color: white;
+  font-weight: 600;
+}
+.work-category-tag.tag-jotou { background: #FF8A65; }
+.work-category-tag.tag-keisagyo { background: #4DB6AC; }
+.work-category-tag.tag-niage { background: #9575CD; }
+
+.modal-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+}
+
+.modal-site-address {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.modal-work-content {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }

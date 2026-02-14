@@ -20,6 +20,28 @@ const StaffRepository = {
   },
 
   /**
+   * 複数IDでスタッフを一括取得（バルク版）
+   * @param {string[]} staffIds - スタッフID配列
+   * @returns {Map<string, Object>} staffId → スタッフデータのMap
+   */
+  findByIds: function(staffIds) {
+    if (!staffIds || staffIds.length === 0) {
+      return new Map();
+    }
+
+    const idSet = new Set(staffIds);
+    const allStaff = this.search({});  // 1回のシートI/Oで全件取得
+
+    const result = new Map();
+    for (const staff of allStaff) {
+      if (idSet.has(staff.staff_id)) {
+        result.set(staff.staff_id, staff);
+      }
+    }
+    return result;
+  },
+
+  /**
    * スタッフを検索
    * @param {Object} query - 検索条件
    * @param {boolean} query.is_active - アクティブのみ（デフォルト: true）

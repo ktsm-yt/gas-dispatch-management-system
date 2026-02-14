@@ -5,16 +5,26 @@
  * 差分支払い方式: period_start/period_endで集計期間を管理
  */
 
+interface BulkUpdateStatusOptions {
+  paid_date?: string;
+  expectedUpdatedAtMap?: Record<string, string>;
+}
+
+interface BulkUpdateStatusResult {
+  success: number;
+  failed: number;
+  results: { payoutId: string; success: boolean; error?: string; message?: string; currentUpdatedAt?: string }[];
+  payouts: PayoutRecord[];
+}
+
 const PayoutRepository = {
   TABLE_NAME: 'T_Payouts',
   ID_COLUMN: 'payout_id',
 
   /**
    * IDで支払いを取得（アーカイブDBフォールバック付き）
-   * @param {string} payoutId - 支払ID
-   * @returns {Object|null} 支払いレコードまたはnull
    */
-  findById: function(payoutId) {
+  findById: function(payoutId: string): PayoutRecord | null {
     // 1. カレントDBを検索
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, payoutId);
     if (record) {
@@ -27,12 +37,11 @@ const PayoutRepository = {
 
   /**
    * スタッフIDで支払いを検索
-   * @param {string} staffId - スタッフID
-   * @param {Object} options - オプション
-   * @param {number} options.limit - 取得件数制限
-   * @returns {Object[]} 支払い配列
+   * @param staffId - スタッフID
+   * @param options - オプション
+   * @returns 支払い配列
    */
-  findByStaffId: function(staffId, options = {}) {
+  findByStaffId: function(staffId: string, options: { limit?: number } = {}): PayoutRecord[] {
     let records = getAllRecords(this.TABLE_NAME);
 
     records = records.filter(r =>
@@ -43,9 +52,9 @@ const PayoutRepository = {
 
     // paid_date優先でソート（新しい順）- searchと統一
     records.sort((a, b) => {
-      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
-      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
-      return dateB - dateA;
+      const dateA = this._parseLocalDate((a.paid_date || a.period_end) as string);
+      const dateB = this._parseLocalDate((b.paid_date || b.period_end) as string);
+      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
     });
 
     if (options.limit && options.limit > 0) {
@@ -57,11 +66,11 @@ const PayoutRepository = {
 
   /**
    * 外注先IDで支払いを検索
-   * @param {string} subcontractorId - 外注先ID
-   * @param {Object} options - オプション
-   * @returns {Object[]} 支払い配列
+   * @param subcontractorId - 外注先ID
+   * @param options - オプション
+   * @returns 支払い配列
    */
-  findBySubcontractorId: function(subcontractorId, options = {}) {
+  findBySubcontractorId: function(subcontractorId: string, options: { limit?: number } = {}): PayoutRecord[] {
     let records = getAllRecords(this.TABLE_NAME);
 
     records = records.filter(r =>
@@ -72,9 +81,9 @@ const PayoutRepository = {
 
     // paid_date優先でソート（新しい順）- searchと統一
     records.sort((a, b) => {
-      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
-      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
-      return dateB - dateA;
+      const dateA = this._parseLocalDate((a.paid_date || a.period_end) as string);
+      const dateB = this._parseLocalDate((b.paid_date || b.period_end) as string);
+      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
     });
 
     if (options.limit && options.limit > 0) {
@@ -86,21 +95,73 @@ const PayoutRepository = {
 
   /**
    * スタッフの最新支払いを取得（差分計算の起点）
-   * @param {string} staffId - スタッフID
-   * @returns {Object|null} 最新の支払いまたはnull
+   * @param staffId - スタッフID
+   * @returns 最新の支払いまたはnull
    */
-  findLastPayout: function(staffId) {
+  findLastPayout: function(staffId: string): PayoutRecord | null {
     const payouts = this.findByStaffId(staffId, { limit: 1 });
     return payouts.length > 0 ? payouts[0] : null;
   },
 
   /**
+   * 指定スタッフ・期間の既存Payoutを検索（重複チェック用）
+   * @param staffId - スタッフID
+   * @param periodStart - 期間開始日
+   * @param periodEnd - 期間終了日
+   * @param options - オプション
+   * @returns 該当するPayoutの配列（重複がある場合は複数返る）
+   */
+  findByStaffAndPeriod: function(staffId: string, periodStart: string, periodEnd: string, options: { excludeDeleted?: boolean } = {}): PayoutRecord[] {
+    const excludeDeleted = options.excludeDeleted !== false;
+    let records = getAllRecords(this.TABLE_NAME);
+
+    const normalizedStart = this._normalizeDate(periodStart);
+    const normalizedEnd = this._normalizeDate(periodEnd);
+
+    records = records.filter(r => {
+      if (excludeDeleted && r.is_deleted) return false;
+      return r.payout_type === 'STAFF' &&
+             r.staff_id === staffId &&
+             this._normalizeDate(r.period_start as string | Date) === normalizedStart &&
+             this._normalizeDate(r.period_end as string | Date) === normalizedEnd;
+    });
+
+    return records.map(r => this._normalizeRecord(r));
+  },
+
+  /**
+   * 指定外注先・期間の既存Payoutを検索（重複チェック用）
+   * @param subcontractorId - 外注先ID
+   * @param periodStart - 期間開始日
+   * @param periodEnd - 期間終了日
+   * @param options - オプション
+   * @returns 該当するPayoutの配列
+   */
+  findBySubcontractorAndPeriod: function(subcontractorId: string, periodStart: string, periodEnd: string, options: { excludeDeleted?: boolean } = {}): PayoutRecord[] {
+    const excludeDeleted = options.excludeDeleted !== false;
+    let records = getAllRecords(this.TABLE_NAME);
+
+    const normalizedStart = this._normalizeDate(periodStart);
+    const normalizedEnd = this._normalizeDate(periodEnd);
+
+    records = records.filter(r => {
+      if (excludeDeleted && r.is_deleted) return false;
+      return r.payout_type === 'SUBCONTRACTOR' &&
+             r.subcontractor_id === subcontractorId &&
+             this._normalizeDate(r.period_start as string | Date) === normalizedStart &&
+             this._normalizeDate(r.period_end as string | Date) === normalizedEnd;
+    });
+
+    return records.map(r => this._normalizeRecord(r));
+  },
+
+  /**
    * 外注先の最新支払いを取得（period_end の最大値で決定）
    * 差分計算の起点として使用するため、paid_date ではなく period_end で判定
-   * @param {string} subcontractorId - 外注先ID
-   * @returns {Object|null} period_end が最大の支払いまたはnull
+   * @param subcontractorId - 外注先ID
+   * @returns period_end が最大の支払いまたはnull
    */
-  findLastPayoutForSubcontractor: function(subcontractorId) {
+  findLastPayoutForSubcontractor: function(subcontractorId: string): PayoutRecord | null {
     let records = getAllRecords(this.TABLE_NAME);
 
     records = records.filter(r =>
@@ -114,9 +175,9 @@ const PayoutRepository = {
 
     // period_end の最大値で決定（二重計上防止）
     records.sort((a, b) => {
-      const dateA = this._parseLocalDate(a.period_end);
-      const dateB = this._parseLocalDate(b.period_end);
-      return dateB - dateA;
+      const dateA = this._parseLocalDate(a.period_end as string);
+      const dateB = this._parseLocalDate(b.period_end as string);
+      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
     });
 
     return this._normalizeRecord(records[0]);
@@ -124,20 +185,10 @@ const PayoutRepository = {
 
   /**
    * 条件で支払いを検索
-   * @param {Object} query - 検索条件
-   * @param {string} query.payout_type - 種別（STAFF/SUBCONTRACTOR）
-   * @param {string} query.staff_id - スタッフID
-   * @param {string} query.subcontractor_id - 外注先ID
-   * @param {string} query.status - ステータス（単一）
-   * @param {string[]} query.status_in - ステータス（複数、OR検索）
-   * @param {string} query.period_start_from - 期間開始日（以降）
-   * @param {string} query.period_end_to - 期間終了日（以前）
-   * @param {string} query.paid_date_from - 支払日（以降）
-   * @param {string} query.paid_date_to - 支払日（以前）
-   * @param {number} query.limit - 取得件数制限
-   * @returns {Object[]} 支払い配列
+   * @param query - 検索条件
+   * @returns 支払い配列
    */
-  search: function(query = {}) {
+  search: function(query: PayoutSearchQuery = {}): PayoutRecord[] {
     let records = getAllRecords(this.TABLE_NAME);
 
     // 論理削除除外
@@ -165,27 +216,33 @@ const PayoutRepository = {
 
     // ステータスで絞り込み（複数）
     if (query.status_in && Array.isArray(query.status_in)) {
-      records = records.filter(r => query.status_in.includes(r.status));
+      records = records.filter(r => query.status_in!.includes(r.status as PayoutStatus));
     }
 
     // 期間開始日（以降）で絞り込み
     if (query.period_start_from) {
       const fromDate = this._parseLocalDate(query.period_start_from);
-      records = records.filter(r => this._parseLocalDate(r.period_start) >= fromDate);
+      records = records.filter(r => {
+        const d = this._parseLocalDate(r.period_start as string);
+        return d && fromDate && d.getTime() >= fromDate.getTime();
+      });
     }
 
     // 期間終了日（以前）で絞り込み
     if (query.period_end_to) {
       const toDate = this._parseLocalDate(query.period_end_to);
-      records = records.filter(r => this._parseLocalDate(r.period_end) <= toDate);
+      records = records.filter(r => {
+        const d = this._parseLocalDate(r.period_end as string);
+        return d && toDate && d.getTime() <= toDate.getTime();
+      });
     }
 
     // 支払日（以降）で絞り込み
     if (query.paid_date_from) {
       const fromDate = this._parseLocalDate(query.paid_date_from);
       records = records.filter(r => {
-        const paidDate = this._parseLocalDate(r.paid_date);
-        return paidDate && paidDate >= fromDate;
+        const paidDate = this._parseLocalDate(r.paid_date as string);
+        return paidDate && fromDate && paidDate.getTime() >= fromDate.getTime();
       });
     }
 
@@ -193,8 +250,8 @@ const PayoutRepository = {
     if (query.paid_date_to) {
       const toDate = this._parseLocalDate(query.paid_date_to);
       records = records.filter(r => {
-        const paidDate = this._parseLocalDate(r.paid_date);
-        return paidDate && paidDate <= toDate;
+        const paidDate = this._parseLocalDate(r.paid_date as string);
+        return paidDate && toDate && paidDate.getTime() <= toDate.getTime();
       });
     }
 
@@ -203,10 +260,12 @@ const PayoutRepository = {
 
     records.sort((a, b) => {
       // paid_dateがあればそれを優先、なければperiod_endを使用
-      const dateA = this._parseLocalDate(a.paid_date || a.period_end);
-      const dateB = this._parseLocalDate(b.paid_date || b.period_end);
+      const dateA = this._parseLocalDate((a.paid_date || a.period_end) as string);
+      const dateB = this._parseLocalDate((b.paid_date || b.period_end) as string);
       // desc: 新しい順（dateB - dateA）、asc: 古い順（dateA - dateB）
-      return sortOrder === 'desc' ? (dateB - dateA) : (dateA - dateB);
+      return sortOrder === 'desc'
+        ? (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0)
+        : (dateA?.getTime() ?? 0) - (dateB?.getTime() ?? 0);
     });
 
     // 件数制限
@@ -219,14 +278,14 @@ const PayoutRepository = {
 
   /**
    * 新規支払いを作成
-   * @param {Object} payout - 支払いデータ
-   * @returns {Object} 作成した支払い
+   * @param payout - 支払いデータ
+   * @returns 作成した支払い
    */
-  insert: function(payout) {
+  insert: function(payout: Partial<PayoutRecord>): PayoutRecord {
     const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 
-    const newPayout = {
+    const newPayout: Record<string, unknown> = {
       payout_id: payout.payout_id || generateId('pay'),
       payout_type: payout.payout_type || 'STAFF',
       staff_id: payout.staff_id || '',
@@ -250,15 +309,15 @@ const PayoutRepository = {
 
     insertRecord(this.TABLE_NAME, newPayout);
 
-    return newPayout;
+    return newPayout as unknown as PayoutRecord;
   },
 
   /**
    * 支払いを一括挿入
-   * @param {Object[]} payouts - 支払いデータ配列
-   * @returns {Object[]} 作成した支払い配列
+   * @param payouts - 支払いデータ配列
+   * @returns 作成した支払い配列
    */
-  insertBulk: function(payouts) {
+  insertBulk: function(payouts: Partial<PayoutRecord>[]): PayoutRecord[] {
     if (!payouts || payouts.length === 0) {
       return [];
     }
@@ -266,7 +325,7 @@ const PayoutRepository = {
     const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 
-    const newPayouts = payouts.map(payout => ({
+    const newPayouts: Record<string, unknown>[] = payouts.map(payout => ({
       payout_id: payout.payout_id || generateId('pay'),
       payout_type: payout.payout_type || 'STAFF',
       staff_id: payout.staff_id || '',
@@ -290,16 +349,16 @@ const PayoutRepository = {
 
     insertRecords(this.TABLE_NAME, newPayouts);
 
-    return newPayouts;
+    return newPayouts as unknown as PayoutRecord[];
   },
 
   /**
    * 支払いを更新（楽観ロック付き）
-   * @param {Object} payout - 更新データ（payout_id必須）
-   * @param {string} expectedUpdatedAt - 期待するupdated_at
-   * @returns {Object} 更新結果 { success: boolean, payout?: Object, error?: string }
+   * @param payout - 更新データ（payout_id必須）
+   * @param expectedUpdatedAt - 期待するupdated_at
+   * @returns 更新結果
    */
-  update: function(payout, expectedUpdatedAt) {
+  update: function(payout: Partial<PayoutRecord> & { payout_id: string }, expectedUpdatedAt?: string): PayoutUpdateResult {
     if (!payout.payout_id) {
       return { success: false, error: 'payout_id is required' };
     }
@@ -330,11 +389,10 @@ const PayoutRepository = {
       return {
         success: false,
         error: 'CONFLICT_ERROR',
-        currentUpdatedAt: currentPayout.updated_at
+        currentUpdatedAt: currentPayout.updated_at as string
       };
     }
 
-    const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
@@ -343,13 +401,13 @@ const PayoutRepository = {
       'base_amount', 'transport_amount', 'adjustment_amount',
       'tax_amount', 'total_amount',
       'status', 'paid_date', 'notes', 'is_deleted'
-    ];
+    ] as const;
 
-    const updatedPayout = { ...currentPayout };
+    const updatedPayout: Record<string, unknown> = { ...currentPayout };
 
     for (const field of updatableFields) {
-      if (payout[field] !== undefined) {
-        updatedPayout[field] = payout[field];
+      if ((payout as Record<string, unknown>)[field] !== undefined) {
+        updatedPayout[field] = (payout as Record<string, unknown>)[field];
       }
     }
 
@@ -367,11 +425,11 @@ const PayoutRepository = {
 
   /**
    * 論理削除
-   * @param {string} payoutId - 支払ID
-   * @param {string} expectedUpdatedAt - 期待するupdated_at
-   * @returns {Object} 削除結果 { success: boolean, error?: string }
+   * @param payoutId - 支払ID
+   * @param expectedUpdatedAt - 期待するupdated_at
+   * @returns 削除結果
    */
-  softDelete: function(payoutId, expectedUpdatedAt) {
+  softDelete: function(payoutId: string, expectedUpdatedAt?: string): PayoutUpdateResult {
     return this.update(
       { payout_id: payoutId, is_deleted: true },
       expectedUpdatedAt
@@ -380,13 +438,13 @@ const PayoutRepository = {
 
   /**
    * ステータスを更新
-   * @param {string} payoutId - 支払ID
-   * @param {string} status - 新ステータス（draft/confirmed/paid）
-   * @param {string} expectedUpdatedAt - 期待するupdated_at
-   * @returns {Object} 更新結果
+   * @param payoutId - 支払ID
+   * @param status - 新ステータス（draft/confirmed/paid）
+   * @param expectedUpdatedAt - 期待するupdated_at
+   * @returns 更新結果
    */
-  updateStatus: function(payoutId, status, expectedUpdatedAt) {
-    const updateData = { payout_id: payoutId, status: status };
+  updateStatus: function(payoutId: string, status: PayoutStatus, expectedUpdatedAt?: string): PayoutUpdateResult {
+    const updateData: Partial<PayoutRecord> & { payout_id: string } = { payout_id: payoutId, status: status };
 
     // paidステータスの場合はpaid_dateも設定
     if (status === 'paid') {
@@ -399,13 +457,12 @@ const PayoutRepository = {
   /**
    * 複数レコードのステータスを一括更新（バルク処理）
    * シートI/Oを1回に集約してパフォーマンスを最適化
-   * @param {string[]} payoutIds - 支払ID配列
-   * @param {string} status - 新ステータス（confirmed/paid）
-   * @param {Object} options - オプション
-   * @param {string} options.paid_date - 支払日（paidの場合に使用）
-   * @returns {Object} { success: number, failed: number, results: [], payouts: [] }
+   * @param payoutIds - 支払ID配列
+   * @param status - 新ステータス（confirmed/paid）
+   * @param options - オプション
+   * @returns バルク更新結果
    */
-  bulkUpdateStatus: function(payoutIds, status, options = {}) {
+  bulkUpdateStatus: function(payoutIds: string[], status: PayoutStatus, options: BulkUpdateStatusOptions = {}): BulkUpdateStatusResult {
     if (!payoutIds || payoutIds.length === 0) {
       return { success: 0, failed: 0, results: [], payouts: [] };
     }
@@ -415,7 +472,9 @@ const PayoutRepository = {
     const lastRow = sheet.getLastRow();
 
     if (lastRow <= 1) {
-      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+      // データがない場合、全てNOT_FOUNDとして記録
+      const results = payoutIds.map(id => ({ payoutId: id, success: false, error: 'NOT_FOUND' }));
+      return { success: 0, failed: payoutIds.length, results, payouts: [] };
     }
 
     // 1. 全データを一括読み込み
@@ -430,16 +489,19 @@ const PayoutRepository = {
     const isDeletedIndex = headers.indexOf('is_deleted');
 
     if (idIndex === -1 || statusIndex === -1) {
-      return { success: 0, failed: payoutIds.length, results: [], payouts: [] };
+      const results = payoutIds.map(id => ({ payoutId: id, success: false, error: 'SCHEMA_ERROR' }));
+      return { success: 0, failed: payoutIds.length, results, payouts: [] };
     }
 
-    // 3. 対象IDのセットを作成
+    // 3. 対象IDのセットを作成 & 見つかったIDを追跡
     const targetIdSet = new Set(payoutIds);
+    const foundIdSet = new Set<string>();
     const now = getCurrentTimestamp();
     const paidDate = options.paid_date || now.split('T')[0];
+    const expectedUpdatedAtMap = options.expectedUpdatedAtMap || {};
 
-    const results = [];
-    const updatedPayouts = [];
+    const results: BulkUpdateStatusResult['results'] = [];
+    const updatedPayouts: PayoutRecord[] = [];
     let success = 0;
     let failed = 0;
     let hasChanges = false;
@@ -447,9 +509,12 @@ const PayoutRepository = {
     // 4. メモリ上でデータを更新
     for (let i = 0; i < allData.length; i++) {
       const row = allData[i];
-      const payoutId = row[idIndex];
+      const payoutId = row[idIndex] as string;
 
       if (!targetIdSet.has(payoutId)) continue;
+
+      // このIDは見つかった
+      foundIdSet.add(payoutId);
 
       // 論理削除済みチェック
       if (isDeletedIndex !== -1 && row[isDeletedIndex] === true) {
@@ -458,8 +523,24 @@ const PayoutRepository = {
         continue;
       }
 
+      // 楽観ロックチェック
+      const expectedUpdatedAt = expectedUpdatedAtMap[payoutId];
+      if (expectedUpdatedAt && updatedAtIndex !== -1) {
+        const currentUpdatedAt = row[updatedAtIndex] as string;
+        if (currentUpdatedAt !== expectedUpdatedAt) {
+          results.push({
+            payoutId,
+            success: false,
+            error: 'CONFLICT_ERROR',
+            currentUpdatedAt: currentUpdatedAt
+          });
+          failed++;
+          continue;
+        }
+      }
+
       // confirmedステータスからのみpaidに変更可能
-      const currentStatus = row[statusIndex];
+      const currentStatus = row[statusIndex] as string;
       if (status === 'paid' && currentStatus !== 'confirmed') {
         results.push({
           payoutId,
@@ -489,7 +570,15 @@ const PayoutRepository = {
       updatedPayouts.push(this._normalizeRecord(updatedRecord));
     }
 
-    // 5. 変更があれば一括書き込み
+    // 5. 存在しなかったIDを失敗として記録
+    for (const payoutId of payoutIds) {
+      if (!foundIdSet.has(payoutId)) {
+        results.push({ payoutId, success: false, error: 'NOT_FOUND' });
+        failed++;
+      }
+    }
+
+    // 6. 変更があれば一括書き込み
     if (hasChanges) {
       dataRange.setValues(allData);
     }
@@ -504,11 +593,11 @@ const PayoutRepository = {
 
   /**
    * 一括挿入
-   * @param {Object[]} payouts - 支払いデータ配列
-   * @returns {Object[]} 作成した支払い配列
+   * @param payouts - 支払いデータ配列
+   * @returns 作成した支払い配列
    */
-  bulkInsert: function(payouts) {
-    const results = [];
+  bulkInsert: function(payouts: Partial<PayoutRecord>[]): PayoutRecord[] {
+    const results: PayoutRecord[] = [];
     for (const payout of payouts) {
       results.push(this.insert(payout));
     }
@@ -517,30 +606,30 @@ const PayoutRepository = {
 
   /**
    * レコードを正規化
-   * @param {Object} record - レコード
-   * @returns {Object} 正規化されたレコード
+   * @param record - レコード
+   * @returns 正規化されたレコード
    */
-  _normalizeRecord: function(record) {
+  _normalizeRecord: function(record: Record<string, unknown>): PayoutRecord {
     return {
       ...record,
-      period_start: this._normalizeDate(record.period_start),
-      period_end: this._normalizeDate(record.period_end),
-      paid_date: this._normalizeDate(record.paid_date),
+      period_start: this._normalizeDate(record.period_start as string | Date),
+      period_end: this._normalizeDate(record.period_end as string | Date),
+      paid_date: this._normalizeDate(record.paid_date as string | Date),
       assignment_count: Number(record.assignment_count) || 0,
       base_amount: Number(record.base_amount) || 0,
       transport_amount: Number(record.transport_amount) || 0,
       adjustment_amount: Number(record.adjustment_amount) || 0,
       tax_amount: Number(record.tax_amount) || 0,
       total_amount: Number(record.total_amount) || 0
-    };
+    } as unknown as PayoutRecord;
   },
 
   /**
    * 日付を正規化してYYYY-MM-DD形式の文字列に変換
-   * @param {Date|string} dateValue - 日付値
-   * @returns {string} 正規化された日付文字列
+   * @param dateValue - 日付値
+   * @returns 正規化された日付文字列
    */
-  _normalizeDate: function(dateValue) {
+  _normalizeDate: function(dateValue: string | Date | null | undefined): string {
     if (!dateValue) return '';
 
     if (dateValue instanceof Date) {
@@ -553,17 +642,17 @@ const PayoutRepository = {
 
   /**
    * 日付文字列をローカルタイムゾーンでパース（UTC解釈回避）
-   * @param {string} dateStr - 日付文字列（YYYY-MM-DD形式）
-   * @returns {Date|null} パースされた日付またはnull
+   * @param dateStr - 日付文字列（YYYY-MM-DD形式）
+   * @returns パースされた日付またはnull
    */
-  _parseLocalDate: function(dateStr) {
+  _parseLocalDate: function(dateStr: string | Date | null | undefined): Date | null {
     if (!dateStr) return null;
 
-    const normalized = this._normalizeDate(dateStr);
+    const normalized = this._normalizeDate(dateStr as string | Date);
     if (!normalized) return null;
 
     const parts = normalized.split('-');
-    if (parts.length !== 3) return new Date(dateStr); // フォールバック
+    if (parts.length !== 3) return new Date(dateStr as string); // フォールバック
 
     const [y, m, d] = parts.map(Number);
     return new Date(y, m - 1, d); // ローカルタイムゾーンで作成

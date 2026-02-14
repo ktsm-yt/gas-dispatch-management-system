@@ -34,7 +34,7 @@ const InvoiceBulkExportService = {
    * @param {Object} params - { invoiceIds: string[], exportMode: 'pdf'|'pdf_cover'|'excel', enableUrlSharing?: boolean }
    * @returns {Object} 実行結果
    */
-  executeBulkExport: function(params) {
+  executeBulkExport: function(params: { invoiceIds: string[]; exportMode: string; enableUrlSharing?: boolean }) {
     Logger.log(`[TIMING][executeBulkExport] START - ${params.invoiceIds.length}件, mode=${params.exportMode}`);
     const _execStart = Date.now();
 
@@ -73,8 +73,8 @@ const InvoiceBulkExportService = {
       }
 
       // 実行中に構築する結果配列（保存はしない）
-      const results = [];
-      const errors = [];
+      const results: Record<string, unknown>[] = [];
+      const errors: Record<string, unknown>[] = [];
 
       Logger.log(`[BulkExport] 開始: ${progress.processedCount}/${progress.totalCount} 件処理済み`);
 
@@ -114,13 +114,13 @@ const InvoiceBulkExportService = {
 
         // 結果を記録（メモリ上のみ）
         if (exportResult.success) {
-          results.push(exportResult.result);
+          results.push(exportResult.result as Record<string, unknown>);
           progress.successCount++;
         } else {
-          errors.push(exportResult.error);
+          errors.push(exportResult.error as Record<string, unknown>);
           progress.errorCount++;
           // 軽量化: 直近のエラーのみ保存（最大20件）
-          if (progress.errorMessages.length < 20) {
+          if (progress.errorMessages.length < 20 && exportResult.error) {
             progress.errorMessages.push({
               invoiceId: exportResult.error.invoiceId,
               message: exportResult.error.message
@@ -151,12 +151,13 @@ const InvoiceBulkExportService = {
         summary: this._getSummary(progress)
       };
 
-    } catch (error) {
-      Logger.log(`[BulkExport] エラー: ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.log(`[BulkExport] エラー: ${msg}`);
       return {
         success: false,
         error: 'SYSTEM_ERROR',
-        message: error.message
+        message: msg
       };
     } finally {
       // ロックが取得できた場合のみ解放
@@ -176,14 +177,14 @@ const InvoiceBulkExportService = {
    * @param {number} processedCount - 既に処理済みの件数（再開時用）
    * @returns {Object} { invoiceMap, customerMap }
    */
-  _preloadInvoiceData: function(invoiceIds, processedCount) {
-    const _t = { start: Date.now() };
+  _preloadInvoiceData: function(invoiceIds: string[], processedCount: number) {
+    const _t: Record<string, number> = { start: Date.now() };
     Logger.log(`[TIMING][preload] START - ${invoiceIds.length}件, 処理済み=${processedCount}`);
 
     // 未処理の請求書IDのみ対象
     const targetIds = invoiceIds.slice(processedCount);
     // 型の正規化（スプレッドシートから読み込む値との比較で型ずれを防ぐ）
-    const targetIdSet = new Set(targetIds.map(id => String(id)));
+    const targetIdSet = new Set(targetIds.map((id: string) => String(id)));
 
     // 請求書データを取得（対象IDのみフィルタ）
     // search({}) で全件取得し、対象IDでフィルタ
@@ -196,17 +197,17 @@ const InvoiceBulkExportService = {
     Logger.log(`[TIMING][preload] filter: ${_t.invoiceFilter - _t.invoiceSearch}ms (${targetInvoices.length}件)`);
 
     // 顧客IDを収集
-    const customerIds = new Set(targetInvoices.map(inv => inv.customer_id));
+    const customerIds = new Set(targetInvoices.map((inv) => inv.customer_id));
 
     // 顧客データをMasterCache経由で取得（キャッシュ済み）
     const allCustomers = MasterCache.getCustomers();
     _t.customers = Date.now();
     Logger.log(`[TIMING][preload] MasterCache.getCustomers: ${_t.customers - _t.invoiceFilter}ms (${allCustomers.length}件)`);
 
-    const customerMap = {};
+    const customerMap: Record<string, Record<string, unknown>> = {};
     for (const customer of allCustomers) {
-      if (customerIds.has(customer.customer_id)) {
-        customerMap[customer.customer_id] = customer;
+      if (customerIds.has(customer.customer_id as string)) {
+        customerMap[customer.customer_id as string] = customer;
       }
     }
 
@@ -218,16 +219,16 @@ const InvoiceBulkExportService = {
 
     // 各明細をline_number順にソート
     for (const invoiceId of Object.keys(linesByInvoiceId)) {
-      linesByInvoiceId[invoiceId].sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
+      linesByInvoiceId[invoiceId].sort((a: Record<string, unknown>, b: Record<string, unknown>) => ((a.line_number as number) || 0) - ((b.line_number as number) || 0));
     }
 
     // invoiceId → { ...invoice, lines, customer } のマップを作成
-    const invoiceMap = {};
+    const invoiceMap: Record<string, Record<string, unknown>> = {};
     for (const invoice of targetInvoices) {
-      const customer = customerMap[invoice.customer_id] || {};
-      invoiceMap[invoice.invoice_id] = {
+      const customer = customerMap[invoice.customer_id as string] || {};
+      invoiceMap[invoice.invoice_id as string] = {
         ...invoice,
-        lines: linesByInvoiceId[invoice.invoice_id] || [],
+        lines: linesByInvoiceId[invoice.invoice_id as string] || [],
         customer: customer
       };
     }
@@ -239,7 +240,7 @@ const InvoiceBulkExportService = {
    * 明細レコードを正規化（InvoiceLineRepositoryと同じ処理）
    * @private
    */
-  _normalizeLineRecord: function(record) {
+  _normalizeLineRecord: function(record: Record<string, unknown>) {
     return {
       ...record,
       work_date: this._normalizeDate(record.work_date),
@@ -255,7 +256,7 @@ const InvoiceBulkExportService = {
    * 日付を正規化
    * @private
    */
-  _normalizeDate: function(dateValue) {
+  _normalizeDate: function(dateValue: unknown) {
     if (!dateValue) return '';
     if (dateValue instanceof Date) {
       return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy-MM-dd');
@@ -271,13 +272,12 @@ const InvoiceBulkExportService = {
    * @param {Set<string>} targetIdSet - 対象請求書IDのSet
    * @returns {Object} invoice_id -> lines[] のマップ
    */
-  _loadLinesInChunks: function(targetIdSet) {
+  _loadLinesInChunks: function(targetIdSet: Set<string>) {
     const CHUNK_SIZE = 3000;  // GAS制約を考慮した適切なチャンクサイズ
-    const sheetName = TABLE_SHEET_MAP['T_InvoiceLines'];  // '請求明細'
-    const sheet = getDb().getSheetByName(sheetName);
+    const sheet = findSheetFromDb(getDb(), 'T_InvoiceLines');
 
     if (!sheet) {
-      Logger.log('[BulkExport] ' + sheetName + ' シートが見つかりません');
+      Logger.log('[BulkExport] InvoiceLines シートが見つかりません');
       return {};
     }
 
@@ -299,7 +299,7 @@ const InvoiceBulkExportService = {
       return {};
     }
 
-    const linesByInvoiceId = {};
+    const linesByInvoiceId: Record<string, Record<string, unknown>[]> = {};
     let processedRows = 0;
 
     // チャンク単位で読み込み
@@ -322,7 +322,7 @@ const InvoiceBulkExportService = {
         }
 
         // 行データをオブジェクトに変換
-        const line = {};
+        const line: Record<string, unknown> = {};
         for (let i = 0; i < headers.length; i++) {
           line[headers[i]] = row[i];
         }
@@ -339,7 +339,7 @@ const InvoiceBulkExportService = {
 
     // 各明細をline_number順にソート
     for (const invoiceId of Object.keys(linesByInvoiceId)) {
-      linesByInvoiceId[invoiceId].sort((a, b) => (a.line_number || 0) - (b.line_number || 0));
+      linesByInvoiceId[invoiceId].sort((a: Record<string, unknown>, b: Record<string, unknown>) => ((a.line_number as number) || 0) - ((b.line_number as number) || 0));
     }
 
     Logger.log(`[BulkExport] 明細チャンク読み込み完了: ${processedRows}行スキャン, ${Object.keys(linesByInvoiceId).length}件の請求書分を抽出`);
@@ -357,8 +357,8 @@ const InvoiceBulkExportService = {
    * @param {Object} company - 会社情報
    * @returns {Object} { success: boolean, result?: {...}, error?: {...} }
    */
-  _exportOneWithPreload: function(invoiceId, progress, params, preloadedData, company) {
-    const modeConfig = this.MODES[progress.exportMode];
+  _exportOneWithPreload: function(invoiceId: string, progress: Record<string, unknown>, params: Record<string, unknown>, preloadedData: Record<string, unknown>, company: Record<string, unknown>) {
+    const modeConfig = this.MODES[progress.exportMode as keyof typeof this.MODES];
     if (!modeConfig) {
       return {
         success: false,
@@ -377,7 +377,8 @@ const InvoiceBulkExportService = {
 
     try {
       // 事前ロード済みデータを使用
-      const invoiceData = preloadedData.invoiceMap[invoiceId];
+      const invoiceMap = preloadedData.invoiceMap as Record<string, Record<string, unknown>>;
+      const invoiceData = invoiceMap[invoiceId];
       if (!invoiceData) {
         return {
           success: false,
@@ -393,11 +394,11 @@ const InvoiceBulkExportService = {
       progress.currentInvoiceNumber = invoiceData.invoice_number || '';
 
       // exportWithData を使用（InvoiceService.get() をスキップ）
-      const result = InvoiceExportService.exportWithData(invoiceData, modeConfig.mode, exportOptions);
+      const result = InvoiceExportService.exportWithData(invoiceData, modeConfig.mode, exportOptions) as { success: boolean; fileId?: string; url?: string; error?: string; message?: string };
 
       if (result.success) {
         // 顧客情報を抽出
-        const customer = invoiceData.customer || {};
+        const customer = (invoiceData.customer as Record<string, unknown>) || {};
 
         // 注意: URL共有の権限設定は後でバッチ処理（_applyUrlSharingBatch）で行う
         // ここでは fileId を記録するだけ
@@ -435,13 +436,14 @@ const InvoiceBulkExportService = {
           }
         };
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
         success: false,
         error: {
           invoiceId,
           error: 'EXPORT_ERROR',
-          message: e.message
+          message: msg
         }
       };
     }
@@ -455,8 +457,8 @@ const InvoiceBulkExportService = {
    * @param {Object} params - 元のパラメータ（enableUrlSharing等を参照）
    * @returns {Object} { success: boolean, result?: {...}, error?: {...} }
    */
-  _exportOne: function(invoiceId, progress, params) {
-    const modeConfig = this.MODES[progress.exportMode];
+  _exportOne: function(invoiceId: string, progress: Record<string, unknown>, params: Record<string, unknown>) {
+    const modeConfig = this.MODES[progress.exportMode as keyof typeof this.MODES];
     if (!modeConfig) {
       return {
         success: false,
@@ -484,11 +486,11 @@ const InvoiceBulkExportService = {
         };
       }
 
-      const result = InvoiceExportService.export(invoiceId, modeConfig.mode, exportOptions);
+      const result = InvoiceExportService.export(invoiceId, modeConfig.mode, exportOptions) as { success: boolean; fileId?: string; url?: string; error?: string; message?: string };
 
       if (result.success) {
         // 顧客情報を抽出
-        const customer = invoiceData.customer || {};
+        const customer = (invoiceData.customer as Record<string, unknown>) || {};
 
         // 注意: URL共有の権限設定は後でバッチ処理（_applyUrlSharingBatch）で行う
         const needsSharing = params.enableUrlSharing && result.fileId;
@@ -524,13 +526,14 @@ const InvoiceBulkExportService = {
           }
         };
       }
-    } catch (e) {
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
       return {
         success: false,
         error: {
           invoiceId,
           error: 'EXPORT_ERROR',
-          message: e.message
+          message: msg
         }
       };
     }
@@ -540,7 +543,7 @@ const InvoiceBulkExportService = {
    * 進捗サマリを取得
    * @private
    */
-  _getSummary: function(progress) {
+  _getSummary: function(progress: Record<string, unknown>) {
     return {
       totalCount: progress.totalCount,
       processedCount: progress.processedCount,
@@ -559,7 +562,7 @@ const InvoiceBulkExportService = {
    * @private
    * @param {Array} results - 出力結果の配列（needsSharing=trueのものを処理）
    */
-  _applyUrlSharingBatch: function(results) {
+  _applyUrlSharingBatch: function(results: Record<string, unknown>[]) {
     const startTime = Date.now();
     let successCount = 0;
     let errorCount = 0;
@@ -573,12 +576,12 @@ const InvoiceBulkExportService = {
       try {
         // Drive API v3 で権限を追加（DriveApp.setSharing より高速）
         // supportsAllDrives: true で共有ドライブのファイルにも対応
-        Drive.Permissions.create(
+        (Drive.Permissions as any).create(
           {
             role: 'reader',
             type: 'anyone'
           },
-          result.fileId,
+          result.fileId as string,
           {
             sendNotificationEmail: false,
             supportsAllDrives: true
@@ -587,13 +590,14 @@ const InvoiceBulkExportService = {
         result.status = 'success';
         result.sharingError = null;
         successCount++;
-      } catch (e) {
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
         // Workspaceポリシーで禁止されている場合など
-        result.sharingError = e.message;
+        result.sharingError = msg;
         result.status = 'sharing_failed';
         result.pdfUrl = result.url;  // フォールバック
         errorCount++;
-        Logger.log(`[BulkExport] 共有設定失敗 (${result.invoiceNumber}): ${e.message}`);
+        Logger.log(`[BulkExport] 共有設定失敗 (${result.invoiceNumber}): ${msg}`);
       }
     }
 
@@ -607,15 +611,16 @@ const InvoiceBulkExportService = {
    * @param {string} key - 進捗キー
    * @returns {Object} 進捗データ
    */
-  getProgress: function(key) {
+  getProgress: function(key: string) {
     const props = PropertiesService.getUserProperties();
     const progressJson = props.getProperty(this.PROGRESS_KEY_PREFIX + key);
 
     if (progressJson) {
       try {
         return JSON.parse(progressJson);
-      } catch (e) {
-        Logger.log(`[BulkExport] 進捗データのパースエラー: ${e.message}`);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`[BulkExport] 進捗データのパースエラー: ${msg}`);
       }
     }
 
@@ -637,7 +642,7 @@ const InvoiceBulkExportService = {
    * @param {string} key - 進捗キー
    * @param {Object} progress - 進捗データ
    */
-  saveProgress: function(key, progress) {
+  saveProgress: function(key: string, progress: Record<string, unknown>) {
     const props = PropertiesService.getUserProperties();
     // 軽量化: 保存に必要な最小限のデータのみ
     const saveData = {
@@ -659,7 +664,7 @@ const InvoiceBulkExportService = {
    * 進捗をクリア
    * @param {string} key - 進捗キー
    */
-  clearProgress: function(key) {
+  clearProgress: function(key: string) {
     const props = PropertiesService.getUserProperties();
     props.deleteProperty(this.PROGRESS_KEY_PREFIX + key);
   },
@@ -669,7 +674,7 @@ const InvoiceBulkExportService = {
    * @param {Object} params - パラメータ
    * @returns {string} 進捗キー
    */
-  _generateKey: function(params) {
+  _generateKey: function(params: { invoiceIds: string[]; exportMode: string }) {
     // invoiceIdsのハッシュを使用（同じ請求書セットなら同じキー）
     const idsHash = params.invoiceIds.sort().join(',').substring(0, 100);
     return `${params.exportMode}_${Utilities.computeDigest(
@@ -683,7 +688,7 @@ const InvoiceBulkExportService = {
    * @param {Object} params - { invoiceIds: string[], exportMode: string }
    * @returns {Object} 結果
    */
-  cancelExport: function(params) {
+  cancelExport: function(params: { invoiceIds: string[]; exportMode: string }) {
     const key = this._generateKey(params);
     this.clearProgress(key);
     return { cancelled: true };

@@ -252,7 +252,7 @@ ${errorMessage}
       Logger.log(`メール送信完了: ${recipients.join(', ')}`);
     } catch (e) {
       Logger.log(`メール送信エラー: ${e.message}`);
-      console.error('Mail error:', e);
+      logErr('Mail error', e);
     }
   }
 };
