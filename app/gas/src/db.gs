@@ -5,41 +5,41 @@
  */
 
 /**
- * テーブル名とシート名のマッピング
+ * テーブル名とシート名のマッピング（英語統一）
  */
 const TABLE_SHEET_MAP = {
-  'M_Customers': '顧客',
-  'M_Staff': 'スタッフ',
-  'M_Subcontractors': '外注先',
-  'M_TransportFee': '交通費',
-  'M_Company': '自社情報',
-  'T_Jobs': '案件',
-  'T_JobSlots': '案件枠',  // 枠システム用
-  'T_JobAssignments': '配置',
-  'T_Invoices': '請求',
-  'T_InvoiceLines': '請求明細',
-  'T_Payouts': '支払',
-  'T_MonthlyStats': '月次統計',  // P2-6: 売上分析ダッシュボード用
-  'T_Payments': '入金記録',  // P2: 入金管理機能
-  'T_AuditLog': 'ログ'
+  'M_Customers': 'Customers',
+  'M_Staff': 'Staff',
+  'M_Subcontractors': 'Subcontractors',
+  'M_TransportFee': 'TransportFees',
+  'M_Company': 'Company',
+  'T_Jobs': 'Jobs',
+  'T_JobSlots': 'JobSlots',
+  'T_JobAssignments': 'Assignments',
+  'T_Invoices': 'Invoices',
+  'T_InvoiceLines': 'InvoiceLines',
+  'T_Payouts': 'Payouts',
+  'T_MonthlyStats': 'MonthlyStats',
+  'T_Payments': 'Payments',
+  'T_AuditLog': 'AuditLog',
+  'T_InvoiceAdjustments': 'InvoiceAdjustments'
 };
+
+// リクエスト内キャッシュ（同一実行内でのopenById/getSheetByName重複を削減）
+let REQUEST_DB_CACHE = null;
+const REQUEST_SHEET_CACHE = {};
 
 /**
  * DB Spreadsheetを取得
+ * ID取得は config.ts::getSpreadsheetId() に委譲
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} Spreadsheetオブジェクト
  */
 function getDb() {
-  const prop = PropertiesService.getScriptProperties();
-  const env = prop.getProperty('ENV') || 'dev';
-  const spreadsheetId = env === 'prod'
-    ? prop.getProperty('SPREADSHEET_ID_PROD')
-    : prop.getProperty('SPREADSHEET_ID_DEV');
-
-  if (!spreadsheetId) {
-    throw new Error(`DB Spreadsheet ID が設定されていません (ENV=${env})`);
+  if (REQUEST_DB_CACHE) {
+    return REQUEST_DB_CACHE;
   }
-
-  return SpreadsheetApp.openById(spreadsheetId);
+  REQUEST_DB_CACHE = SpreadsheetApp.openById(getSpreadsheetId());
+  return REQUEST_DB_CACHE;
 }
 
 /**
@@ -57,6 +57,10 @@ function getEnv() {
  * @returns {GoogleAppsScript.Spreadsheet.Sheet} シートオブジェクト
  */
 function getSheet(tableName) {
+  if (REQUEST_SHEET_CACHE[tableName]) {
+    return REQUEST_SHEET_CACHE[tableName];
+  }
+
   const sheetName = TABLE_SHEET_MAP[tableName];
   if (!sheetName) {
     throw new Error(`不明なテーブル名: ${tableName}`);
@@ -69,6 +73,37 @@ function getSheet(tableName) {
     throw new Error(`シートが見つかりません: ${sheetName}`);
   }
 
+  REQUEST_SHEET_CACHE[tableName] = sheet;
+  return sheet;
+}
+
+/**
+ * 任意のSpreadsheetからシートを検索（null返却版）
+ * シート未存在を許容する場面用（ArchiveService等）
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} db - 対象Spreadsheet
+ * @param {string} tableName - テーブル名（T_Jobs等）
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet|null} シートまたはnull
+ */
+function findSheetFromDb(db, tableName) {
+  const sheetName = TABLE_SHEET_MAP[tableName];
+  if (!sheetName) return null;
+
+  return db.getSheetByName(sheetName);
+}
+
+/**
+ * 任意のSpreadsheetからシートを取得（throw版）
+ * シートが必ず存在すべき場面用（Repository等）
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} db - 対象Spreadsheet
+ * @param {string} tableName - テーブル名（T_Jobs等）
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} シートオブジェクト
+ */
+function getSheetFromDb(db, tableName) {
+  const sheet = findSheetFromDb(db, tableName);
+  if (!sheet) {
+    const sheetName = TABLE_SHEET_MAP[tableName] || tableName;
+    throw new Error(`シートが見つかりません: ${sheetName} (DB: ${db.getName()})`);
+  }
   return sheet;
 }
 

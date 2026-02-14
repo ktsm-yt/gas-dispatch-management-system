@@ -232,6 +232,25 @@ function testInvoiceCalculations() {
   assertEqual(totals.taxAmount, 4000, 'taxAmount should be 4000');
   assertEqual(totals.totalAmount, 44000, 'totalAmount should be 44000');
   Logger.log('  CalculateInvoiceTotals: OK');
+
+  // 6. 顧客別税端数処理テスト（切り上げ）
+  const floorTotals = InvoiceService._calculateTotals(
+    [{ amount: 10001, item_name: '作業費' }],
+    0.10,
+    0,
+    'format1',
+    'floor'
+  );
+  const ceilTotals = InvoiceService._calculateTotals(
+    [{ amount: 10001, item_name: '作業費' }],
+    0.10,
+    0,
+    'format1',
+    'ceil'
+  );
+  assertEqual(floorTotals.taxAmount, 1000, 'floor tax should be 1000');
+  assertEqual(ceilTotals.taxAmount, 1001, 'ceil tax should be 1001');
+  Logger.log('  Customer tax rounding mode: OK');
 }
 
 // ============================================
@@ -353,8 +372,8 @@ function testFormat2Export() {
     };
   }
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -439,7 +458,7 @@ function testFormat2ExportFromCustomer() {
   }
 
   // エクスポート実行
-  const result = InvoiceExportService.export(invoiceId, 'edit', { keepSheet: true });
+  const result = InvoiceExportService.export(invoiceId, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -471,8 +490,8 @@ function testFormat2ExportWithExistingInvoice() {
   const invoice = invoices[0];
   Logger.log(`✓ 請求書を使用: ${invoice.invoice_id} (${invoice.invoice_number || 'No number'})`);
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(invoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(invoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);
@@ -514,7 +533,7 @@ function testFormat2MultiPage() {
   const paymentMonthOffset = customer.payment_month_offset || 1;
 
   // 発行日（末日締め→翌月1日発行）
-  const issueDate = closingDay >= 28 ? '2025-02-01' : `2025-01-${String(closingDay + 1).padStart(2, '0')}`;
+  const issueDate = closingDay === 31 ? '2025-02-01' : `2025-01-${String(closingDay + 1).padStart(2, '0')}`;
 
   // 支払期限（翌月または翌々月の支払日）
   const dueMonth = 1 + paymentMonthOffset;
@@ -675,8 +694,8 @@ function testFormat3Export() {
   }
   Logger.log(`✓ 明細追加: ${testLines.length}件`);
 
-  // エクスポート実行（編集用シート作成）
-  const result = InvoiceExportService.export(testInvoice.invoice_id, 'edit', { keepSheet: true });
+  // エクスポート実行（Excel出力）
+  const result = InvoiceExportService.export(testInvoice.invoice_id, 'excel');
 
   if (result.success) {
     Logger.log(`✓ エクスポート成功!`);

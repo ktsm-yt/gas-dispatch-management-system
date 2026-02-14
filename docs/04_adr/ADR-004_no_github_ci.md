@@ -2,7 +2,7 @@
 
 ## ステータス
 
-承認済み
+改訂済み（2026-02-04: 部分的CI導入）
 
 ## コンテキスト
 
@@ -92,3 +92,39 @@ GAS環境ではTypeScriptを導入しない方針。理由：
 
 - [11_deployment.md](../05_ops/11_deployment.md) - デプロイ手順
 - [16_git_workflow.md](../05_ops/16_git_workflow.md) - Git運用ガイド
+
+## 改訂履歴
+
+### 2026-02-04: 部分的CI導入
+
+**背景**: コードベースが25,000行に拡大し、見直し条件を満たした。
+
+**目的**:
+- 型安全性による実行時エラーの削減
+- IDEサポート向上（補完、リファクタリング）
+- 大規模ファイル（2,000行超）のリファクタリング安全性確保
+
+**変更内容**:
+1. TypeScript導入（段階的移行）
+   - tsconfig.json: ES2020、strict mode、allowJs有効
+   - @types/google-apps-script: バージョン固定
+   - 既存.gsファイルは段階的に`@ts-check`で型チェック導入
+2. GitHub ActionsでLint + 型チェック
+   - PRおよびmainへのpush時に自動実行
+   - 型チェック（`npm run typecheck`）とESLint実行
+   - デプロイは行わない（手動維持）
+3. E2Eテスト・自動デプロイは引き続き見送り
+   - OAuth認証の複雑さにより自動化困難
+   - 実環境での手動テストが必須
+
+**維持する方針**:
+- `clasp push` による手動デプロイ
+- GAS環境でのテストは手動確認
+- E2E自動テストは導入しない
+
+**導入ファイル**:
+- `package.json`: TypeScript関連依存関係追加
+- `app/gas/tsconfig.json`: TypeScript設定
+- `app/gas/.eslintrc.json`: ESLint設定（GASグローバル対応）
+- `.github/workflows/ci.yml`: GitHub Actions CI
+- `app/gas/src/types/index.d.ts`: 共通型定義

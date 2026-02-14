@@ -59,10 +59,11 @@ const ArchiveService = {
         return { success: false, error: 'ALREADY_RUNNING' };
       }
 
-      // 対象年度の決定
+      // 対象年度の決定（3月始まり/2月終わり）
       const targetYear = fiscalYear || this.getCurrentFiscalYear() - 1;
-      const startDate = `${targetYear}-04-01`;
-      const endDate = `${targetYear + 1}-03-31`;
+      const startDate = `${targetYear}-03-01`;
+      const lastDay = new Date(targetYear + 1, 2, 0).getDate(); // 2月末日（閏年対応）
+      const endDate = `${targetYear + 1}-02-${String(lastDay).padStart(2, '0')}`;
 
       Logger.log(`=== アーカイブ開始: ${targetYear}年度 (${startDate} - ${endDate}) ===`);
 
@@ -105,7 +106,7 @@ const ArchiveService = {
 
     } catch (e) {
       Logger.log(`アーカイブエラー: ${e.message}`);
-      console.error('Archive error:', e);
+      logErr('Archive error', e);
       return { success: false, error: e.message };
 
     } finally {
@@ -172,21 +173,16 @@ const ArchiveService = {
     const currentDb = SpreadsheetApp.openById(getSpreadsheetId());
     const archiveDb = SpreadsheetApp.openById(archiveDbId);
 
-    // テーブル名から日本語シート名に変換
+    // currentSheet: 見つからなければスキップ（既存仕様維持）
     const sheetName = TABLE_SHEET_MAP[tableName];
-    if (!sheetName) {
-      Logger.log(`不明なテーブル名: ${tableName}`);
-      return { movedCount: 0, remainingCount: 0 };
-    }
-
-    const currentSheet = currentDb.getSheetByName(sheetName);
+    const currentSheet = findSheetFromDb(currentDb, tableName);
     if (!currentSheet) {
-      Logger.log(`シート ${sheetName} が見つかりません`);
+      Logger.log(`シート ${sheetName || tableName} が見つかりません`);
       return { movedCount: 0, remainingCount: 0 };
     }
 
-    // アーカイブ先シート取得/作成（日本語シート名で作成）
-    let archiveSheet = archiveDb.getSheetByName(sheetName);
+    // archiveSheet: 見つからなければ新規作成
+    let archiveSheet = findSheetFromDb(archiveDb, tableName);
     if (!archiveSheet) {
       archiveSheet = archiveDb.insertSheet(sheetName);
       const headers = currentSheet.getRange(1, 1, 1, currentSheet.getLastColumn()).getValues();
@@ -307,9 +303,9 @@ const ArchiveService = {
    * 請求年月が対象年度内かチェック
    */
   isInFiscalYear(billingYear, billingMonth, fiscalYear) {
-    // 年度: 4月〜翌3月
-    // 例: 2024年度 = 2024/4 〜 2025/3
-    if (billingMonth >= 4) {
+    // 年度: 3月〜翌2月（2月決算）
+    // 例: 2024年度 = 2024/3 〜 2025/2
+    if (billingMonth >= 3) {
       return billingYear === fiscalYear;
     } else {
       return billingYear === fiscalYear + 1;
@@ -325,16 +321,9 @@ const ArchiveService = {
    */
   getArchivedParentIds(archiveDbId, parentTable, idColumn) {
     const archiveDb = SpreadsheetApp.openById(archiveDbId);
-    const parentSheetName = TABLE_SHEET_MAP[parentTable];
-
-    if (!parentSheetName) {
-      Logger.log(`不明な親テーブル名: ${parentTable}`);
-      return new Set();
-    }
-
-    const parentSheet = archiveDb.getSheetByName(parentSheetName);
+    const parentSheet = findSheetFromDb(archiveDb, parentTable);
     if (!parentSheet) {
-      Logger.log(`アーカイブDBに ${parentSheetName} シートがありません`);
+      Logger.log(`アーカイブDBに ${TABLE_SHEET_MAP[parentTable] || parentTable} シートがありません`);
       return new Set();
     }
 
@@ -369,7 +358,7 @@ const ArchiveService = {
     const today = new Date();
     const month = today.getMonth() + 1;
     const year = today.getFullYear();
-    return month >= 4 ? year : year - 1;
+    return month >= 3 ? year : year - 1;
   },
 
   /**
@@ -382,8 +371,8 @@ const ArchiveService = {
     const failedMonths = [];
     let successCount = 0;
 
-    // 4月〜12月
-    for (let m = 4; m <= 12; m++) {
+    // 3月〜12月（当年）
+    for (let m = 3; m <= 12; m++) {
       try {
         StatsService.finalizeMonthStats(fiscalYear, m);
         successCount++;
@@ -393,8 +382,8 @@ const ArchiveService = {
       }
     }
 
-    // 翌年1月〜3月
-    for (let m = 1; m <= 3; m++) {
+    // 翌年1月〜2月
+    for (let m = 1; m <= 2; m++) {
       try {
         StatsService.finalizeMonthStats(fiscalYear + 1, m);
         successCount++;
@@ -417,17 +406,18 @@ const ArchiveService = {
    * 未処理項目をチェック
    */
   checkPendingItems(fiscalYear) {
-    const startDate = `${fiscalYear}-04-01`;
-    const endDate = `${fiscalYear + 1}-03-31`;
+    const startDate = `${fiscalYear}-03-01`;
+    const lastDay = new Date(fiscalYear + 1, 2, 0).getDate();
+    const endDate = `${fiscalYear + 1}-02-${String(lastDay).padStart(2, '0')}`;
 
-    // 未発行請求書（年度全体: 4月〜翌3月）
+    // 未発行請求書（年度全体: 3月〜翌2月）
     const unpaidInvoices = [];
     try {
-      // 4月〜12月（当年）
-      for (let m = 4; m <= 12; m++) {
+      // 3月〜12月（当年）
+      for (let m = 3; m <= 12; m++) {
         const invoices = InvoiceRepository.findByPeriod(fiscalYear, m);
         invoices.forEach(inv => {
-          if (inv.status === 'unsent') {
+          if (inv.status === 'unsent' || inv.status === 'hold') {
             unpaidInvoices.push({
               customerId: inv.customer_id,
               customerName: inv.customer_name || inv.customer_id,
@@ -436,11 +426,11 @@ const ArchiveService = {
           }
         });
       }
-      // 1月〜3月（翌年）
-      for (let m = 1; m <= 3; m++) {
+      // 1月〜2月（翌年）
+      for (let m = 1; m <= 2; m++) {
         const invoices = InvoiceRepository.findByPeriod(fiscalYear + 1, m);
         invoices.forEach(inv => {
-          if (inv.status === 'unsent') {
+          if (inv.status === 'unsent' || inv.status === 'hold') {
             unpaidInvoices.push({
               customerId: inv.customer_id,
               customerName: inv.customer_name || inv.customer_id,

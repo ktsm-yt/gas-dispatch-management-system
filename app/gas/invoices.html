@@ -84,6 +84,90 @@
       box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
     }
 
+    /* Customer Autocomplete */
+    .autocomplete-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .autocomplete-wrapper input[type="text"] {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+      width: 180px;
+    }
+
+    .autocomplete-wrapper input[type="text"]:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .autocomplete-wrapper input[type="text"].has-value {
+      color: var(--text-primary);
+    }
+
+    .autocomplete-wrapper input[type="text"].placeholder-like {
+      color: var(--text-muted);
+    }
+
+    .autocomplete-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 240px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      z-index: 100;
+    }
+
+    .autocomplete-dropdown.open {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: 6px var(--spacing-sm);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.highlighted {
+      background: var(--bg-hover);
+    }
+
+    .autocomplete-item.selected {
+      background: var(--color-secondary);
+      color: white;
+    }
+
+    .autocomplete-no-results {
+      padding: 6px var(--spacing-sm);
+      font-size: 13px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Modal内autocompleteはフル幅 */
+    .form-group .autocomplete-wrapper {
+      display: block;
+    }
+
+    .form-group .autocomplete-wrapper input[type="text"] {
+      width: 100%;
+    }
+
     .archive-toggle {
       display: flex;
       align-items: center;
@@ -253,6 +337,11 @@
     .status-paid {
       background: #D1FAE5;
       color: #059669;
+    }
+
+    .status-hold {
+      background: #FFF7ED;
+      color: #EA580C;
     }
 
     /* Assignment Change Warning */
@@ -621,6 +710,71 @@
       font-size: 13px;
     }
 
+    /* Adjustment rows */
+    .adjustment-row {
+      display: grid;
+      grid-template-columns: 1fr 120px 40px;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .adjustment-row input[type="text"],
+    .adjustment-row input[type="number"] {
+      padding: 6px 8px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+    }
+    .adjustment-row input:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+    .adjustment-row input[type="number"] {
+      text-align: right;
+      font-family: 'Menlo', 'Monaco', monospace;
+    }
+    .adjustment-remove-btn {
+      width: 28px; height: 28px;
+      border: none; background: transparent;
+      color: var(--text-muted); cursor: pointer;
+      font-size: 16px; border-radius: var(--radius-sm);
+    }
+    .adjustment-remove-btn:hover { background: #fee2e2; color: #DC3545; }
+    .adjustment-add-btn {
+      font-size: 12px; color: var(--color-secondary);
+      background: transparent; border: 1px dashed var(--color-secondary);
+      border-radius: var(--radius-sm); padding: 6px 12px;
+      cursor: pointer; margin-top: 4px;
+    }
+    .adjustment-add-btn:hover { background: rgba(19,155,196,0.05); }
+    .adjustment-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Totals preview */
+    .totals-preview {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      margin-top: var(--spacing-md);
+      font-size: 13px;
+    }
+    .totals-preview .totals-row {
+      display: flex; justify-content: space-between;
+      padding: 3px 0;
+    }
+    .totals-preview .totals-row.total-line {
+      border-top: 1px solid var(--border-color);
+      margin-top: 4px; padding-top: 8px;
+      font-weight: 600;
+    }
+    .totals-preview .amount-value {
+      font-family: 'Menlo', 'Monaco', monospace;
+      text-align: right;
+    }
+    .amount-positive { color: #059669; }
+    .amount-negative { color: #DC3545; }
+
     #editNotes:focus {
       outline: none;
       border-color: var(--color-secondary);
@@ -790,6 +944,7 @@
       bottom: 0;
       background: rgba(255, 255, 255, 0.8);
       z-index: 9998;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
@@ -805,6 +960,12 @@
       border-top-color: var(--color-primary);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
+    }
+
+    .loading-message {
+      margin-top: 16px;
+      color: #666;
+      font-size: 14px;
     }
 
     @keyframes spin {
@@ -872,13 +1033,16 @@
       <select id="filterMonth"></select>
       <span>月</span>
       <label>顧客:</label>
-      <select id="filterCustomer">
-        <option value="">全て</option>
-      </select>
+      <div class="autocomplete-wrapper" id="filterCustomerWrapper">
+        <input type="text" id="filterCustomerInput" placeholder="全て" autocomplete="off">
+        <input type="hidden" id="filterCustomer" value="">
+        <div class="autocomplete-dropdown" id="filterCustomerDropdown"></div>
+      </div>
       <label>ステータス:</label>
       <select id="filterStatus">
         <option value="">全て</option>
         <option value="unsent">未送付</option>
+        <option value="hold">保留</option>
         <option value="sent">送付済</option>
         <option value="unpaid">未回収</option>
         <option value="paid">入金済</option>
@@ -904,8 +1068,10 @@
     <select id="bulkStatusSelect">
       <option value="">ステータス変更...</option>
       <option value="unsent">未送付</option>
+      <option value="hold">保留</option>
       <option value="sent">送付済</option>
       <option value="unpaid">未回収</option>
+      <option value="paid">入金済</option>
     </select>
     <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
@@ -1181,7 +1347,7 @@
         <!-- 明細テーブル -->
         <div class="edit-section">
           <h4>■ 明細（テキストのみ編集可）</h4>
-          <p class="edit-hint">※金額・数量・単価は編集できません。変更が必要な場合は配置データを修正して請求書を再生成してください。</p>
+          <p class="edit-hint">※金額・数量・単価は編集できません。金額の追加・値引きは下の「調整項目」で行えます。</p>
           <div class="edit-lines-container">
             <table class="edit-lines-table">
               <thead>
@@ -1198,6 +1364,22 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- 調整項目 -->
+        <div class="edit-section" id="adjustmentSection">
+          <h4>■ 調整項目（材料費・値引きなど）</h4>
+          <div id="adjustmentItemsContainer"></div>
+          <button type="button" class="adjustment-add-btn" id="addAdjustmentBtn" onclick="addAdjustmentRow()">+ 調整項目を追加</button>
+        </div>
+
+        <!-- 合計プレビュー -->
+        <div class="totals-preview" id="totalsPreview">
+          <div class="totals-row"><span>作業費</span><span class="amount-value" id="previewSubtotal">-</span></div>
+          <div class="totals-row"><span>諸経費</span><span class="amount-value" id="previewExpense">-</span></div>
+          <div class="totals-row" id="previewAdjustmentRow" style="display:none;"><span>調整合計</span><span class="amount-value" id="previewAdjustment">-</span></div>
+          <div class="totals-row"><span>消費税</span><span class="amount-value" id="previewTax">-</span></div>
+          <div class="totals-row total-line"><span>税込合計</span><span class="amount-value" id="previewTotal">-</span></div>
         </div>
 
         <!-- 隠しフィールド -->
@@ -1228,10 +1410,12 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="generateCustomer">顧客 *</label>
-          <select id="generateCustomer" required>
-            <option value="">選択してください</option>
-          </select>
+          <label for="generateCustomerInput">顧客 *</label>
+          <div class="autocomplete-wrapper" id="generateCustomerWrapper">
+            <input type="text" id="generateCustomerInput" placeholder="顧客名を入力..." autocomplete="off">
+            <input type="hidden" id="generateCustomer" value="">
+            <div class="autocomplete-dropdown" id="generateCustomerDropdown"></div>
+          </div>
         </div>
         <div class="form-group">
           <label for="generateYear">対象年月 *</label>
@@ -1398,10 +1582,13 @@
   <!-- Loading -->
   <div class="loading-overlay" id="loading">
     <div class="spinner"></div>
+    <div class="loading-message" id="loading-message"></div>
   </div>
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>
+
+  <?!= include('cache_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
@@ -1411,46 +1598,18 @@
     let customers = [];
     let customersLoaded = false;
     let customersLoading = false;
+    let currentInvoiceQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
 
-    // SessionStorage keys and TTL
-    const SS_INVOICES_KEY = 'invoices_data';
-    const SS_CUSTOMERS_KEY = 'invoices_customers';
+    // クロスタブ同期
+    let invoiceSyncChannel = null;
+    let pendingInvalidation = false;
+
+    // キャッシュキー（PageCache統一）
+    const INVOICES_CUSTOMERS_KEY = 'invoices_customers';
+    const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分（請求書一覧用）
+
+    // Filter state用（localStorage維持）
     const SS_FILTER_KEY = 'invoices_filter';
-    const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分
-
-    // Cache functions - Invoices (with TTL)
-    function saveInvoicesToCache(data, query) {
-      sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        query: query,
-        invoices: data
-      }));
-    }
-
-    function loadInvoicesFromCache(currentQuery) {
-      const saved = sessionStorage.getItem(SS_INVOICES_KEY);
-      if (!saved) return null;
-
-      const data = JSON.parse(saved);
-      if (Date.now() - data.timestamp > INVOICES_CACHE_TTL) {
-        sessionStorage.removeItem(SS_INVOICES_KEY);
-        return null;
-      }
-      if (JSON.stringify(data.query) !== JSON.stringify(currentQuery)) {
-        return null;
-      }
-      return data.invoices;
-    }
-
-    // Cache functions - Customers (localStorage for persistence across navigation)
-    function saveCustomersToCache(data) {
-      localStorage.setItem(SS_CUSTOMERS_KEY, JSON.stringify(data));
-    }
-
-    function loadCustomersFromCache() {
-      const saved = localStorage.getItem(SS_CUSTOMERS_KEY);
-      return saved ? JSON.parse(saved) : null;
-    }
 
     // Cache functions - Filter state (localStorage for persistence across navigation)
     function saveFilterState() {
@@ -1477,7 +1636,18 @@
       if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
       if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
       if (!options.skipCustomer && filter.customer !== undefined) {
-        document.getElementById('filterCustomer').value = filter.customer;
+        if (filter.customer && filterAutocomplete && customersLoaded && customers.length > 0) {
+          // 顧客IDがまだ有効か検証（削除/アーカイブ済みならクリア）
+          const match = customers.find(function (c) { return c.customer_id === filter.customer; });
+          if (match) {
+            filterAutocomplete.setValue(match.customer_id, getCustomerLabel(match));
+          } else {
+            // 無効なIDはクリア（「全て」にフォールバック）
+            document.getElementById('filterCustomer').value = '';
+          }
+        } else {
+          document.getElementById('filterCustomer').value = filter.customer || '';
+        }
       }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
 
@@ -1488,12 +1658,15 @@
     document.addEventListener('DOMContentLoaded', function () {
       initNavBar('invoices', '請求管理');
       initFilters();
+      // 入力イベントを先に有効化（顧客データは後から setItems で注入）
+      populateCustomerSelects();
       restoreFilterState({ skipCustomer: true });
       initCustomerLazyLoad();
       initCustomersFromCache();
       initModalHandlers();
       loadBillingFolderLink();
       loadLastExportFromStorage();  // 前回の出力結果を復元
+      initInvoiceSync();
     });
 
     // エクスポートフォルダリンクを読み込み
@@ -1523,11 +1696,16 @@
 
     // Modal ESC key and click-outside handlers
     function initCustomersFromCache() {
-      const cached = loadCustomersFromCache();
+      // PageCacheからキャッシュを確認（Stale-While-Revalidate）
+      const cached = PageCache.get(INVOICES_CUSTOMERS_KEY);
       if (cached) {
-        customers = cached;
+        customers = cached.data;
         customersLoaded = true;
         populateCustomerSelects();
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
       }
       // 顧客キャッシュの有無に関わらず、フィルター状態を復元して自動検索を試みる
       const restored = restoreFilterState();
@@ -1536,17 +1714,212 @@
       }
     }
 
-    function initCustomerLazyLoad() {
-      const trigger = function () {
-        if (customersLoaded || customersLoading) return;
-        loadCustomers();
-      };
-      ['filterCustomer', 'generateCustomer'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.addEventListener('focus', trigger);
-        el.addEventListener('click', trigger);
+    // ── CustomerAutocomplete ──
+    // autocomplete インスタンスを保持
+    let filterAutocomplete = null;
+    let generateAutocomplete = null;
+
+    function toSafeText(value) {
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    }
+
+    function getCustomerLabel(customer) {
+      if (!customer || typeof customer !== 'object') return '';
+      return toSafeText(customer.company_name || customer.customer_name);
+    }
+
+    function getCustomerSearchText(customer) {
+      const companyName = getCustomerLabel(customer);
+      const branchName = toSafeText(customer && customer.branch_name);
+      const customerCode = toSafeText(customer && customer.customer_code);
+      return [companyName, branchName, customerCode]
+        .filter(function (v) { return !!v; })
+        .join(' ')
+        .toLowerCase();
+    }
+
+    function filterCustomers(items, query) {
+      const source = Array.isArray(items) ? items : [];
+      const q = (query || '').trim().toLowerCase();
+      if (!q) return source;
+      return source.filter(function (c) {
+        return getCustomerSearchText(c).indexOf(q) !== -1;
       });
+    }
+
+    function createAutocomplete(config) {
+      const input = document.getElementById(config.inputId);
+      const hidden = document.getElementById(config.hiddenId);
+      const dropdown = document.getElementById(config.dropdownId);
+      let items = [];
+      let highlightIndex = -1;
+      let isOpen = false;
+
+      function render(filtered) {
+        dropdown.innerHTML = '';
+        // 「全て」オプション（filterCustomer用）
+        if (config.allOption) {
+          const allItem = document.createElement('div');
+          allItem.className = 'autocomplete-item' + (!hidden.value ? ' selected' : '');
+          allItem.textContent = config.allOption;
+          allItem.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            select('', config.allOption);
+          });
+          dropdown.appendChild(allItem);
+        }
+
+        if (filtered.length === 0 && input.value.trim()) {
+          const noResult = document.createElement('div');
+          noResult.className = 'autocomplete-no-results';
+          noResult.textContent = '該当なし';
+          dropdown.appendChild(noResult);
+          return;
+        }
+
+        filtered.forEach(function (item, i) {
+          const label = getCustomerLabel(item);
+          if (!item || !item.customer_id || !label) return;
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          if (item.customer_id === hidden.value) div.className += ' selected';
+          if (i === highlightIndex) div.className += ' highlighted';
+          div.textContent = label;
+          div.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            select(item.customer_id, label);
+          });
+          dropdown.appendChild(div);
+        });
+      }
+
+      function open() {
+        if (isOpen) return;
+        isOpen = true;
+        highlightIndex = -1;
+        const filtered = filterCustomers(items, input.value);
+        render(filtered);
+        dropdown.classList.add('open');
+      }
+
+      function close() {
+        if (!isOpen) return;
+        isOpen = false;
+        dropdown.classList.remove('open');
+        highlightIndex = -1;
+      }
+
+      function select(value, label) {
+        hidden.value = value;
+        if (value) {
+          input.value = label;
+          input.classList.add('has-value');
+          input.classList.remove('placeholder-like');
+        } else {
+          input.value = '';
+          input.classList.remove('has-value');
+        }
+        close();
+        if (config.onChange) config.onChange(value, label);
+      }
+
+      input.addEventListener('focus', function () {
+        // 遅延ロード: 顧客データが未取得ならロード
+        if (!customersLoaded && !customersLoading) {
+          loadCustomers();
+        }
+        open();
+      });
+
+      input.addEventListener('input', function () {
+        highlightIndex = -1;
+        const filtered = filterCustomers(items, input.value);
+        render(filtered);
+        if (!isOpen) {
+          isOpen = true;
+          dropdown.classList.add('open');
+        }
+        // 入力中は hidden をクリア（確定前）
+        hidden.value = '';
+      });
+
+      input.addEventListener('keydown', function (e) {
+        if (!isOpen) return;
+        const visibleItems = dropdown.querySelectorAll('.autocomplete-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          highlightIndex = Math.min(highlightIndex + 1, visibleItems.length - 1);
+          updateHighlight(visibleItems);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          highlightIndex = Math.max(highlightIndex - 1, 0);
+          updateHighlight(visibleItems);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (highlightIndex >= 0 && visibleItems[highlightIndex]) {
+            visibleItems[highlightIndex].dispatchEvent(new MouseEvent('mousedown'));
+          }
+        } else if (e.key === 'Escape') {
+          close();
+          // 未確定なら元の値に復元
+          if (!hidden.value) {
+            input.value = config.allOption ? '' : '';
+          }
+        }
+      });
+
+      function updateHighlight(nodeList) {
+        nodeList.forEach(function (node, i) {
+          node.classList.toggle('highlighted', i === highlightIndex);
+          if (i === highlightIndex) {
+            node.scrollIntoView({ block: 'nearest' });
+          }
+        });
+      }
+
+      input.addEventListener('blur', function () {
+        // 少し遅延して閉じる（mousedown イベントを先に処理するため）
+        setTimeout(function () { close(); }, 150);
+        // blur時に未選択なら値をクリア
+        if (!hidden.value && input.value.trim()) {
+          // 入力テキストに完全一致する顧客があれば自動選択
+          const typed = input.value.trim();
+          const match = items.find(function (c) { return getCustomerLabel(c) === typed; });
+          if (match) {
+            select(match.customer_id, getCustomerLabel(match));
+          } else {
+            input.value = '';
+          }
+        }
+      });
+
+      // 外部クリックで閉じる
+      document.addEventListener('click', function (e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+          close();
+        }
+      });
+
+      return {
+        setItems: function (newItems) {
+          items = Array.isArray(newItems)
+            ? newItems.filter(function (item) { return item && item.customer_id && getCustomerLabel(item); })
+            : [];
+          if (isOpen) {
+            const filtered = filterCustomers(items, input.value);
+            render(filtered);
+          }
+        },
+        getValue: function () { return hidden.value; },
+        setValue: function (value, label) { select(value, label); },
+        clear: function () { select('', config.allOption || ''); }
+      };
+    }
+
+    function initCustomerLazyLoad() {
+      // autocomplete のfocusイベントで遅延ロード済み
+      // 追加のトリガーは不要
     }
 
     function initModalHandlers() {
@@ -1593,6 +1966,13 @@
       const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear', 'billingExportYear'];
       yearSelects.forEach(id => {
         const select = document.getElementById(id);
+        // filterYearのみ「全て」オプションを追加（全期間検索用）
+        if (id === 'filterYear') {
+          const allOption = document.createElement('option');
+          allOption.value = '';
+          allOption.textContent = '全て';
+          select.appendChild(allOption);
+        }
         for (let y = currentYear - 2; y <= currentYear + 1; y++) {
           const option = document.createElement('option');
           option.value = y;
@@ -1625,25 +2005,31 @@
 
     function loadCustomers() {
       if (customersLoaded || customersLoading) return;
-      customersLoading = true;
-      // Check cache first
-      const cached = loadCustomersFromCache();
+
+      // PageCacheから確認（Stale-While-Revalidate）
+      const cached = PageCache.get(INVOICES_CUSTOMERS_KEY);
       if (cached) {
-        customers = cached;
+        // キャッシュがあれば即座に表示
+        customers = cached.data;
         customersLoaded = true;
-        customersLoading = false;
         populateCustomerSelects();
         restoreFilterState();
+
+        // TTL超過ならバックグラウンド更新
+        if (cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
         return;
       }
 
-      // Fetch from API
+      // キャッシュなし: APIから取得
+      customersLoading = true;
       google.script.run
         .withSuccessHandler(function (result) {
           customersLoading = false;
           if (result.ok) {
             customers = result.data.customers || [];
-            saveCustomersToCache(customers);
+            PageCache.set(INVOICES_CUSTOMERS_KEY, customers);
             customersLoaded = true;
             populateCustomerSelects();
             restoreFilterState();
@@ -1656,25 +2042,191 @@
         .getCustomers();
     }
 
+    // 顧客マスターをバックグラウンドで更新
+    function refreshCustomersInBackground() {
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (result.ok) {
+            const newCustomers = result.data.customers || [];
+            PageCache.set(INVOICES_CUSTOMERS_KEY, newCustomers);
+            // 差分があればUIを更新
+            if (JSON.stringify(customers) !== JSON.stringify(newCustomers)) {
+              customers = newCustomers;
+              populateCustomerSelects();
+            }
+          }
+        })
+        .withFailureHandler(function () {}) // サイレント
+        .getCustomers();
+    }
+
     function populateCustomerSelects() {
-      const filterSelect = document.getElementById('filterCustomer');
-      const generateSelect = document.getElementById('generateCustomer');
+      // autocomplete が未初期化なら作成
+      if (!filterAutocomplete) {
+        filterAutocomplete = createAutocomplete({
+          inputId: 'filterCustomerInput',
+          hiddenId: 'filterCustomer',
+          dropdownId: 'filterCustomerDropdown',
+          allOption: '全て'
+        });
+      }
+      if (!generateAutocomplete) {
+        generateAutocomplete = createAutocomplete({
+          inputId: 'generateCustomerInput',
+          hiddenId: 'generateCustomer',
+          dropdownId: 'generateCustomerDropdown',
+          allOption: null
+        });
+      }
+      // データを設定
+      filterAutocomplete.setItems(customers);
+      generateAutocomplete.setItems(customers);
+    }
 
-      // Clear existing options (except first)
-      filterSelect.innerHTML = '<option value="">全て</option>';
-      generateSelect.innerHTML = '<option value="">選択してください</option>';
+    /**
+     * 請求書が現在のフィルタ条件に一致するかチェック
+     * @param {Object} invoice - 請求書オブジェクト
+     * @returns {boolean} フィルタに一致すればtrue
+     */
+    // ========================================
+    // クロスタブ同期
+    // ========================================
 
-      customers.forEach(c => {
-        const option1 = document.createElement('option');
-        option1.value = c.customer_id;
-        option1.textContent = c.company_name;
-        filterSelect.appendChild(option1);
-
-        const option2 = document.createElement('option');
-        option2.value = c.customer_id;
-        option2.textContent = c.company_name;
-        generateSelect.appendChild(option2);
+    function initInvoiceSync() {
+      invoiceSyncChannel = BroadcastSync.init('invoice_sync', handleInvoiceSyncMessage);
+      BroadcastSync.initVisibilityRefresh(refreshInvoicesOnVisible, {
+        isModalOpen: isAnyInvoiceModalOpen,
+        throttleMs: 5000
       });
+    }
+
+    function isAnyInvoiceModalOpen() {
+      const overlays = ['editModal','paymentModal','generateModal','bulkGenerateModal',
+        'billingExportModal','fileOverwriteModal','regenerateConfirmModal',
+        'statusConfirmModal','bulkExportModal','invoiceOverwriteModal'];
+      for (const id of overlays) {
+        if (document.getElementById(id)?.classList.contains('active')) return true;
+      }
+      const confirm = document.getElementById('confirmation-modal-overlay');
+      if (confirm && confirm.style.display !== 'none') return true;
+      return false;
+    }
+
+    function handleInvoiceSyncMessage(event) {
+      const { type, data, timestamp } = event.data;
+      if (isAnyInvoiceModalOpen()) {
+        pendingInvalidation = true;
+        return;
+      }
+      applyInvoiceSyncMessage(type, data, timestamp);
+    }
+
+    function applyInvoiceSyncMessage(type, data, timestamp) {
+      if (type === 'INVOICES_BULK_UPDATED') {
+        PageCache.clearByPrefix('invoices_list');
+        loadInvoices(true);
+        return;
+      }
+
+      if (type === 'INVOICE_UPDATED' && data?.invoice) {
+        const inv = data.invoice;
+        const existingIdx = invoices.findIndex(i => i.invoice_id === inv.invoice_id);
+
+        if (existingIdx !== -1) {
+          // タイムスタンプ検証: ローカルの方が新しければ無視
+          if (timestamp && invoices[existingIdx].updated_at &&
+              new Date(invoices[existingIdx].updated_at).getTime() > timestamp) {
+            return;
+          }
+          invoices[existingIdx] = { ...invoices[existingIdx], ...inv };
+          const tbody = document.getElementById('invoiceTableBody');
+          const row = tbody.querySelector(`tr[data-invoice-id="${inv.invoice_id}"]`);
+          // フィルタ不一致なら行を削除（ステータス変更等で対象外になったケース）
+          if (!matchesCurrentFilter(invoices[existingIdx])) {
+            invoices.splice(existingIdx, 1);
+            if (row) row.remove();
+          } else if (row) {
+            const showOverdueDays = document.getElementById('filterStatus').value === 'unpaid';
+            row.outerHTML = renderSingleInvoiceRow(invoices[existingIdx], showOverdueDays);
+          }
+        } else if (matchesCurrentFilter(inv)) {
+          invoices.unshift(inv);
+          renderInvoices();
+        }
+        // キャッシュ更新
+        if (currentInvoiceQuery) {
+          PageCache.set(PageCache.makeKey('invoices_list', currentInvoiceQuery), invoices);
+        }
+        return;
+      }
+
+      if (type === 'PAYMENT_RECORDED' && data?.invoiceId) {
+        const inv = invoices.find(i => i.invoice_id === data.invoiceId);
+        if (inv) {
+          if (data.totalPaid !== undefined) inv.total_paid = data.totalPaid;
+          if (data.outstanding !== undefined) inv.outstanding = data.outstanding;
+          if (data.status) inv.status = data.status;
+          if (data.updatedAt) inv.updated_at = data.updatedAt;
+          const tbody = document.getElementById('invoiceTableBody');
+          const row = tbody.querySelector(`tr[data-invoice-id="${data.invoiceId}"]`);
+          if (row) {
+            const showOverdueDays = document.getElementById('filterStatus').value === 'unpaid';
+            row.outerHTML = renderSingleInvoiceRow(inv, showOverdueDays);
+          }
+          if (currentInvoiceQuery) {
+            PageCache.set(PageCache.makeKey('invoices_list', currentInvoiceQuery), invoices);
+          }
+        }
+        return;
+      }
+    }
+
+    function refreshInvoicesOnVisible() {
+      PageCache.clearByPrefix('invoices_list');
+      loadInvoices(true);
+    }
+
+    function processPendingInvalidation() {
+      if (pendingInvalidation) {
+        pendingInvalidation = false;
+        loadInvoices(true);
+      }
+    }
+
+    function matchesCurrentFilter(invoice) {
+      if (!currentInvoiceQuery) return false;
+
+      // customer_idチェック
+      if (currentInvoiceQuery.customer_id && invoice.customer_id !== currentInvoiceQuery.customer_id) {
+        return false;
+      }
+
+      // billing_ym_from/to チェック（年月範囲フィルタ）
+      if (currentInvoiceQuery.billing_ym_from || currentInvoiceQuery.billing_ym_to) {
+        const year = invoice.billing_year != null ? Number(invoice.billing_year) : null;
+        const month = invoice.billing_month != null ? Number(invoice.billing_month) : null;
+        if (year == null || month == null || isNaN(year) || isNaN(month)) return false;
+        const invoiceYm = `${year}-${String(month).padStart(2, '0')}`;
+        if (currentInvoiceQuery.billing_ym_from && invoiceYm < currentInvoiceQuery.billing_ym_from) return false;
+        if (currentInvoiceQuery.billing_ym_to && invoiceYm > currentInvoiceQuery.billing_ym_to) return false;
+      }
+
+      // billing_yearチェック (従来互換)
+      if (currentInvoiceQuery.billing_year && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
+        if (String(invoice.billing_year) !== String(currentInvoiceQuery.billing_year)) return false;
+      }
+
+      // billing_monthチェック (従来互換)
+      if (currentInvoiceQuery.billing_month && !currentInvoiceQuery.billing_ym_from && !currentInvoiceQuery.billing_ym_to) {
+        if (String(invoice.billing_month) !== String(currentInvoiceQuery.billing_month)) return false;
+      }
+
+      // statusチェック（生成直後は常にdraft）
+      if (currentInvoiceQuery.status && invoice.status !== currentInvoiceQuery.status) {
+        return false;
+      }
+
+      return true;
     }
 
     function loadInvoices(skipCache = false) {
@@ -1685,19 +2237,48 @@
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
 
-      // 顧客未選択時は月の指定が必須
-      if (!customerId && !month) {
-        showToast('顧客を選択するか、月を指定してください', 'warning');
-        return;
-      }
-
       const query = {};
-      if (year) {
-        query.billing_year = parseInt(year);
+
+      // 年が「全て」の場合 → 全期間表示（フィルタなし）
+      if (!year) {
+        // billing_ym_from/to を設定しない = 全件
+        // ただし顧客指定がない場合は警告
+        if (!customerId) {
+          showToast('全期間表示は顧客を選択してください', 'warning');
+          return;
+        }
       }
-      if (month) {
+      // 顧客指定あり → 期間制限なし（既存動作維持）
+      else if (customerId) {
+        query.customer_id = customerId;
+        // 年/月指定があれば適用
+        if (year) query.billing_year = parseInt(year);
+        if (month) query.billing_month = parseInt(month);
+      }
+      // 月指定あり → 単一月表示
+      else if (month) {
+        query.billing_year = parseInt(year);
         query.billing_month = parseInt(month);
       }
+      // 月指定なし → 「当月＋前月」デフォルト（★ 新機能）
+      else {
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+
+        // YYYY-MM形式で範囲指定（年またぎも安全）
+        const currentYm = `${year}-${String(currentMonth).padStart(2, '0')}`;
+        let prevYm;
+        if (currentMonth === 1) {
+          // 1月の場合は前年12月を含める
+          prevYm = `${parseInt(year) - 1}-12`;
+        } else {
+          prevYm = `${year}-${String(currentMonth - 1).padStart(2, '0')}`;
+        }
+
+        query.billing_ym_from = prevYm;
+        query.billing_ym_to = currentYm;
+      }
+
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
 
@@ -1708,24 +2289,34 @@
       // Save filter state
       saveFilterState();
 
-      // Check cache (unless skipCache is true)
+      // 現在のクエリを保存（バックグラウンド更新時に使用）
+      currentInvoiceQuery = query;
+      const cacheKey = PageCache.makeKey('invoices_list', query);
+
+      // Stale-While-Revalidate: キャッシュがあれば即座に表示
       if (!skipCache) {
-        const cached = loadInvoicesFromCache(query);
+        const cached = PageCache.get(cacheKey);
         if (cached) {
-          invoices = cached;
+          invoices = cached.data;
           renderInvoices();
+
+          // TTL超過ならバックグラウンド更新
+          if (cached.age > INVOICES_CACHE_TTL) {
+            refreshInvoicesInBackground(cacheKey, query);
+          }
           return;
         }
       }
 
-      showLoading();
+      // キャッシュなし: ローディング表示してAPI取得
+      showLoading('請求書一覧を読み込み中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
             invoices = result.data.invoices || [];
-            saveInvoicesToCache(invoices, query);
+            PageCache.set(cacheKey, invoices);
             renderInvoices();
           } else {
             showToast(result.error?.message || 'エラーが発生しました', 'error');
@@ -1736,6 +2327,90 @@
           handleError(error);
         })
         .searchInvoices(query);
+    }
+
+    // 請求書一覧をバックグラウンドで更新
+    function refreshInvoicesInBackground(cacheKey, query) {
+      google.script.run
+        .withSuccessHandler(function (result) {
+          if (result.ok) {
+            const newInvoices = result.data.invoices || [];
+            PageCache.set(cacheKey, newInvoices);
+
+            // 現在の検索条件と一致する場合のみUIを更新
+            if (JSON.stringify(currentInvoiceQuery) === JSON.stringify(query)) {
+              // 差分があればUIを更新
+              if (JSON.stringify(invoices) !== JSON.stringify(newInvoices)) {
+                invoices = newInvoices;
+                renderInvoices();
+                showToast('データを更新しました', 'info');
+              }
+            }
+          }
+        })
+        .withFailureHandler(function () {}) // サイレント
+        .searchInvoices(query);
+    }
+
+    function renderSingleInvoiceRow(inv, showOverdueDays, customerById) {
+      const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
+      const masterCustomer = customerById ? customerById.get(customerId) : customers.find(c => c.customer_id === customerId);
+      const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
+
+      let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
+        '" data-status="' + inv.status + '" style="cursor: pointer;">';
+      rowHtml += '<td onclick="event.stopPropagation()">' +
+        '<input type="checkbox" class="invoice-checkbox" data-invoice-id="' + inv.invoice_id +
+        '" data-updated-at="' + (inv.updated_at || '') + '" onchange="updateBulkActionBar()">' +
+        '</td>';
+      rowHtml += '<td onclick="event.stopPropagation()">';
+      if (inv.has_assignment_changes) {
+        rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
+          inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+          '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
+          '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
+      }
+      rowHtml += '</td>';
+      rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
+      rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
+      rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
+      rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
+      rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
+      rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
+      const totalPaid = inv.total_paid || 0;
+      const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
+      const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
+      rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
+      if (outstanding === 0 && inv.total_amount > 0) {
+        rowHtml += '<span class="payment-complete">✓ 完済</span>';
+      } else if (totalPaid > 0) {
+        rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
+      } else if (outstanding > 0) {
+        rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
+      } else {
+        rowHtml += '<span class="payment-none">-</span>';
+      }
+      if (isPayable) {
+        rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
+          (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
+      }
+      rowHtml += '</td>';
+      rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
+      if (showOverdueDays) {
+        rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
+      }
+      const isEditable = inv.status === 'unsent' || inv.status === 'hold' || inv.status === 'draft' || inv.status === 'issued';
+      const btnLabel = isEditable ? '確認' : '出力';
+      const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
+      const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
+      rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
+        '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
+        '</td>';
+      rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
+        '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()">' +
+        renderFolderCellHtml(customerId, folderId) + '</td>';
+      rowHtml += '</tr>';
+      return rowHtml;
     }
 
     function renderInvoices() {
@@ -1776,70 +2451,7 @@
       emptyState.style.display = 'none';
 
       const customerById = new Map(customers.map(c => [c.customer_id, c]));
-      tbody.innerHTML = invoices.map(inv => {
-        const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
-        const masterCustomer = customerById.get(customerId);
-        const folderId = (inv.customer && inv.customer.folder_id) || (masterCustomer && masterCustomer.folder_id) || '';
-
-        let rowHtml = '<tr onclick="toggleRowCheckbox(\'' + inv.invoice_id + '\')" data-invoice-id="' + inv.invoice_id +
-          '" data-status="' + inv.status + '" style="cursor: pointer;">';
-        rowHtml += '<td onclick="event.stopPropagation()">' +
-          '<input type="checkbox" class="invoice-checkbox" data-invoice-id="' + inv.invoice_id +
-          '" data-updated-at="' + (inv.updated_at || '') + '" onchange="updateBulkActionBar()">' +
-          '</td>';
-        rowHtml += '<td onclick="event.stopPropagation()">';
-        if (inv.has_assignment_changes) {
-          rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
-            inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
-            '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
-            '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
-        }
-        rowHtml += '</td>';
-        rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
-        rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
-        rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
-        rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
-        rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
-        rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
-        // 入金状況カラム（コンパクト表示 + ホバーボタン）
-        const totalPaid = inv.total_paid || 0;
-        const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
-        const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
-        rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
-        if (outstanding === 0 && inv.total_amount > 0) {
-          rowHtml += '<span class="payment-complete">✓ 完済</span>';
-        } else if (totalPaid > 0) {
-          rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
-        } else if (outstanding > 0) {
-          rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
-        } else {
-          rowHtml += '<span class="payment-none">-</span>';
-        }
-        if (isPayable) {
-          rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
-            (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
-        }
-        rowHtml += '</td>';
-        // ステータス
-        rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
-        // 滞留日数列（未回収フィルタ時のみ）
-        if (showOverdueDays) {
-          rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
-        }
-        // 帳票出力ボタン（常に表示、編集可否はモーダル内で制御）
-        const isEditable = inv.status === 'unsent' || inv.status === 'draft' || inv.status === 'issued';
-        const btnLabel = isEditable ? '確認' : '出力';
-        const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
-        const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
-        rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
-          '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
-          '</td>';
-        rowHtml += '<td class="folder-cell" data-customer-id="' + escapeHtml(customerId) +
-          '" data-folder-id="' + escapeHtml(folderId) + '" onclick="event.stopPropagation()">' +
-          renderFolderCellHtml(customerId, folderId) + '</td>';
-        rowHtml += '</tr>';
-        return rowHtml;
-      }).join('');
+      tbody.innerHTML = invoices.map(inv => renderSingleInvoiceRow(inv, showOverdueDays, customerById)).join('');
       // チェックボックス状態をリセット
       document.getElementById('selectAll').checked = false;
       updateBulkActionBar();
@@ -1848,6 +2460,7 @@
     function getStatusLabel(status) {
       const labels = {
         unsent: '未送付',
+        hold: '保留',
         sent: '送付済',
         unpaid: '未回収',
         paid: '入金済',
@@ -1875,13 +2488,15 @@
 
       // セッションキャッシュも更新
       try {
-        const cacheKey = sessionStorage.getItem(SS_INVOICES_KEY);
-        if (cacheKey) {
-          const cacheData = JSON.parse(cacheKey);
-          const cacheIndex = cacheData.data.findIndex(i => i.invoice_id === invoiceId);
-          if (cacheIndex !== -1) {
-            cacheData.data[cacheIndex] = inv;
-            sessionStorage.setItem(SS_INVOICES_KEY, JSON.stringify(cacheData));
+        if (currentInvoiceQuery) {
+          const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+          const cached = PageCache.get(cacheKey);
+          if (cached && Array.isArray(cached.data)) {
+            const cacheIndex = cached.data.findIndex(i => i.invoice_id === invoiceId);
+            if (cacheIndex !== -1) {
+              cached.data[cacheIndex] = inv;
+              PageCache.set(cacheKey, cached.data);
+            }
           }
         }
       } catch (e) { /* キャッシュ更新失敗は無視 */ }
@@ -1891,11 +2506,26 @@
       const row = tbody.querySelector(`tr[data-invoice-id="${invoiceId}"]`);
       if (!row) return false;
 
-      // 行の中身を更新（発行日、支払期限のみ - 他は変わらない）
+      // 行の中身を更新
       const cells = row.querySelectorAll('td');
-      // cells[5] = 発行日, cells[6] = 支払期限
+      // cells[5] = 発行日, cells[6] = 支払期限, cells[7] = 合計金額
       if (cells[5]) cells[5].textContent = inv.issue_date || '-';
       if (cells[6]) cells[6].textContent = inv.due_date || '-';
+      if (cells[7]) cells[7].innerHTML = formatCurrency(inv.total_amount);
+
+      // 入金状況セル(cells[8])の残高も更新
+      if (cells[8]) {
+        const totalPaid = inv.total_paid || 0;
+        const outstanding = inv.total_amount - totalPaid;
+        inv.outstanding = outstanding;
+        if (outstanding === 0 && inv.total_amount > 0) {
+          cells[8].innerHTML = '<span class="payment-complete">✓ 完済</span>';
+        } else if (totalPaid > 0) {
+          cells[8].innerHTML = '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
+        } else if (outstanding > 0) {
+          cells[8].innerHTML = '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
+        }
+      }
 
       return true;
     }
@@ -2002,9 +2632,9 @@
       const customer = customers.find(c => c.customer_id === customerId);
       if (customer) {
         customer.folder_id = folderId;
-        saveCustomersToCache(customers);
+        PageCache.set(INVOICES_CUSTOMERS_KEY, customers);
       }
-      sessionStorage.removeItem(SS_INVOICES_KEY);
+      PageCache.clearByPrefix('invoices_list');
       // 該当セルのみ更新
       document.querySelectorAll('#invoiceTableBody tr').forEach(row => {
         const cell = row.querySelector('td.folder-cell');
@@ -2080,7 +2710,7 @@
 
     // ========== ソート機能 ==========
     let invoiceSortDirection = 0; // 0:なし, 1:昇順, -1:降順
-    const statusOrder = { 'unsent': 1, 'sent': 2, 'unpaid': 3, 'paid': 4, 'draft': 1, 'issued': 1 };
+    const statusOrder = { 'unsent': 1, 'hold': 1.5, 'sent': 2, 'unpaid': 3, 'paid': 4, 'draft': 1, 'issued': 1 };
 
     function toggleStatusSort() {
       // ソート方向をトグル
@@ -2179,6 +2809,7 @@
 
       const statusLabel = {
         unsent: '未送付',
+        hold: '保留',
         sent: '送付済',
         unpaid: '未回収',
         paid: '入金済'
@@ -2196,6 +2827,7 @@
     function closeStatusConfirm() {
       document.getElementById('statusConfirmModal').classList.remove('active');
       pendingStatusUpdate = null;
+      processPendingInvalidation();
     }
 
     function executeStatusUpdate() {
@@ -2230,7 +2862,9 @@
               }
             });
             // Clear cache since data changed
-            sessionStorage.removeItem(SS_INVOICES_KEY);
+            PageCache.clearByPrefix('invoices_list');
+            // クロスタブ同期（一括更新）
+            BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { status });
             clearSelection();
             document.getElementById('bulkStatusSelect').value = '';
           } else {
@@ -2251,11 +2885,15 @@
 
     function openGenerateModal() {
       loadCustomers();
+      // autocomplete をクリア
+      if (generateAutocomplete) generateAutocomplete.clear();
+      document.getElementById('generateCustomerInput').value = '';
       document.getElementById('generateModal').classList.add('active');
     }
 
     function closeGenerateModal() {
       document.getElementById('generateModal').classList.remove('active');
+      processPendingInvalidation();
     }
 
     // 上書き確認用の一時データ
@@ -2276,7 +2914,7 @@
         return;
       }
 
-      showLoading();
+      showLoading('請求書を生成中...');
       closeGenerateModal();
 
       google.script.run
@@ -2284,8 +2922,30 @@
           hideLoading();
           if (result.ok) {
             showToast('請求書を生成しました', 'success');
-            loadInvoices(true);  // Skip cache after data change
+            // 差分更新: 生成した請求書をリストの先頭に追加
+            if (result.data?.invoice) {
+              const newInvoice = result.data.invoice;
+              // 支払額は0で初期化
+              newInvoice.total_paid = 0;
+              newInvoice.outstanding = newInvoice.total_amount || 0;
+
+              // フィルタ条件に一致する場合のみ差分更新、一致しない場合はリロード
+              if (matchesCurrentFilter(newInvoice)) {
+                invoices.unshift(newInvoice);
+                renderInvoices();
+                // キャッシュを更新
+                const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+                PageCache.set(cacheKey, invoices);
+              } else {
+                // フィルタに一致しない場合、キャッシュをクリアしてリロード
+                PageCache.clearByPrefix('invoices_list');
+                loadInvoices(true);
+              }
+              // クロスタブ同期
+              BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
+            }
           } else if (result.error?.code === 'CONFLICT_ERROR' && result.error?.details?.existingInvoice) {
+            hideLoading();
             // 既存請求書がある場合、上書き確認モーダルを表示
             const existing = result.error.details.existingInvoice;
             pendingOverwrite = { customerId, ym, existingInvoice: existing };
@@ -2294,6 +2954,7 @@
               existing.total_amount ? '¥' + Number(existing.total_amount).toLocaleString() : '-';
             document.getElementById('invoiceOverwriteModal').classList.add('active');
           } else {
+            hideLoading();
             showToast(result.error?.message || '生成に失敗しました', 'error');
           }
         })
@@ -2307,6 +2968,7 @@
     function closeInvoiceOverwriteModal() {
       document.getElementById('invoiceOverwriteModal').classList.remove('active');
       pendingOverwrite = { customerId: null, ym: null, existingInvoice: null };
+      processPendingInvalidation();
     }
 
     function confirmInvoiceOverwrite() {
@@ -2317,19 +2979,42 @@
 
       const { customerId, ym, existingInvoice } = pendingOverwrite;
       closeInvoiceOverwriteModal();
-      showLoading();
+      showLoading('既存請求書を削除中...');
 
       // 既存請求書を削除してから再生成
       google.script.run
         .withSuccessHandler(function (deleteResult) {
           if (deleteResult.ok) {
-            // 削除成功、新規生成
+            // 削除成功、リストから削除
+            invoices = invoices.filter(inv => inv.invoice_id !== existingInvoice.invoice_id);
+            // 新規生成
+            showLoading('請求書を再生成中...');
             google.script.run
               .withSuccessHandler(function (genResult) {
                 hideLoading();
                 if (genResult.ok) {
                   showToast('請求書を再生成しました', 'success');
-                  loadInvoices(true);
+                  // 差分更新: 生成した請求書をリストの先頭に追加
+                  if (genResult.data?.invoice) {
+                    const newInvoice = genResult.data.invoice;
+                    newInvoice.total_paid = 0;
+                    newInvoice.outstanding = newInvoice.total_amount || 0;
+
+                    // フィルタ条件に一致する場合のみ差分更新
+                    if (matchesCurrentFilter(newInvoice)) {
+                      invoices.unshift(newInvoice);
+                      renderInvoices();
+                      // キャッシュを更新
+                      const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+                      PageCache.set(cacheKey, invoices);
+                    } else {
+                      // フィルタに一致しない場合はリロード
+                      PageCache.clearByPrefix('invoices_list');
+                      loadInvoices(true);
+                    }
+                    // クロスタブ同期
+                    BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
+                  }
                 } else {
                   showToast(genResult.error?.message || '再生成に失敗しました', 'error');
                 }
@@ -2373,7 +3058,10 @@
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
+        // クロスタブ同期（一括生成完了時のみ1回）
+        BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
+      processPendingInvalidation();
     }
 
     function closeBulkGenerateModal() {
@@ -2385,7 +3073,9 @@
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
+        BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
+      processPendingInvalidation();
       // リセット
       document.getElementById('bulkGenerateProgress').style.display = 'none';
       document.getElementById('bulkGenerateResult').style.display = 'none';
@@ -2684,7 +3374,7 @@
         newTab.document.write(loadingHtml);
         newTab.document.close();
       }
-      showLoading();
+      showLoading('ファイルを出力中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -2748,6 +3438,7 @@
     function closeFileOverwriteModal() {
       document.getElementById('fileOverwriteModal').classList.remove('active');
       pendingExport = null;
+      processPendingInvalidation();
     }
 
     function confirmOverwrite() {
@@ -2852,6 +3543,7 @@
      */
     function closeBulkExportModal() {
       document.getElementById('bulkExportModal').classList.remove('active');
+      processPendingInvalidation();
 
       // タイマーを停止
       stopElapsedTimeUpdate();
@@ -3345,6 +4037,7 @@
 
     function closeBillingExportModal() {
       document.getElementById('billingExportModal').classList.remove('active');
+      processPendingInvalidation();
     }
 
     function executeBillingExport() {
@@ -3385,7 +4078,7 @@
         newTab.document.close();
       }
 
-      showLoading();
+      showLoading('エクスポート中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -3433,12 +4126,16 @@
         .replace(/'/g, '&#039;');
     }
 
-    function showLoading() {
+    function showLoading(message) {
       document.getElementById('loading').classList.add('active');
+      const msgEl = document.getElementById('loading-message');
+      if (msgEl) msgEl.textContent = message || '';
     }
 
     function hideLoading() {
       document.getElementById('loading').classList.remove('active');
+      const msgEl = document.getElementById('loading-message');
+      if (msgEl) msgEl.textContent = '';
     }
 
     function showToast(message, type = 'info') {
@@ -3497,7 +4194,7 @@
      */
     function showRegenerateConfirm(invoiceId, customerName, period, status) {
       // 送付済みの場合は再生成不可
-      if (status !== 'unsent' && status !== 'draft' && status !== 'issued') {
+      if (status !== 'unsent' && status !== 'hold' && status !== 'draft' && status !== 'issued') {
         showToast('送付済みの請求書は再生成できません', 'warning');
         return;
       }
@@ -3525,6 +4222,7 @@
     function closeRegenerateConfirm() {
       document.getElementById('regenerateConfirmModal').classList.remove('active');
       pendingRegenerate = null;
+      processPendingInvalidation();
     }
 
     /**
@@ -3539,7 +4237,7 @@
       // ローディング表示
       confirmBtn.disabled = true;
       confirmBtn.textContent = '再生成中...';
-      showLoading();
+      showLoading('請求書を再生成中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
@@ -3547,9 +4245,23 @@
           closeRegenerateConfirm();
           if (result.ok) {
             showToast(customerName + ' の請求書を再生成しました', 'success');
-            // キャッシュをクリアして再読み込み
-            clearInvoiceCache();
-            loadInvoices(true);
+            // 差分更新: 該当請求書を更新
+            if (result.data?.invoice) {
+              const updatedInvoice = result.data.invoice;
+              const idx = invoices.findIndex(inv => inv.invoice_id === invoiceId);
+              if (idx !== -1) {
+                // 支払額を保持
+                updatedInvoice.total_paid = invoices[idx].total_paid || 0;
+                updatedInvoice.outstanding = (updatedInvoice.total_amount || 0) - updatedInvoice.total_paid;
+                invoices[idx] = updatedInvoice;
+                renderInvoices();
+                // キャッシュを更新
+                const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+                PageCache.set(cacheKey, invoices);
+              }
+              // クロスタブ同期
+              BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
+            }
           } else {
             const errorMsg = result.error?.message || result.error || '再生成に失敗しました';
             showToast(errorMsg, 'error');
@@ -3568,19 +4280,7 @@
      * 請求書キャッシュをクリア
      */
     function clearInvoiceCache() {
-      const keysToRemove = [];
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && key.startsWith('invoices_')) {
-          keysToRemove.push(key);
-        }
-      }
-      keysToRemove.forEach(k => sessionStorage.removeItem(k));
-
-      // 単一キーのキャッシュも削除
-      if (typeof SS_INVOICES_KEY !== 'undefined') {
-        sessionStorage.removeItem(SS_INVOICES_KEY);
-      }
+      PageCache.clearByPrefix('invoices');
     }
 
     // ========== 入金管理機能 ==========
@@ -3623,6 +4323,7 @@
     function closePaymentModal() {
       document.getElementById('paymentModal').classList.remove('active');
       currentPaymentInvoice = null;
+      processPendingInvalidation();
     }
 
     // ========================================
@@ -3636,7 +4337,7 @@
      * @param {string} invoiceId - 請求書ID
      */
     function openEditModal(invoiceId) {
-      showLoading();
+      showLoading('請求書を読み込み中...');
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
@@ -3649,7 +4350,7 @@
           currentEditInvoice = invoice;
 
           // 編集可能なステータスかチェック
-          const editableStatuses = ['unsent', 'draft', 'issued'];
+          const editableStatuses = ['unsent', 'hold', 'draft', 'issued'];
           const isEditable = editableStatuses.includes(invoice.status);
 
           // モーダルタイトルを設定
@@ -3672,6 +4373,20 @@
 
           // 明細をレンダリング（編集可否を渡す）
           renderEditLines(invoice.lines || [], isEditable);
+
+          // 調整項目をロード
+          const container = document.getElementById('adjustmentItemsContainer');
+          container.innerHTML = '';
+          const adjustments = invoice.adjustments || [];
+          adjustments.forEach(function(adj) {
+            addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
+          });
+          // 編集不可の場合は調整項目セクションを非表示
+          document.getElementById('adjustmentSection').style.display = isEditable ? '' : 'none';
+          document.getElementById('addAdjustmentBtn').disabled = adjustments.length >= 5;
+
+          // 合計プレビューを更新
+          updateTotalsPreview();
 
           // アーカイブデータの場合は警告バナーを表示
           if (invoice._archived) {
@@ -3699,6 +4414,7 @@
       document.getElementById('editModal').classList.remove('active');
       currentEditInvoice = null;
       hideInvoiceArchiveWarning();
+      processPendingInvalidation();
     }
 
     /**
@@ -3809,7 +4525,7 @@
         });
       });
 
-      showLoading();
+      showLoading('保存中...');
       google.script.run
         .withSuccessHandler(function(result) {
           hideLoading();
@@ -3832,6 +4548,12 @@
             updateInvoiceRow(result.data.invoice);
             // 楽観ロック用の updated_at を更新（次回保存用）
             document.getElementById('editUpdatedAt').value = result.data.invoice.updated_at || '';
+            // currentEditInvoice を更新（合計プレビュー用）
+            currentEditInvoice = { ...currentEditInvoice, ...result.data.invoice };
+            if (result.data.adjustments) currentEditInvoice.adjustments = result.data.adjustments;
+            updateTotalsPreview();
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
           }
           // モーダルは閉じず、出力を促す
           showToast('保存しました。帳票を出力して確認できます', 'success');
@@ -3843,7 +4565,107 @@
           console.error('updateInvoiceDetails error:', error);
           showToast('保存に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
-        .updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
+        .updateInvoiceDetails(invoiceId, headerData, linesData, collectAdjustmentData(), expectedUpdatedAt);
+    }
+
+    // ========================================
+    // 調整項目関連関数
+    // ========================================
+
+    /**
+     * 調整行をDOMに追加
+     */
+    function addAdjustmentRow(itemName, amount, adjustmentId) {
+      const container = document.getElementById('adjustmentItemsContainer');
+      const count = container.querySelectorAll('.adjustment-row').length;
+      if (count >= 5) return;
+
+      const row = document.createElement('div');
+      row.className = 'adjustment-row';
+      row.dataset.adjustmentId = adjustmentId || '';
+      row.innerHTML =
+        '<input type="text" placeholder="品目名（例: 材料費）" maxlength="50" value="' + escapeHtml(itemName || '') + '" oninput="updateTotalsPreview()" />' +
+        '<input type="number" placeholder="金額" value="' + (amount || '') + '" oninput="updateTotalsPreview()" />' +
+        '<button type="button" class="adjustment-remove-btn" onclick="removeAdjustmentRow(this)" title="削除">&times;</button>';
+      container.appendChild(row);
+
+      // 追加ボタンの状態を更新
+      document.getElementById('addAdjustmentBtn').disabled = container.querySelectorAll('.adjustment-row').length >= 5;
+      updateTotalsPreview();
+    }
+
+    /**
+     * 調整行をDOMから削除
+     */
+    function removeAdjustmentRow(btn) {
+      btn.closest('.adjustment-row').remove();
+      document.getElementById('addAdjustmentBtn').disabled =
+        document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row').length >= 5;
+      updateTotalsPreview();
+    }
+
+    /**
+     * フォームから調整データを収集（空品目名・0金額はスキップ）
+     */
+    function collectAdjustmentData() {
+      const rows = document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row');
+      const data = [];
+      rows.forEach(function(row) {
+        const itemName = row.querySelector('input[type="text"]').value.trim();
+        const amount = parseInt(row.querySelector('input[type="number"]').value, 10);
+        if (!itemName || !amount || isNaN(amount)) return;
+        const entry = { item_name: itemName, amount: amount };
+        if (row.dataset.adjustmentId) entry.adjustment_id = row.dataset.adjustmentId;
+        data.push(entry);
+      });
+      return data;
+    }
+
+    /**
+     * リアルタイム合計プレビューを更新
+     */
+    function updateTotalsPreview() {
+      if (!currentEditInvoice) return;
+      const inv = currentEditInvoice;
+
+      // 明細からの金額
+      const subtotal = Number(inv.subtotal) || 0;
+      const expense = Number(inv.expense_amount) || 0;
+
+      // 調整項目の合計
+      const adjRows = document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row');
+      let adjTotal = 0;
+      adjRows.forEach(function(row) {
+        const val = parseInt(row.querySelector('input[type="number"]').value, 10);
+        if (!isNaN(val)) adjTotal += val;
+      });
+
+      // 税率（顧客設定から、デフォルト10%）
+      // 注意: tax_rate はパーセント単位（10）で保存されているため、100で割って小数に変換
+      const taxRate = ((inv.customer && Number(inv.customer.tax_rate)) || 10) / 100;
+
+      // 税込合計を概算
+      const taxable = subtotal + expense + adjTotal;
+      const taxAmount = Math.floor(taxable * taxRate);
+      const total = Math.floor(taxable + taxAmount);
+
+      document.getElementById('previewSubtotal').textContent = formatCurrency(subtotal);
+      document.getElementById('previewExpense').textContent = formatCurrency(expense);
+
+      const adjRow = document.getElementById('previewAdjustmentRow');
+      const adjSpan = document.getElementById('previewAdjustment');
+      if (adjTotal !== 0) {
+        adjRow.style.display = '';
+        adjSpan.textContent = formatCurrency(adjTotal);
+        adjSpan.className = 'amount-value ' + (adjTotal > 0 ? 'amount-positive' : 'amount-negative');
+      } else {
+        adjRow.style.display = 'none';
+      }
+
+      document.getElementById('previewTax').textContent = formatCurrency(taxAmount);
+      const totalSpan = document.getElementById('previewTotal');
+      totalSpan.textContent = formatCurrency(total);
+      totalSpan.className = 'amount-value' + (total < 0 ? ' amount-negative' : '');
     }
 
     /**
@@ -4016,6 +4838,20 @@
 
             // テーブル再描画
             renderInvoices();
+
+            // キャッシュを更新（現在のデータで上書き）
+            if (currentInvoiceQuery) {
+              const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+              PageCache.set(cacheKey, invoices);
+            }
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'PAYMENT_RECORDED', {
+              invoiceId: invoiceId,
+              totalPaid: result.data.totalPaid,
+              outstanding: result.data.outstanding,
+              status: result.data.statusUpdated ? 'paid' : (inv ? inv.status : null),
+              updatedAt: result.data.newUpdatedAt
+            });
           } else {
             showToast(result.error?.message || result.error || '入金記録に失敗しました', 'error');
           }
@@ -4075,6 +4911,20 @@
 
             // テーブル再描画
             renderInvoices();
+
+            // キャッシュを更新（現在のデータで上書き）
+            if (currentInvoiceQuery) {
+              const cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+              PageCache.set(cacheKey, invoices);
+            }
+            // クロスタブ同期
+            BroadcastSync.broadcast(invoiceSyncChannel, 'PAYMENT_RECORDED', {
+              invoiceId: invoiceId,
+              totalPaid: result.data.totalPaid,
+              outstanding: result.data.outstanding,
+              status: result.data.statusUpdated ? 'unpaid' : (inv ? inv.status : null),
+              updatedAt: result.data.newUpdatedAt
+            });
           } else {
             showToast(result.error?.message || result.error || '削除に失敗しました', 'error');
           }

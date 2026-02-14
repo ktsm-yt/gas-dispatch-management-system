@@ -11,7 +11,7 @@
 
 /**
  * シートを取得（直接シート名で検索）
- * @param {string} sheetName - シート名（日本語）
+ * @param {string} sheetName - シート名（英語）
  * @returns {GoogleAppsScript.Spreadsheet.Sheet}
  */
 function getSheetDirect(sheetName) {
@@ -150,20 +150,8 @@ function softDeleteRow(sheet, rowIndex, deletedBy) {
 }
 
 // 以下の関数は utils.gs に統一
-// @see utils.gs generateId(), getCurrentTimestamp(), generateRequestId()
+// @see utils.gs generateId(), getCurrentTimestamp(), generateRequestId(), getCurrentUserEmail()
 // @see utils.gs buildSuccessResponse(), buildErrorResponse()
-
-/**
- * 現在のユーザーメールを取得
- * @returns {string} メールアドレス
- */
-function getCurrentUserEmail() {
-  try {
-    return Session.getActiveUser().getEmail() || 'system';
-  } catch (e) {
-    return 'system';
-  }
-}
 
 /**
  * 楽観ロックチェック

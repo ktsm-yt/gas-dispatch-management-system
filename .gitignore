@@ -3,6 +3,7 @@
 
 # Node / clasp / Apps Script
 node_modules/
+app/gas/dist/
 .clasp.json
 app/gas/.clasp.json
 app/gas/.cache/
@@ -48,6 +49,7 @@ yarn-error.log*
 .env.bak.*
 
 # Secrets / Credentials
+.credentials/
 *.pem
 *.key
 *.p12

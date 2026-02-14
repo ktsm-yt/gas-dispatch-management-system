@@ -121,7 +121,7 @@ const SlotService = {
       }, requestId);
 
     } catch (e) {
-      console.error('saveSlots error:', e);
+      logErr('saveSlots', e);
       return buildErrorResponse(
         ERROR_CODES.SYSTEM_ERROR,
         'システムエラーが発生しました',
@@ -136,11 +136,14 @@ const SlotService = {
   /**
    * 枠ごとの充足状況を取得
    * @param {string} jobId - 案件ID
+   * @param {Object} [preloadedData] - プリロード済みデータ（省略時はDB取得）
+   * @param {Object[]} [preloadedData.slots] - 枠データ
+   * @param {Object[]} [preloadedData.assignments] - 配置データ
    * @returns {Object} { slotStatuses: Object[], total: Object }
    */
-  getSlotStatus: function(jobId) {
-    const slots = SlotRepository.findByJobId(jobId);
-    const assignments = AssignmentRepository.findByJobId(jobId);
+  getSlotStatus: function(jobId, preloadedData) {
+    const slots = preloadedData?.slots || SlotRepository.findByJobId(jobId);
+    const assignments = preloadedData?.assignments || AssignmentRepository.findByJobId(jobId);
 
     // 枠ごとの配置数をカウント
     const assignmentsBySlot = {};
@@ -271,7 +274,7 @@ const SlotService = {
       }, requestId);
 
     } catch (e) {
-      console.error('assignToSlot error:', e);
+      logErr('assignToSlot', e);
       return buildErrorResponse(
         ERROR_CODES.SYSTEM_ERROR,
         'システムエラーが発生しました',

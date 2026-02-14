@@ -14,12 +14,12 @@ function getCustomers() {
     const result = listCustomers({ activeOnly: true });
     if (result.ok) {
       // listCustomers returns { items: [...], count: N }
-      return buildSuccessResponse({ customers: result.data.items || [] });
+      return buildSuccessResponse({ customers: result.data?.items || [] });
     }
     return result;
-  } catch (error) {
-    console.error('getCustomers error:', error);
-    return buildErrorResponse('SYSTEM_ERROR', error.message);
+  } catch (error: unknown) {
+    logErr('getCustomers', error);
+    return buildErrorResponse('SYSTEM_ERROR', (error instanceof Error) ? error.message : String(error));
   }
 }
 
@@ -30,7 +30,7 @@ function getCustomers() {
  * @param {Object} options - オプション
  * @returns {Object} APIレスポンス
  */
-function generateInvoice(customerId, ym, options = {}) {
+function generateInvoice(customerId: string, ym: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -74,20 +74,20 @@ function generateInvoice(customerId, ym, options = {}) {
       const errorCode = result.error === 'INVOICE_ALREADY_EXISTS'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      const errorMessages = {
+      const errorMessages: Record<string, string> = {
         'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
         'INVOICE_ALREADY_EXISTS': '既に請求書が存在します',
         'CUSTOMER_NOT_FOUND': '顧客が見つかりません'
       };
-      const message = errorMessages[result.error] || result.error;
+      const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
       return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`generateInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`generateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -97,7 +97,7 @@ function generateInvoice(customerId, ym, options = {}) {
  * @param {Object} options - オプション { overwrite: false }
  * @returns {Object} APIレスポンス { success, skippedNoData, skippedExisting, failed }
  */
-function bulkGenerateInvoices(ym, options = {}) {
+function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -120,9 +120,9 @@ function bulkGenerateInvoices(ym, options = {}) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`bulkGenerateInvoices error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`bulkGenerateInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -131,7 +131,7 @@ function bulkGenerateInvoices(ym, options = {}) {
  * @param {Object} query - 検索条件
  * @returns {Object} APIレスポンス
  */
-function searchInvoices(query) {
+function searchInvoices(query: Record<string, unknown>) {
   const requestId = generateRequestId();
 
   try {
@@ -148,9 +148,9 @@ function searchInvoices(query) {
       if (overdueResult.updated > 0) {
         Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
       }
-    } catch (overdueError) {
+    } catch (overdueError: unknown) {
       // 自動更新エラーは検索自体を妨げない
-      console.warn('autoMarkOverdue error:', overdueError.message);
+      console.warn('autoMarkOverdue error:', (overdueError instanceof Error) ? overdueError.message : String(overdueError));
     }
 
     // Service呼び出し
@@ -170,9 +170,9 @@ function searchInvoices(query) {
 
     return buildSuccessResponse({ invoices: invoices }, requestId);
 
-  } catch (error) {
-    Logger.log(`searchInvoices error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`searchInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -181,7 +181,7 @@ function searchInvoices(query) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function getInvoice(invoiceId) {
+function getInvoice(invoiceId: string) {
   const requestId = generateRequestId();
 
   try {
@@ -205,9 +205,9 @@ function getInvoice(invoiceId) {
 
     return buildSuccessResponse(invoice, requestId);
 
-  } catch (error) {
-    Logger.log(`getInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`getInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -218,7 +218,7 @@ function getInvoice(invoiceId) {
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function saveInvoice(invoice, lines, expectedUpdatedAt) {
+function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -234,20 +234,20 @@ function saveInvoice(invoice, lines, expectedUpdatedAt) {
     }
 
     // Service呼び出し
-    const result = InvoiceService.save(invoice, lines, expectedUpdatedAt);
+    const result = InvoiceService.save(invoice, lines as Record<string, unknown>[], expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, {}, requestId);
+      return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`saveInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`saveInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -258,7 +258,7 @@ function saveInvoice(invoice, lines, expectedUpdatedAt) {
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function updateInvoiceStatus(invoiceId, status, expectedUpdatedAt) {
+function updateInvoiceStatus(invoiceId: string, status: string, expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -286,14 +286,14 @@ function updateInvoiceStatus(invoiceId, status, expectedUpdatedAt) {
         : result.error === 'NOT_FOUND'
         ? ERROR_CODES.NOT_FOUND
         : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error, {}, requestId);
+      return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`updateInvoiceStatus error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`updateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -303,7 +303,7 @@ function updateInvoiceStatus(invoiceId, status, expectedUpdatedAt) {
  * @param {string} status - 新しいステータス
  * @returns {Object} APIレスポンス { success, updated, failed, errors }
  */
-function bulkUpdateInvoiceStatus(updates, status) {
+function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
   const requestId = generateRequestId();
 
   try {
@@ -323,15 +323,15 @@ function bulkUpdateInvoiceStatus(updates, status) {
     }
 
     // 有効なステータスチェック
-    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid'];
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
     if (!validStatuses.includes(status)) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
     }
 
     // 入力形式を変換 (updatedAt → expectedUpdatedAt)
-    const bulkUpdates = updates.map(item => ({
-      invoiceId: item.invoiceId,
-      expectedUpdatedAt: item.updatedAt
+    const bulkUpdates = (updates as Record<string, unknown>[]).map((item: Record<string, unknown>) => ({
+      invoiceId: item.invoiceId as string,
+      expectedUpdatedAt: item.updatedAt as string
     }));
 
     // バルク更新実行（シートI/O 1回）
@@ -346,7 +346,12 @@ function bulkUpdateInvoiceStatus(updates, status) {
     // エラー情報を抽出
     const errors = result.results
       .filter(r => !r.success)
-      .map(r => ({ invoiceId: r.invoiceId, error: r.error }));
+      .map(r => ({
+        invoiceId: r.invoiceId,
+        error: r.error,
+        currentStatus: r.currentStatus,
+        currentUpdatedAt: r.currentUpdatedAt
+      }));
 
     return buildSuccessResponse({
       success: true,
@@ -356,9 +361,9 @@ function bulkUpdateInvoiceStatus(updates, status) {
       errors: errors.length > 0 ? errors : undefined
     }, requestId);
 
-  } catch (error) {
-    Logger.log(`bulkUpdateInvoiceStatus error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`bulkUpdateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -369,7 +374,7 @@ function bulkUpdateInvoiceStatus(updates, status) {
  * @param {Object} options - オプション（includeCoverPage: true で頭紙付きファイル名をチェック）
  * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
  */
-function checkInvoiceExportFile(invoiceId, mode, options = {}) {
+function checkInvoiceExportFile(invoiceId: string, mode: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -398,20 +403,20 @@ function checkInvoiceExportFile(invoiceId, mode, options = {}) {
     const result = InvoiceExportService.checkExistingFile(invoiceId, mode, options);
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`checkInvoiceExportFile error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`checkInvoiceExportFile error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
 /**
  * 請求書を出力（PDF/Excel/編集）
  * @param {string} invoiceId - 請求ID
- * @param {string} mode - 出力モード（pdf/excel/edit）
+ * @param {string} mode - 出力モード（pdf/excel/cover）
  * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
  * @returns {Object} APIレスポンス { fileId, url }
  */
-function exportInvoice(invoiceId, mode, options = {}) {
+function exportInvoice(invoiceId: string, mode: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -426,7 +431,7 @@ function exportInvoice(invoiceId, mode, options = {}) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    const validModes = ['pdf', 'excel', 'cover', 'edit'];
+    const validModes = ['pdf', 'excel', 'cover'];
     if (!mode || !validModes.includes(mode)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -437,7 +442,7 @@ function exportInvoice(invoiceId, mode, options = {}) {
     }
 
     // アーカイブデータのエクスポートを拒否（P2-5）
-    if (options._archived) {
+    if ((options as Record<string, unknown>)._archived) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '過去年度のデータは出力できません。一覧からの参照のみ可能です。',
@@ -450,14 +455,14 @@ function exportInvoice(invoiceId, mode, options = {}) {
     const result = InvoiceExportService.export(invoiceId, mode, options);
 
     if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, result.error, {}, requestId);
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, String(result.error || 'エラーが発生しました'), {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`exportInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`exportInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -467,7 +472,7 @@ function exportInvoice(invoiceId, mode, options = {}) {
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function deleteInvoice(invoiceId, expectedUpdatedAt) {
+function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -491,14 +496,14 @@ function deleteInvoice(invoiceId, expectedUpdatedAt) {
         : result.error === 'CANNOT_DELETE_ISSUED_INVOICE'
         ? ERROR_CODES.VALIDATION_ERROR
         : ERROR_CODES.SYSTEM_ERROR;
-      return buildErrorResponse(errorCode, result.error, {}, requestId);
+      return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
     }
 
     return buildSuccessResponse({ deleted: true }, requestId);
 
-  } catch (error) {
-    Logger.log(`deleteInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`deleteInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -507,7 +512,7 @@ function deleteInvoice(invoiceId, expectedUpdatedAt) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function regenerateInvoice(invoiceId) {
+function regenerateInvoice(invoiceId: string) {
   const requestId = generateRequestId();
 
   try {
@@ -526,31 +531,31 @@ function regenerateInvoice(invoiceId) {
     const result = InvoiceService.regenerate(invoiceId);
 
     if (!result.success) {
-      const errorMessages = {
+      const errorMessages: Record<string, string> = {
         'NOT_FOUND': '請求書が見つかりません',
         'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再生成できません',
         'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再生成できません',
         'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません'
       };
-      const message = errorMessages[result.error] || result.error;
+      const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, message, {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`regenerateInvoice error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`regenerateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
 /**
  * 請求データをエクスポート（集計データ）
  * @param {string} ym - 対象年月（YYYY-MM形式）
- * @param {string} format - 出力形式（xlsx/csv）。csv は @deprecated 2026-06 削除予定
+ * @param {string} format - 出力形式（xlsx）
  * @returns {Object} APIレスポンス { fileId, url }
  */
-function exportBillingData(ym, format = 'xlsx') {
+function exportBillingData(ym: string, format: string = 'xlsx') {
   const requestId = generateRequestId();
 
   try {
@@ -565,7 +570,7 @@ function exportBillingData(ym, format = 'xlsx') {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'ym must be in YYYY-MM format', {}, requestId);
     }
 
-    const validFormats = ['xlsx', 'csv'];
+    const validFormats = ['xlsx'];
     if (!validFormats.includes(format)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
@@ -609,36 +614,24 @@ function exportBillingData(ym, format = 'xlsx') {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
 
       // データ
-      const rows = data.map(row => headers.map(h => row[h]));
+      const rows = data.map(row => headers.map(h => (row as Record<string, unknown>)[h]));
       sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
     }
 
     SpreadsheetApp.flush();
 
-    // フォーマットに応じて出力
-    let blob;
-    let fileName;
+    // xlsx形式で出力
     const spreadsheetId = spreadsheet.getId();
-
-    if (format === 'csv') {
-      console.warn('[DEPRECATED] CSV出力は 2026-06 に削除予定です。xlsx形式を使用してください。');
-      const csvContent = this._convertToCSV(data);
-      blob = Utilities.newBlob(csvContent, 'text/csv');
-      fileName = `請求データ_${ym}.csv`;
-    } else {
-      const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
-      const token = ScriptApp.getOAuthToken();
-      const response = UrlFetchApp.fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      blob = response.getBlob();
-      fileName = `請求データ_${ym}.xlsx`;
-    }
-
-    blob.setName(fileName);
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
+    const token = ScriptApp.getOAuthToken();
+    const response = UrlFetchApp.fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const blob = response.getBlob();
+    blob.setName(`請求データ_${ym}.xlsx`);
 
     // エクスポートフォルダを取得
-    const folder = InvoiceExportService._getOutputFolder();
+    const folder = InvoiceExportService._getOutputFolder({});
 
     // ファイルを保存
     const file = folder.createFile(blob);
@@ -651,9 +644,9 @@ function exportBillingData(ym, format = 'xlsx') {
       url: file.getUrl()
     }, requestId);
 
-  } catch (error) {
-    Logger.log(`exportBillingData error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`exportBillingData error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -673,33 +666,10 @@ function getBillingExportFolderUrl() {
     const status = InvoiceExportService.getExportFolderStatus();
     return buildSuccessResponse(status, requestId);
 
-  } catch (error) {
-    Logger.log(`getBillingExportFolderUrl error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`getBillingExportFolderUrl error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
-}
-
-/**
- * 配列をCSV形式に変換
- * @param {Object[]} data - データ配列
- * @returns {string} CSV文字列
- */
-function _convertToCSV(data) {
-  if (!data || data.length === 0) return '';
-
-  const headers = Object.keys(data[0]);
-  const rows = data.map(row =>
-    headers.map(h => {
-      const value = row[h];
-      // カンマや改行を含む場合はダブルクォートで囲む
-      if (String(value).includes(',') || String(value).includes('\n')) {
-        return `"${String(value).replace(/"/g, '""')}"`;
-      }
-      return value;
-    }).join(',')
-  );
-
-  return [headers.join(','), ...rows].join('\n');
 }
 
 /**
@@ -709,7 +679,7 @@ function _convertToCSV(data) {
  * @param {string} workDate - 作業日（YYYY-MM-DD形式）
  * @returns {Object} APIレスポンス { exists, invoice? }
  */
-function checkInvoiceExistsForJob(customerId, workDate) {
+function checkInvoiceExistsForJob(customerId: string, workDate: string) {
   const requestId = generateRequestId();
 
   try {
@@ -731,7 +701,7 @@ function checkInvoiceExistsForJob(customerId, workDate) {
     }
 
     // 作業日から請求期間を算出
-    const closingDay = customer.closing_day || 31;
+    const closingDay = Number(customer.closing_day || 31);
     const workDateObj = new Date(workDate);
     const { billingYear, billingMonth } = calculateBillingPeriodFromWorkDate_(workDateObj, closingDay);
 
@@ -757,9 +727,9 @@ function checkInvoiceExistsForJob(customerId, workDate) {
       }
     }, requestId);
 
-  } catch (error) {
-    Logger.log(`checkInvoiceExistsForJob error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`checkInvoiceExistsForJob error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -769,13 +739,13 @@ function checkInvoiceExistsForJob(customerId, workDate) {
  * @param {number} closingDay - 締め日（1-31、31=月末）
  * @returns {Object} { billingYear, billingMonth }
  */
-function calculateBillingPeriodFromWorkDate_(workDate, closingDay) {
+function calculateBillingPeriodFromWorkDate_(workDate: Date, closingDay: number) {
   const year = workDate.getFullYear();
   const month = workDate.getMonth() + 1; // 1-12
   const day = workDate.getDate();
 
   // 月末締め（31）の場合
-  if (closingDay >= 31) {
+  if (closingDay === 31) {
     return { billingYear: year, billingMonth: month };
   }
 
@@ -801,7 +771,7 @@ function calculateBillingPeriodFromWorkDate_(workDate, closingDay) {
  * @param {Object} params - { invoiceIds: string[], exportMode: 'pdf'|'pdf_cover'|'excel' }
  * @returns {Object} APIレスポンス
  */
-function startBulkExport(params) {
+function startBulkExport(params: Record<string, unknown>) {
   const requestId = generateRequestId();
 
   try {
@@ -819,7 +789,7 @@ function startBulkExport(params) {
     // 入力検証
     if (!params || !params.invoiceIds || !Array.isArray(params.invoiceIds)) {
       return buildErrorResponse(
-        ERROR_CODES.INVALID_INPUT,
+        ERROR_CODES.VALIDATION_ERROR,
         '出力する請求書を選択してください',
         {},
         requestId
@@ -828,7 +798,7 @@ function startBulkExport(params) {
 
     if (params.invoiceIds.length === 0) {
       return buildErrorResponse(
-        ERROR_CODES.INVALID_INPUT,
+        ERROR_CODES.VALIDATION_ERROR,
         '出力する請求書を選択してください',
         {},
         requestId
@@ -836,9 +806,9 @@ function startBulkExport(params) {
     }
 
     const validModes = ['pdf', 'pdf_cover', 'excel'];
-    if (!params.exportMode || !validModes.includes(params.exportMode)) {
+    if (!params.exportMode || !validModes.includes(params.exportMode as string)) {
       return buildErrorResponse(
-        ERROR_CODES.INVALID_INPUT,
+        ERROR_CODES.VALIDATION_ERROR,
         '有効な出力モードを選択してください',
         {},
         requestId
@@ -846,7 +816,7 @@ function startBulkExport(params) {
     }
 
     // 一括出力を実行
-    const result = InvoiceBulkExportService.executeBulkExport(params);
+    const result = InvoiceBulkExportService.executeBulkExport(params as { invoiceIds: string[]; exportMode: string; enableUrlSharing?: boolean });
 
     // サービス層でエラーが発生した場合はエラーレスポンスを返す
     if (!result.success && result.error !== 'TIMEOUT_WILL_CONTINUE') {
@@ -860,11 +830,11 @@ function startBulkExport(params) {
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    console.error('startBulkExport error:', error);
+  } catch (error: unknown) {
+    logErr('startBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      (error instanceof Error) ? error.message : String(error),
       {},
       requestId
     );
@@ -876,7 +846,7 @@ function startBulkExport(params) {
  * @param {Object} params - { invoiceIds: string[], exportMode: string }
  * @returns {Object} APIレスポンス
  */
-function cancelBulkExport(params) {
+function cancelBulkExport(params: Record<string, unknown>) {
   const requestId = generateRequestId();
 
   try {
@@ -891,14 +861,14 @@ function cancelBulkExport(params) {
       );
     }
 
-    const result = InvoiceBulkExportService.cancelExport(params);
+    const result = InvoiceBulkExportService.cancelExport(params as { invoiceIds: string[]; exportMode: string });
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    console.error('cancelBulkExport error:', error);
+  } catch (error: unknown) {
+    logErr('cancelBulkExport', error, requestId);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      (error instanceof Error) ? error.message : String(error),
       {},
       requestId
     );
@@ -910,10 +880,11 @@ function cancelBulkExport(params) {
  * @param {string} invoiceId - 請求ID
  * @param {Object} headerData - ヘッダー更新データ { issue_date, due_date, notes }
  * @param {Object[]} linesData - 明細更新データ [{ line_id, item_name, time_note, site_name }]
+ * @param {Object[]|undefined} adjustmentsData - 調整項目データ [{ adjustment_id?, item_name, amount }]
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt) {
+function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unknown>, linesData: unknown[], adjustmentsData: unknown[] | undefined, expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -934,16 +905,51 @@ function updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedA
 
     // 日付形式の検証（指定されている場合）
     if (headerData) {
-      if (headerData.issue_date && !/^\d{4}-\d{2}-\d{2}$/.test(headerData.issue_date)) {
+      if (headerData.issue_date && !/^\d{4}-\d{2}-\d{2}$/.test(String(headerData.issue_date))) {
         return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'issue_date must be in YYYY-MM-DD format', {}, requestId);
       }
-      if (headerData.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(headerData.due_date)) {
+      if (headerData.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(String(headerData.due_date))) {
         return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'due_date must be in YYYY-MM-DD format', {}, requestId);
       }
     }
 
+    // 調整項目のバリデーション（指定されている場合のみ）
+    if (adjustmentsData !== undefined) {
+      if (!Array.isArray(adjustmentsData)) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'adjustmentsData must be an array', {}, requestId);
+      }
+      if (adjustmentsData.length > 5) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整項目は最大5件までです', {}, requestId);
+      }
+      for (let i = 0; i < adjustmentsData.length; i++) {
+        const adj = adjustmentsData[i] as Record<string, unknown>;
+        // 品目名チェック
+        if (!adj.item_name || String(adj.item_name).trim() === '') {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名は必須です`, {}, requestId);
+        }
+        if (String(adj.item_name).length > 50) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名は50文字以内です`, {}, requestId);
+        }
+        // 式注入防止
+        if (String(adj.item_name).charAt(0) === '=') {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名の先頭に = は使用できません`, {}, requestId);
+        }
+        // 金額チェック
+        const amount = Number(adj.amount);
+        if (!isFinite(amount) || !Number.isInteger(amount)) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額は整数で入力してください`, {}, requestId);
+        }
+        if (amount < -9999999 || amount > 9999999) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額は -9,999,999〜9,999,999 の範囲です`, {}, requestId);
+        }
+        if (amount === 0) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額に0は指定できません`, {}, requestId);
+        }
+      }
+    }
+
     // Service呼び出し
-    const result = InvoiceService.updateDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
+    const result = InvoiceService.updateDetails(invoiceId, headerData, linesData as Record<string, unknown>[], adjustmentsData as Record<string, unknown>[], expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'
@@ -954,19 +960,22 @@ function updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedA
         ? ERROR_CODES.VALIDATION_ERROR
         : ERROR_CODES.SYSTEM_ERROR;
 
-      const errorMessages = {
+      const errorMessages: Record<string, string> = {
         'NOT_FOUND': '請求書が見つかりません',
         'CANNOT_EDIT_SENT_INVOICE': '送付済みの請求書は編集できません',
-        'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください'
+        'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください',
+        'ADJUSTMENT_LIMIT_EXCEEDED': '調整項目は最大5件までです',
+        'ADJUSTMENT_UPDATE_ERROR': '調整項目の更新に失敗しました',
+        'NEGATIVE_TOTAL': '合計金額がマイナスになるため保存できません'
       };
-      const message = errorMessages[result.error] || result.error;
+      const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
       return buildErrorResponse(errorCode, message, {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
 
-  } catch (error) {
-    Logger.log(`updateInvoiceDetails error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+  } catch (error: unknown) {
+    Logger.log(`updateInvoiceDetails error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }

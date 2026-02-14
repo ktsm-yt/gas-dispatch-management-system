@@ -372,6 +372,24 @@
       display: none; /* 非表示にしてコンパクト化 */
     }
 
+    .staff-names {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      margin-top: 1px;
+    }
+
+    .staff-chip {
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--color-accent);
+      background: rgba(19, 93, 167, 0.08);
+      padding: 0 4px;
+      border-radius: 3px;
+      line-height: 1.6;
+      white-space: nowrap;
+    }
+
     /* Status badge */
     .status-badge {
       font-size: 9px;
@@ -433,45 +451,6 @@
       font-size: 13px;
     }
 
-    /* View Toggle Buttons */
-    .view-toggle {
-      display: flex;
-      gap: 2px;
-      background: var(--border-color);
-      border-radius: var(--radius-sm);
-      padding: 2px;
-    }
-
-    .view-toggle-btn {
-      background: transparent;
-      border: none;
-      padding: 4px 10px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: all 0.15s;
-    }
-
-    .view-toggle-btn:hover {
-      color: var(--text-primary);
-    }
-
-    .view-toggle-btn.active {
-      background: white;
-      color: var(--color-primary);
-      font-weight: 600;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-    }
-
-    .view-toggle-btn svg {
-      width: 14px;
-      height: 14px;
-    }
-
     /* Filter Controls */
     .filter-group {
       display: flex;
@@ -521,213 +500,6 @@
     .header-filter-select:focus {
       outline: none;
       border-color: var(--color-primary);
-    }
-
-    /* List View Container */
-    .dashboard-list {
-      display: none;
-      background: white;
-      border-radius: var(--radius-md);
-      overflow: hidden;
-      box-shadow: var(--shadow-card);
-    }
-
-    .dashboard-list.active {
-      display: block;
-    }
-
-    .dashboard-columns.hidden {
-      display: none;
-    }
-
-    /* Job List Table */
-    .job-list-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    .job-list-table th {
-      background: var(--bg-card);
-      padding: 10px 12px;
-      text-align: left;
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--text-muted);
-      border-bottom: 2px solid var(--border-color);
-      position: sticky;
-      top: 0;
-      cursor: pointer;
-      user-select: none;
-      white-space: nowrap;
-    }
-
-    .job-list-table th:hover {
-      background: var(--bg-hover);
-    }
-
-    .job-list-table th.sortable::after {
-      content: '';
-      display: inline-block;
-      margin-left: 4px;
-      width: 0;
-      height: 0;
-      vertical-align: middle;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 4px solid transparent;
-      border-bottom: 4px solid transparent;
-    }
-
-    .job-list-table th.sort-asc::after {
-      border-bottom: 5px solid var(--color-primary);
-      border-top: none;
-    }
-
-    .job-list-table th.sort-desc::after {
-      border-top: 5px solid var(--color-primary);
-      border-bottom: none;
-    }
-
-    .job-list-table th:not(.sortable) {
-      cursor: default;
-    }
-
-    .job-list-table th:not(.sortable):hover {
-      background: var(--bg-card);
-    }
-
-    .job-list-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border-color);
-      vertical-align: middle;
-    }
-
-    .job-list-table tbody tr {
-      cursor: pointer;
-      transition: background 0.1s;
-    }
-
-    .job-list-table tbody tr:hover {
-      background: var(--bg-hover);
-    }
-
-    .job-list-table tbody tr.has-shortage {
-      background: rgba(220, 53, 69, 0.05);
-    }
-
-    .job-list-table tbody tr.has-shortage:hover {
-      background: rgba(220, 53, 69, 0.1);
-    }
-
-    .job-list-table .time-slot-cell {
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .job-list-table .customer-cell {
-      max-width: 150px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .job-list-table .site-cell {
-      max-width: 200px;
-    }
-
-    .job-list-table .site-cell .site-name {
-      font-weight: 500;
-    }
-
-    .job-list-table .site-cell .site-address {
-      font-size: 11px;
-      color: var(--text-muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .job-list-table .work-type-cell .tag {
-      font-size: 11px;
-    }
-
-    .job-list-table .staff-cell {
-      max-width: 200px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    .job-list-table .assignment-cell {
-      white-space: nowrap;
-      text-align: center;
-    }
-
-    .job-list-table .assignment-cell .fraction {
-      font-weight: 600;
-      color: var(--color-primary);
-    }
-
-    .job-list-table .assignment-cell .fraction.shortage {
-      color: var(--color-danger);
-    }
-
-    .job-list-table .shortage-cell {
-      white-space: nowrap;
-      text-align: center;
-      font-weight: 600;
-      font-size: 12px;
-    }
-
-    .job-list-table .shortage-cell.shortage-negative {
-      color: var(--color-danger);
-    }
-
-    .job-list-table .shortage-cell.shortage-positive {
-      color: var(--color-success);
-    }
-
-    .job-list-table .shortage-cell.shortage-neutral {
-      color: var(--text-muted);
-    }
-
-    .job-list-table .actions-cell {
-      width: 40px;
-      text-align: center;
-    }
-
-    .job-list-table .list-edit-btn {
-      background: none;
-      border: none;
-      padding: 4px;
-      cursor: pointer;
-      color: var(--text-muted);
-      border-radius: 3px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .job-list-table .list-edit-btn:hover {
-      background: var(--bg-card);
-      color: var(--color-primary);
-    }
-
-    .list-empty-state {
-      text-align: center;
-      padding: 48px 24px;
-      color: var(--text-muted);
-    }
-
-    .list-loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 48px;
-      color: var(--text-muted);
     }
 
     /* Add Button */
@@ -839,31 +611,6 @@
       <button class="date-btn date-btn-icon" id="next-day" title="翌日">&gt;</button>
       <button class="date-btn" id="today-btn">今日</button>
     </div>
-    <!-- Center: View Toggle -->
-    <div class="date-nav-center">
-      <div class="view-toggle" id="view-toggle">
-        <button class="view-toggle-btn active" data-view="card" title="カード表示">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"/>
-            <rect x="14" y="3" width="7" height="7" rx="1"/>
-            <rect x="3" y="14" width="7" height="7" rx="1"/>
-            <rect x="14" y="14" width="7" height="7" rx="1"/>
-          </svg>
-          カード
-        </button>
-        <button class="view-toggle-btn" data-view="list" title="リスト表示">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="8" y1="6" x2="21" y2="6"/>
-            <line x1="8" y1="12" x2="21" y2="12"/>
-            <line x1="8" y1="18" x2="21" y2="18"/>
-            <line x1="3" y1="6" x2="3.01" y2="6"/>
-            <line x1="3" y1="12" x2="3.01" y2="12"/>
-            <line x1="3" y1="18" x2="3.01" y2="18"/>
-          </svg>
-          リスト
-        </button>
-      </div>
-    </div>
     <!-- Right: Filter + Stats -->
     <div class="date-nav-right">
       <div class="filter-group">
@@ -892,35 +639,6 @@
       <!-- Columns will be rendered here -->
     </div>
 
-    <!-- List View -->
-    <div class="dashboard-list" id="dashboard-list">
-      <table class="job-list-table">
-        <thead>
-          <tr>
-            <th>時間区分
-              <select id="time-slot-filter" class="header-filter-select">
-                <option value="all">すべて</option>
-                <option value="jotou">上棟</option>
-                <option value="shuujitsu">終日</option>
-                <option value="am">AM</option>
-                <option value="pm">PM</option>
-                <option value="yakin">夜勤</option>
-                <option value="mitei">未定</option>
-              </select>
-            </th>
-            <th class="sortable" data-sort="customer_name">顧客名</th>
-            <th class="sortable" data-sort="site_name">現場</th>
-            <th>配置スタッフ</th>
-            <th class="sortable" data-sort="assignment">配置</th>
-            <th class="sortable" data-sort="shortage">過不足</th>
-            <th>案件編集</th>
-          </tr>
-        </thead>
-        <tbody id="job-list-body">
-          <!-- List rows will be rendered here -->
-        </tbody>
-      </table>
-    </div>
   </main>
 
   <!-- Add Button -->
@@ -955,6 +673,12 @@
         const validAssignments = (assignments || []).filter(a => a.status !== 'CANCELLED');
         // 一意なスタッフIDでカウント（サーバー側と同じロジック）
         const uniqueStaffIds = new Set(validAssignments.map(a => a.staff_id));
+
+        // 変更検知: 配置データが実際に変わった場合のみブロードキャスト
+        const oldAssignments = JSON.stringify(dashboardData.jobs[idx].assignments || []);
+        const newAssignments = JSON.stringify(assignments || []);
+        const changed = oldAssignments !== newAssignments;
+
         dashboardData.jobs[idx].assigned_count = uniqueStaffIds.size;
         dashboardData.jobs[idx].staff_names = validAssignments.map(a => a.staff_name || '');
         // 配置データも更新（競合チェック用キャッシュに反映）
@@ -969,6 +693,9 @@
 
         // 日次キャッシュも更新
         saveToCachedDate(dashboardData.date, dashboardData);
+        if (changed) {
+          broadcastDashboardUpdate();
+        }
       }
     }
 
@@ -977,24 +704,8 @@
     let dashboardData = null;
     let lastMaxUpdatedAt = null;
 
-    // 表示モード状態
-    let currentViewMode = 'card';  // 'card' | 'list'
-    let listSortKey = 'start_time';
-    let listSortOrder = 'asc';  // 'asc' | 'desc'
-
     // フィルター状態
-    let statusFilter = 'all';    // 共通：ステータスフィルター
-    let timeSlotFilter = 'all';  // リスト専用：時間区分フィルター
-
-    // 時間区分のソート順（カスタム順序）
-    const TIME_SLOT_SORT_ORDER = {
-      jotou: 1,
-      shuujitsu: 2,
-      am: 3,
-      pm: 4,
-      yakin: 5,
-      mitei: 6
-    };
+    let statusFilter = 'all';
 
     // 日付別メモリキャッシュ（最大5日分、高速アクセス用）
     const dateMemoryCache = new Map();
@@ -1031,90 +742,29 @@
       'niage': '荷揚げ'
     };
 
+    // BroadcastChannel for cross-tab sync
+    let dashboardChannel = null;
+
     // Initialize
     document.addEventListener('DOMContentLoaded', () => {
       initNavBar('dashboard', 'ダッシュボード');
-      initViewMode();
       renderColumns();
       initializeWithServerDate();
       setupEventListeners();
+      initBroadcastChannel();
       // Note: Customer autocomplete is now handled by the shared job_modal_js component
     });
 
-    // 表示モードの初期化
-    function initViewMode() {
-      // localStorageから表示モードを復元（デフォルト: card）
-      const savedMode = localStorage.getItem('dashboard_view_mode');
-      currentViewMode = savedMode === 'list' ? 'list' : 'card';
-
-      // UIを更新
-      updateViewToggleUI();
-      applyViewMode();
-    }
-
-    // 表示切替ボタンのUI更新
-    function updateViewToggleUI() {
-      const buttons = document.querySelectorAll('.view-toggle-btn');
-      buttons.forEach(btn => {
-        const isActive = btn.dataset.view === currentViewMode;
-        btn.classList.toggle('active', isActive);
-      });
-    }
-
-    // 表示モードを適用（コンテナの表示/非表示切替）
-    function applyViewMode() {
-      const columnsEl = document.getElementById('dashboard-columns');
-      const listEl = document.getElementById('dashboard-list');
-
-      if (currentViewMode === 'list') {
-        columnsEl.classList.add('hidden');
-        listEl.classList.add('active');
-      } else {
-        columnsEl.classList.remove('hidden');
-        listEl.classList.remove('active');
-      }
-    }
-
-    // 表示モード切替
-    function switchViewMode(mode) {
-      if (mode === currentViewMode) return;
-
-      currentViewMode = mode;
-      localStorage.setItem('dashboard_view_mode', mode);
-
-      updateViewToggleUI();
-      applyViewMode();
-
-      // データがあれば再描画
-      if (dashboardData) {
-        if (mode === 'list') {
-          renderListView();
-        }
-        // カード表示は既にrenderDashboard()で描画済み
-      }
-    }
-
-    // フィルター適用（両モード共通）
+    // フィルター適用
     function applyFilters() {
       if (!dashboardData) return;
-
-      if (currentViewMode === 'list') {
-        renderListView();
-      } else {
-        renderDashboard();
-      }
+      renderDashboard();
     }
 
     // ステータスでフィルタリング
     function filterByStatus(jobs) {
       if (statusFilter === 'all') return jobs;
       return jobs.filter(job => job.status === statusFilter);
-    }
-
-    // 時間区分でフィルタリング（リスト専用）
-    function filterByTimeSlot(jobs) {
-      if (timeSlotFilter === 'all') return jobs;
-      return jobs.filter(job => job.time_slot === timeSlotFilter);
     }
 
     function initializeWithServerDate() {
@@ -1134,35 +784,19 @@
         currentDate = new Date();
       }
       loadDashboard();
+      // 配置モーダルの初回表示高速化: 全スタッフを先読み
+      if (typeof prefetchGlobalStaffCache === 'function') {
+        prefetchGlobalStaffCache(true); // 強制リフレッシュで古いキャッシュを残さない
+      }
       startPolling();
+      initVisibilityRefresh();
     }
 
     function setupEventListeners() {
-      // View toggle
-      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          switchViewMode(btn.dataset.view);
-        });
-      });
-
-      // Status filter (共通)
+      // Status filter
       document.getElementById('status-filter').addEventListener('change', (e) => {
         statusFilter = e.target.value;
         applyFilters();
-      });
-
-      // Time slot filter (リスト専用)
-      document.getElementById('time-slot-filter').addEventListener('change', (e) => {
-        timeSlotFilter = e.target.value;
-        renderListView();
-      });
-
-      // List view sort headers
-      document.querySelectorAll('.job-list-table th.sortable').forEach(th => {
-        th.addEventListener('click', () => {
-          const sortKey = th.dataset.sort;
-          handleListSort(sortKey);
-        });
       });
 
       // Date navigation
@@ -1191,36 +825,6 @@
 
       document.getElementById('add-job-btn').addEventListener('click', () => {
         openJobModalForDashboard(null);
-      });
-    }
-
-    // リストのソート処理
-    function handleListSort(sortKey) {
-      if (listSortKey === sortKey) {
-        // 同じキーなら順序を反転
-        listSortOrder = listSortOrder === 'asc' ? 'desc' : 'asc';
-      } else {
-        // 新しいキーならasc開始
-        listSortKey = sortKey;
-        listSortOrder = 'asc';
-      }
-
-      // ヘッダーのソート表示を更新
-      updateSortIndicators();
-
-      // リストを再描画
-      if (dashboardData) {
-        renderListView();
-      }
-    }
-
-    // ソートインジケーターの更新
-    function updateSortIndicators() {
-      document.querySelectorAll('.job-list-table th.sortable').forEach(th => {
-        th.classList.remove('sort-asc', 'sort-desc');
-        if (th.dataset.sort === listSortKey) {
-          th.classList.add(listSortOrder === 'asc' ? 'sort-asc' : 'sort-desc');
-        }
       });
     }
 
@@ -1280,7 +884,8 @@
       if (memoryCached) {
         dashboardData = memoryCached;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
-        lastMaxUpdatedAt = null;
+        lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         const sessionCached = PageCache.get(cacheKey);
@@ -1296,7 +901,8 @@
         dateMemoryCache.set(cacheKey, sessionCached.data);
         dashboardData = sessionCached.data;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
-        lastMaxUpdatedAt = null;
+        lastMaxUpdatedAt = dashboardData?.maxUpdatedAt || null;
+        buildDayAssignmentsCache(); // キャッシュ復元時も競合チェック用キャッシュを再構築
         renderDashboard();
         // TTL超過ならバックグラウンド更新
         if (sessionCached.age > PageCache.DEFAULT_TTL) {
@@ -1339,13 +945,13 @@
         return;
       }
 
-      // キャッシュと比較して変更があれば更新
-      // hasFullAssignments フラグが異なる場合も更新（キャッシュ互換性のため）
-      const jobsChanged = JSON.stringify(dashboardData?.jobs) !== JSON.stringify(newData.jobs);
+      // maxUpdatedAtベースで差分判定（巨大データのJSON.stringifyコストを回避）
+      const jobsChanged = (dashboardData?.maxUpdatedAt || null) !== (newData.maxUpdatedAt || null);
       const flagsChanged = dashboardData?.hasFullAssignments !== newData.hasFullAssignments;
       if (jobsChanged || flagsChanged) {
         dashboardData = newData;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
+        lastMaxUpdatedAt = newData.maxUpdatedAt || null;
         saveToCachedDate(newData.date, newData);
         // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
         buildDayAssignmentsCache();
@@ -1356,6 +962,7 @@
         // データは同じだがキャッシュがない場合は構築
         dashboardData = newData;
         window.dashboardData = dashboardData;  // 配置モーダル用に公開
+        lastMaxUpdatedAt = newData.maxUpdatedAt || null;
         buildDayAssignmentsCache();
       }
     }
@@ -1401,7 +1008,7 @@
 
       dashboardData = newData;
       window.dashboardData = dashboardData;  // 配置モーダル用に公開
-      lastMaxUpdatedAt = null; // Reset for polling
+      lastMaxUpdatedAt = newData.maxUpdatedAt || null;
 
       // 日次配置キャッシュを構築（APIから新鮮なデータが来た時のみ）
       buildDayAssignmentsCache();
@@ -1442,137 +1049,6 @@
         const jobs = filterByStatus(allJobs);
         renderCards(slot, jobs);
       });
-
-      // リスト表示モードならリストも描画
-      if (currentViewMode === 'list') {
-        renderListView();
-      }
-    }
-
-    // リスト表示を描画
-    function renderListView() {
-      const tbody = document.getElementById('job-list-body');
-
-      if (!dashboardData || dashboardData.jobs.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="7" class="list-empty-state">案件がありません</td>
-          </tr>
-        `;
-        return;
-      }
-
-      // フィルター適用（ステータス + 時間区分）
-      let filteredJobs = filterByStatus(dashboardData.jobs);
-      filteredJobs = filterByTimeSlot(filteredJobs);
-
-      if (filteredJobs.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="7" class="list-empty-state">条件に一致する案件がありません</td>
-          </tr>
-        `;
-        return;
-      }
-
-      // ソート
-      const sortedJobs = sortJobs([...filteredJobs], listSortKey, listSortOrder);
-
-      // 描画
-      tbody.innerHTML = sortedJobs.map(job => {
-        const shortage = job.required_count - job.assigned_count;
-        const hasShortage = shortage > 0;
-        // assignmentsからアクティブなスタッフ名を動的生成
-        const staffNames = (job.assignments || [])
-          .filter(a => a.status !== 'CANCELLED')
-          .map(a => a.staff_name)
-          .filter(n => n)
-          .join(', ') || '-';
-
-        // 過不足の表示
-        let shortageText, shortageClass;
-        if (shortage > 0) {
-          shortageText = `${shortage}名不足`;
-          shortageClass = 'shortage-negative';
-        } else if (shortage < 0) {
-          shortageText = `+${Math.abs(shortage)}名`;
-          shortageClass = 'shortage-positive';
-        } else {
-          shortageText = '±0';
-          shortageClass = 'shortage-neutral';
-        }
-
-        return `
-          <tr class="${hasShortage ? 'has-shortage' : ''}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
-            <td class="time-slot-cell">${TIME_SLOT_LABELS[job.time_slot] || job.time_slot}${job.start_time ? ` (${job.start_time})` : ''}</td>
-            <td class="customer-cell">${escapeHtml(job.customer_name) || '-'}${job.status === 'hold' ? ' <span class="status-badge status-hold">保留</span>' : ''}</td>
-            <td class="site-cell">
-              <div class="site-name">${escapeHtml(job.site_name) || '-'}</div>
-              ${job.site_address ? `<div class="site-address">${escapeHtml(job.site_address)}</div>` : ''}
-            </td>
-            <td class="staff-cell">${escapeHtml(staffNames)}</td>
-            <td class="assignment-cell">
-              <span class="fraction ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
-            </td>
-            <td class="shortage-cell ${shortageClass}">${shortageText}</td>
-            <td class="actions-cell">
-              <button class="list-edit-btn" onclick="event.stopPropagation(); openJobModalForDashboard('${job.job_id}')" title="案件編集">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join('');
-
-      // ソートインジケーターを更新
-      updateSortIndicators();
-    }
-
-    // ジョブをソート
-    function sortJobs(jobs, sortKey, order) {
-      return jobs.sort((a, b) => {
-        let aVal, bVal;
-
-        switch (sortKey) {
-          case 'start_time':
-            // 開始時間でソート（空は最後に）
-            aVal = a.start_time || 'ZZ:ZZ';
-            bVal = b.start_time || 'ZZ:ZZ';
-            break;
-          case 'customer_name':
-            aVal = (a.customer_name || '').toLowerCase();
-            bVal = (b.customer_name || '').toLowerCase();
-            break;
-          case 'site_name':
-            aVal = (a.site_name || '').toLowerCase();
-            bVal = (b.site_name || '').toLowerCase();
-            break;
-          case 'assignment':
-            // 配置人数でソート
-            aVal = a.assigned_count || 0;
-            bVal = b.assigned_count || 0;
-            break;
-          case 'shortage':
-            // 不足数でソート（不足が多いものを上に）
-            aVal = a.required_count - a.assigned_count;
-            bVal = b.required_count - b.assigned_count;
-            break;
-          default:
-            return 0;
-        }
-
-        let result = 0;
-        if (typeof aVal === 'string') {
-          result = aVal.localeCompare(bVal, 'ja');
-        } else {
-          result = aVal - bVal;
-        }
-
-        return order === 'desc' ? -result : result;
-      });
     }
 
     function renderCards(slot, jobs) {
@@ -1588,9 +1064,15 @@
         const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '';
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
+        const staffChips = (job.assignments || [])
+          .filter(a => a.status !== 'CANCELLED')
+          .map(a => (a.staff_name || '').slice(0, 4))
+          .filter(n => n)
+          .map(n => `<span class="staff-chip">${escapeHtml(n)}</span>`)
+          .join('');
 
         return `
-          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignments('${job.job_id}')">
+          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignmentsForDashboard('${job.job_id}')">
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
@@ -1608,6 +1090,7 @@
               <span class="site-address">${job.site_address || ''}</span>
               <span class="start-time">${job.start_time || ''}</span>
             </div>
+            ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}
           </div>
         `;
       }).join('');
@@ -1641,13 +1124,21 @@
         customer_name: customerName,
         site_name: savedJob.site_name || '',
         site_address: savedJob.site_address || '',
+        work_date: savedJob.work_date || dashboardData.date,
         time_slot: savedJob.time_slot,
         start_time: savedJob.start_time || '',
         work_category: savedJob.work_category,
+        work_detail: savedJob.work_detail || '',
+        work_detail_other_text: savedJob.work_detail_other_text || '',
         required_count: savedJob.required_count,
+        pay_unit: savedJob.pay_unit || '',
         assigned_count: 0,
         status: savedJob.status,
         supervisor_name: savedJob.supervisor_name || '',
+        order_number: savedJob.order_number || '',
+        branch_office: savedJob.branch_office || '',
+        property_code: savedJob.property_code || '',
+        construction_div: savedJob.construction_div || '',
         notes: savedJob.notes || '',
         staff_names: [],
         assignments: [],  // 配置キャッシュ用（新規は空）
@@ -1715,6 +1206,7 @@
 
       // キャッシュも更新
       saveToCachedDate(dashboardData.date, dashboardData);
+      broadcastDashboardUpdate();
     }
 
     /**
@@ -1820,11 +1312,15 @@
      */
     function onJobModalDelete(jobId, job, isConfirmed) {
       if (!isConfirmed && dashboardData) {
-        // 楽観的更新: UIを即座に更新
+        // 楽観的更新: UIを即座に更新（ブロードキャストはサーバー確認後）
         dashboardData.jobs = dashboardData.jobs.filter(j => j.job_id !== jobId);
         recalculateStats();
         renderDashboard();
         saveToCachedDate(dashboardData.date, dashboardData);
+      }
+      if (isConfirmed) {
+        // サーバー確認済み: 他タブに通知（削除失敗時の不整合を防ぐ）
+        broadcastDashboardUpdate();
       }
     }
 
@@ -1854,6 +1350,30 @@
       });
     }
 
+    /**
+     * Dashboard用のopenJobAssignments wrapper
+     * キャッシュデータを渡して配置モーダルを即座表示
+     */
+    function openJobAssignmentsForDashboard(jobId) {
+      // キャッシュから案件データを取得（assignments, slots含む）
+      const jobData = jobId && dashboardData && dashboardData.jobs
+        ? dashboardData.jobs.find(j => j.job_id === jobId)
+        : null;
+
+      // fillAssignmentModalFromCacheが期待する構造に変換
+      const cachedJob = jobData ? {
+        job: jobData,
+        assignments: jobData.assignments || [],
+        slots: jobData.slots || [],
+        slotStatus: null,  // ダッシュボードにはslotStatusがないのでnull
+        allStaff: []       // スタッフ一覧はバックグラウンドで取得
+      } : null;
+
+      openJobAssignments(jobId, {
+        cachedJob: cachedJob  // キャッシュデータを渡す（即座表示）
+      });
+    }
+
     function handleError(error) {
       console.error('Error:', error);
       showToast(error.message || 'エラーが発生しました', true);
@@ -1880,6 +1400,77 @@
         .replace(/'/g, '&#39;');
     }
 
+    // ========== B: タブフォーカス時のリフレッシュ ==========
+    let lastRefreshTime = 0;
+    const REFRESH_THROTTLE_MS = 5000; // 5秒スロットリング
+
+    function initVisibilityRefresh() {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+
+        // モーダルが開いている場合はスキップ
+        const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
+                       || document.getElementById('job-modal')?.style.display !== 'none';
+        if (modalOpen) return;
+
+        // スロットリング
+        const now = Date.now();
+        if (now - lastRefreshTime < REFRESH_THROTTLE_MS) return;
+        lastRefreshTime = now;
+
+        refreshDashboardInBackground(formatDate(currentDate));
+      });
+    }
+
+    // ========== C: BroadcastChannel クロスタブ同期 ==========
+    function initBroadcastChannel() {
+      if (typeof BroadcastChannel === 'undefined') return; // 非対応ブラウザはA+Bにフォールバック
+
+      try {
+        dashboardChannel = new BroadcastChannel('dashboard_sync');
+        dashboardChannel.onmessage = handleBroadcastMessage;
+      } catch (e) {
+        console.warn('[BC] init failed:', e);
+      }
+    }
+
+    function handleBroadcastMessage(event) {
+      const msg = event.data;
+      if (!msg || msg.type !== 'DASHBOARD_UPDATED') return;
+
+      const { date, dashboardData: newData, maxUpdatedAt } = msg.data;
+
+      // 現在表示中の日付と一致する場合のみ処理
+      if (date !== formatDate(currentDate)) return;
+
+      // モーダルが開いている場合はスキップ
+      const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
+                     || document.getElementById('job-modal')?.style.display !== 'none';
+      if (modalOpen) return;
+
+      // データを置換して再描画
+      dashboardData = newData;
+      window.dashboardData = dashboardData;
+      renderDashboard();
+      buildDayAssignmentsCache();
+      saveToCachedDate(date, newData);
+
+      // ポーリングの重複検知を防止
+      if (maxUpdatedAt) {
+        lastMaxUpdatedAt = maxUpdatedAt;
+      }
+    }
+
+    function broadcastDashboardUpdate() {
+      if (!dashboardChannel || !dashboardData) return;
+      try {
+        dashboardChannel.postMessage({
+          type: 'DASHBOARD_UPDATED',
+          data: { date: dashboardData.date, dashboardData, maxUpdatedAt: lastMaxUpdatedAt }
+        });
+      } catch (e) { console.warn('[BC] broadcast failed:', e); }
+    }
+
     // Polling for updates
     function startPolling() {
       setInterval(checkForUpdates, 30000); // 30 seconds
@@ -1890,16 +1481,17 @@
 
       google.script.run
         .withSuccessHandler((response) => {
-          if (response.ok && response.data.maxUpdatedAt) {
-            if (lastMaxUpdatedAt && response.data.maxUpdatedAt !== lastMaxUpdatedAt) {
-              // モーダルが開いている間はトーストを表示しない（モーダル内で更新されるため）
+          if (response.ok) {
+            const latestMaxUpdatedAt = response.data.maxUpdatedAt || null;
+            if (latestMaxUpdatedAt !== lastMaxUpdatedAt) {
+              // モーダルが開いている間は更新をスキップ（モーダル内で更新されるため）
               const modalOpen = document.getElementById('assignment-modal')?.style.display !== 'none'
                              || document.getElementById('job-modal')?.style.display !== 'none';
               if (!modalOpen) {
-                showToast('データが更新されました。再読み込みしてください。');
+                refreshDashboardInBackground(dateStr);
               }
             }
-            lastMaxUpdatedAt = response.data.maxUpdatedAt;
+            lastMaxUpdatedAt = latestMaxUpdatedAt;
           }
         })
         .getDashboardMeta(dateStr);

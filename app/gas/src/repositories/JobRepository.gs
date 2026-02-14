@@ -152,7 +152,7 @@ const JobRepository = {
    * @returns {Object} 作成した案件
    */
   insert: function(job) {
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     const newJob = {
@@ -167,6 +167,7 @@ const JobRepository = {
       pay_unit: job.pay_unit,
       work_category: job.work_category || '',
       work_detail: job.work_detail || '',
+      work_detail_other_text: job.work_detail_other_text || '',
       supervisor_name: job.supervisor_name || '',
       order_number: job.order_number || '',
       branch_office: job.branch_office || '',
@@ -230,14 +231,14 @@ const JobRepository = {
       };
     }
 
-    const user = Session.getActiveUser().getEmail() || 'system';
+    const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
     // 更新可能フィールド（ホワイトリスト）
     const updatableFields = [
       'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
       'start_time', 'required_count',
-      'pay_unit', 'work_category', 'work_detail',
+      'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
       'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
     ];
@@ -343,11 +344,20 @@ const JobRepository = {
    * @returns {string|null} HH:mm形式の文字列またはnull
    */
   _normalizeTime: function(timeValue) {
-    if (!timeValue) return '';
+    if (!timeValue && timeValue !== 0) return '';
 
     if (timeValue instanceof Date) {
       // 1899-1900年のDateはスプレッドシートの時刻のみセル
       return Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+    }
+
+    // 数値型の場合（スプレッドシートの時刻は0〜1の小数）
+    if (typeof timeValue === 'number') {
+      // 0.333333... = 8:00, 0.5 = 12:00 など
+      const totalMinutes = Math.round(timeValue * 24 * 60);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
     }
 
     // 既に文字列の場合はそのまま返す
@@ -371,9 +381,7 @@ const JobRepository = {
 
       try {
         const archiveDb = SpreadsheetApp.openById(archiveDbId);
-        // TABLE_SHEET_MAPを使って日本語シート名に変換
-        const sheetName = TABLE_SHEET_MAP[this.TABLE_NAME] || this.TABLE_NAME;
-        const sheet = archiveDb.getSheetByName(sheetName);
+        const sheet = findSheetFromDb(archiveDb, this.TABLE_NAME);
         if (!sheet) continue;
 
         const data = sheet.getDataRange().getValues();
