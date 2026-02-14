@@ -100,6 +100,9 @@ declare global {
     created_by: string;
     updated_at: string;
     is_deleted: boolean;
+    // アーカイブメタフィールド（_getArchiveRecordsで付与）
+    _archived?: boolean;
+    _archiveFiscalYear?: number;
   }
 
   interface PayoutSearchQuery {
@@ -223,6 +226,8 @@ declare global {
     is_deleted: boolean;
     deleted_at: string;
     deleted_by: string;
+    _archived?: boolean;
+    _archiveFiscalYear?: number;
   }
 
   interface InvoiceAdjustmentRecord {
@@ -301,10 +306,6 @@ declare global {
   function isInvoiceEditable_(status: string): boolean;
 
   // === 未移行リポジトリのambient宣言（TS移行時に削除して実装に置き換え） ===
-  const JobRepository: {
-    findById(jobId: string): Record<string, unknown> | null;
-    search(query: Record<string, unknown>): Record<string, unknown>[];
-  };
   const AssignmentRepository: {
     findByStaffId(staffId: string): Record<string, unknown>[];
     findByJobId(jobId: string): Record<string, unknown>[];
@@ -329,6 +330,7 @@ declare global {
   // === 未移行サービスのambient宣言 ===
   const ArchiveService: {
     getArchiveDbId(fiscalYear: number): string | null;
+    getCurrentFiscalYear(): number;
   };
   const CustomerFolderService: {
     getInvoiceFolder(customer: Record<string, unknown>): GoogleAppsScript.Drive.Folder | null;

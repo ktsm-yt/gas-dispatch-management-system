@@ -209,7 +209,7 @@ const InvoiceRepository = {
 
     // アーカイブデータの場合はアーカイブDBに書き込み
     if (invoice._archived && invoice._archiveFiscalYear) {
-      return this._updateArchiveRecord(invoice, expectedUpdatedAt);
+      return this._updateArchiveRecord(invoice as Record<string, unknown>, expectedUpdatedAt);
     }
 
     const sheet = getSheet(this.TABLE_NAME);
@@ -710,12 +710,12 @@ const InvoiceRepository = {
    * @param {string} expectedUpdatedAt - 期待するupdated_at
    * @returns {Object} 更新結果 { success: boolean, invoice?: Object, error?: string }
    */
-  _updateArchiveRecord: function(invoice, expectedUpdatedAt) {
-    const fiscalYear = invoice._archiveFiscalYear;
+  _updateArchiveRecord: function(invoice: Record<string, unknown>, expectedUpdatedAt?: string): InvoiceUpdateResult {
+    const fiscalYear = Number(invoice._archiveFiscalYear);
     const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
 
     if (!archiveDbId) {
-      return { success: false, error: 'ARCHIVE_DB_NOT_FOUND', message: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
+      return { success: false, error: `${fiscalYear}年度のアーカイブDBが見つかりません。` };
     }
 
     try {
@@ -724,7 +724,7 @@ const InvoiceRepository = {
       const sheet = archiveDb.getSheetByName(sheetName);
 
       if (!sheet) {
-        return { success: false, error: 'ARCHIVE_SHEET_NOT_FOUND', message: `アーカイブDBに${sheetName}シートが見つかりません。` };
+        return { success: false, error: `アーカイブDBに${sheetName}シートが見つかりません。` };
       }
 
       const headers = getHeaders(sheet);
@@ -732,7 +732,7 @@ const InvoiceRepository = {
       const updatedAtColIndex = headers.indexOf('updated_at');
 
       if (idColIndex === -1) {
-        return { success: false, error: 'SCHEMA_ERROR', message: 'アーカイブDBのスキーマが不正です。' };
+        return { success: false, error: 'アーカイブDBのスキーマが不正です。' };
       }
 
       // IDで行を検索
@@ -743,7 +743,7 @@ const InvoiceRepository = {
 
       const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
       let targetRowIndex = -1;
-      let currentRecord = null;
+      let currentRecord: Record<string, unknown> | null = null;
 
       for (let i = 0; i < data.length; i++) {
         if (data[i][idColIndex] === invoice.invoice_id) {
@@ -758,11 +758,11 @@ const InvoiceRepository = {
       }
 
       // 楽観ロックチェック
-      if (expectedUpdatedAt && currentRecord.updated_at !== expectedUpdatedAt) {
+      if (expectedUpdatedAt && currentRecord && currentRecord.updated_at !== expectedUpdatedAt) {
         return {
           success: false,
           error: 'CONFLICT_ERROR',
-          currentUpdatedAt: currentRecord.updated_at
+          currentUpdatedAt: currentRecord.updated_at as string
         };
       }
 
@@ -793,19 +793,20 @@ const InvoiceRepository = {
       sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
 
       // アーカイブフラグを付与して返す
-      const result = this._normalizeRecord(updatedInvoice);
+      const result = this._normalizeRecord(updatedInvoice) as InvoiceRecord & { _archived?: boolean; _archiveFiscalYear?: number };
       result._archived = true;
       result._archiveFiscalYear = fiscalYear;
 
       return {
         success: true,
         invoice: result,
-        before: currentRecord
+        before: currentRecord ?? undefined
       };
 
     } catch (e) {
-      Logger.log(`アーカイブDB更新エラー: ${e.message}`);
-      return { success: false, error: 'ARCHIVE_UPDATE_ERROR', message: e.message };
+      const msg = e instanceof Error ? e.message : String(e);
+      Logger.log(`アーカイブDB更新エラー: ${msg}`);
+      return { success: false, error: msg };
     }
   },
 
@@ -814,7 +815,7 @@ const InvoiceRepository = {
    * @param {string} invoiceId - 請求ID
    * @returns {Object|null} 請求書レコード（_archived, _archiveFiscalYear付き）またはnull
    */
-  _findInArchive: function(invoiceId) {
+  _findInArchive: function(invoiceId: string): InvoiceRecord | null {
     const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
 
     // 直近3年度分のアーカイブを検索（新しい年度から）
@@ -837,7 +838,7 @@ const InvoiceRepository = {
 
         for (let i = 1; i < data.length; i++) {
           if (data[i][idColIndex] === invoiceId) {
-            const record = {};
+            const record: Record<string, unknown> = {};
             for (let j = 0; j < headers.length; j++) {
               record[headers[j]] = data[i][j];
             }
@@ -850,7 +851,8 @@ const InvoiceRepository = {
           }
         }
       } catch (e) {
-        Logger.log(`アーカイブDB検索エラー (${y}): ${e.message}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`アーカイブDB検索エラー (${y}): ${msg}`);
       }
     }
 

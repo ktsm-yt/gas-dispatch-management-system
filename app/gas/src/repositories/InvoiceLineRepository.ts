@@ -108,6 +108,14 @@ const InvoiceLineRepository = {
       !r.is_deleted && r.invoice_id === invoiceId
     );
 
+    // カレントDBに見つからない場合、アーカイブDBを検索
+    if (records.length === 0) {
+      const archiveLines = this._findInArchiveByInvoiceId(invoiceId);
+      if (archiveLines.length > 0) {
+        return archiveLines;
+      }
+    }
+
     records.sort((a, b) => {
       const numA = Number(a.line_number) || 0;
       const numB = Number(b.line_number) || 0;
@@ -497,6 +505,49 @@ const InvoiceLineRepository = {
       totalAmount: Math.floor(subtotal + taxAmount),
       lineCount: lines.length
     };
+  },
+
+  _findInArchiveByInvoiceId: function(invoiceId: string): InvoiceLineRecord[] {
+    const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
+
+    for (let fy = currentFiscalYear - 1; fy >= currentFiscalYear - 3; fy--) {
+      try {
+        const archiveDbId = ArchiveService.getArchiveDbId(fy);
+        if (!archiveDbId) continue;
+
+        const archiveDb = SpreadsheetApp.openById(archiveDbId);
+        const sheet = findSheetFromDb(archiveDb, this.TABLE_NAME);
+        if (!sheet) continue;
+
+        const headers = getHeaders(sheet);
+        const lastRow = sheet.getLastRow();
+        if (lastRow <= 1) continue;
+
+        const data = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+        const invoiceIdIdx = headers.indexOf('invoice_id');
+        const isDeletedIdx = headers.indexOf('is_deleted');
+
+        const lines: InvoiceLineRecord[] = [];
+        for (let i = 0; i < data.length; i++) {
+          if (data[i][invoiceIdIdx] === invoiceId && !data[i][isDeletedIdx]) {
+            const record = rowToObject(headers, data[i]);
+            const normalized = this._normalizeRecord(record);
+            normalized._archived = true;
+            normalized._archiveFiscalYear = fy;
+            lines.push(normalized);
+          }
+        }
+
+        if (lines.length > 0) {
+          lines.sort((a, b) => (Number(a.line_number) || 0) - (Number(b.line_number) || 0));
+          return lines;
+        }
+      } catch (e) {
+        console.warn(`Archive DB search failed for FY${fy}:`, e);
+      }
+    }
+
+    return [];
   },
 
   _normalizeRecord: function(record: Record<string, unknown>): InvoiceLineRecord {
