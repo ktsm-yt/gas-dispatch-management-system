@@ -1189,7 +1189,15 @@
   </div>
 
   <div class="main-content">
-    <div class="table-container">
+    <div class="table-container" style="position: relative;">
+      <div id="bgUpdateBar" style="display: none; position: absolute; top: 0; left: 0; right: 0; height: 2px; z-index: 10; overflow: hidden;">
+        <div style="width: 30%; height: 100%; background: var(--primary, #4CAF50); animation: bgUpdateSlide 1.2s ease-in-out infinite;"></div>
+      </div>
+      <style>
+        @keyframes bgUpdateSlide { 0% { transform: translateX(-100%); } 100% { transform: translateX(400%); } }
+        @keyframes rowFlash { 0% { background-color: rgba(76,175,80,0.15); } 100% { background-color: transparent; } }
+        .row-flash { animation: rowFlash 0.8s ease-out; }
+      </style>
       <table class="data-table">
         <thead id="invoiceTableHead">
           <tr>
@@ -2091,11 +2099,13 @@
     function applyInvoiceSyncMessage(type, data, timestamp) {
       if (type === 'INVOICES_BULK_UPDATED') {
         PageCache.clearByPrefix('invoices_list');
+        invalidateDetailCache(); // 全詳細キャッシュも無効化
         loadInvoices(true);
         return;
       }
 
       if (type === 'INVOICE_UPDATED' && data?.invoice) {
+        invalidateDetailCache(data.invoice.invoice_id);
         const inv = data.invoice;
         const existingIdx = invoices.findIndex(i => i.invoice_id === inv.invoice_id);
 
@@ -2128,6 +2138,7 @@
       }
 
       if (type === 'PAYMENT_RECORDED' && data?.invoiceId) {
+        invalidateDetailCache(data.invoiceId);
         const inv = invoices.find(i => i.invoice_id === data.invoiceId);
         if (inv) {
           if (data.totalPaid !== undefined) inv.total_paid = data.totalPaid;
@@ -2296,26 +2307,44 @@
         .searchInvoices(query);
     }
 
-    // 請求書一覧をバックグラウンドで更新
+    // 請求書一覧をバックグラウンドで更新（差分検知 + 行単位更新）
     function refreshInvoicesInBackground(cacheKey, query) {
+      document.getElementById('bgUpdateBar').style.display = '';
       google.script.run
         .withSuccessHandler(function (result) {
+          document.getElementById('bgUpdateBar').style.display = 'none';
           if (result.ok) {
             const newInvoices = result.data.invoices || [];
             PageCache.set(cacheKey, newInvoices);
 
             // 現在の検索条件と一致する場合のみUIを更新
             if (JSON.stringify(currentInvoiceQuery) === JSON.stringify(query)) {
-              // 差分があればUIを更新
-              if (JSON.stringify(invoices) !== JSON.stringify(newInvoices)) {
+              // 変更行を特定してハイライト
+              const oldMap = {};
+              invoices.forEach(function(inv) { oldMap[inv.invoice_id] = JSON.stringify(inv); });
+              const changedIds = [];
+              newInvoices.forEach(function(inv) {
+                if (oldMap[inv.invoice_id] !== JSON.stringify(inv)) changedIds.push(inv.invoice_id);
+              });
+              // 新規追加・削除の検出
+              const newMap = {};
+              newInvoices.forEach(function(inv) { newMap[inv.invoice_id] = true; });
+              const hasStructuralChange = invoices.some(function(inv) { return !newMap[inv.invoice_id]; }) ||
+                newInvoices.length !== invoices.length;
+
+              if (changedIds.length > 0 || hasStructuralChange) {
                 invoices = newInvoices;
                 renderInvoices();
-                showToast('データを更新しました', 'info');
+                // 変更行をフラッシュハイライト
+                changedIds.forEach(function(id) {
+                  var row = document.querySelector('tr[data-invoice-id="' + id + '"]');
+                  if (row) { row.classList.add('row-flash'); setTimeout(function() { row.classList.remove('row-flash'); }, 800); }
+                });
               }
             }
           }
         })
-        .withFailureHandler(function () {}) // サイレント
+        .withFailureHandler(function () { document.getElementById('bgUpdateBar').style.display = 'none'; }) // サイレント
         .searchInvoices(query);
     }
 
@@ -2493,6 +2522,19 @@
           cells[8].innerHTML = '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
         }
       }
+
+      // ステータスバッジ(cells[9])を更新
+      if (cells[9]) {
+        cells[9].innerHTML = '<span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span>';
+      }
+
+      // 滞留日数(cells[10])を更新（unpaidフィルタ時のみ存在）
+      if (cells[10]) {
+        cells[10].innerHTML = renderOverdueDays(inv);
+      }
+
+      // data-status属性も更新（CSSスタイリング用）
+      row.dataset.status = inv.status;
 
       return true;
     }
@@ -4299,77 +4341,196 @@
 
     let currentEditInvoice = null;
 
+    // ========== モーダル高速化: キャッシュ・競合制御 ==========
+    let editModalRequestToken = 0;           // requestToken（非同期競合防止）
+    let invoiceDetailInflight = {};           // in-flight dedup: { invoiceId: [callbacks] }
+    let invoiceDetailCache = {};             // 詳細キャッシュ: { invoiceId: { data, timestamp } }
+    const DETAIL_CACHE_MAX = 10;
+    const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5分
+
     /**
-     * 編集モーダルを開く
+     * 詳細キャッシュに保存（LRU制限付き）
+     */
+    function cacheInvoiceDetail(invoiceId, data) {
+      invoiceDetailCache[invoiceId] = { data: data, timestamp: Date.now() };
+      // LRU: 古い順に削除
+      const keys = Object.keys(invoiceDetailCache);
+      if (keys.length > DETAIL_CACHE_MAX) {
+        let oldest = keys[0], oldestTs = invoiceDetailCache[keys[0]].timestamp;
+        keys.forEach(function(k) {
+          if (invoiceDetailCache[k].timestamp < oldestTs) { oldest = k; oldestTs = invoiceDetailCache[k].timestamp; }
+        });
+        delete invoiceDetailCache[oldest];
+      }
+    }
+
+    /**
+     * 詳細キャッシュを無効化
+     */
+    function invalidateDetailCache(invoiceId) {
+      if (invoiceId) {
+        delete invoiceDetailCache[invoiceId];
+      } else {
+        invoiceDetailCache = {};
+      }
+    }
+
+    /**
+     * サーバーから請求書詳細を取得（in-flight dedup付き）
+     */
+    function fetchInvoiceDetail(invoiceId, callback) {
+      // in-flight dedup: 同じIDのリクエストが進行中ならwaiterに追加
+      if (invoiceDetailInflight[invoiceId]) {
+        invoiceDetailInflight[invoiceId].push(callback);
+        return;
+      }
+      invoiceDetailInflight[invoiceId] = [callback];
+
+      google.script.run
+        .withSuccessHandler(function(result) {
+          var waiters = invoiceDetailInflight[invoiceId] || [];
+          delete invoiceDetailInflight[invoiceId];
+          if (result.ok) {
+            cacheInvoiceDetail(invoiceId, result.data);
+          }
+          waiters.forEach(function(cb) { cb(result); });
+        })
+        .withFailureHandler(function(error) {
+          var waiters = invoiceDetailInflight[invoiceId] || [];
+          delete invoiceDetailInflight[invoiceId];
+          waiters.forEach(function(cb) { cb({ ok: false, message: error.message || 'FETCH_ERROR' }); });
+        })
+        .getInvoice(invoiceId);
+    }
+
+    /**
+     * モーダルにヘッダー情報をセット（サマリまたは詳細データから）
+     */
+    function renderEditModalHeader(invoice) {
+      var editableStatuses = ['unsent', 'hold', 'draft', 'issued'];
+      var isEditable = editableStatuses.includes(invoice.status);
+      // アーカイブ行は常に閲覧専用
+      if (invoice._archived) isEditable = false;
+
+      document.getElementById('editModalTitle').textContent = isEditable ? '請求書編集' : '請求書出力';
+      document.getElementById('editIssueDate').value = invoice.issue_date || '';
+      document.getElementById('editDueDate').value = invoice.due_date || '';
+      document.getElementById('editNotes').value = invoice.notes || '';
+      document.getElementById('editInvoiceId').value = invoice.invoice_id;
+      document.getElementById('editUpdatedAt').value = invoice.updated_at || '';
+
+      document.getElementById('editIssueDate').disabled = !isEditable;
+      document.getElementById('editDueDate').disabled = !isEditable;
+      document.getElementById('editNotes').disabled = !isEditable;
+      document.getElementById('editSaveBtn').style.display = isEditable ? '' : 'none';
+
+      return isEditable;
+    }
+
+    /**
+     * モーダルに明細・調整をセット
+     */
+    function renderEditModalDetail(invoice, isEditable) {
+      renderEditLines(invoice.lines || [], isEditable);
+
+      var container = document.getElementById('adjustmentItemsContainer');
+      container.innerHTML = '';
+      var adjustments = invoice.adjustments || [];
+      adjustments.forEach(function(adj) {
+        addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
+      });
+      document.getElementById('adjustmentSection').style.display = isEditable ? '' : 'none';
+      document.getElementById('addAdjustmentBtn').disabled = adjustments.length >= 5;
+
+      updateTotalsPreview();
+    }
+
+    /**
+     * 明細セクションをスケルトン表示
+     */
+    function showEditDetailSkeleton() {
+      var tbody = document.getElementById('editLinesBody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">' +
+        '<span class="spinner" style="display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: middle;"></span>' +
+        '明細を読み込み中...</td></tr>';
+      var container = document.getElementById('adjustmentItemsContainer');
+      container.innerHTML = '<div style="text-align: center; padding: 12px; color: var(--text-muted);">読み込み中...</div>';
+    }
+
+    /**
+     * 編集モーダルを開く（高速化版）
+     * - 一覧データでヘッダー即時表示
+     * - 詳細はキャッシュ → in-flight dedup → バックグラウンド取得
+     * - requestTokenで非同期競合防止
      * @param {string} invoiceId - 請求書ID
      */
     function openEditModal(invoiceId) {
-      showLoading('請求書を読み込み中...');
-      google.script.run
-        .withSuccessHandler(function(result) {
-          hideLoading();
-          if (!result.ok) {
-            showToast(result.message || '請求書の取得に失敗しました', 'error');
-            return;
-          }
+      var token = ++editModalRequestToken;
 
-          const invoice = result.data;
-          currentEditInvoice = invoice;
+      // 1. 一覧データからサマリを取得してヘッダー即時表示
+      var summary = invoices.find(function(i) { return i.invoice_id === invoiceId; });
+      var isEditable;
 
-          // 編集可能なステータスかチェック
-          const editableStatuses = ['unsent', 'hold', 'draft', 'issued'];
-          const isEditable = editableStatuses.includes(invoice.status);
+      if (summary) {
+        // モーダルを即座に表示（ヘッダーのみ）
+        currentEditInvoice = { ...summary };
+        isEditable = renderEditModalHeader(summary);
+        showEditDetailSkeleton();
+        document.getElementById('editModal').classList.add('active');
+      } else {
+        // 一覧にない場合（直接アクセス等）: 従来通りローディング表示
+        showLoading('請求書を読み込み中...');
+      }
 
-          // モーダルタイトルを設定
-          document.getElementById('editModalTitle').textContent = isEditable ? '請求書編集' : '請求書出力';
+      // 2. 詳細キャッシュチェック
+      var cached = invoiceDetailCache[invoiceId];
+      if (cached && (Date.now() - cached.timestamp < DETAIL_CACHE_TTL)) {
+        // キャッシュヒット: 即時に明細表示
+        if (token !== editModalRequestToken) return;
+        var invoice = cached.data;
+        currentEditInvoice = invoice;
+        isEditable = renderEditModalHeader(invoice);
+        renderEditModalDetail(invoice, isEditable);
+        if (!summary) { hideLoading(); document.getElementById('editModal').classList.add('active'); }
 
-          // ヘッダー情報をセット
-          document.getElementById('editIssueDate').value = invoice.issue_date || '';
-          document.getElementById('editDueDate').value = invoice.due_date || '';
-          document.getElementById('editNotes').value = invoice.notes || '';
-          document.getElementById('editInvoiceId').value = invoice.invoice_id;
-          document.getElementById('editUpdatedAt').value = invoice.updated_at || '';
+        // バックグラウンド更新（SWR）: キャッシュのみ更新、UIには反映しない
+        // 理由: updated_atをUIに反映するとoptimistic lockが壊れる
+        // （フォーム内容は古いのにロックトークンだけ新しくなり、CONFLICT_ERRORをすり抜ける）
+        fetchInvoiceDetail(invoiceId, function() {
+          // キャッシュは fetchInvoiceDetail 内で自動更新される
+          // UIは触らない（次回モーダルオープン時にキャッシュから最新を表示）
+        });
+        return;
+      }
 
-          // 編集可否に応じて入力フィールドを制御
-          document.getElementById('editIssueDate').disabled = !isEditable;
-          document.getElementById('editDueDate').disabled = !isEditable;
-          document.getElementById('editNotes').disabled = !isEditable;
+      // 3. サーバーから取得（in-flight dedup付き）
+      fetchInvoiceDetail(invoiceId, function(result) {
+        if (token !== editModalRequestToken) return; // 古いレスポンス破棄
+        if (!summary) hideLoading();
 
-          // 保存ボタンの表示/非表示
-          document.getElementById('editSaveBtn').style.display = isEditable ? '' : 'none';
+        if (!result.ok) {
+          if (!summary) { /* モーダル未表示 */ }
+          else { document.getElementById('editModal').classList.remove('active'); }
+          showToast(result.message || '請求書の取得に失敗しました', 'error');
+          return;
+        }
 
-          // 明細をレンダリング（編集可否を渡す）
-          renderEditLines(invoice.lines || [], isEditable);
+        var invoice = result.data;
+        currentEditInvoice = invoice;
+        isEditable = renderEditModalHeader(invoice);
+        renderEditModalDetail(invoice, isEditable);
 
-          // 調整項目をロード
-          const container = document.getElementById('adjustmentItemsContainer');
-          container.innerHTML = '';
-          const adjustments = invoice.adjustments || [];
-          adjustments.forEach(function(adj) {
-            addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
-          });
-          // 編集不可の場合は調整項目セクションを非表示
-          document.getElementById('adjustmentSection').style.display = isEditable ? '' : 'none';
-          document.getElementById('addAdjustmentBtn').disabled = adjustments.length >= 5;
-
-          // 合計プレビューを更新
-          updateTotalsPreview();
-
-          // モーダルを表示
+        if (!summary) {
           document.getElementById('editModal').classList.add('active');
-        })
-        .withFailureHandler(function(error) {
-          hideLoading();
-          console.error('getInvoice error:', error);
-          showToast('請求書の取得に失敗しました。しばらくしてから再度お試しください。', 'error');
-        })
-        .getInvoice(invoiceId);
+        }
+      });
     }
 
     /**
      * 編集モーダルを閉じる
      */
     function closeEditModal() {
+      editModalRequestToken++; // 閉じた後の遅延レスポンスを破棄
       document.getElementById('editModal').classList.remove('active');
       currentEditInvoice = null;
       processPendingInvalidation();
@@ -4482,6 +4643,16 @@
           // 差分更新: 該当行のみ更新（全件リロードを回避）
           if (result.data && result.data.invoice) {
             updateInvoiceRow(result.data.invoice);
+            // 詳細キャッシュを更新（getInvoice形式に正規化して保存）
+            // getInvoice: { invoice_id, lines, adjustments, customer, ... } (フラット)
+            // updateInvoiceDetails: { invoice: {...}, lines: [...], adjustments: [...] } (ネスト)
+            var normalizedForCache = {
+              ...result.data.invoice,
+              lines: result.data.lines || currentEditInvoice.lines || [],
+              adjustments: result.data.adjustments || currentEditInvoice.adjustments || [],
+              customer: currentEditInvoice.customer || null
+            };
+            cacheInvoiceDetail(result.data.invoice.invoice_id, normalizedForCache);
             // 楽観ロック用の updated_at を更新（次回保存用）
             document.getElementById('editUpdatedAt').value = result.data.invoice.updated_at || '';
             // currentEditInvoice を更新（合計プレビュー用）
