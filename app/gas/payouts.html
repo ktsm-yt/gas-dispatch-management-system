@@ -2861,6 +2861,14 @@
       const body = document.getElementById('payoutModalBody');
       const preview = options.preview === true;
       const status = options.status || modalPayoutStatus || 'unpaid';
+
+      // アーカイブデータの場合は警告バナーを表示
+      if (data._archived) {
+        const fiscalYear = data._archiveFiscalYear || '過去';
+        showPayoutArchiveWarning(`このデータは${fiscalYear}年度のアーカイブです。編集内容はアーカイブDBに反映されます。`);
+      } else {
+        hidePayoutArchiveWarning();
+      }
       const disabledAttr = preview ? 'disabled' : '';
       const baseText = (data.baseAmount === null || data.baseAmount === undefined) ? '-' : formatCurrency(data.baseAmount);
       const transportText = (data.transportAmount === null || data.transportAmount === undefined) ? '-' : formatCurrency(data.transportAmount);

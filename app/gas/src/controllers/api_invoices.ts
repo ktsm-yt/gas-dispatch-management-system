@@ -233,6 +233,15 @@ function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expecte
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoice.invoice_id is required', {}, requestId);
     }
 
+    // アーカイブフラグ補完（UIからは_archivedが送られないため、DBから取得して付与）
+    if (!invoice._archived) {
+      const current = InvoiceRepository.findById(invoice.invoice_id as string);
+      if (current && current._archived) {
+        invoice._archived = current._archived;
+        invoice._archiveFiscalYear = current._archiveFiscalYear;
+      }
+    }
+
     // Service呼び出し
     const result = InvoiceService.save(invoice, lines as Record<string, unknown>[], expectedUpdatedAt);
 

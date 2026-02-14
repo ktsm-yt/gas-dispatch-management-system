@@ -429,7 +429,7 @@ const JobRepository = {
       const updatableFields = [
         'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
         'start_time', 'required_count',
-        'pay_unit', 'work_category', 'work_detail',
+        'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
         'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
         'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
       ];
