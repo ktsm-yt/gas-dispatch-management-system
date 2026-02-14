@@ -1655,6 +1655,8 @@
     let customersLoaded = false;
     let customersLoading = false;
     let currentInvoiceQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
+    let changeFlagQueryToken = 0;    // 変更検知リクエストの無効化トークン
+    let lastInvoiceFetchTime = 0;    // 最後にsearchInvoicesを取得した時刻
 
     // クロスタブ同期
     let invoiceSyncChannel = null;
@@ -2241,7 +2243,16 @@
     }
 
     function refreshInvoicesOnVisible() {
-      PageCache.clearByPrefix('invoices_list');
+      // キャッシュクリアせずバックグラウンド更新のみ（ローディングモーダルを出さない）
+      if (invoices.length > 0 && currentInvoiceQuery) {
+        // 5分以内に取得済みならスキップ（単一ユーザー運用のため頻繁な再取得不要）
+        if (Date.now() - lastInvoiceFetchTime < 300000) return;
+        var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+        refreshInvoicesInBackground(cacheKey, currentInvoiceQuery);
+        fetchChangeFlagsInBackground();
+        return;
+      }
+      // 初回表示前（データなし）の場合のみ通常読み込み
       loadInvoices(true);
     }
 
@@ -2358,6 +2369,7 @@
         if (cached) {
           invoices = cached.data;
           renderInvoices();
+          fetchChangeFlagsInBackground();
 
           // TTL超過ならバックグラウンド更新
           if (cached.age > INVOICES_CACHE_TTL) {
@@ -2369,14 +2381,18 @@
 
       // キャッシュなし: ローディング表示してAPI取得
       showLoading('請求書一覧を読み込み中...');
+      var _searchStart = performance.now();
 
       google.script.run
         .withSuccessHandler(function (result) {
+          console.log('[perf] searchInvoices: ' + Math.round(performance.now() - _searchStart) + 'ms');
           hideLoading();
           if (result.ok) {
             invoices = result.data.invoices || [];
+            lastInvoiceFetchTime = Date.now();
             PageCache.set(cacheKey, invoices);
             renderInvoices();
+            fetchChangeFlagsInBackground();
           } else {
             showToast(result.error?.message || 'エラーが発生しました', 'error');
           }
@@ -2396,6 +2412,7 @@
           document.getElementById('bgUpdateBar').style.display = 'none';
           if (result.ok) {
             const newInvoices = result.data.invoices || [];
+            lastInvoiceFetchTime = Date.now();
             PageCache.set(cacheKey, newInvoices);
 
             // 現在の検索条件と一致する場合のみUIを更新
@@ -2416,6 +2433,7 @@
               if (changedIds.length > 0 || hasStructuralChange) {
                 invoices = newInvoices;
                 renderInvoices();
+                fetchChangeFlagsInBackground();
                 // 変更行をフラッシュハイライト
                 changedIds.forEach(function(id) {
                   var row = document.querySelector('tr[data-invoice-id="' + id + '"]');
@@ -2427,6 +2445,75 @@
         })
         .withFailureHandler(function () { document.getElementById('bgUpdateBar').style.display = 'none'; }) // サイレント
         .searchInvoices(query);
+    }
+
+    // 変更検知フラグをバックグラウンドで取得し、⚠️アイコンをDOM差分更新
+    function fetchChangeFlagsInBackground() {
+      if (!invoices || invoices.length === 0) return;
+      var token = ++changeFlagQueryToken;
+      var ids = invoices.map(function(inv) { return inv.invoice_id; });
+
+      setTimeout(function() {
+        if (token !== changeFlagQueryToken) return; // フィルタ変更済み
+        google.script.run
+          .withSuccessHandler(function(result) {
+            if (token !== changeFlagQueryToken) return; // stale
+            if (!result.ok || !result.data || !result.data.flags) return;
+            var flags = result.data.flags;
+            var changeCount = 0;
+            invoices.forEach(function(inv) {
+              var changed = !!flags[inv.invoice_id];
+              inv.has_assignment_changes = changed;
+              if (changed) changeCount++;
+              // DOM差分更新: ⚠️セルを直接更新
+              var row = document.querySelector('tr[data-invoice-id="' + inv.invoice_id + '"]');
+              if (row) {
+                var warningCell = row.children[1]; // 2番目のtd
+                if (warningCell) {
+                  if (changed && !warningCell.querySelector('.assignment-change-warning')) {
+                    warningCell.innerHTML = '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
+                      inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+                      '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
+                      '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
+                  } else if (!changed) {
+                    warningCell.innerHTML = '';
+                  }
+                }
+              }
+            });
+            // ヘッダーバッジ更新
+            updateChangeBadge(changeCount);
+            if (changeCount > 0) {
+              showToast('配置変更あり: ' + changeCount + '件の請求書で配置が変更されています', 'warning');
+            }
+          })
+          .withFailureHandler(function() { /* サイレント */ })
+          .getInvoiceChangeFlags(ids);
+      }, 500);
+    }
+
+    // 変更あり件数バッジの表示/更新
+    function updateChangeBadge(count) {
+      var badge = document.getElementById('changeFlagBadge');
+      if (!badge) {
+        // テーブルヘッダーの⚠️列にバッジを追加
+        var thead = document.getElementById('invoiceTableHead');
+        if (thead) {
+          var headerRow = thead.querySelector('tr');
+          if (headerRow && headerRow.children[1]) {
+            headerRow.children[1].innerHTML = count > 0
+              ? '<span id="changeFlagBadge" style="font-size:11px;color:#e67e22;" title="配置変更のある請求書">⚠️' + count + '</span>'
+              : '';
+          }
+        }
+        return;
+      }
+      if (count > 0) {
+        badge.innerHTML = '⚠️' + count;
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
     }
 
     function renderSingleInvoiceRow(inv, showOverdueDays, customerById) {
@@ -2445,7 +2532,7 @@
         rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
           inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
           '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
-          '\')" title="配置が変更されています。クリックして再生成">⚠️</span>';
+          '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
       }
       rowHtml += '</td>';
       rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
