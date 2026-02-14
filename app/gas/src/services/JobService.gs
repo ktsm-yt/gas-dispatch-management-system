@@ -450,7 +450,14 @@ const JobService = {
       };
     }
 
-    return this.save({ job_id: jobId, status: status }, expectedUpdatedAt);
+    // アーカイブフラグ補完
+    const jobData = { job_id: jobId, status: status };
+    const current = JobRepository.findById(jobId);
+    if (current && current._archived) {
+      jobData._archived = current._archived;
+      jobData._archiveFiscalYear = current._archiveFiscalYear;
+    }
+    return this.save(jobData, expectedUpdatedAt);
   },
 
   /**

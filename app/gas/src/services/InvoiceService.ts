@@ -380,10 +380,12 @@ const InvoiceService = {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
     }
 
-    const result = InvoiceRepository.update(
-      { invoice_id: invoiceId, status: normalizedStatus },
-      expectedUpdatedAt
-    );
+    const updateData: Record<string, unknown> = { invoice_id: invoiceId, status: normalizedStatus };
+    if (current._archived) {
+      updateData._archived = current._archived;
+      updateData._archiveFiscalYear = current._archiveFiscalYear;
+    }
+    const result = InvoiceRepository.update(updateData, expectedUpdatedAt);
 
     // 監査ログを記録（更新成功時のみ）
     if (result.success) {
@@ -1314,14 +1316,23 @@ const InvoiceService = {
         return { success: false, error: 'CANNOT_EDIT_SENT_INVOICE' };
       }
 
-      // 3. 楽観的ロックチェック
+      // 3. アーカイブデータの明細変更をブロック
+      if (invoice._archived && linesData && linesData.length > 0) {
+        return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
+      }
+
+      // 4. 楽観的ロックチェック
       if (expectedUpdatedAt && invoice.updated_at !== expectedUpdatedAt) {
         return { success: false, error: 'CONFLICT_ERROR' };
       }
 
-      // 4. ヘッダー情報を更新
+      // 5. ヘッダー情報を更新
       const allowedHeaderFields = ['issue_date', 'due_date', 'notes'];
       const headerUpdate: Record<string, unknown> = { invoice_id: invoiceId };
+      if (invoice._archived) {
+        headerUpdate._archived = invoice._archived;
+        headerUpdate._archiveFiscalYear = invoice._archiveFiscalYear;
+      }
       for (const field of allowedHeaderFields) {
         if (headerData && headerData[field] !== undefined) {
           headerUpdate[field] = headerData[field];
