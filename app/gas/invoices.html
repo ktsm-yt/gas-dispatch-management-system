@@ -639,19 +639,24 @@
 
     .edit-modal-context {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: var(--spacing-sm);
-      flex-wrap: wrap;
-      padding: 8px 10px;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 12px;
       margin-bottom: var(--spacing-sm);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-sm);
       background: #f8fafc;
     }
 
+    .edit-modal-context-row {
+      display: flex;
+      justify-content: flex-start;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+
     .edit-modal-context-company {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--text-primary);
       min-width: 0;
@@ -666,16 +671,24 @@
       white-space: nowrap;
     }
 
-    .edit-header-grid {
+    .edit-modal-context-dates {
       display: flex;
-      flex-direction: column;
-      gap: var(--spacing-sm);
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-secondary);
     }
 
-    .edit-header-dates {
-      display: flex;
-      gap: var(--spacing-sm);
-      flex-wrap: wrap;
+    .edit-modal-context-dates label {
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .edit-modal-context-dates input[type="date"] {
+      font-size: 12px;
+      padding: 3px 6px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
     }
 
     .compact-date-field {
@@ -696,6 +709,15 @@
 
     .edit-notes-group {
       width: 100%;
+    }
+
+    @media (max-width: 768px) {
+      .edit-modal-context-row {
+        flex-wrap: wrap;
+      }
+      .edit-modal-context-dates {
+        flex-wrap: wrap;
+      }
     }
 
     .edit-hint {
@@ -1349,7 +1371,7 @@
 
   <!-- Invoice Edit Modal -->
   <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" onclick="handleModalOverlayClick(event, 'editModal')">
-    <div class="modal" style="max-width: 800px;">
+    <div class="modal" style="max-width: 1050px;">
       <div class="modal-header">
         <h2 id="editModalTitle">請求書編集</h2>
         <button class="modal-close" onclick="closeEditModal()" aria-label="閉じる">&times;</button>
@@ -1359,24 +1381,22 @@
         <div class="edit-section">
           <h4>■ ヘッダー情報</h4>
           <div class="edit-modal-context">
-            <div class="edit-modal-context-company" id="editContextCompany">請求先: -</div>
-            <div class="edit-modal-context-meta" id="editContextMeta">請求番号: - / 請求年月: -</div>
-          </div>
-          <div class="edit-header-grid">
-            <div class="edit-header-dates">
-              <div class="form-group compact-date-field">
+            <div class="edit-modal-context-row">
+              <div class="edit-modal-context-company" id="editContextCompany">請求先: -</div>
+              <div class="edit-modal-context-meta" id="editContextMeta">請求番号: - / 請求年月: -</div>
+            </div>
+            <div class="edit-modal-context-row">
+              <div class="edit-modal-context-dates">
                 <label for="editIssueDate">発行日</label>
                 <input type="date" id="editIssueDate" />
-              </div>
-              <div class="form-group compact-date-field">
                 <label for="editDueDate">支払期限</label>
                 <input type="date" id="editDueDate" />
               </div>
             </div>
-            <div class="form-group edit-notes-group">
-              <label for="editNotes">社内メモ</label>
-              <input type="text" id="editNotes" placeholder="請求確認事項や作業メモなど（出力には含まれません）" style="width: 100%;">
-            </div>
+          </div>
+          <div class="form-group edit-notes-group">
+            <label for="editNotes">社内メモ</label>
+            <input type="text" id="editNotes" placeholder="請求確認事項や作業メモなど（出力には含まれません）" style="width: 100%;">
           </div>
         </div>
 
