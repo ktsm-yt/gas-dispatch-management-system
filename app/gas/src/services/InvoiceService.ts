@@ -984,7 +984,7 @@ const InvoiceService = {
 
     const hasTransportFee = customer.has_transport_fee === true || customer.has_transport_fee === 'true';
 
-    let transportAreaMap: Record<string, string> = preloadedTransportAreaMap || {};
+    const transportAreaMap: Record<string, string> = preloadedTransportAreaMap || {};
     if (hasTransportFee && !preloadedTransportAreaMap) {
       try {
         const transportFees = listTransportFees() as Record<string, unknown>[];

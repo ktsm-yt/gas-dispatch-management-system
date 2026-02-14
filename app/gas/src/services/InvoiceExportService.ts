@@ -797,7 +797,7 @@ const InvoiceExportService = {
    */
   _populateFormat1: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
     const spreadsheet = sheet.getParent();
-    let dataSheet = spreadsheet.getSheetByName('データ');
+    const dataSheet = spreadsheet.getSheetByName('データ');
 
     // P2-8: 合計金額は税抜（作業費 + 諸経費）
     const totalBeforeTax = Number(invoice.subtotal || 0) + Number(invoice.expense_amount || 0);
@@ -1164,7 +1164,7 @@ const InvoiceExportService = {
     let customerDisplay = customer.company_name || '';
     if (customer.contact_name) {
       const honorific = customer.honorific === 'なし' ? '' : (customer.honorific || '様');
-      customerDisplay += `　${customer.contact_name}${honorific ? '　' + honorific : ''}`;
+      customerDisplay += `\u3000${customer.contact_name}${honorific ? '\u3000' + honorific : ''}`;
     }
     sheet.getRange('E5').setValue(customerDisplay);
 
@@ -1264,8 +1264,8 @@ const InvoiceExportService = {
     sheet.getRange('AI23').setValue(invoice.subtotal || 0);
 
     // === 行24〜: 諸経費（あれば）→ 調整項目を動的配置 ===
-    var currentRow = 24;
-    var expenseAmount = Number(invoice.expense_amount || 0);
+    let currentRow = 24;
+    const expenseAmount = Number(invoice.expense_amount || 0);
     if (expenseAmount > 0) {
       sheet.getRange('F' + currentRow).setValue('諸経費');
       sheet.getRange('AC' + currentRow).setValue(1);
@@ -1799,7 +1799,7 @@ const InvoiceExportService = {
    * @returns {string} ファイル名
    */
   _generateFileName: function(invoice: Record<string, unknown>, customer: Record<string, unknown>, type: string, options: Record<string, unknown> = {}) {
-    const customerName = String(customer.company_name || '不明').replace(/[\/\\?%*:|"<>]/g, '_');
+    const customerName = String(customer.company_name || '不明').replace(/[/\\?%*:|"<>]/g, '_');
     const period = `${invoice.billing_year}年${String(invoice.billing_month).padStart(2, '0')}月`;
 
     const extension = type === 'sheet' ? '' : `.${type}`;
