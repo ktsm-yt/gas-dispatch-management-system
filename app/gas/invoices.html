@@ -2474,7 +2474,7 @@
                 if (warningCell) {
                   if (changed && !warningCell.querySelector('.assignment-change-warning')) {
                     warningCell.innerHTML = '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
-                      inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+                      inv.invoice_id + '\', \'' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') +
                       '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
                       '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
                   } else if (!changed) {
@@ -2532,13 +2532,13 @@
       rowHtml += '<td onclick="event.stopPropagation()">';
       if (inv.has_assignment_changes) {
         rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
-          inv.invoice_id + '\', \'' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') +
+          inv.invoice_id + '\', \'' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') +
           '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
           '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
       }
       rowHtml += '</td>';
       rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
-      rowHtml += '<td>' + escapeHtml(inv.customer && inv.customer.company_name ? inv.customer.company_name : '') + '</td>';
+      rowHtml += '<td>' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') + '</td>';
       rowHtml += '<td>' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '</td>';
       rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
       rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
