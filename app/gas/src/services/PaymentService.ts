@@ -7,20 +7,45 @@
  * - 残高計算・ステータス自動更新
  */
 
+interface PaymentInput {
+  payment_date: string;
+  amount: number | string;
+  payment_method?: string;
+  bank_ref?: string;
+  notes?: string;
+}
+
+interface PaymentServiceResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+  payment?: PaymentRecord;
+  invoiceId?: string;
+  totalPaid?: number;
+  outstanding?: number;
+  newUpdatedAt?: string;
+  statusUpdated?: boolean;
+  currentUpdatedAt?: string;
+  maxAmount?: number;
+}
+
+interface PaymentHistoryResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+  invoiceId?: string;
+  invoiceTotal?: number;
+  payments?: PaymentRecord[];
+  totalPaid?: number;
+  outstanding?: number;
+  updatedAt?: string;
+}
+
 const PaymentService = {
   /**
    * 入金を記録
-   * @param {string} invoiceId - 請求書ID
-   * @param {Object} paymentData - 入金データ
-   * @param {string} paymentData.payment_date - 入金日
-   * @param {number} paymentData.amount - 入金額
-   * @param {string} paymentData.payment_method - 入金方法（bank_transfer/cash/other）
-   * @param {string} [paymentData.bank_ref] - 銀行参照番号
-   * @param {string} [paymentData.notes] - 備考
-   * @param {string} expectedUpdatedAt - 請求書の期待するupdated_at（楽観ロック）
-   * @returns {Object} 結果 { success, payment, outstanding, newUpdatedAt, error }
    */
-  recordPayment: function(invoiceId, paymentData, expectedUpdatedAt) {
+  recordPayment: function(invoiceId: string, paymentData: PaymentInput, expectedUpdatedAt: string): PaymentServiceResult {
     // 1. LockService で排他制御
     const lock = LockService.getScriptLock();
     try {
@@ -46,7 +71,7 @@ const PaymentService = {
 
       // 3. ステータスチェック（未送付の請求書には入金記録不可）
       const payableStatuses = ['sent', 'unpaid', 'paid']; // paidでも追加入金可能（過払いチェックで制御）
-      if (!payableStatuses.includes(invoice.status)) {
+      if (!payableStatuses.includes(invoice.status as string)) {
         return {
           success: false,
           error: 'INVALID_STATUS',
@@ -55,7 +80,7 @@ const PaymentService = {
       }
 
       // 4. バリデーション
-      const amount = parseFloat(paymentData.amount);
+      const amount = parseFloat(String(paymentData.amount));
       if (isNaN(amount) || amount <= 0) {
         return { success: false, error: 'INVALID_AMOUNT', message: '入金額は0より大きい値を入力してください。' };
       }
@@ -96,11 +121,8 @@ const PaymentService = {
           invoice.updated_at
         );
         if (updateResult.success) {
-          newUpdatedAt = updateResult.invoice.updated_at;
+          newUpdatedAt = updateResult.invoice?.updated_at || newUpdatedAt;
         }
-      } else if (outstanding > 0 && invoice.status === 'unsent') {
-        // 部分入金でもunsentの場合はsentに（送付してないと入金されないはず）
-        // 実運用を考慮して、ここでは変更しない（手動でステータス管理）
       }
 
       // 監査ログを記録
@@ -112,8 +134,9 @@ const PaymentService = {
           payment_method: paymentData.payment_method || 'bank_transfer',
           outstanding_after: outstanding
         });
-      } catch (logError) {
-        console.warn('監査ログ記録エラー (recordPayment):', logError.message);
+      } catch (logError: unknown) {
+        const msg = logError instanceof Error ? logError.message : String(logError);
+        console.warn('監査ログ記録エラー (recordPayment):', msg);
       }
 
       return {
@@ -126,8 +149,9 @@ const PaymentService = {
         statusUpdated: outstanding === 0
       };
 
-    } catch (error) {
-      Logger.log(`PaymentService.recordPayment error: ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.log(`PaymentService.recordPayment error: ${msg}`);
       return { success: false, error: 'UNEXPECTED_ERROR', message: '予期しないエラーが発生しました。' };
     } finally {
       lock.releaseLock();
@@ -136,11 +160,8 @@ const PaymentService = {
 
   /**
    * 入金を削除（論理削除）
-   * @param {string} paymentId - 入金ID
-   * @param {string} invoiceExpectedUpdatedAt - 請求書の期待するupdated_at（楽観ロック）
-   * @returns {Object} 結果 { success, outstanding, newUpdatedAt, error }
    */
-  deletePayment: function(paymentId, invoiceExpectedUpdatedAt) {
+  deletePayment: function(paymentId: string, invoiceExpectedUpdatedAt: string): PaymentServiceResult {
     // 1. LockService で排他制御
     const lock = LockService.getScriptLock();
     try {
@@ -189,7 +210,7 @@ const PaymentService = {
           invoice.updated_at
         );
         if (updateResult.success) {
-          newUpdatedAt = updateResult.invoice.updated_at;
+          newUpdatedAt = updateResult.invoice?.updated_at || newUpdatedAt;
         }
       }
 
@@ -202,8 +223,9 @@ const PaymentService = {
           payment_method: payment.payment_method,
           outstanding_after: outstanding
         });
-      } catch (logError) {
-        console.warn('監査ログ記録エラー (deletePayment):', logError.message);
+      } catch (logError: unknown) {
+        const msg = logError instanceof Error ? logError.message : String(logError);
+        console.warn('監査ログ記録エラー (deletePayment):', msg);
       }
 
       return {
@@ -215,8 +237,9 @@ const PaymentService = {
         statusUpdated: outstanding > 0 && invoice.status === 'paid'
       };
 
-    } catch (error) {
-      Logger.log(`PaymentService.deletePayment error: ${error.message}`);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error);
+      Logger.log(`PaymentService.deletePayment error: ${msg}`);
       return { success: false, error: 'UNEXPECTED_ERROR', message: '予期しないエラーが発生しました。' };
     } finally {
       lock.releaseLock();
@@ -225,10 +248,8 @@ const PaymentService = {
 
   /**
    * 請求書の入金履歴を取得
-   * @param {string} invoiceId - 請求書ID
-   * @returns {Object} { success, payments, totalPaid, outstanding }
    */
-  getPaymentsByInvoice: function(invoiceId) {
+  getPaymentsByInvoice: function(invoiceId: string): PaymentHistoryResult {
     // 請求書取得
     const invoice = InvoiceRepository.findById(invoiceId);
     if (!invoice) {
@@ -255,10 +276,8 @@ const PaymentService = {
 
   /**
    * 未回収残高を計算
-   * @param {string} invoiceId - 請求書ID
-   * @returns {Object} { success, totalPaid, outstanding }
    */
-  calculateOutstanding: function(invoiceId) {
+  calculateOutstanding: function(invoiceId: string): { success: boolean; error?: string; invoiceId?: string; invoiceTotal?: number; totalPaid?: number; outstanding?: number } {
     const invoice = InvoiceRepository.findById(invoiceId);
     if (!invoice) {
       return { success: false, error: 'INVOICE_NOT_FOUND' };
@@ -278,10 +297,8 @@ const PaymentService = {
 
   /**
    * 複数請求書の入金情報を一括取得（パフォーマンス最適化）
-   * @param {string[]} invoiceIds - 請求書ID配列
-   * @returns {Map<string, {totalPaid: number, outstanding: number}>}
    */
-  getPaymentSummaryBulk: function(invoiceIds) {
+  getPaymentSummaryBulk: function(invoiceIds: string[]): Map<string, number> {
     if (!invoiceIds || invoiceIds.length === 0) {
       return new Map();
     }

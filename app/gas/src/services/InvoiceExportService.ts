@@ -29,7 +29,7 @@ const InvoiceExportService = {
    * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} テンプレートスプレッドシート
    * @throws {Error} テンプレートID未設定または無効な場合
    */
-  _getTemplateSpreadsheet: function(templateKey) {
+  _getTemplateSpreadsheet: function(templateKey: string) {
     const props = PropertiesService.getScriptProperties();
     const templateId = props.getProperty(templateKey);
 
@@ -47,10 +47,10 @@ const InvoiceExportService = {
 
     try {
       return SpreadsheetApp.openById(templateId);
-    } catch (e) {
+    } catch (e: unknown) {
       throw new Error(
         `テンプレートを開けません: ${templateKey}=${templateId}\n` +
-        `原因: ${e.message}\n` +
+        `原因: ${((e instanceof Error) ? e.message : String(e))}\n` +
         `ファイルが削除されたか、アクセス権限がない可能性があります。`
       );
     }
@@ -61,8 +61,8 @@ const InvoiceExportService = {
    * @param {string} format - 請求書フォーマット
    * @returns {Object} { valid: boolean, missingKey?: string, setupGuide?: string }
    */
-  validateTemplateConfig: function(format) {
-    const templateKey = this.TEMPLATE_KEYS[format] || this.TEMPLATE_KEYS.format1;
+  validateTemplateConfig: function(format: string) {
+    const templateKey = (this.TEMPLATE_KEYS as Record<string, string>)[format] || this.TEMPLATE_KEYS.format1;
     const templateId = PropertiesService.getScriptProperties().getProperty(templateKey);
 
     if (!templateId) {
@@ -82,7 +82,7 @@ const InvoiceExportService = {
     // テンプレートファイルの存在確認
     try {
       DriveApp.getFileById(templateId);
-    } catch (e) {
+    } catch (e: unknown) {
       return {
         valid: false,
         missingKey: templateKey,
@@ -100,7 +100,7 @@ const InvoiceExportService = {
    * @returns {Object} 各フォーマットの設定状況
    */
   getTemplateConfigStatus: function() {
-    const status = {};
+    const status: Record<string, unknown> = {};
     const props = PropertiesService.getScriptProperties();
 
     for (const [format, key] of Object.entries(this.TEMPLATE_KEYS)) {
@@ -115,11 +115,11 @@ const InvoiceExportService = {
       if (templateId) {
         try {
           const file = DriveApp.getFileById(templateId);
-          status[format].fileName = file.getName();
-          status[format].accessible = true;
-        } catch (e) {
-          status[format].accessible = false;
-          status[format].error = 'ファイルにアクセスできません';
+          (status[format] as unknown as Record<string, unknown>).fileName = file.getName();
+          (status[format] as unknown as Record<string, unknown>).accessible = true;
+        } catch (e: unknown) {
+          (status[format] as unknown as Record<string, unknown>).accessible = false;
+          (status[format] as unknown as Record<string, unknown>).error = 'ファイルにアクセスできません';
         }
       }
     }
@@ -134,14 +134,14 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（includeCoverPage: true で頭紙付きファイル名をチェック）
    * @returns {Object} { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
    */
-  checkExistingFile: function(invoiceId, mode, options = {}) {
+  checkExistingFile: function(invoiceId: string, mode: string, options: Record<string, unknown> = {}) {
     try {
       const invoiceData = InvoiceService.get(invoiceId);
       if (!invoiceData) {
         return { exists: false, error: 'INVOICE_NOT_FOUND' };
       }
 
-      const { invoice, customer } = this._extractInvoiceData(invoiceData);
+      const { invoice, customer } = this._extractInvoiceData(invoiceData as unknown as Record<string, unknown>);
       const folder = this._getOutputFolder(customer);
 
       // modeとoptionsに基づいてファイル名オプションを決定
@@ -155,7 +155,7 @@ const InvoiceExportService = {
         fileNameOptions = { withCover: options.includeCoverPage === true };
       }
 
-      const fileName = this._generateFileName(invoice, customer, fileType, fileNameOptions);
+      const fileName = this._generateFileName(invoice as Record<string, unknown>, customer, fileType, fileNameOptions);
 
       const files = folder.getFilesByName(fileName);
       if (files.hasNext()) {
@@ -171,9 +171,9 @@ const InvoiceExportService = {
         };
       }
       return { exists: false };
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('checkExistingFile', error);
-      return { exists: false, error: error.message };
+      return { exists: false, error: ((error instanceof Error) ? error.message : String(error)) };
     }
   },
 
@@ -184,7 +184,7 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url, error }
    */
-  export: function(invoiceId, mode, options = {}) {
+  export: function(invoiceId: string, mode: string, options: Record<string, unknown> = {}) {
     try {
       // 請求書データを取得
       const invoiceData = InvoiceService.get(invoiceId);
@@ -192,16 +192,16 @@ const InvoiceExportService = {
         return { success: false, error: 'INVOICE_NOT_FOUND' };
       }
 
-      const { invoice, lines, customer } = this._extractInvoiceData(invoiceData);
+      const { invoice, lines, customer } = this._extractInvoiceData(invoiceData as unknown as Record<string, unknown>);
 
       // デバッグログ
       console.log('=== Export Debug ===');
       console.log('invoice_format:', invoice.invoice_format);
-      console.log('customer.include_cover_page:', customer.include_cover_page);
+      console.log('customer.include_cover_page:', (customer as unknown as Record<string, unknown>).include_cover_page);
       console.log('customer keys:', Object.keys(customer).join(', '));
 
       // テンプレートIDの事前検証
-      const templateValidation = this.validateTemplateConfig(invoice.invoice_format);
+      const templateValidation = this.validateTemplateConfig(String(invoice.invoice_format));
       if (!templateValidation.valid) {
         return {
           success: false,
@@ -216,17 +216,17 @@ const InvoiceExportService = {
       // フォーマットに応じた処理
       switch (mode) {
         case 'pdf':
-          return this.exportToPdf(invoice, lines, customer, company, options);
+          return this.exportToPdf(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company, options);
         case 'excel':
-          return this.exportToExcel(invoice, lines, customer, company, options);
+          return this.exportToExcel(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company, options);
         case 'cover':
-          return this.exportCoverOnly(invoice, lines, customer, company, options);
+          return this.exportCoverOnly(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company, options);
         default:
           return { success: false, error: 'INVALID_MODE' };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('InvoiceExportService.export', error);
-      return { success: false, error: error.message || 'EXPORT_ERROR' };
+      return { success: false, error: ((error instanceof Error) ? error.message : String(error)) || 'EXPORT_ERROR' };
     }
   },
 
@@ -240,16 +240,16 @@ const InvoiceExportService = {
    * @param {Object} options.company - 自社情報（省略時は内部で取得）
    * @returns {Object} { success, fileId, url, error }
    */
-  exportWithData: function(invoiceData, mode, options = {}) {
+  exportWithData: function(invoiceData: Record<string, unknown>, mode: string, options: Record<string, unknown> = {}) {
     try {
       if (!invoiceData) {
         return { success: false, error: 'INVOICE_DATA_REQUIRED' };
       }
 
-      const { invoice, lines, customer } = this._extractInvoiceData(invoiceData);
+      const { invoice, lines, customer } = this._extractInvoiceData(invoiceData as unknown as Record<string, unknown>);
 
       // テンプレートIDの事前検証
-      const templateValidation = this.validateTemplateConfig(invoice.invoice_format);
+      const templateValidation = this.validateTemplateConfig(String(invoice.invoice_format));
       if (!templateValidation.valid) {
         return {
           success: false,
@@ -264,17 +264,17 @@ const InvoiceExportService = {
       // フォーマットに応じた処理
       switch (mode) {
         case 'pdf':
-          return this.exportToPdf(invoice, lines, customer, company, options);
+          return this.exportToPdf(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company as Record<string, unknown>, options);
         case 'excel':
-          return this.exportToExcel(invoice, lines, customer, company, options);
+          return this.exportToExcel(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company as Record<string, unknown>, options);
         case 'cover':
-          return this.exportCoverOnly(invoice, lines, customer, company, options);
+          return this.exportCoverOnly(invoice as Record<string, unknown>, lines as Record<string, unknown>[], customer, company as Record<string, unknown>, options);
         default:
           return { success: false, error: 'INVALID_MODE' };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('InvoiceExportService.exportWithData', error);
-      return { success: false, error: error.message || 'EXPORT_ERROR' };
+      return { success: false, error: ((error instanceof Error) ? error.message : String(error)) || 'EXPORT_ERROR' };
     }
   },
 
@@ -287,9 +287,9 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url }
    */
-  exportToPdf: function(invoice, lines, customer, company, options = {}) {
+  exportToPdf: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, options: Record<string, unknown> = {}) {
     try {
-      const timings = { start: Date.now() };
+      const timings: Record<string, number> = { start: Date.now() };
       Logger.log(`[TIMING] exportToPdf START - invoice: ${invoice.invoice_number}`);
 
       // スプレッドシートを作成（PDF用：ページ分割あり）
@@ -310,9 +310,9 @@ const InvoiceExportService = {
       const pdfOptions = { landscape: invoice.invoice_format === 'format3' };
       let pdfBlob;
       if (sheetResult.hasCoverPage || sheetResult.hasPrintSheets) {
-        pdfBlob = this._exportSpreadsheetToPdf(spreadsheet.getId(), pdfOptions);
+        pdfBlob = this._exportSpreadsheetToPdf(spreadsheet!.getId(), pdfOptions);
       } else {
-        pdfBlob = this._exportSheetToPdf(spreadsheet.getId(), sheet.getSheetId(), pdfOptions);
+        pdfBlob = this._exportSheetToPdf(spreadsheet!.getId(), sheet!.getSheetId(), pdfOptions);
       }
       timings.exportPdf = Date.now();
       Logger.log(`[TIMING] PDF export: ${timings.exportPdf - timings.createSheet}ms`);
@@ -345,18 +345,18 @@ const InvoiceExportService = {
 
       // 一時スプレッドシートを削除
       if (!options.keepSheet) {
-        DriveApp.getFileById(spreadsheet.getId()).setTrashed(true);
+        DriveApp.getFileById(spreadsheet!.getId()).setTrashed(true);
       }
       timings.cleanup = Date.now();
       Logger.log(`[TIMING] cleanup temp sheet: ${timings.cleanup - timings.createFile}ms`);
 
       // 請求書のファイルIDを更新
-      InvoiceRepository.updateFileIds(invoice.invoice_id, { pdf_file_id: file.getId() });
+      InvoiceRepository.updateFileIds(String(invoice.invoice_id), { pdf_file_id: file.getId() });
       timings.updateDb = Date.now();
       Logger.log(`[TIMING] updateFileIds: ${timings.updateDb - timings.cleanup}ms`);
       Logger.log(`[TIMING] exportToPdf TOTAL: ${timings.updateDb - timings.start}ms`);
 
-      const result = {
+      const result: Record<string, unknown> = {
         success: true,
         fileId: file.getId(),
         url: file.getUrl(),
@@ -369,9 +369,9 @@ const InvoiceExportService = {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('exportToPdf', error);
-      return { success: false, error: error.message || 'PDF_EXPORT_ERROR' };
+      return { success: false, error: ((error instanceof Error) ? error.message : String(error)) || 'PDF_EXPORT_ERROR' };
     }
   },
 
@@ -384,7 +384,7 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
    * @returns {Object} { success, fileId, url }
    */
-  exportToExcel: function(invoice, lines, customer, company, options = {}) {
+  exportToExcel: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, options: Record<string, unknown> = {}) {
     try {
       // デバッグログ
       console.log('=== exportToExcel Debug ===');
@@ -403,7 +403,7 @@ const InvoiceExportService = {
       const spreadsheet = sheetResult.spreadsheet;
 
       // Excelに変換
-      const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet.getId());
+      const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet!.getId());
 
       // 出力先フォルダを取得
       const folder = this._getOutputFolder(customer);
@@ -427,13 +427,13 @@ const InvoiceExportService = {
 
       // 一時スプレッドシートを削除
       if (!options.keepSheet) {
-        DriveApp.getFileById(spreadsheet.getId()).setTrashed(true);
+        DriveApp.getFileById(spreadsheet!.getId()).setTrashed(true);
       }
 
       // 請求書のファイルIDを更新
-      InvoiceRepository.updateFileIds(invoice.invoice_id, { excel_file_id: file.getId() });
+      InvoiceRepository.updateFileIds(String(invoice.invoice_id), { excel_file_id: file.getId() });
 
-      const result = {
+      const result: Record<string, unknown> = {
         success: true,
         fileId: file.getId(),
         url: file.getUrl(),
@@ -446,9 +446,9 @@ const InvoiceExportService = {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('exportToExcel', error);
-      return { success: false, error: error.message || 'EXCEL_EXPORT_ERROR' };
+      return { success: false, error: ((error instanceof Error) ? error.message : String(error)) || 'EXCEL_EXPORT_ERROR' };
     }
   },
 
@@ -461,10 +461,10 @@ const InvoiceExportService = {
    * @param {Object} options - オプション
    * @returns {Object} { success, fileId, url }
    */
-  exportCoverOnly: function(invoice, lines, customer, company, options = {}) {
+  exportCoverOnly: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, options: Record<string, unknown> = {}) {
     try {
       // format1/format2のみ頭紙対応
-      const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
+      const supportsCoverPage = ['format1', 'format2'].includes(String(invoice.invoice_format));
       if (!supportsCoverPage) {
         return { success: false, error: 'このフォーマットは頭紙に対応していません' };
       }
@@ -478,8 +478,8 @@ const InvoiceExportService = {
       let coverTemplate;
       try {
         coverTemplate = SpreadsheetApp.openById(coverTemplateId);
-      } catch (e) {
-        return { success: false, error: `頭紙テンプレートにアクセスできません: ${e.message}` };
+      } catch (e: unknown) {
+        return { success: false, error: `頭紙テンプレートにアクセスできません: ${((e instanceof Error) ? e.message : String(e))}` };
       }
 
       // テンプレートをコピー
@@ -498,7 +498,7 @@ const InvoiceExportService = {
       SpreadsheetApp.flush();
 
       // Excelに変換
-      const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet.getId());
+      const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet!.getId());
 
       // 出力先フォルダを取得
       const folder = this._getOutputFolder(customer);
@@ -520,7 +520,7 @@ const InvoiceExportService = {
       const file = folder.createFile(xlsxBlob);
 
       // 一時スプレッドシートを削除
-      DriveApp.getFileById(spreadsheet.getId()).setTrashed(true);
+      DriveApp.getFileById(spreadsheet!.getId()).setTrashed(true);
 
       return {
         success: true,
@@ -528,9 +528,9 @@ const InvoiceExportService = {
         url: file.getUrl(),
         invoiceId: invoice.invoice_id
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logErr('exportCoverOnly', error);
-      return { success: false, error: error.message || 'COVER_EXPORT_ERROR' };
+      return { success: false, error: ((error instanceof Error) ? error.message : String(error)) || 'COVER_EXPORT_ERROR' };
     }
   },
 
@@ -543,7 +543,7 @@ const InvoiceExportService = {
    * @param {Object} invoiceData - InvoiceService.get()の結果
    * @returns {Object} { invoice, lines, customer }
    */
-  _extractInvoiceData: function(invoiceData) {
+  _extractInvoiceData: function(invoiceData: Record<string, unknown>): { invoice: Record<string, unknown>; lines: Record<string, unknown>[]; customer: Record<string, unknown> } {
     return {
       invoice: {
         invoice_id: invoiceData.invoice_id,
@@ -561,8 +561,8 @@ const InvoiceExportService = {
         status: invoiceData.status,
         notes: invoiceData.notes
       },
-      lines: invoiceData.lines || [],
-      customer: invoiceData.customer || {}
+      lines: (invoiceData.lines || []) as Record<string, unknown>[],
+      customer: (invoiceData.customer || {}) as Record<string, unknown>
     };
   },
 
@@ -619,11 +619,11 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（forPdf: PDF用処理を行うか）
    * @returns {Object} { success, spreadsheet, sheet, hasCoverPage }
    */
-  _createFilledSheet: function(invoice, lines, customer, company, options = {}) {
-    const _t = { start: Date.now() };  // タイミング計測用
+  _createFilledSheet: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, options: Record<string, unknown> = {}) {
+    const _t: Record<string, number> = { start: Date.now() };  // タイミング計測用
     const forPdf = options.forPdf !== false;  // デフォルトはtrue（後方互換）
     // テンプレートIDを取得
-    const templateKey = this.TEMPLATE_KEYS[invoice.invoice_format] || this.TEMPLATE_KEYS.format1;
+    const templateKey = (this.TEMPLATE_KEYS as Record<string, string>)[invoice.invoice_format as string] || this.TEMPLATE_KEYS.format1;
     const templateId = PropertiesService.getScriptProperties().getProperty(templateKey);
 
     if (!templateId) {
@@ -641,14 +641,14 @@ const InvoiceExportService = {
     let templateFile;
     try {
       templateFile = DriveApp.getFileById(templateId);
-    } catch (e) {
+    } catch (e: unknown) {
       return {
         success: false,
         error: 'TEMPLATE_ACCESS_ERROR',
         details: {
           templateKey: templateKey,
           templateId: templateId,
-          message: `テンプレートファイルにアクセスできません: ${e.message}`
+          message: `テンプレートファイルにアクセスできません: ${((e instanceof Error) ? e.message : String(e))}`
         }
       };
     }
@@ -669,7 +669,7 @@ const InvoiceExportService = {
     // - ユーザーが明示指定した場合: その値を優先
     // - 指定がない場合: PDF出力時は顧客設定(include_cover_page)に従う、Excel出力時は頭紙なし
     const customerWantsCover = customer.include_cover_page === true || customer.include_cover_page === 'true';
-    const supportsCoverPage = ['format1', 'format2'].includes(invoice.invoice_format);
+    const supportsCoverPage = ['format1', 'format2'].includes(String(invoice.invoice_format));
 
     // ユーザー指定を正規化（文字列"true"/"false"も考慮）
     let userWantsCover = null;
@@ -703,8 +703,8 @@ const InvoiceExportService = {
         let coverTemplate;
         try {
           coverTemplate = SpreadsheetApp.openById(coverTemplateId);
-        } catch (e) {
-          console.warn(`頭紙テンプレートにアクセスできません: ${e.message}`);
+        } catch (e: unknown) {
+          console.warn(`頭紙テンプレートにアクセスできません: ${((e instanceof Error) ? e.message : String(e))}`);
           coverPageWarning = `頭紙テンプレートにアクセスできません（ID: ${coverTemplateId}）。ファイルが削除されたか、アクセス権限がない可能性があります。`;
         }
         if (coverTemplate) {
@@ -795,12 +795,12 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateFormat1: function(sheet, invoice, lines, customer, company) {
+  _populateFormat1: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
     const spreadsheet = sheet.getParent();
-    let dataSheet = spreadsheet.getSheetByName('データ');
+    const dataSheet = spreadsheet.getSheetByName('データ');
 
     // P2-8: 合計金額は税抜（作業費 + 諸経費）
-    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+    const totalBeforeTax = Number(invoice.subtotal || 0) + Number(invoice.expense_amount || 0);
 
     // === ヘッダー情報 ===
     if (dataSheet) {
@@ -894,7 +894,7 @@ const InvoiceExportService = {
       totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
       sheet.getRange(totalRow, 9).setValue('合計');                // I: ラベル
       // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
-      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+      const totalBeforeTax = Number(invoice.subtotal || 0) + Number(invoice.expense_amount || 0);
       sheet.getRange(totalRow, 10).setValue(totalBeforeTax);       // J: 税別合計
 
       // 合計行の上下に罫線を追加
@@ -944,17 +944,17 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateFormat2: function(sheet, invoice, lines, customer, company) {
+  _populateFormat2: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
     // データシートを取得（atamagamiと同じアーキテクチャ）
     const spreadsheet = sheet.getParent();
     const dataSheet = spreadsheet.getSheetByName('データ');
 
     if (!dataSheet) {
-      throw new Error(`format2 template invalid: required sheet "データ" is missing (templateId=${spreadsheet.getId()})`);
+      throw new Error(`format2 template invalid: required sheet "データ" is missing (templateId=${spreadsheet!.getId()})`);
     }
 
     // P2-8: 合計金額は税抜（作業費 + 諸経費）
-    const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+    const totalBeforeTax = Number(invoice.subtotal || 0) + Number(invoice.expense_amount || 0);
 
     // === ヘッダー情報をデータシートに書き込み ===
     // （売上シートは数式で自動参照）
@@ -1039,7 +1039,7 @@ const InvoiceExportService = {
       totalRow = lastDataRow + 2;  // 最終明細行の2行下に合計行
       sheet.getRange(totalRow, 9).setValue('合計');               // I: ラベル
       // P2-8: 合計は作業費(subtotal) + 諸経費(expense_amount)
-      const totalBeforeTax = (invoice.subtotal || 0) + (invoice.expense_amount || 0);
+      const totalBeforeTax = Number(invoice.subtotal || 0) + Number(invoice.expense_amount || 0);
       sheet.getRange(totalRow, 10).setValue(totalBeforeTax);      // J: 税別合計
 
       // 合計行の上下に罫線を追加
@@ -1086,7 +1086,7 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateFormat3: function(sheet, invoice, lines, customer, company) {
+  _populateFormat3: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
     // タイトル（B1に配置、顧客Bフォーマット準拠）
     sheet.getRange('B1').setValue(`${customer.company_name || ''} ${invoice.billing_year}年${invoice.billing_month}月 追加請求一覧`);
 
@@ -1099,7 +1099,7 @@ const InvoiceExportService = {
 
     // 明細データを2D配列として構築（バルク処理）
     const rowsData = lines.map((line, i) => {
-      const taxIncluded = calculateTaxIncluded_(line.amount || 0, taxRate, taxRoundingMode);
+      const taxIncluded = calculateTaxIncluded_(Number(line.amount || 0), taxRate, taxRoundingMode);
       return [
         i + 1,                          // A: № (連番)
         line.construction_div || '',    // B: 担当工事課
@@ -1133,7 +1133,7 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateAtagami: function(sheet, invoice, lines, customer, company) {
+  _populateAtagami: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
     // === デバッグログ ===
     console.log('=== _populateAtagami Debug ===');
     console.log('invoice.issue_date:', invoice.issue_date);
@@ -1149,7 +1149,7 @@ const InvoiceExportService = {
     }
 
     if (!dataSheet) {
-      throw new Error(`atagami template invalid: required sheet "データ" or "頭紙データ" is missing (templateId=${spreadsheet.getId()})`);
+      throw new Error(`atagami template invalid: required sheet "データ" or "頭紙データ" is missing (templateId=${spreadsheet!.getId()})`);
     }
 
     // === 顧客情報（原本シートに直接書き込み） ===
@@ -1164,7 +1164,7 @@ const InvoiceExportService = {
     let customerDisplay = customer.company_name || '';
     if (customer.contact_name) {
       const honorific = customer.honorific === 'なし' ? '' : (customer.honorific || '様');
-      customerDisplay += `　${customer.contact_name}${honorific ? '　' + honorific : ''}`;
+      customerDisplay += `\u3000${customer.contact_name}${honorific ? '\u3000' + honorific : ''}`;
     }
     sheet.getRange('E5').setValue(customerDisplay);
 
@@ -1174,7 +1174,7 @@ const InvoiceExportService = {
 
     // 発行日
     if (invoice.issue_date) {
-      const parts = invoice.issue_date.split('-');
+      const parts = String(invoice.issue_date).split('-');
       const issueDateFormatted = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
       dataSheet.getRange('B2').setValue(invoice.issue_date);
       sheet.getRange('AO2').setValue(issueDateFormatted);  // 原本シートの値セルに直接書き込み
@@ -1190,7 +1190,7 @@ const InvoiceExportService = {
 
     // 支払期限 年/月/日
     if (invoice.due_date) {
-      const dueParts = invoice.due_date.split('-');
+      const dueParts = String(invoice.due_date).split('-');
       const dueYear = parseInt(dueParts[0]);
       const dueMonth = parseInt(dueParts[1]);
       let dueDay = parseInt(dueParts[2]);
@@ -1264,8 +1264,8 @@ const InvoiceExportService = {
     sheet.getRange('AI23').setValue(invoice.subtotal || 0);
 
     // === 行24〜: 諸経費（あれば）→ 調整項目を動的配置 ===
-    var currentRow = 24;
-    var expenseAmount = invoice.expense_amount || 0;
+    let currentRow = 24;
+    const expenseAmount = Number(invoice.expense_amount || 0);
     if (expenseAmount > 0) {
       sheet.getRange('F' + currentRow).setValue('諸経費');
       sheet.getRange('AC' + currentRow).setValue(1);
@@ -1274,7 +1274,7 @@ const InvoiceExportService = {
       currentRow++;
     }
 
-    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoice.invoice_id);
+    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(String(invoice.invoice_id));
     adjustments.forEach(function(adj, i) {
       if (i >= 5) return;
       sheet.getRange('F' + currentRow).setValue(adj.item_name);
@@ -1302,7 +1302,7 @@ const InvoiceExportService = {
    * @param {number} columnsCount - コピーする列数
    * @param {boolean} includeFormat - 書式もコピーするか
    */
-  _batchCopyInterleavedRows: function(sourceSheet, targetSheet, sourceStartRow, targetStartRow, itemCount, columnsCount, includeFormat) {
+  _batchCopyInterleavedRows: function(sourceSheet: GoogleAppsScript.Spreadsheet.Sheet, targetSheet: GoogleAppsScript.Spreadsheet.Sheet, sourceStartRow: number, targetStartRow: number, itemCount: number, columnsCount: number, includeFormat: boolean) {
     if (itemCount === 0) return;
 
     const sourceRowCount = itemCount * 2;
@@ -1334,7 +1334,7 @@ const InvoiceExportService = {
    * @param {number} targetStartRow - コピー先の開始行
    * @param {number} rowCount - 行数
    */
-  _batchSetRowHeights: function(sourceSheet, targetSheet, sourceStartRow, targetStartRow, rowCount) {
+  _batchSetRowHeights: function(sourceSheet: GoogleAppsScript.Spreadsheet.Sheet, targetSheet: GoogleAppsScript.Spreadsheet.Sheet, sourceStartRow: number, targetStartRow: number, rowCount: number) {
     if (rowCount === 0) return;
 
     // === 最適化版: 2行パターンの高さだけ取得（getRowHeight 2回のみ） ===
@@ -1381,7 +1381,7 @@ const InvoiceExportService = {
    * @param {number} targetRowCount - 適用する行数
    * @param {number} columnsCount - 列数
    */
-  _batchExtendFormat: function(sheet, sourceRow, targetStartRow, targetRowCount, columnsCount) {
+  _batchExtendFormat: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, sourceRow: number, targetStartRow: number, targetRowCount: number, columnsCount: number) {
     if (targetRowCount <= 0) return;
 
     const sourceRange = sheet.getRange(sourceRow, 1, 2, columnsCount);
@@ -1413,7 +1413,7 @@ const InvoiceExportService = {
    * @param {Array} lines - 明細行データ
    * @param {Object} invoice - 請求書データ（subtotal等を参照）
    */
-  _createPrintSheetsForFormat2: function(spreadsheet, dataSheet, lines, invoice) {
+  _createPrintSheetsForFormat2: function(spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, dataSheet: GoogleAppsScript.Spreadsheet.Sheet, lines: Record<string, unknown>[], invoice: Record<string, unknown>) {
     // === 2シート構成アプローチ（改良版） ===
     // 1. 表紙シート: 行1-9（ヘッダー全体）+ 1ページ目のデータ + (合計行:1ページに収まる場合)
     // 2. 明細シート: 行9（列ヘッダー）を凍結 + 残りのデータ + 合計行
@@ -1523,7 +1523,7 @@ const InvoiceExportService = {
    * @param {Array} lines - 明細行データ
    * @param {Object} invoice - 請求書データ（subtotal等を参照）
    */
-  _createPrintSheetsForFormat1: function(spreadsheet, dataSheet, lines, invoice) {
+  _createPrintSheetsForFormat1: function(spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, dataSheet: GoogleAppsScript.Spreadsheet.Sheet, lines: Record<string, unknown>[], invoice: Record<string, unknown>) {
     console.log(`=== FORMAT1 2シート構成 ===`);
     console.log(`明細行数: ${lines.length}`);
 
@@ -1622,7 +1622,7 @@ const InvoiceExportService = {
    * @param {boolean} options.landscape - 横向き印刷（デフォルト: false）
    * @returns {GoogleAppsScript.Base.Blob} PDFブロブ
    */
-  _exportSheetToPdf: function(spreadsheetId, sheetId, options = {}) {
+  _exportSheetToPdf: function(spreadsheetId: string, sheetId: string | number, options: Record<string, unknown> = {}) {
     const isLandscape = options.landscape === true;
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
       `format=pdf` +
@@ -1656,7 +1656,7 @@ const InvoiceExportService = {
    * @param {boolean} options.landscape - 横向き印刷（デフォルト: false）
    * @returns {GoogleAppsScript.Base.Blob} PDFブロブ
    */
-  _exportSpreadsheetToPdf: function(spreadsheetId, options = {}) {
+  _exportSpreadsheetToPdf: function(spreadsheetId: string, options: Record<string, unknown> = {}) {
     const isLandscape = options.landscape === true;
     // gidパラメータを省略して全シートを出力
     // fitw=trueで幅を1ページに収め、fzr=trueで凍結行繰り返し
@@ -1688,7 +1688,7 @@ const InvoiceExportService = {
    * @param {string} spreadsheetId - スプレッドシートID
    * @returns {GoogleAppsScript.Base.Blob} Excelブロブ
    */
-  _exportSpreadsheetToXlsx: function(spreadsheetId) {
+  _exportSpreadsheetToXlsx: function(spreadsheetId: string) {
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?format=xlsx`;
 
     const token = ScriptApp.getOAuthToken();
@@ -1705,7 +1705,7 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ（folder_idを持つ可能性あり）
    * @returns {GoogleAppsScript.Drive.Folder} フォルダ
    */
-  _getOutputFolder: function(customer) {
+  _getOutputFolder: function(customer: Record<string, unknown>) {
     // 顧客専用フォルダがあればその配下の「請求書」フォルダを使用
     if (customer && customer.folder_id) {
       try {
@@ -1713,8 +1713,8 @@ const InvoiceExportService = {
         if (invoiceFolder) {
           return invoiceFolder;
         }
-      } catch (e) {
-        Logger.log(`顧客フォルダ取得エラー: ${e.message}`);
+      } catch (e: unknown) {
+        Logger.log(`顧客フォルダ取得エラー: ${((e instanceof Error) ? e.message : String(e))}`);
       }
     }
 
@@ -1724,15 +1724,15 @@ const InvoiceExportService = {
         const folderResult = CustomerFolderService.createCustomerFolder(customer);
         if (folderResult.folderId) {
           CustomerFolderService._updateCustomerFolderId(
-            customer.customer_id,
+            String(customer.customer_id),
             folderResult.folderId
           );
           Logger.log(`請求書出力時に顧客フォルダを自動作成: ${customer.company_name}`);
           // 請求書サブフォルダを返す
           return DriveApp.getFolderById(folderResult.invoiceFolderId);
         }
-      } catch (e) {
-        Logger.log(`フォルダ自動作成に失敗: ${e.message}`);
+      } catch (e: unknown) {
+        Logger.log(`フォルダ自動作成に失敗: ${((e instanceof Error) ? e.message : String(e))}`);
       }
     }
 
@@ -1743,7 +1743,7 @@ const InvoiceExportService = {
     if (folderId) {
       try {
         return DriveApp.getFolderById(folderId);
-      } catch (e) {
+      } catch (e: unknown) {
         throw new Error(
           `請求書エクスポートフォルダにアクセスできません（ID: ${folderId}）。\n` +
           `フォルダが削除されたか、アクセス権限がない可能性があります。`
@@ -1780,7 +1780,7 @@ const InvoiceExportService = {
         folderName: folder.getName(),
         url: `https://drive.google.com/drive/folders/${folderId}`
       };
-    } catch (e) {
+    } catch (e: unknown) {
       return {
         configured: false,
         folderId: folderId,
@@ -1798,8 +1798,8 @@ const InvoiceExportService = {
    * @param {Object} options - オプション（addTimestamp: true で日付を追加）
    * @returns {string} ファイル名
    */
-  _generateFileName: function(invoice, customer, type, options = {}) {
-    const customerName = (customer.company_name || '不明').replace(/[\/\\?%*:|"<>]/g, '_');
+  _generateFileName: function(invoice: Record<string, unknown>, customer: Record<string, unknown>, type: string, options: Record<string, unknown> = {}) {
+    const customerName = String(customer.company_name || '不明').replace(/[/\\?%*:|"<>]/g, '_');
     const period = `${invoice.billing_year}年${String(invoice.billing_month).padStart(2, '0')}月`;
 
     const extension = type === 'sheet' ? '' : `.${type}`;
@@ -1830,7 +1830,7 @@ const InvoiceExportService = {
    * @param {Date|string|number|null} value - 時間値
    * @returns {string} 時間文字列または空文字
    */
-  _formatTimeValue: function(value) {
+  _formatTimeValue: function(value: unknown) {
     if (!value) return '';
 
     // 既に文字列の場合はそのまま返す
@@ -1852,7 +1852,7 @@ const InvoiceExportService = {
           return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
         }
         return Utilities.formatDate(value, 'Asia/Tokyo', 'HH:mm');
-      } catch (e) {
+      } catch (e: unknown) {
         return '';
       }
     }
@@ -1870,7 +1870,7 @@ const InvoiceExportService = {
    * @param {string} dateStr - 日付文字列（YYYY-MM-DD）
    * @returns {string} フォーマット済み日付（令和X年X月X日）
    */
-  _formatDate: function(dateStr) {
+  _formatDate: function(dateStr: string) {
     if (!dateStr) return '';
 
     const date = new Date(dateStr);
