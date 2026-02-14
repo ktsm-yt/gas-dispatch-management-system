@@ -637,10 +637,65 @@
       color: var(--text-primary);
     }
 
+    .edit-modal-context {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      margin-bottom: var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      background: #f8fafc;
+    }
+
+    .edit-modal-context-company {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .edit-modal-context-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
     .edit-header-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--spacing-md);
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    .edit-header-dates {
+      display: flex;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+    }
+
+    .compact-date-field {
+      width: 170px;
+      margin-bottom: 0;
+    }
+
+    .compact-date-field label {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .compact-date-field input[type="date"] {
+      width: 100%;
+      padding: 6px 8px;
+      font-size: 12px;
+    }
+
+    .edit-notes-group {
+      width: 100%;
     }
 
     .edit-hint {
@@ -1303,16 +1358,22 @@
         <!-- ヘッダー情報 -->
         <div class="edit-section">
           <h4>■ ヘッダー情報</h4>
+          <div class="edit-modal-context">
+            <div class="edit-modal-context-company" id="editContextCompany">請求先: -</div>
+            <div class="edit-modal-context-meta" id="editContextMeta">請求番号: - / 請求年月: -</div>
+          </div>
           <div class="edit-header-grid">
-            <div class="form-group">
-              <label for="editIssueDate">発行日</label>
-              <input type="date" id="editIssueDate" />
+            <div class="edit-header-dates">
+              <div class="form-group compact-date-field">
+                <label for="editIssueDate">発行日</label>
+                <input type="date" id="editIssueDate" />
+              </div>
+              <div class="form-group compact-date-field">
+                <label for="editDueDate">支払期限</label>
+                <input type="date" id="editDueDate" />
+              </div>
             </div>
-            <div class="form-group">
-              <label for="editDueDate">支払期限</label>
-              <input type="date" id="editDueDate" />
-            </div>
-            <div class="form-group" style="grid-column: span 2;">
+            <div class="form-group edit-notes-group">
               <label for="editNotes">社内メモ</label>
               <input type="text" id="editNotes" placeholder="請求確認事項や作業メモなど（出力には含まれません）" style="width: 100%;">
             </div>
@@ -4411,6 +4472,21 @@
       var isEditable = editableStatuses.includes(invoice.status);
       // アーカイブ行は常に閲覧専用
       if (invoice._archived) isEditable = false;
+      var companyName = '';
+      if (invoice.customer && invoice.customer.company_name) {
+        companyName = invoice.customer.company_name;
+      } else if (invoice.customer_name) {
+        companyName = invoice.customer_name;
+      } else if (invoice.customer_id) {
+        companyName = 'ID: ' + invoice.customer_id;
+      } else {
+        companyName = '-';
+      }
+      var period = (invoice.billing_year && invoice.billing_month)
+        ? invoice.billing_year + '/' + String(invoice.billing_month).padStart(2, '0')
+        : '-';
+      document.getElementById('editContextCompany').textContent = '請求先: ' + companyName;
+      document.getElementById('editContextMeta').textContent = '請求番号: ' + (invoice.invoice_number || '-') + ' / 請求年月: ' + period;
 
       document.getElementById('editModalTitle').textContent = isEditable ? '請求書編集' : '請求書出力';
       document.getElementById('editIssueDate').value = invoice.issue_date || '';
@@ -4455,6 +4531,14 @@
         '明細を読み込み中...</td></tr>';
       var container = document.getElementById('adjustmentItemsContainer');
       container.innerHTML = '<div style="text-align: center; padding: 12px; color: var(--text-muted);">読み込み中...</div>';
+
+      // 合計プレビューをリセット（前回の請求書データが残らないように）
+      document.getElementById('previewSubtotal').textContent = '-';
+      document.getElementById('previewExpense').textContent = '-';
+      document.getElementById('previewTax').textContent = '-';
+      document.getElementById('previewTotal').textContent = '-';
+      var adjRow = document.getElementById('previewAdjustmentRow');
+      if (adjRow) adjRow.style.display = 'none';
     }
 
     /**
