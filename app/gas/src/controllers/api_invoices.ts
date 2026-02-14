@@ -143,10 +143,17 @@ function searchInvoices(query: Record<string, unknown>) {
 
     // 期限超過の請求書を自動的に「未回収」ステータスに更新
     // （sent かつ due_date < 今日 → unpaid）
+    // 1日1回のみ実行（CacheServiceで当日実行済みフラグ管理）
     try {
-      const overdueResult = InvoiceRepository.autoMarkOverdue();
-      if (overdueResult.updated > 0) {
-        Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
+      const todayKey = 'autoMarkOverdue_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+      const cache = CacheService.getScriptCache();
+      if (!cache.get(todayKey)) {
+        const overdueResult = InvoiceRepository.autoMarkOverdue();
+        if (overdueResult.updated > 0) {
+          Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
+        }
+        // 6時間キャッシュ（日付変更を跨ぐケースをカバー）
+        cache.put(todayKey, '1', 6 * 60 * 60);
       }
     } catch (overdueError: unknown) {
       // 自動更新エラーは検索自体を妨げない
