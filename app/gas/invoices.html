@@ -2249,7 +2249,7 @@
         if (Date.now() - lastInvoiceFetchTime < 300000) return;
         var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
         refreshInvoicesInBackground(cacheKey, currentInvoiceQuery);
-        fetchChangeFlagsInBackground();
+        fetchChangeFlagsInBackground(false);
         return;
       }
       // 初回表示前（データなし）の場合のみ通常読み込み
@@ -2433,7 +2433,7 @@
               if (changedIds.length > 0 || hasStructuralChange) {
                 invoices = newInvoices;
                 renderInvoices();
-                fetchChangeFlagsInBackground();
+                fetchChangeFlagsInBackground(false);
                 // 変更行をフラッシュハイライト
                 changedIds.forEach(function(id) {
                   var row = document.querySelector('tr[data-invoice-id="' + id + '"]');
@@ -2448,7 +2448,9 @@
     }
 
     // 変更検知フラグをバックグラウンドで取得し、⚠️アイコンをDOM差分更新
-    function fetchChangeFlagsInBackground() {
+    // showToast: trueなら初回表示（トースト通知あり）、falseなら再取得（サイレント）
+    function fetchChangeFlagsInBackground(showToast_) {
+      if (showToast_ === undefined) showToast_ = true;
       if (!invoices || invoices.length === 0) return;
       var token = ++changeFlagQueryToken;
       var ids = invoices.map(function(inv) { return inv.invoice_id; });
@@ -2483,7 +2485,7 @@
             });
             // ヘッダーバッジ更新
             updateChangeBadge(changeCount);
-            if (changeCount > 0) {
+            if (changeCount > 0 && showToast_) {
               showToast('配置変更あり: ' + changeCount + '件の請求書で配置が変更されています', 'warning');
             }
           })
