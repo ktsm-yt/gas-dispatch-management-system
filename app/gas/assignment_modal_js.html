@@ -1797,7 +1797,7 @@ function checkInvoiceExistsNotification() {
         const inv = response.data.invoice;
         const periodLabel = `${inv.billing_year}年${inv.billing_month}月`;
         showInvoiceExistsBanner(
-          `この案件の請求書は生成済みです（${periodLabel}）。変更は請求書に反映されません。`
+          `この案件の請求書は集計済みです（${periodLabel}）。変更は請求書に反映されません。`
         );
       } else {
         hideInvoiceExistsBanner();
@@ -1812,7 +1812,7 @@ function checkInvoiceExistsNotification() {
 }
 
 /**
- * 請求書生成済みバナーを表示
+ * 請求集計済みバナーを表示
  */
 function showInvoiceExistsBanner(message) {
   const banner = document.getElementById('invoice-exists-banner');
@@ -1824,7 +1824,7 @@ function showInvoiceExistsBanner(message) {
 }
 
 /**
- * 請求書生成済みバナーを非表示
+ * 請求集計済みバナーを非表示
  */
 function hideInvoiceExistsBanner() {
   const banner = document.getElementById('invoice-exists-banner');

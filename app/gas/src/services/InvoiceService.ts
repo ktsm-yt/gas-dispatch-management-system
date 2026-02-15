@@ -73,7 +73,7 @@ interface RegenerateResult extends InvoiceGenerateResult {
 
 const InvoiceService = {
   /**
-   * 請求書を生成（配置データから自動作成）
+   * 請求集計（generate）- 配置データから自動作成
    */
   generate: function(customerId: string, year: number, month: number, options: InvoiceGenerateOptions = {}): InvoiceGenerateResult {
     try {
@@ -458,7 +458,7 @@ const InvoiceService = {
   },
 
   /**
-   * 請求書を一括生成（全アクティブ顧客）- 最適化版
+   * 請求一括集計（bulkGenerate）- 全アクティブ顧客・最適化版
    */
   bulkGenerate: function(year: number, month: number, options: BulkGenerateOptions = {}): BulkGenerateResults {
     const offset = options.offset || 0;
@@ -793,7 +793,7 @@ const InvoiceService = {
   },
 
   /**
-   * 請求書を再生成（既存の請求書を削除して新規作成）
+   * 請求書を再集計（regenerate）- 既存の請求書を削除して新規作成
    */
   regenerate: function(invoiceId: string): RegenerateResult {
     const invoice = InvoiceRepository.findById(invoiceId);
@@ -801,7 +801,7 @@ const InvoiceService = {
       return { success: false, error: 'NOT_FOUND' };
     }
 
-    // 送付済み請求書は再生成不可
+    // 送付済み請求書は再集計不可
     if (!isInvoiceEditable_(invoice.status as string)) {
       return { success: false, error: 'CANNOT_REGENERATE_SENT_INVOICE' };
     }

@@ -24,7 +24,7 @@ function getCustomers() {
 }
 
 /**
- * 請求書を生成
+ * 請求集計（generate）
  * @param {string} customerId - 顧客ID
  * @param {string} ym - 対象年月（YYYY-MM形式）
  * @param {Object} options - オプション
@@ -92,7 +92,7 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
 }
 
 /**
- * 請求書を一括生成（全アクティブ顧客）
+ * 請求一括集計（bulkGenerate）- 全アクティブ顧客
  * @param {string} ym - 対象年月（YYYY-MM形式）
  * @param {Object} options - オプション { overwrite: false }
  * @returns {Object} APIレスポンス { success, skippedNoData, skippedExisting, failed }
@@ -526,7 +526,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
 }
 
 /**
- * 請求書を再生成
+ * 請求書を再集計（regenerate）
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
@@ -551,8 +551,8 @@ function regenerateInvoice(invoiceId: string) {
     if (!result.success) {
       const errorMessages: Record<string, string> = {
         'NOT_FOUND': '請求書が見つかりません',
-        'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再生成できません',
-        'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再生成できません',
+        'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再集計できません',
+        'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再集計できません',
         'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません'
       };
       const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
