@@ -45,7 +45,6 @@
       border-bottom: 1px solid var(--border-color);
       padding: var(--spacing-md) var(--spacing-lg);
       display: flex;
-      justify-content: space-between;
       align-items: center;
       gap: var(--spacing-md);
       flex-wrap: wrap;
@@ -55,6 +54,17 @@
       display: flex;
       gap: var(--spacing-sm);
       align-items: center;
+      background: var(--bg-hover);
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+
+    .filter-group.no-bg {
+      background: none;
+      padding: 0;
+      border: none;
+      border-radius: 0;
     }
 
     .filter-group label {
@@ -655,7 +665,7 @@
   <!-- ========== Staff Payout Tab ========== -->
   <div id="tabContentStaff" class="tab-content active">
     <div class="toolbar">
-      <div class="filter-group">
+      <div class="filter-group no-bg">
         <!-- View Toggle -->
         <div class="view-toggle" id="staffViewToggle">
           <button class="view-toggle-btn active" data-view="aggregation" onclick="switchStaffView('aggregation')">
@@ -666,6 +676,25 @@
           </button>
         </div>
       </div>
+      <!-- 集計フィルター（未払い集計ビュー用） -->
+      <div class="filter-group" id="staffAggregationFilter">
+        <label>スタッフ:</label>
+        <select id="staffFilter">
+          <option value="">全て</option>
+        </select>
+        <label>終了日:</label>
+        <input type="date" id="endDateFilter" />
+        <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
+      </div>
+      <!-- 履歴フィルター（支払履歴ビュー用） -->
+      <div class="filter-group" id="staffHistoryFilter" style="display: none;">
+        <label>期間:</label>
+        <input type="date" id="historyFromDate">
+        <span>〜</span>
+        <input type="date" id="historyToDate">
+        <button class="btn btn-secondary" onclick="loadAllPayoutHistory()">検索</button>
+      </div>
+      <span style="flex: 1;"></span>
       <div class="toolbar-actions">
         <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
         <a id="payout-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleFolderLinkClick(this)">📁 出力先</a>
@@ -674,21 +703,6 @@
 
     <!-- ========== 未払い集計ビュー ========== -->
     <div id="staffAggregationView" class="staff-view active">
-      <!-- 集計フィルター -->
-      <div class="toolbar" style="border-top: none;">
-        <div class="filter-group">
-          <label>スタッフ:</label>
-          <select id="staffFilter">
-            <option value="">全て</option>
-          </select>
-
-          <label>終了日:</label>
-          <input type="date" id="endDateFilter" />
-
-          <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
-        </div>
-      </div>
-
       <!-- 一括操作バー -->
       <div id="bulkActionBar" class="bulk-action-bar">
         <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
@@ -719,17 +733,6 @@
 
     <!-- ========== 支払履歴ビュー ========== -->
     <div id="staffHistoryView" class="staff-view">
-      <!-- 履歴フィルター（集計ビューと同じtoolbar構造） -->
-      <div class="toolbar" style="border-top: none;">
-        <div class="filter-group">
-          <label>期間:</label>
-          <input type="date" id="historyFromDate">
-          <span>〜</span>
-          <input type="date" id="historyToDate">
-          <button class="btn btn-secondary" onclick="loadAllPayoutHistory()">検索</button>
-        </div>
-      </div>
-
       <div class="main-content">
         <div id="historyTable">
           <div class="empty-state">期間を指定して「検索」をクリックしてください</div>
@@ -741,7 +744,7 @@
   <!-- ========== Subcontractor Payout Tab ========== -->
   <div id="tabContentSubcontractor" class="tab-content">
     <div class="toolbar">
-      <div class="filter-group">
+      <div class="filter-group no-bg">
         <!-- View Toggle -->
         <div class="view-toggle" id="subViewToggle">
           <button class="view-toggle-btn active" data-view="aggregation" onclick="switchSubView('aggregation')">
@@ -752,26 +755,29 @@
           </button>
         </div>
       </div>
+      <!-- 集計フィルター（未払い集計ビュー用） -->
+      <div class="filter-group" id="subAggregationFilter">
+        <label>外注先:</label>
+        <select id="subcontractorFilter">
+          <option value="">全て</option>
+        </select>
+        <label>終了日:</label>
+        <input type="date" id="subEndDateFilter" />
+        <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
+        <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締集計</button>
+      </div>
+      <!-- 履歴フィルター（支払履歴ビュー用） -->
+      <div class="filter-group" id="subHistoryFilter" style="display: none;">
+        <label>期間:</label>
+        <input type="date" id="subHistoryFromDate">
+        <span>〜</span>
+        <input type="date" id="subHistoryToDate">
+        <button class="btn btn-secondary" onclick="loadAllSubcontractorPayoutHistory()">検索</button>
+      </div>
     </div>
 
     <!-- ========== 外注費 未払い集計ビュー ========== -->
     <div id="subAggregationView" class="sub-view active">
-      <!-- 集計フィルター -->
-      <div class="toolbar" style="border-top: none;">
-        <div class="filter-group">
-          <label>外注先:</label>
-          <select id="subcontractorFilter">
-            <option value="">全て</option>
-          </select>
-
-          <label>終了日:</label>
-          <input type="date" id="subEndDateFilter" />
-
-          <button class="btn btn-secondary" onclick="loadSubcontractorUnpaidList()">集計</button>
-          <button class="btn btn-primary" onclick="loadMonthEndSummary()">末締集計</button>
-        </div>
-      </div>
-
       <div class="main-content">
         <!-- 外注費未払サマリー -->
         <div id="subUnpaidSection" class="summary-card">
@@ -785,17 +791,6 @@
 
     <!-- ========== 外注費 支払履歴ビュー ========== -->
     <div id="subHistoryView" class="sub-view">
-      <!-- 履歴フィルター（集計ビューと同じtoolbar構造） -->
-      <div class="toolbar" style="border-top: none;">
-        <div class="filter-group">
-          <label>期間:</label>
-          <input type="date" id="subHistoryFromDate">
-          <span>〜</span>
-          <input type="date" id="subHistoryToDate">
-          <button class="btn btn-secondary" onclick="loadAllSubcontractorPayoutHistory()">検索</button>
-        </div>
-      </div>
-
       <div class="main-content">
         <div id="subHistoryTable">
           <div class="empty-state">期間を指定して「検索」をクリックしてください</div>
@@ -1131,6 +1126,10 @@
       document.getElementById('staffAggregationView').classList.toggle('active', view === 'aggregation');
       document.getElementById('staffHistoryView').classList.toggle('active', view === 'history');
 
+      // フィルター群の表示切り替え
+      document.getElementById('staffAggregationFilter').style.display = view === 'aggregation' ? '' : 'none';
+      document.getElementById('staffHistoryFilter').style.display = view === 'history' ? '' : 'none';
+
       // 保存
       if (save) {
         localStorage.setItem('payouts_staff_view', view);
@@ -1154,6 +1153,10 @@
       // ビュー表示切り替え
       document.getElementById('subAggregationView').classList.toggle('active', view === 'aggregation');
       document.getElementById('subHistoryView').classList.toggle('active', view === 'history');
+
+      // フィルター群の表示切り替え
+      document.getElementById('subAggregationFilter').style.display = view === 'aggregation' ? '' : 'none';
+      document.getElementById('subHistoryFilter').style.display = view === 'history' ? '' : 'none';
 
       // 保存
       if (save) {
