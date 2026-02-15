@@ -268,20 +268,85 @@ function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = tru
 // ============================================
 
 function getFiscalYear_(date: Date | string): number {
-  const d = typeof date === 'string' ? parseDate_(date)! : date;
-  const month = d.getMonth() + 1;
-  const year = d.getFullYear();
-  return month >= 3 ? year : year - 1;
+  const fiscalMonthEnd = _getFiscalMonthEndFromMaster_();
+  return getFiscalYearByEndMonth_(date, fiscalMonthEnd);
 }
 
 function getFiscalYearRange_(fiscalYear: number): { startDate: string; endDate: string } {
-  // 2月決算: 3月1日〜翌2月末日（うるう年考慮）
-  const endDate = new Date(fiscalYear + 1, 2, 0); // 2月末日
-  const endDateStr = `${fiscalYear + 1}-02-${String(endDate.getDate()).padStart(2, '0')}`;
+  const fiscalMonthEnd = _getFiscalMonthEndFromMaster_();
+  return getFiscalYearRangeByEndMonth_(fiscalYear, fiscalMonthEnd);
+}
+
+// ============================================
+// 汎用年度計算（決算月パラメータ化）
+// ============================================
+
+/** マスタから決算月を取得（未設定時は2月決算にフォールバック） */
+function _getFiscalMonthEndFromMaster_(): number {
+  try {
+    const company = MasterCache.getCompany();
+    const v = company && company.fiscal_month_end;
+    if (v && Number(v) >= 1 && Number(v) <= 12) return Number(v);
+  } catch (_) { /* フォールバック */ }
+  return 2; // デフォルト: 2月決算
+}
+
+/** 決算月から年度開始月を算出（例: 決算2月→開始3月） */
+function getFiscalStartMonth_(fiscalMonthEnd: number): number {
+  return fiscalMonthEnd === 12 ? 1 : fiscalMonthEnd + 1;
+}
+
+/** 日付と決算月から年度を計算 */
+function getFiscalYearByEndMonth_(date: Date | string, fiscalMonthEnd: number): number {
+  const d = typeof date === 'string' ? parseDate_(date)! : date;
+  const month = d.getMonth() + 1;
+  const year = d.getFullYear();
+  const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
+  // 決算月12月（暦年一致）の場合: startMonth=1 → 全月が当年
+  // それ以外: startMonth以降なら当年が年度、startMonth未満なら前年が年度
+  return month >= startMonth ? year : year - 1;
+}
+
+/** 年度と決算月から年度の開始日・終了日を計算 */
+function getFiscalYearRangeByEndMonth_(fiscalYear: number, fiscalMonthEnd: number): { startDate: string; endDate: string } {
+  const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
+
+  let startYear: number, endYear: number;
+  if (fiscalMonthEnd === 12) {
+    // 12月決算: 年度=暦年（1月〜12月）
+    startYear = fiscalYear;
+    endYear = fiscalYear;
+  } else {
+    // 例: 2月決算 → 年度2025 = 2025/3/1〜2026/2/末
+    startYear = fiscalYear;
+    endYear = fiscalYear + 1;
+  }
+
+  const endDate = new Date(endYear, fiscalMonthEnd, 0); // 決算月末日
+  const endDateStr = `${endYear}-${String(fiscalMonthEnd).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+
   return {
-    startDate: `${fiscalYear}-03-01`,
+    startDate: `${startYear}-${String(startMonth).padStart(2, '0')}-01`,
     endDate: endDateStr
   };
+}
+
+/** 年度内の12ヶ月を [{year, month}] 配列で返す */
+function getFiscalMonths_(fiscalYear: number, fiscalMonthEnd: number): Array<{year: number; month: number}> {
+  const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
+  const months: Array<{year: number; month: number}> = [];
+
+  for (let i = 0; i < 12; i++) {
+    let m = startMonth + i;
+    let y = fiscalYear;
+    if (m > 12) {
+      m -= 12;
+      y += 1;
+    }
+    months.push({ year: y, month: m });
+  }
+
+  return months;
 }
 
 function isWithinPeriod_(date: string, startDate: string, endDate: string): boolean {

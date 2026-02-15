@@ -776,6 +776,12 @@ function validateCompany(data) {
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
+  if (data.fiscal_month_end !== undefined && data.fiscal_month_end !== '') {
+    const m = Number(data.fiscal_month_end);
+    if (!Number.isInteger(m) || m < 1 || m > 12) {
+      return { valid: false, message: '決算月は1〜12の整数で指定してください', details: { field: 'fiscal_month_end' } };
+    }
+  }
   return { valid: true };
 }
 

@@ -114,9 +114,7 @@ function getYearlyStatsSummary(fiscalYear) {
 
     if (!fiscalYear) {
       // デフォルトは現在の会計年度
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      fiscalYear = month >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+      fiscalYear = getFiscalYear_(new Date());
     }
 
     const summary = StatsService.getYearlySummary(Number(fiscalYear));
