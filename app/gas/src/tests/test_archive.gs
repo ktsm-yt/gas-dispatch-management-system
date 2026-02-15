@@ -18,6 +18,7 @@
 // テスト用の年度（実際の本番データに影響しないよう過去年度を使用）
 // 年度は3月〜2月（例: FY2023 = 2023-03-01 〜 2024-02-29）
 const TEST_FISCAL_YEAR = 2023;
+const TEST_FISCAL_YEARS = [2022, 2023]; // 複数年度テスト用
 
 /**
  * アーカイブフォルダIDを設定（初回のみ実行）
@@ -902,4 +903,385 @@ function runAllArchiveTests() {
   Logger.log('  全テスト完了');
   Logger.log('========================================');
   Logger.log('\nクリーンアップするには cleanupArchiveTestData() を実行してください');
+}
+
+// ============================================================
+// 複数年度テスト
+// ============================================================
+
+/**
+ * 複数年度のテストデータを作成
+ * GASエディタから実行: createMultiYearTestData()
+ */
+function createMultiYearTestData() {
+  Logger.log('=== 複数年度テストデータ作成開始 ===');
+  Logger.log(`対象年度: ${TEST_FISCAL_YEARS.join(', ')}`);
+
+  let testCustomer;
+  try {
+    const customers = getAllRecords('M_Customers').filter(c => !c.is_deleted);
+    if (customers.length === 0) {
+      Logger.log('エラー: 顧客マスタにデータがありません');
+      return;
+    }
+    testCustomer = customers[0];
+    Logger.log(`テスト用顧客: ${testCustomer.customer_name} (${testCustomer.customer_id})`);
+  } catch (e) {
+    Logger.log(`顧客取得エラー: ${e.message}`);
+    return;
+  }
+
+  let testStaff;
+  try {
+    const staffList = getAllRecords('M_Staff').filter(s => !s.is_deleted);
+    if (staffList.length > 0) {
+      testStaff = staffList[0];
+    }
+  } catch (e) { /* skip */ }
+
+  for (const fy of TEST_FISCAL_YEARS) {
+    Logger.log(`\n========== FY${fy} (${fy}-03-01 〜 ${fy + 1}-02-末) ==========`);
+
+    // 各年度3件ずつ（3月、9月、2月 = 年度の頭・真ん中・末尾）
+    const testMonths = [
+      { y: fy, m: 3 },   // 年度初月
+      { y: fy, m: 9 },   // 年度中盤
+      { y: fy + 1, m: 2 } // 年度最終月
+    ];
+
+    const jobs = [];
+    for (const tm of testMonths) {
+      const workDate = `${tm.y}-${String(tm.m).padStart(2, '0')}-15`;
+      const job = JobRepository.insert({
+        customer_id: testCustomer.customer_id,
+        site_name: `[複数年度テスト] FY${fy} ${tm.m}月`,
+        site_address: 'テスト住所',
+        work_date: workDate,
+        time_slot: 'am',
+        required_count: 2,
+        pay_unit: 'day',
+        status: 'assigned',
+        notes: `P2-5複数年度テスト FY${fy} (${workDate})`
+      });
+      Logger.log(`  案件: ${job.job_id} - ${workDate}`);
+      jobs.push(job);
+    }
+
+    for (let i = 0; i < testMonths.length; i++) {
+      const tm = testMonths[i];
+      const invoice = InvoiceRepository.insert({
+        customer_id: testCustomer.customer_id,
+        billing_year: tm.y,
+        billing_month: tm.m,
+        issue_date: `${tm.y}-${String(tm.m).padStart(2, '0')}-25`,
+        subtotal: (fy - 2020) * 100000 + tm.m * 10000,
+        tax_amount: Math.round(((fy - 2020) * 100000 + tm.m * 10000) * 0.1),
+        total_amount: Math.round(((fy - 2020) * 100000 + tm.m * 10000) * 1.1),
+        adjustment_total: 0,
+        status: 'paid',
+        notes: `P2-5複数年度テスト FY${fy}`
+      });
+      Logger.log(`  請求書: ${invoice.invoice_id} - ${tm.y}/${tm.m}`);
+
+      // 明細
+      InvoiceLineRepository.insert({
+        invoice_id: invoice.invoice_id,
+        job_id: jobs[i].job_id,
+        work_date: `${tm.y}-${String(tm.m).padStart(2, '0')}-15`,
+        item_name: `[複数年度テスト] FY${fy} ${tm.m}月分`,
+        quantity: 1,
+        unit_price: (fy - 2020) * 100000 + tm.m * 10000,
+        amount: (fy - 2020) * 100000 + tm.m * 10000,
+        notes: `P2-5複数年度テスト FY${fy}`
+      });
+    }
+
+    // 支払い
+    if (testStaff) {
+      const periodStart = `${fy}-03-01`;
+      const periodEnd = `${fy}-03-31`;
+      const payout = PayoutRepository.insert({
+        staff_id: testStaff.staff_id,
+        payee_type: 'staff',
+        period_start: periodStart,
+        period_end: periodEnd,
+        total_amount: (fy - 2020) * 80000,
+        status: 'confirmed',
+        notes: `P2-5複数年度テスト FY${fy}`
+      });
+      Logger.log(`  支払い: ${payout.payout_id} - ${periodStart}`);
+    }
+
+    Logger.log(`✓ FY${fy} テストデータ作成完了`);
+  }
+
+  Logger.log('\n=== 複数年度テストデータ作成完了 ===');
+  Logger.log('次のステップ: archiveMultiYears() を実行');
+}
+
+/**
+ * 複数年度を順次アーカイブ
+ * GASエディタから実行: archiveMultiYears()
+ */
+function archiveMultiYears() {
+  Logger.log('=== 複数年度アーカイブ実行 ===');
+
+  for (const fy of TEST_FISCAL_YEARS) {
+    Logger.log(`\n--- FY${fy} アーカイブ ---`);
+    const result = ArchiveService.executeYearlyArchive(fy);
+
+    if (result.success) {
+      const dbId = ArchiveService.getArchiveDbId(fy);
+      Logger.log(`✓ FY${fy} アーカイブ成功 → DB: ${dbId}`);
+    } else if (result.error === 'TIMEOUT_WILL_CONTINUE') {
+      Logger.log(`⏳ FY${fy} タイムアウト。再実行してください。`);
+      return;
+    } else {
+      Logger.log(`✗ FY${fy} 失敗: ${result.error}`);
+    }
+  }
+
+  Logger.log('\n=== 全年度アーカイブ完了 ===');
+  Logger.log('次のステップ: testMultiYearRetrieval() を実行');
+}
+
+/**
+ * 複数年度の参照・分離テスト
+ * GASエディタから実行: testMultiYearRetrieval()
+ */
+function testMultiYearRetrieval() {
+  Logger.log('=== 複数年度 参照・分離テスト ===');
+
+  let passed = 0;
+  let failed = 0;
+
+  // 1. 各年度のアーカイブDBが別々に作成されているか
+  Logger.log('\n--- テスト1: 年度別DB分離 ---');
+  const dbIds = {};
+  for (const fy of TEST_FISCAL_YEARS) {
+    const dbId = ArchiveService.getArchiveDbId(fy);
+    if (dbId) {
+      dbIds[fy] = dbId;
+      Logger.log(`  FY${fy}: ${dbId}`);
+    } else {
+      Logger.log(`  ✗ FY${fy}: アーカイブDB未作成`);
+      failed++;
+    }
+  }
+
+  // DBが全て異なるIDか
+  const uniqueIds = new Set(Object.values(dbIds));
+  if (uniqueIds.size === TEST_FISCAL_YEARS.length) {
+    Logger.log(`  ✓ ${TEST_FISCAL_YEARS.length}年度分の別々のDBが存在`);
+    passed++;
+  } else {
+    Logger.log(`  ✗ DBが重複している（${uniqueIds.size}個 / ${TEST_FISCAL_YEARS.length}年度）`);
+    failed++;
+  }
+
+  // 2. 各アーカイブDBのデータ件数
+  Logger.log('\n--- テスト2: 各DBのデータ件数 ---');
+  for (const fy of TEST_FISCAL_YEARS) {
+    if (!dbIds[fy]) continue;
+
+    const archiveDb = SpreadsheetApp.openById(dbIds[fy]);
+    Logger.log(`  FY${fy} (${archiveDb.getName()}):`);
+
+    const tables = ['Jobs', 'Invoices', 'InvoiceLines', 'Payouts'];
+    for (const table of tables) {
+      const sheet = archiveDb.getSheetByName(table);
+      const count = sheet ? Math.max(0, sheet.getLastRow() - 1) : 0;
+      Logger.log(`    ${table}: ${count}件`);
+    }
+  }
+
+  // 3. findById が正しい年度のDBから取得するか
+  Logger.log('\n--- テスト3: findById の年度別フォールバック ---');
+  for (const fy of TEST_FISCAL_YEARS) {
+    if (!dbIds[fy]) continue;
+
+    const archiveDb = SpreadsheetApp.openById(dbIds[fy]);
+
+    // 案件
+    const jobSheet = archiveDb.getSheetByName('Jobs');
+    if (jobSheet && jobSheet.getLastRow() > 1) {
+      const headers = jobSheet.getRange(1, 1, 1, jobSheet.getLastColumn()).getValues()[0];
+      const jobIdCol = headers.indexOf('job_id');
+      const firstJobId = jobSheet.getRange(2, jobIdCol + 1).getValue();
+
+      const job = JobRepository.findById(firstJobId);
+      if (job && job._archived && job._archiveFiscalYear === fy) {
+        Logger.log(`  ✓ FY${fy} 案件: _archiveFiscalYear=${job._archiveFiscalYear} (正しい)`);
+        passed++;
+      } else {
+        Logger.log(`  ✗ FY${fy} 案件: 期待=${fy}, 実際=${job ? job._archiveFiscalYear : 'null'}`);
+        failed++;
+      }
+    }
+
+    // 請求書
+    const invSheet = archiveDb.getSheetByName('Invoices');
+    if (invSheet && invSheet.getLastRow() > 1) {
+      const headers = invSheet.getRange(1, 1, 1, invSheet.getLastColumn()).getValues()[0];
+      const invIdCol = headers.indexOf('invoice_id');
+      const firstInvId = invSheet.getRange(2, invIdCol + 1).getValue();
+
+      const inv = InvoiceRepository.findById(firstInvId);
+      if (inv && inv._archived && inv._archiveFiscalYear === fy) {
+        Logger.log(`  ✓ FY${fy} 請求書: _archiveFiscalYear=${inv._archiveFiscalYear} (正しい)`);
+        passed++;
+      } else {
+        Logger.log(`  ✗ FY${fy} 請求書: 期待=${fy}, 実際=${inv ? inv._archiveFiscalYear : 'null'}`);
+        failed++;
+      }
+
+      // 明細も正しい年度か
+      const lines = InvoiceLineRepository.findByInvoiceId(firstInvId);
+      if (lines && lines.length > 0 && lines[0]._archiveFiscalYear === fy) {
+        Logger.log(`  ✓ FY${fy} 明細: _archiveFiscalYear=${lines[0]._archiveFiscalYear} (正しい)`);
+        passed++;
+      } else {
+        Logger.log(`  ✗ FY${fy} 明細: 期待=${fy}, 実際=${lines && lines.length > 0 ? lines[0]._archiveFiscalYear : 'なし'}`);
+        failed++;
+      }
+    }
+  }
+
+  // 4. 年度を跨いだ編集が正しいDBに書き込まれるか
+  Logger.log('\n--- テスト4: 年度別編集の分離 ---');
+  for (const fy of TEST_FISCAL_YEARS) {
+    if (!dbIds[fy]) continue;
+
+    const archiveDb = SpreadsheetApp.openById(dbIds[fy]);
+    const jobSheet = archiveDb.getSheetByName('Jobs');
+    if (!jobSheet || jobSheet.getLastRow() <= 1) continue;
+
+    const headers = jobSheet.getRange(1, 1, 1, jobSheet.getLastColumn()).getValues()[0];
+    const jobIdCol = headers.indexOf('job_id');
+    const siteNameCol = headers.indexOf('site_name');
+    const firstJobId = jobSheet.getRange(2, jobIdCol + 1).getValue();
+
+    const job = JobRepository.findById(firstJobId);
+    if (!job || !job._archived) continue;
+
+    // 編集
+    const marker = `[年度分離テスト-FY${fy}]`;
+    const originalSiteName = job.site_name;
+    job.site_name = marker;
+    JobRepository.update(job, job.updated_at);
+
+    // 正しいアーカイブDBに書き込まれたか直接確認
+    SpreadsheetApp.flush();
+    const updatedValue = archiveDb.getSheetByName('Jobs').getRange(2, siteNameCol + 1).getValue();
+    if (updatedValue === marker) {
+      Logger.log(`  ✓ FY${fy}: 正しいDBに書き込み確認`);
+      passed++;
+    } else {
+      Logger.log(`  ✗ FY${fy}: DB上の値="${updatedValue}", 期待="${marker}"`);
+      failed++;
+    }
+
+    // 他の年度のDBが変更されていないか
+    for (const otherFy of TEST_FISCAL_YEARS) {
+      if (otherFy === fy || !dbIds[otherFy]) continue;
+      const otherDb = SpreadsheetApp.openById(dbIds[otherFy]);
+      const otherJobSheet = otherDb.getSheetByName('Jobs');
+      if (!otherJobSheet || otherJobSheet.getLastRow() <= 1) continue;
+
+      const otherHeaders = otherJobSheet.getRange(1, 1, 1, otherJobSheet.getLastColumn()).getValues()[0];
+      const otherSiteNameCol = otherHeaders.indexOf('site_name');
+      const allValues = otherJobSheet.getRange(2, otherSiteNameCol + 1, otherJobSheet.getLastRow() - 1, 1).getValues();
+      const contaminated = allValues.some(row => row[0] === marker);
+      if (!contaminated) {
+        Logger.log(`  ✓ FY${otherFy}: 他年度のDBは汚染されていない`);
+        passed++;
+      } else {
+        Logger.log(`  ✗ FY${otherFy}: 他年度のDBにFY${fy}の編集が混入!`);
+        failed++;
+      }
+    }
+
+    // 元に戻す
+    const restored = JobRepository.findById(firstJobId);
+    restored.site_name = originalSiteName;
+    JobRepository.update(restored, restored.updated_at);
+  }
+
+  // 結果
+  Logger.log('\n========================================');
+  Logger.log(`  複数年度テスト結果: ${passed} passed, ${failed} failed`);
+  Logger.log('========================================');
+  if (failed === 0) {
+    Logger.log('\n✓ 全テスト合格！年度別DBは正しく分離されています。');
+  }
+}
+
+/**
+ * 複数年度テストデータ＋アーカイブDBをクリーンアップ
+ * GASエディタから実行: cleanupMultiYearTestData()
+ */
+function cleanupMultiYearTestData() {
+  Logger.log('=== 複数年度テストデータ クリーンアップ ===');
+
+  for (const fy of TEST_FISCAL_YEARS) {
+    Logger.log(`\n--- FY${fy} ---`);
+
+    // 現行DBのテストデータ削除
+    const jobs = JobRepository.search({
+      work_date_from: `${fy}-03-01`,
+      work_date_to: `${fy + 1}-02-28`
+    });
+    const testJobs = jobs.filter(j => j.notes && j.notes.includes('P2-5複数年度テスト'));
+    Logger.log(`  現行DB案件削除: ${testJobs.length}件`);
+    for (const job of testJobs) {
+      JobRepository.softDelete(job.job_id, job.updated_at);
+    }
+
+    // アーカイブDB削除
+    const archiveDbId = ArchiveService.getArchiveDbId(fy);
+    if (archiveDbId) {
+      try {
+        DriveApp.getFileById(archiveDbId).setTrashed(true);
+        Logger.log(`  ✓ アーカイブDB削除: ${archiveDbId}`);
+      } catch (e) {
+        Logger.log(`  ⚠ アーカイブDB削除失敗: ${e.message}`);
+      }
+      // ScriptPropertiesからも削除
+      PropertiesService.getScriptProperties().deleteProperty(`ARCHIVE_DB_${fy}`);
+      Logger.log(`  ✓ ARCHIVE_DB_${fy} プロパティ削除`);
+    }
+
+    // 進捗クリア
+    ArchiveService.clearProgress(fy);
+  }
+
+  Logger.log('\n=== クリーンアップ完了 ===');
+}
+
+/**
+ * 複数年度テスト一括実行
+ * GASエディタから実行: runMultiYearTests()
+ *
+ * 注意: アーカイブ実行に時間がかかるため、タイムアウトする場合は
+ * 各関数を個別に実行してください。
+ */
+function runMultiYearTests() {
+  Logger.log('========================================');
+  Logger.log('  複数年度アーカイブテスト');
+  Logger.log(`  対象: ${TEST_FISCAL_YEARS.map(fy => 'FY' + fy).join(', ')}`);
+  Logger.log('========================================\n');
+
+  Logger.log('1/3 テストデータ作成');
+  createMultiYearTestData();
+
+  Logger.log('\n\n2/3 アーカイブ実行');
+  archiveMultiYears();
+
+  Logger.log('\n\n3/3 参照・分離テスト');
+  testMultiYearRetrieval();
+
+  Logger.log('\n\n========================================');
+  Logger.log('  複数年度テスト完了');
+  Logger.log('========================================');
+  Logger.log('\nクリーンアップ: cleanupMultiYearTestData()');
 }
