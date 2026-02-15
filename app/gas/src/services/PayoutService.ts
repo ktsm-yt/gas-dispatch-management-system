@@ -994,6 +994,7 @@ const PayoutService = {
       results.push({
         staffId: staffId,
         staffName: staff.name as string,
+        staffNameKana: (staff.name_kana as string) || '',
         unpaidCount: staffAssignments.length,
         baseAmount: calcResult.baseAmount,
         transportAmount: calcResult.transportAmount,
@@ -1006,8 +1007,8 @@ const PayoutService = {
       });
     }
 
-    // 金額降順でソート
-    return results.sort((a, b) => b.estimatedAmount - a.estimatedAmount);
+    // 50音順（カナ）でソート
+    return results.sort((a, b) => (a.staffNameKana || a.staffName).localeCompare(b.staffNameKana || b.staffName, 'ja'));
   },
 
   /**
@@ -1243,12 +1244,14 @@ const PayoutService = {
    * @param payout - 支払いデータ
    * @returns 名前付き支払いデータ
    */
-  _enrichPayout: function(payout: PayoutRecord): PayoutRecord & { target_name: string } {
+  _enrichPayout: function(payout: PayoutRecord): PayoutRecord & { target_name: string; target_name_kana: string } {
     let targetName = '';
+    let targetNameKana = '';
 
     if (payout.payout_type === 'STAFF' && payout.staff_id) {
       const staff = StaffRepository.findById(payout.staff_id);
       targetName = staff ? (staff.name as string) : '(不明)';
+      targetNameKana = staff ? ((staff.name_kana as string) || '') : '';
     } else if (payout.payout_type === 'SUBCONTRACTOR' && payout.subcontractor_id) {
       const sub = SubcontractorRepository.findById(payout.subcontractor_id);
       targetName = sub ? (sub.company_name as string) : '(不明)';
@@ -1256,7 +1259,8 @@ const PayoutService = {
 
     return {
       ...payout,
-      target_name: targetName
+      target_name: targetName,
+      target_name_kana: targetNameKana
     };
   },
 
@@ -1288,14 +1292,16 @@ const PayoutService = {
     // 名前を付与
     return payouts.map(p => {
       let targetName = '';
+      let targetNameKana = '';
       if (p.payout_type === 'STAFF' && p.staff_id) {
         const staff = staffMap.get(p.staff_id);
         targetName = staff ? (staff.name as string) : '(不明)';
+        targetNameKana = staff ? ((staff.name_kana as string) || '') : '';
       } else if (p.payout_type === 'SUBCONTRACTOR' && p.subcontractor_id) {
         const sub = subMap.get(p.subcontractor_id);
         targetName = sub ? (sub.company_name as string) : '(不明)';
       }
-      return { ...p, target_name: targetName };
+      return { ...p, target_name: targetName, target_name_kana: targetNameKana };
     });
   },
 

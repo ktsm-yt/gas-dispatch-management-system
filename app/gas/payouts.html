@@ -865,6 +865,13 @@
       const cacheKey = PageCache.makeKey('payouts_unpaid', endDate, 'all');
       const cached = PageCache.get(cacheKey);
       if (!cached) return null;
+      // キャッシュにカナデータがない場合は無効化（デプロイ後の古いキャッシュ対策）
+      const firstStaff = cached.data?.data?.staffList?.[0] || cached.data?.staffList?.[0];
+      if (firstStaff && firstStaff.staffNameKana === undefined) {
+        console.log('[SWR] Cache invalidated: missing staffNameKana field');
+        PageCache.clearByPrefix('payouts_unpaid');
+        return null;
+      }
       // TTL超過でもデータは返す（SWR）、呼び出し側でバックグラウンド更新を判断
       return cached.data;
     }
@@ -1564,9 +1571,9 @@
         staffMap.set(updated.staffId, updated);
       }
 
-      // 3. 金額降順でソート
+      // 3. 50音順（カナ）でソート
       const mergedList = Array.from(staffMap.values())
-        .sort((a, b) => b.estimatedAmount - a.estimatedAmount);
+        .sort((a, b) => (a.staffNameKana || a.staffName).localeCompare(b.staffNameKana || b.staffName, 'ja'));
 
       return {
         ...currentData,
@@ -1654,6 +1661,7 @@
       const confirmedRows = confirmedData.map(p => ({
         staffId: p.staff_id,
         staffName: p.target_name,
+        staffNameKana: p.target_name_kana || '',
         unpaidCount: p.assignment_count,
         periodStart: p.period_start,
         periodEnd: p.period_end,
@@ -1672,7 +1680,7 @@
 
       // Sort: confirmed first, then unpaid
       allRows.sort((a, b) => {
-        if (a.status === b.status) return a.staffName.localeCompare(b.staffName);
+        if (a.status === b.status) return (a.staffNameKana || a.staffName).localeCompare(b.staffNameKana || b.staffName, 'ja');
         return a.status === 'confirmed' ? -1 : 1;
       });
 
@@ -1762,7 +1770,7 @@
     // Render a single unpaid row
     function renderUnpaidRow(s) {
       return `
-        <tr data-staff-id="${s.staffId}" data-status="unpaid" data-row-id="${s.rowId}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+        <tr data-staff-id="${s.staffId}" data-status="unpaid" data-row-id="${s.rowId}" data-name-kana="${s.staffNameKana || s.staffName}" class="clickable-row" onclick="toggleRowCheck(this, event)">
           <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${s.staffId}"></td>
           <td>${s.staffName}</td>
           <td>${s.unpaidCount}件</td>
@@ -1787,7 +1795,7 @@
         ? `<span style="color: ${p.adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${p.adjustmentAmount > 0 ? '+' : ''}${formatCurrency(p.adjustmentAmount).replace('¥', '')}</span>`
         : '-';
       return `
-        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}" data-name-kana="${p.staffNameKana || p.staffName}" class="clickable-row" onclick="toggleRowCheck(this, event)">
           <td><input type="checkbox" class="payout-check" data-status="confirmed" value="${p.payoutId}"></td>
           <td>${p.staffName}</td>
           <td>${p.unpaidCount}件</td>
@@ -1816,20 +1824,20 @@
       const rows = Array.from(tbody.querySelectorAll('tr'));
 
       if (currentSortOrder === 'unpaid-first') {
-        // Sort confirmed first
+        // Sort confirmed first, then kana order within same status
         rows.sort((a, b) => {
           const statusA = a.dataset.status;
           const statusB = b.dataset.status;
-          if (statusA === statusB) return 0;
+          if (statusA === statusB) return (a.dataset.nameKana || '').localeCompare(b.dataset.nameKana || '', 'ja');
           return statusA === 'confirmed' ? -1 : 1;
         });
         currentSortOrder = 'confirmed-first';
       } else {
-        // Sort unpaid first
+        // Sort unpaid first, then kana order within same status
         rows.sort((a, b) => {
           const statusA = a.dataset.status;
           const statusB = b.dataset.status;
-          if (statusA === statusB) return 0;
+          if (statusA === statusB) return (a.dataset.nameKana || '').localeCompare(b.dataset.nameKana || '', 'ja');
           return statusA === 'unpaid' ? -1 : 1;
         });
         currentSortOrder = 'unpaid-first';
@@ -2486,6 +2494,7 @@
       const unpaidRow = {
         staffId: undone.staff_id,
         staffName: undone.target_name,
+        staffNameKana: undone.target_name_kana || '',
         unpaidCount: undone.assignment_count,
         periodStart: undone.period_start,
         periodEnd: undone.period_end,
