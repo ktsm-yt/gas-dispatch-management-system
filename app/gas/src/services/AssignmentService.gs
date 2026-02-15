@@ -279,6 +279,13 @@ const AssignmentService = {
         });
       }
 
+      // 逆引き+フラグ更新（best-effort: 失敗しても配置保存には影響なし）
+      try {
+        this._markAffectedInvoicesChanged(jobId);
+      } catch (flagError) {
+        Logger.log('Invoice change flag update failed (non-critical): ' + flagError);
+      }
+
       return buildSuccessResponse({
         assignments: enrichedAssignments,
         inserted: results.inserted.length,
@@ -731,5 +738,48 @@ const AssignmentService = {
     }
 
     return result;
+  },
+
+  /**
+   * 配置変更時に影響する請求書の has_assignment_changes フラグを立てる
+   * @private
+   * @param {string} jobId - 変更された案件ID
+   */
+  _markAffectedInvoicesChanged: function(jobId) {
+    // T_InvoiceLines から job_id で逆引き → 影響する invoice_id を特定
+    var allLines = getAllRecords('T_InvoiceLines');
+    var affectedInvoiceIds = [];
+    for (var i = 0; i < allLines.length; i++) {
+      var line = allLines[i];
+      if (line.job_id === jobId && !line.is_deleted) {
+        if (affectedInvoiceIds.indexOf(line.invoice_id) === -1) {
+          affectedInvoiceIds.push(line.invoice_id);
+        }
+      }
+    }
+
+    if (affectedInvoiceIds.length === 0) return;
+
+    // T_Invoices シートを直接操作してフラグを更新
+    var sheet = getSheetDirect('Invoices');
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var flagColIdx = headers.indexOf('has_assignment_changes');
+    var idColIdx = headers.indexOf('invoice_id');
+
+    // カラム未存在時はスキップ（マイグレーション前環境の後方互換）
+    if (flagColIdx < 0 || idColIdx < 0) return;
+
+    var data = sheet.getDataRange().getValues();
+    var idSet = {};
+    for (var j = 0; j < affectedInvoiceIds.length; j++) {
+      idSet[affectedInvoiceIds[j]] = true;
+    }
+
+    // 対象行のフラグ列のみ個別更新（全行read-modify-write回避）
+    for (var r = 1; r < data.length; r++) {
+      if (idSet[data[r][idColIdx]]) {
+        sheet.getRange(r + 1, flagColIdx + 1).setValue(true);
+      }
+    }
   }
 };
