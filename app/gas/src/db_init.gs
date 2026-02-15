@@ -109,7 +109,7 @@ const TABLE_DEFINITIONS = {
       'invoice_id', 'invoice_number', 'customer_id', 'billing_year', 'billing_month',
       'issue_date', 'due_date', 'subtotal', 'expense_amount', 'tax_amount',
       'total_amount', 'adjustment_total', 'invoice_format', 'shipper_name', 'pdf_file_id',
-      'excel_file_id', 'sheet_file_id', 'status', 'notes', 'created_at',
+      'excel_file_id', 'sheet_file_id', 'status', 'has_assignment_changes', 'notes', 'created_at',
       'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
   },

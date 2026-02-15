@@ -143,18 +143,27 @@ function searchInvoices(query: Record<string, unknown>) {
 
     // 期限超過の請求書を自動的に「未回収」ステータスに更新
     // （sent かつ due_date < 今日 → unpaid）
+    // 1日1回のみ実行（CacheServiceで当日実行済みフラグ管理）
     try {
-      const overdueResult = InvoiceRepository.autoMarkOverdue();
-      if (overdueResult.updated > 0) {
-        Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
+      const todayKey = 'autoMarkOverdue_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd');
+      const cache = CacheService.getScriptCache();
+      if (!cache.get(todayKey)) {
+        const overdueResult = InvoiceRepository.autoMarkOverdue();
+        if (overdueResult.updated > 0) {
+          Logger.log(`autoMarkOverdue: ${overdueResult.updated}件を未回収に更新`);
+        }
+        // 6時間キャッシュ（日付変更を跨ぐケースをカバー）
+        cache.put(todayKey, '1', 6 * 60 * 60);
       }
     } catch (overdueError: unknown) {
       // 自動更新エラーは検索自体を妨げない
       console.warn('autoMarkOverdue error:', (overdueError instanceof Error) ? overdueError.message : String(overdueError));
     }
 
-    // Service呼び出し
-    const invoices = InvoiceService.search(query || {});
+    // Service呼び出し（has_assignment_changes カラムから直接取得、フルスキャン不要）
+    console.time('searchInvoices');
+    const invoices = InvoiceService.search({ ...(query || {}) });
+    console.timeEnd('searchInvoices');
 
     // 入金情報を一括取得（パフォーマンス最適化）
     if (invoices.length > 0) {
@@ -769,6 +778,67 @@ function calculateBillingPeriodFromWorkDate_(workDate: Date, closingDay: number)
 
   // 締め日以前の作業日 → 当月請求
   return { billingYear: year, billingMonth: month };
+}
+
+/**
+ * 請求書の配置変更フラグを取得（バックグラウンド変更検知用）
+ * @param {string[]} invoiceIds - 請求IDリスト
+ * @returns {Object} APIレスポンス { flags: { [invoiceId]: boolean } }
+ */
+function getInvoiceChangeFlags(invoiceIds: string[]) {
+  const requestId = generateRequestId();
+
+  try {
+    // 認可チェック（staff以上）
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!Array.isArray(invoiceIds) || invoiceIds.length === 0) {
+      return buildSuccessResponse({ flags: {} }, requestId);
+    }
+
+    console.time('getInvoiceChangeFlags');
+
+    // T_Invoices の has_assignment_changes カラムから直接取得（フルスキャン不要）
+    const idSet = new Set(invoiceIds);
+    const allInvoices = getAllRecords('T_Invoices') as unknown as InvoiceRecord[];
+    const invoices = allInvoices.filter(inv => !inv.is_deleted && idSet.has(inv.invoice_id));
+
+    // has_assignment_changes カラム存在チェック
+    const hasColumn = invoices.length > 0 && 'has_assignment_changes' in invoices[0];
+
+    const flags: Record<string, boolean> = {};
+
+    if (hasColumn) {
+      // 新方式: DBカラムから直接取得（高速）
+      for (const inv of invoices) {
+        flags[inv.invoice_id] = inv.has_assignment_changes === true || inv.has_assignment_changes === 'true';
+      }
+    } else {
+      // フォールバック: 旧方式（3テーブル全件読み）
+      const assignmentUpdates = InvoiceService._getAssignmentUpdatesForInvoices(invoices);
+      for (const inv of invoices) {
+        const latestUpdate = assignmentUpdates[inv.invoice_id];
+        if (latestUpdate && inv.created_at) {
+          const invoiceCreatedAt = new Date(inv.created_at).getTime();
+          const assignmentUpdatedAt = new Date(latestUpdate).getTime();
+          flags[inv.invoice_id] = assignmentUpdatedAt > invoiceCreatedAt;
+        } else {
+          flags[inv.invoice_id] = false;
+        }
+      }
+    }
+
+    console.timeEnd('getInvoiceChangeFlags');
+
+    return buildSuccessResponse({ flags }, requestId);
+
+  } catch (error: unknown) {
+    Logger.log(`getInvoiceChangeFlags error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+  }
 }
 
 // ============================================================
