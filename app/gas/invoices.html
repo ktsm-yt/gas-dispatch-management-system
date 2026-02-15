@@ -4709,9 +4709,15 @@
       adjustments.forEach(function(adj) {
         addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
       });
-      // アーカイブは調整項目セクション表示（閲覧）だが追加は不可
+      // アーカイブは調整項目セクション表示（閲覧）だが追加・編集は不可
       document.getElementById('adjustmentSection').style.display = (isEditable || isArchived) ? '' : 'none';
       document.getElementById('addAdjustmentBtn').disabled = isArchived || adjustments.length >= 5;
+      if (isArchived) {
+        var adjInputs = document.querySelectorAll('#adjustmentItemsContainer input');
+        adjInputs.forEach(function(input) { input.disabled = true; });
+        var adjRemoveBtns = document.querySelectorAll('#adjustmentItemsContainer .adjustment-remove-btn');
+        adjRemoveBtns.forEach(function(btn) { btn.style.display = 'none'; });
+      }
 
       updateTotalsPreview();
     }
