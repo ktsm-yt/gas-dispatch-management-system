@@ -38,6 +38,7 @@ interface BulkGenerateResults {
   skippedExisting: { customerId: string; companyName: string }[];
   failed: { customerId?: string; companyName?: string; error: string }[];
   progress: { processed: number; total: number; hasMore: boolean };
+  lastCustomerName?: string;
 }
 
 interface InvoiceSearchResult extends InvoiceRecord {
@@ -653,6 +654,11 @@ const InvoiceService = {
           const msg = e instanceof Error ? e.message : String(e);
           results.failed.push({ customerId, companyName, error: msg || 'UNKNOWN_ERROR' });
         }
+      }
+
+      // 最後に処理した顧客名を記録（進捗UI用）
+      if (customers.length > 0) {
+        results.lastCustomerName = (customers[customers.length - 1].company_name || '') as string;
       }
 
       // === 一括挿入 ===
