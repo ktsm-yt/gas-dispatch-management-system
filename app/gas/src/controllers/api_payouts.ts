@@ -168,7 +168,10 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
         return {
           assignment_id: a.assignment_id as string,
           work_date: (job as Record<string, unknown>).work_date,
-          site_name: ((job as Record<string, unknown>).site_name as string) || '(現場名なし)'
+          site_name: ((job as Record<string, unknown>).site_name as string) || '(現場名なし)',
+          pay_unit: a.pay_unit,
+          invoice_unit: a.invoice_unit,
+          wage_rate: a.wage_rate
         };
       });
     }
