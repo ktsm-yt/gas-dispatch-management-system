@@ -160,9 +160,9 @@ function searchInvoices(query: Record<string, unknown>) {
       console.warn('autoMarkOverdue error:', (overdueError instanceof Error) ? overdueError.message : String(overdueError));
     }
 
-    // Service呼び出し（変更検知はバックグラウンドで別途取得するためスキップ）
+    // Service呼び出し（has_assignment_changes カラムから直接取得、フルスキャン不要）
     console.time('searchInvoices');
-    const invoices = InvoiceService.search({ ...(query || {}), includeChangeDetection: false });
+    const invoices = InvoiceService.search({ ...(query || {}) });
     console.timeEnd('searchInvoices');
 
     // 入金情報を一括取得（パフォーマンス最適化）
@@ -790,45 +790,39 @@ function getInvoiceChangeFlags(invoiceIds: string[]) {
       return buildSuccessResponse({ flags: {} }, requestId);
     }
 
-    // CacheServiceで5分キャッシュ
-    const cache = CacheService.getScriptCache();
-    const cacheKey = 'changeFlags_' + Utilities.computeDigest(
-      Utilities.DigestAlgorithm.MD5,
-      invoiceIds.slice().sort().join(',')
-    ).map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return buildSuccessResponse({ flags: JSON.parse(cached) }, requestId);
-    }
-
     console.time('getInvoiceChangeFlags');
 
-    // 全件1回読みでN+1を回避
+    // T_Invoices の has_assignment_changes カラムから直接取得（フルスキャン不要）
     const idSet = new Set(invoiceIds);
     const allInvoices = getAllRecords('T_Invoices') as unknown as InvoiceRecord[];
     const invoices = allInvoices.filter(inv => !inv.is_deleted && idSet.has(inv.invoice_id));
 
-    // 変更検知実行
-    const assignmentUpdates = InvoiceService._getAssignmentUpdatesForInvoices(invoices);
+    // has_assignment_changes カラム存在チェック
+    const hasColumn = invoices.length > 0 && 'has_assignment_changes' in invoices[0];
 
-    // boolean フラグに変換
     const flags: Record<string, boolean> = {};
-    for (const inv of invoices) {
-      const latestUpdate = assignmentUpdates[inv.invoice_id];
-      if (latestUpdate && inv.created_at) {
-        const invoiceCreatedAt = new Date(inv.created_at).getTime();
-        const assignmentUpdatedAt = new Date(latestUpdate).getTime();
-        flags[inv.invoice_id] = assignmentUpdatedAt > invoiceCreatedAt;
-      } else {
-        flags[inv.invoice_id] = false;
+
+    if (hasColumn) {
+      // 新方式: DBカラムから直接取得（高速）
+      for (const inv of invoices) {
+        flags[inv.invoice_id] = inv.has_assignment_changes === true || inv.has_assignment_changes === 'true';
+      }
+    } else {
+      // フォールバック: 旧方式（3テーブル全件読み）
+      const assignmentUpdates = InvoiceService._getAssignmentUpdatesForInvoices(invoices);
+      for (const inv of invoices) {
+        const latestUpdate = assignmentUpdates[inv.invoice_id];
+        if (latestUpdate && inv.created_at) {
+          const invoiceCreatedAt = new Date(inv.created_at).getTime();
+          const assignmentUpdatedAt = new Date(latestUpdate).getTime();
+          flags[inv.invoice_id] = assignmentUpdatedAt > invoiceCreatedAt;
+        } else {
+          flags[inv.invoice_id] = false;
+        }
       }
     }
 
     console.timeEnd('getInvoiceChangeFlags');
-
-    // 5分キャッシュ
-    cache.put(cacheKey, JSON.stringify(flags), 5 * 60);
 
     return buildSuccessResponse({ flags }, requestId);
 
