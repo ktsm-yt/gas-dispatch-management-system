@@ -183,6 +183,7 @@ declare global {
     excel_file_id: string;
     sheet_file_id: string;
     status: InvoiceStatus | InvoiceLegacyStatus;
+    has_assignment_changes: boolean | string;
     notes: string;
     created_at: string;
     created_by: string;

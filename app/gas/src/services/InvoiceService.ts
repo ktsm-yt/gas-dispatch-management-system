@@ -213,12 +213,15 @@ const InvoiceService = {
    */
   search: function(query: InvoiceSearchQuery & { includeChangeDetection?: boolean } = {}): InvoiceSearchResult[] {
     const invoices = InvoiceRepository.search(query);
-    const includeChangeDetection = query.includeChangeDetection !== false; // デフォルトtrue
 
     // 顧客情報を付加
     const customerCache: Record<string, Record<string, unknown> | null> = {};
 
-    // 配置変更検知のためのデータを一括取得
+    // has_assignment_changes カラムがDB側に存在するかチェック（最初の1件で判定）
+    const hasColumnInDb = invoices.length > 0 && 'has_assignment_changes' in invoices[0];
+
+    // カラム未存在時のみ旧ロジックにフォールバック
+    const includeChangeDetection = !hasColumnInDb && query.includeChangeDetection !== false;
     let assignmentUpdates: Record<string, string> = {};
     if (includeChangeDetection && invoices.length > 0) {
       assignmentUpdates = this._getAssignmentUpdatesForInvoices(invoices);
@@ -229,9 +232,11 @@ const InvoiceService = {
         customerCache[inv.customer_id] = this._getCustomer(inv.customer_id);
       }
 
-      // 配置変更があるかチェック
+      // フラグ判定: DBカラム優先、無ければ旧ロジック
       let hasAssignmentChanges = false;
-      if (includeChangeDetection) {
+      if (hasColumnInDb) {
+        hasAssignmentChanges = inv.has_assignment_changes === true || inv.has_assignment_changes === 'true';
+      } else if (includeChangeDetection) {
         const latestUpdate = assignmentUpdates[inv.invoice_id];
         if (latestUpdate && inv.created_at) {
           const invoiceCreatedAt = new Date(inv.created_at).getTime();
