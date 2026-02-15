@@ -189,6 +189,7 @@ declare global {
   interface UnpaidStaffItem {
     staffId: string;
     staffName: string;
+    staffNameKana: string;
     unpaidCount: number;
     baseAmount: number;
     transportAmount: number;
