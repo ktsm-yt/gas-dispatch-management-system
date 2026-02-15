@@ -1101,10 +1101,10 @@
   <?!= include('confirmation_modal'); ?>
 
   <div class="toolbar">
-    <!-- 生成アクション -->
+    <!-- 集計アクション -->
     <div class="toolbar-actions">
-      <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
-      <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
+      <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求集計</button>
+      <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括集計</button>
     </div>
     <span style="flex: 1;"></span>
     <!-- エクスポート -->
@@ -1501,7 +1501,7 @@
   <div class="modal-overlay" id="generateModal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle" onclick="handleModalOverlayClick(event, 'generateModal')">
     <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
-        <h2 id="generateModalTitle">請求書生成</h2>
+        <h2 id="generateModalTitle">請求集計</h2>
         <button class="modal-close" onclick="closeGenerateModal()" aria-label="閉じる">&times;</button>
       </div>
       <div class="modal-body">
@@ -1525,7 +1525,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeGenerateModal()">キャンセル</button>
-        <button class="btn btn-primary" onclick="generateInvoice()">生成</button>
+        <button class="btn btn-primary" onclick="generateInvoice()">集計</button>
       </div>
     </div>
   </div>
@@ -1546,7 +1546,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeInvoiceOverwriteModal()">キャンセル</button>
-        <button class="btn btn-danger" onclick="confirmInvoiceOverwrite()">上書き生成</button>
+        <button class="btn btn-danger" onclick="confirmInvoiceOverwrite()">上書き集計</button>
       </div>
     </div>
   </div>
@@ -1555,7 +1555,7 @@
   <div class="modal-overlay" id="bulkGenerateModal" onclick="handleModalOverlayClick(event, 'bulkGenerateModal')">
     <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
-        <h2>請求書一括生成</h2>
+        <h2>請求一括集計</h2>
         <button class="modal-close" onclick="closeBulkGenerateModal()">&times;</button>
       </div>
       <div class="modal-body">
@@ -1662,7 +1662,7 @@
     onclick="handleModalOverlayClick(event, 'regenerateConfirmModal')">
     <div class="modal" style="max-width: 400px;">
       <div class="modal-header">
-        <h2>請求書の再生成</h2>
+        <h2>請求書の再集計</h2>
         <button class="modal-close" onclick="closeRegenerateConfirm()">&times;</button>
       </div>
       <div class="modal-body" id="regenerateConfirmBody">
@@ -1670,7 +1670,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeRegenerateConfirm()">キャンセル</button>
-        <button class="btn btn-primary" id="regenerateConfirmBtn" onclick="executeRegenerate()">再生成</button>
+        <button class="btn btn-primary" id="regenerateConfirmBtn" onclick="executeRegenerate()">再集計</button>
       </div>
     </div>
   </div>
@@ -2555,7 +2555,7 @@
         rowHtml += '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
           inv.invoice_id + '\', \'' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') +
           '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
-          '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
+          '\')" title="配置が変更されています。再集計を検討してください">⚠️</span>';
       }
       rowHtml += '</td>';
       rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';
@@ -3128,15 +3128,15 @@
         return;
       }
 
-      showLoading('請求書を生成中...');
+      showLoading('請求書を集計中...');
       closeGenerateModal();
 
       google.script.run
         .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
-            showToast('請求書を生成しました', 'success');
-            // 差分更新: 生成した請求書をリストの先頭に追加
+            showToast('請求書を集計しました', 'success');
+            // 差分更新: 集計した請求書をリストの先頭に追加
             if (result.data?.invoice) {
               const newInvoice = result.data.invoice;
               // 支払額は0で初期化
@@ -3169,7 +3169,7 @@
             document.getElementById('invoiceOverwriteModal').classList.add('active');
           } else {
             hideLoading();
-            showToast(result.error?.message || '生成に失敗しました', 'error');
+            showToast(result.error?.message || '集計に失敗しました', 'error');
           }
         })
         .withFailureHandler(function (error) {
@@ -3195,19 +3195,19 @@
       closeInvoiceOverwriteModal();
       showLoading('既存請求書を削除中...');
 
-      // 既存請求書を削除してから再生成
+      // 既存請求書を削除してから再集計
       google.script.run
         .withSuccessHandler(function (deleteResult) {
           if (deleteResult.ok) {
             // 削除成功、リストから削除
             invoices = invoices.filter(inv => inv.invoice_id !== existingInvoice.invoice_id);
             // 新規生成
-            showLoading('請求書を再生成中...');
+            showLoading('請求書を再集計中...');
             google.script.run
               .withSuccessHandler(function (genResult) {
                 hideLoading();
                 if (genResult.ok) {
-                  showToast('請求書を再生成しました', 'success');
+                  showToast('請求書を再集計しました', 'success');
                   // 差分更新: 生成した請求書をリストの先頭に追加
                   if (genResult.data?.invoice) {
                     const newInvoice = genResult.data.invoice;
@@ -3230,7 +3230,7 @@
                     BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
                   }
                 } else {
-                  showToast(genResult.error?.message || '再生成に失敗しました', 'error');
+                  showToast(genResult.error?.message || '再集計に失敗しました', 'error');
                 }
               })
               .withFailureHandler(function (error) {
@@ -3270,10 +3270,10 @@
     function completeBulkGenerate() {
       bulkGenTimer.stop();
       document.getElementById('bulkGenerateModal').classList.remove('active');
-      // 生成が実行された場合のみリロード
+      // 集計が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
-        // クロスタブ同期（一括生成完了時のみ1回）
+        // クロスタブ同期（一括集計完了時のみ1回）
         BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
       processPendingInvalidation();
@@ -3286,7 +3286,7 @@
         bulkState.stopRequested = true;
       }
       document.getElementById('bulkGenerateModal').classList.remove('active');
-      // 生成が実行された場合のみリロード
+      // 集計が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
         loadInvoices(true);  // Skip cache after data change
         BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
@@ -3355,7 +3355,7 @@
             showBulkGenerateResult(result.data);
           } else {
             bulkGenTimer.stop();
-            showToast(result.error?.message || '一括生成に失敗しました', 'error');
+            showToast(result.error?.message || '一括集計に失敗しました', 'error');
             document.getElementById('bulkGenerateBtn').style.display = '';
             document.getElementById('bulkStopBtn').style.display = 'none';
             document.getElementById('bulkAutoGenerateGroup').style.display = '';
@@ -3399,7 +3399,7 @@
 
       // Update result display
       const resultDiv = document.getElementById('bulkGenerateResult');
-      let html = '<span style="color:var(--color-success);">生成:' + bulkState.totalSuccess + '</span>';
+      let html = '<span style="color:var(--color-success);">集計:' + bulkState.totalSuccess + '</span>';
       html += ' / <span style="color:var(--text-muted);">スキップ:' + bulkState.totalSkipped + '</span>';
       if (bulkState.totalFailed > 0) {
         html += ' / <span style="color:var(--color-danger);">エラー:' + bulkState.totalFailed + '</span>';
@@ -3418,7 +3418,7 @@
           document.getElementById('bulkContinueBtn').style.display = '';
           document.getElementById('bulkContinueBtn').textContent = '続きを実行';
         }
-        showToast('停止: ' + bulkState.totalSuccess + '件生成済み', 'info');
+        showToast('停止: ' + bulkState.totalSuccess + '件集計済み', 'info');
         return;
       }
 
@@ -3452,7 +3452,7 @@
         document.getElementById('bulkContinueBtn').style.display = 'none';
         document.getElementById('bulkCancelBtn').style.display = 'none';
         document.getElementById('bulkCompleteBtn').style.display = '';
-        showToast('完了: ' + bulkState.totalSuccess + '件生成', 'success');
+        showToast('完了: ' + bulkState.totalSuccess + '件集計', 'success');
       }
     }
 
@@ -4404,7 +4404,7 @@
       showToast('エラーが発生しました。しばらくしてから再度お試しください。', 'error');
     }
 
-    // ========== 請求書再生成機能 ==========
+    // ========== 請求書再集計機能 ==========
 
     let pendingRegenerate = null;
 
@@ -4414,7 +4414,7 @@
     function showRegenerateConfirm(invoiceId, customerName, period, status) {
       // 送付済みの場合は再生成不可
       if (status !== 'unsent' && status !== 'hold' && status !== 'draft' && status !== 'issued') {
-        showToast('送付済みの請求書は再生成できません', 'warning');
+        showToast('送付済みの請求書は再集計できません', 'warning');
         return;
       }
 
@@ -4423,7 +4423,7 @@
       document.getElementById('regenerateConfirmBody').innerHTML =
         '<p style="margin-bottom: 16px;">' +
         '配置内容が変更されています。<br>' +
-        '請求書を再生成しますか？' +
+        '請求書を再集計しますか？' +
         '</p>' +
         '<div style="background: #FEF3C7; padding: 12px; border-radius: 6px; margin-bottom: 16px;">' +
         '<div style="font-weight: 500; color: #92400E;">' + customerName + '</div>' +
@@ -4434,7 +4434,7 @@
         '※ 手動で編集した内容は失われます。' +
         '</p>';
       document.getElementById('regenerateConfirmBtn').disabled = false;
-      document.getElementById('regenerateConfirmBtn').textContent = '再生成';
+      document.getElementById('regenerateConfirmBtn').textContent = '再集計';
       document.getElementById('regenerateConfirmModal').classList.add('active');
     }
 
@@ -4455,15 +4455,15 @@
 
       // ローディング表示
       confirmBtn.disabled = true;
-      confirmBtn.textContent = '再生成中...';
-      showLoading('請求書を再生成中...');
+      confirmBtn.textContent = '再集計中...';
+      showLoading('請求書を再集計中...');
 
       google.script.run
         .withSuccessHandler(function (result) {
           hideLoading();
           closeRegenerateConfirm();
           if (result.ok) {
-            showToast(customerName + ' の請求書を再生成しました', 'success');
+            showToast(customerName + ' の請求書を再集計しました', 'success');
             // 差分更新: 該当請求書を更新
             if (result.data?.invoice) {
               const updatedInvoice = result.data.invoice;
@@ -4482,7 +4482,7 @@
               BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
             }
           } else {
-            const errorMsg = result.error?.message || result.error || '再生成に失敗しました';
+            const errorMsg = result.error?.message || result.error || '再集計に失敗しました';
             showToast(errorMsg, 'error');
           }
         })
@@ -4490,7 +4490,7 @@
           hideLoading();
           closeRegenerateConfirm();
           console.error('regenerateInvoice failure:', error);
-          showToast('再生成に失敗しました。しばらくしてから再度お試しください。', 'error');
+          showToast('再集計に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .regenerateInvoice(invoiceId);
     }
