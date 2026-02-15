@@ -189,7 +189,7 @@
 
     .data-table td.amount {
       text-align: right;
-      font-family: 'Menlo', monospace;
+      font-family: 'Menlo', 'Monaco', monospace;
     }
 
     .data-table input[type="number"],
@@ -355,6 +355,7 @@
     .modal-history .history-amount {
       font-weight: 500;
       color: var(--text-primary);
+      font-family: 'Menlo', 'Monaco', monospace;
     }
 
     .modal-history .empty {
@@ -387,6 +388,11 @@
       padding: 6px 8px;
       text-align: left;
       border-bottom: 1px solid var(--border-color);
+    }
+
+    .assignment-list-table td:last-child {
+      font-family: 'Menlo', 'Monaco', monospace;
+      text-align: right;
     }
 
     .assignment-list-table th {
@@ -4147,7 +4153,7 @@
             <td style="font-size: 12px; white-space: nowrap;">${periodText}</td>
             <td class="amount">¥${formatNumber(sub.baseAmount)}</td>
             <td class="amount">¥${formatNumber(sub.transportAmount)}</td>
-            <td class="amount"><strong>¥${formatNumber(sub.estimatedAmount)}</strong></td>
+            <td class="amount">¥${formatNumber(sub.estimatedAmount)}</td>
             <td>
               <button class="btn btn-secondary" onclick="showSubcontractorDetail('${sub.subcontractorId}')">詳細</button>
               <button class="btn btn-primary" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払</button>
