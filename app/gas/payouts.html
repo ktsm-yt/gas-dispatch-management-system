@@ -1116,7 +1116,7 @@
         if (document.visibilityState === 'visible') {
           // スタッフタブのrevalidate
           if (currentUnpaidQuery && currentUnpaidQuery.endDate) {
-            if (isUnpaidCacheStale(currentUnpaidQuery.endDate)) {
+            if (isSessionStale(currentUnpaidQuery.endDate)) {
               console.log('[SWR] Tab visible - revalidating staff unpaid list');
               refreshUnpaidListInBackground(currentUnpaidQuery.endDate);
             }
@@ -4150,7 +4150,7 @@
             <td class="amount"><strong>¥${formatNumber(sub.estimatedAmount)}</strong></td>
             <td>
               <button class="btn btn-secondary" onclick="showSubcontractorDetail('${sub.subcontractorId}')">詳細</button>
-              <button class="btn btn-success" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払</button>
+              <button class="btn btn-primary" data-sub-id="${sub.subcontractorId}" data-company-name="${escapeHtml(sub.companyName)}" data-amount="${sub.estimatedAmount}" onclick="markSubcontractorPaidFromButton(this)">支払</button>
             </td>
           </tr>
         `;
@@ -4188,7 +4188,7 @@
           </div>
           <div class="summary-item">
             <div class="label">件数</div>
-            <div class="value">${data.assignmentCount}</div>
+            <div class="value">${data.assignmentCount ?? '-'}</div>
           </div>
           <div class="summary-item">
             <div class="label">基本金額</div>
@@ -4241,7 +4241,7 @@
           </tbody>
         </table>
         <div style="margin-top: var(--spacing-md); text-align: right;">
-          <button class="btn btn-success" onclick="markCurrentSubcontractorPaid()" ${payDisabledAttr}>支払済にする</button>
+          <button class="btn btn-primary" onclick="markCurrentSubcontractorPaid()" ${payDisabledAttr}>支払済にする</button>
         </div>
       `;
 
@@ -4270,7 +4270,7 @@
          <p>締め日: ${endDate}</p>
          <p>金額: <strong>¥${formatNumber(amount)}</strong></p>`,
         '支払済にする',
-        'btn-success',
+        'btn-primary',
         () => {
           showLoading('処理中...');
           google.script.run
@@ -4310,7 +4310,7 @@
          <p>締め日: ${endDate}</p>
          <p>金額: <strong>¥${formatNumber(amount)}</strong></p>`,
         '支払済にする',
-        'btn-success',
+        'btn-primary',
         () => {
           showLoading('処理中...');
           google.script.run
