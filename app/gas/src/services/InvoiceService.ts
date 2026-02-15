@@ -1320,14 +1320,14 @@ const InvoiceService = {
         return { success: false, error: 'NOT_FOUND' };
       }
 
-      // 2. 編集可能なステータスかチェック
-      if (!isInvoiceEditable_(invoice.status as string)) {
+      // 2. 編集可能なステータスかチェック（アーカイブデータはヘッダー編集のみ許可）
+      if (invoice._archived) {
+        // アーカイブデータは明細変更をブロック、ヘッダーのみ許可
+        if (linesData && linesData.length > 0) {
+          return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
+        }
+      } else if (!isInvoiceEditable_(invoice.status as string)) {
         return { success: false, error: 'CANNOT_EDIT_SENT_INVOICE' };
-      }
-
-      // 3. アーカイブデータの明細変更をブロック
-      if (invoice._archived && linesData && linesData.length > 0) {
-        return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
       }
 
       // 4. 楽観的ロックチェック
