@@ -58,9 +58,13 @@
 
     .filter-group {
       display: flex;
-      flex: 1;
+      width: 100%;
       gap: var(--spacing-sm);
       align-items: center;
+      background: var(--bg-hover);
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
     }
 
     .filter-group label {
@@ -1097,12 +1101,18 @@
   <?!= include('confirmation_modal'); ?>
 
   <div class="toolbar">
-    <!-- 生成アクション（優先） -->
+    <!-- 生成アクション -->
     <div class="toolbar-actions">
       <button class="btn btn-secondary" onclick="openGenerateModal()">+ 請求書生成</button>
       <button class="btn btn-primary" onclick="openBulkGenerateModal()">一括生成</button>
     </div>
-    <!-- 検索フィルター（補助） -->
+    <span style="flex: 1;"></span>
+    <!-- エクスポート -->
+    <div class="toolbar-actions">
+      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
+      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleBillingFolderLinkClick(this)">📁 出力先</a>
+    </div>
+    <!-- 検索フィルター -->
     <div class="filter-group">
       <label>年月:</label>
       <select id="filterYear"></select>
@@ -1129,9 +1139,6 @@
         <span>過去年度を含む</span>
       </label>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
-      <span style="flex: 1;"></span>
-      <button class="btn btn-secondary" onclick="openBillingExportModal()">集計エクスポート</button>
-      <a id="billing-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleBillingFolderLinkClick(this)">📁 出力先</a>
     </div>
   </div>
 
