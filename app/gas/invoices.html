@@ -1121,7 +1121,6 @@
       <option value="hold">保留</option>
       <option value="sent">送付済</option>
       <option value="unpaid">未回収</option>
-      <option value="paid">入金済</option>
     </select>
     <button class="btn btn-primary" onclick="showStatusConfirm()">適用</button>
     <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
@@ -1371,7 +1370,7 @@
 
   <!-- Invoice Edit Modal -->
   <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" onclick="handleModalOverlayClick(event, 'editModal')">
-    <div class="modal" style="max-width: 1050px;">
+    <div class="modal" style="max-width: 1200px;">
       <div class="modal-header">
         <h2 id="editModalTitle">請求書編集</h2>
         <button class="modal-close" onclick="closeEditModal()" aria-label="閉じる">&times;</button>
@@ -1409,11 +1408,11 @@
               <thead>
                 <tr>
                   <th style="width: 90px;">日付</th>
-                  <th style="width: 150px;">現場名</th>
-                  <th style="width: 140px;">品目名</th>
-                  <th style="width: 100px;">時間/備考</th>
+                  <th style="width: 200px;">現場名</th>
+                  <th style="width: 160px;">品目名</th>
+                  <th style="width: 110px;">時間/備考</th>
                   <th style="width: 50px;">数量</th>
-                  <th style="width: 90px;">金額(税抜)</th>
+                  <th style="width: 100px;">金額(税抜)</th>
                 </tr>
               </thead>
               <tbody id="editLinesBody">
@@ -1449,7 +1448,8 @@
           <button class="action-btn excel" onclick="exportFromModal('excel')" title="Excel出力">Excel</button>
           <button class="action-btn excel-cover" onclick="exportFromModal('cover')" title="頭紙のみ出力">頭紙</button>
         </div>
-        <div class="form-actions" style="display: flex; gap: 8px;">
+        <div class="form-actions" style="display: flex; gap: 8px; align-items: center;">
+          <span id="unsavedWarning" style="display:none; color: #e67e22; font-size: 12px; white-space: nowrap;">⚠ 未保存の変更があります</span>
           <button class="btn btn-secondary" onclick="closeEditModal()">閉じる</button>
           <button class="btn btn-primary" id="editSaveBtn" onclick="saveInvoiceDetails()">保存</button>
         </div>
@@ -2180,6 +2180,13 @@
     }
 
     function applyInvoiceSyncMessage(type, data, timestamp) {
+      if (type === 'ASSIGNMENT_CHANGED') {
+        // ダッシュボードで配置変更 → 一覧リロードでフラグ反映
+        PageCache.clearByPrefix('invoices_list');
+        loadInvoices(true);
+        return;
+      }
+
       if (type === 'INVOICES_BULK_UPDATED') {
         PageCache.clearByPrefix('invoices_list');
         invalidateDetailCache(); // 全詳細キャッシュも無効化
@@ -2259,6 +2266,7 @@
     function processPendingInvalidation() {
       if (pendingInvalidation) {
         pendingInvalidation = false;
+        invalidateDetailCache();
         loadInvoices(true);
       }
     }
@@ -2447,51 +2455,24 @@
         .searchInvoices(query);
     }
 
-    // 変更検知フラグをバックグラウンドで取得し、⚠️アイコンをDOM差分更新
-    // showToast: trueなら初回表示（トースト通知あり）、falseなら再取得（サイレント）
-    function fetchChangeFlagsInBackground(showToast_) {
+    // 一覧データから変更フラグを反映し、⚠️バッジを更新
+    // showToast_: trueなら初回表示（トースト通知あり）、falseなら再取得（サイレント）
+    function applyChangeFlagsFromData(showToast_) {
       if (showToast_ === undefined) showToast_ = true;
       if (!invoices || invoices.length === 0) return;
-      var token = ++changeFlagQueryToken;
-      var ids = invoices.map(function(inv) { return inv.invoice_id; });
+      var changeCount = 0;
+      invoices.forEach(function(inv) {
+        if (inv.has_assignment_changes) changeCount++;
+      });
+      updateChangeBadge(changeCount);
+      if (changeCount > 0 && showToast_) {
+        showToast('配置変更あり: ' + changeCount + '件の請求書で配置が変更されています', 'warning');
+      }
+    }
 
-      setTimeout(function() {
-        if (token !== changeFlagQueryToken) return; // フィルタ変更済み
-        google.script.run
-          .withSuccessHandler(function(result) {
-            if (token !== changeFlagQueryToken) return; // stale
-            if (!result.ok || !result.data || !result.data.flags) return;
-            var flags = result.data.flags;
-            var changeCount = 0;
-            invoices.forEach(function(inv) {
-              var changed = !!flags[inv.invoice_id];
-              inv.has_assignment_changes = changed;
-              if (changed) changeCount++;
-              // DOM差分更新: ⚠️セルを直接更新
-              var row = document.querySelector('tr[data-invoice-id="' + inv.invoice_id + '"]');
-              if (row) {
-                var warningCell = row.children[1]; // 2番目のtd
-                if (warningCell) {
-                  if (changed && !warningCell.querySelector('.assignment-change-warning')) {
-                    warningCell.innerHTML = '<span class="assignment-change-warning" onclick="showRegenerateConfirm(\'' +
-                      inv.invoice_id + '\', \'' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') +
-                      '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
-                      '\')" title="配置が変更されています。再生成を検討してください">⚠️</span>';
-                  } else if (!changed) {
-                    warningCell.innerHTML = '';
-                  }
-                }
-              }
-            });
-            // ヘッダーバッジ更新
-            updateChangeBadge(changeCount);
-            if (changeCount > 0 && showToast_) {
-              showToast('配置変更あり: ' + changeCount + '件の請求書で配置が変更されています', 'warning');
-            }
-          })
-          .withFailureHandler(function() { /* サイレント */ })
-          .getInvoiceChangeFlags(ids);
-      }, 500);
+    // 後方互換: 旧フロントエンドコードや外部からの呼び出し用エイリアス
+    function fetchChangeFlagsInBackground(showToast_) {
+      applyChangeFlagsFromData(showToast_);
     }
 
     // 変更あり件数バッジの表示/更新
@@ -2698,8 +2679,9 @@
         cells[9].innerHTML = '<span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span>';
       }
 
-      // 滞留日数(cells[10])を更新（unpaidフィルタ時のみ存在）
-      if (cells[10]) {
+      // 滞留日数セルを更新（unpaidフィルタ時のみ存在する追加カラム）
+      const showOverdueDays = document.getElementById('filterStatus').value === 'unpaid';
+      if (showOverdueDays && cells[10]) {
         cells[10].innerHTML = renderOverdueDays(inv);
       }
 
@@ -2971,6 +2953,12 @@
         return;
       }
 
+      if (status === 'paid') {
+        showToast('「入金済」への変更は、各請求書の入金記録から行ってください', 'warning');
+        document.getElementById('bulkStatusSelect').value = '';
+        return;
+      }
+
       const checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
       if (checkboxes.length === 0) {
         showToast('請求書を選択してください', 'warning');
@@ -2990,8 +2978,7 @@
         unsent: '未送付',
         hold: '保留',
         sent: '送付済',
-        unpaid: '未回収',
-        paid: '入金済'
+        unpaid: '未回収'
       }[status];
 
       // 確認モーダルを表示
@@ -3012,7 +2999,7 @@
     function executeStatusUpdate() {
       if (!pendingStatusUpdate) return;
 
-      const { updates, status } = pendingStatusUpdate;
+      const { updates, status, statusLabel } = pendingStatusUpdate;
       const confirmBtn = document.getElementById('statusConfirmBtn');
 
       // ローディング表示
@@ -3025,10 +3012,18 @@
           closeStatusConfirm();
           if (result.ok) {
             const data = result.data || {};
-            const msg = data.failed > 0
-              ? (data.updated + '件更新、' + data.failed + '件失敗')
-              : (data.updated + '件のステータスを更新しました');
-            showToast(msg, data.failed > 0 ? 'warning' : 'success');
+            var msg, toastType;
+            if (data.updated === 0 && data.failed > 0) {
+              msg = 'ステータスの変更に失敗しました。しばらくしてから再度お試しください';
+              toastType = 'error';
+            } else if (data.failed > 0) {
+              msg = '「' + statusLabel + '」に変更しました（' + (data.updated + data.failed) + '件中' + data.updated + '件）。一部の請求書は変更できませんでした';
+              toastType = 'warning';
+            } else {
+              msg = '「' + statusLabel + '」に変更しました（' + data.updated + '件）';
+              toastType = 'success';
+            }
+            showToast(msg, toastType);
             if (data.errors) {
               console.warn('Update errors:', data.errors);
             }
@@ -4516,7 +4511,7 @@
     let invoiceDetailInflight = {};           // in-flight dedup: { invoiceId: [callbacks] }
     let invoiceDetailCache = {};             // 詳細キャッシュ: { invoiceId: { data, timestamp } }
     const DETAIL_CACHE_MAX = 10;
-    const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5分
+    const DETAIL_CACHE_TTL = 15 * 60 * 1000; // 15分
 
     /**
      * 詳細キャッシュに保存（LRU制限付き）
@@ -4532,6 +4527,17 @@
         });
         delete invoiceDetailCache[oldest];
       }
+      // sessionStorage write-through
+      try {
+        PageCache.set(PageCache.makeKey('invoice_detail', invoiceId), data);
+      } catch (e) {
+        try {
+          PageCache.clearByPrefix('invoice_detail_');
+          PageCache.set(PageCache.makeKey('invoice_detail', invoiceId), data);
+        } catch (e2) {
+          console.warn('sessionStorage write failed:', e2);
+        }
+      }
     }
 
     /**
@@ -4540,9 +4546,27 @@
     function invalidateDetailCache(invoiceId) {
       if (invoiceId) {
         delete invoiceDetailCache[invoiceId];
+        PageCache.clear(PageCache.makeKey('invoice_detail', invoiceId));
       } else {
         invoiceDetailCache = {};
+        PageCache.clearByPrefix('invoice_detail_');
       }
+    }
+
+    function getDetailCache(invoiceId) {
+      var now = Date.now();
+      // 1. メモリ
+      var mem = invoiceDetailCache[invoiceId];
+      if (mem && (now - mem.timestamp < DETAIL_CACHE_TTL)) {
+        return { data: mem.data, timestamp: mem.timestamp, source: 'memory' };
+      }
+      // 2. sessionStorage
+      var ses = PageCache.get(PageCache.makeKey('invoice_detail', invoiceId));
+      if (ses && PageCache.isValid(ses, DETAIL_CACHE_TTL)) {
+        invoiceDetailCache[invoiceId] = { data: ses.data, timestamp: ses.timestamp };
+        return { data: ses.data, timestamp: ses.timestamp, source: 'sessionStorage' };
+      }
+      return null;
     }
 
     /**
@@ -4608,6 +4632,23 @@
       document.getElementById('editDueDate').disabled = !isEditable;
       document.getElementById('editNotes').disabled = !isEditable;
       document.getElementById('editSaveBtn').style.display = isEditable ? '' : 'none';
+      document.getElementById('unsavedWarning').style.display = 'none';
+
+      // 変更検知: ヘッダーフィールドの入力で未保存警告を表示
+      if (isEditable) {
+        var showUnsaved = function() { document.getElementById('unsavedWarning').style.display = ''; };
+        ['editIssueDate', 'editDueDate', 'editNotes'].forEach(function(id) {
+          var el = document.getElementById(id);
+          el.removeEventListener('input', showUnsaved);
+          el.addEventListener('input', showUnsaved);
+          el.removeEventListener('change', showUnsaved);
+          el.addEventListener('change', showUnsaved);
+        });
+        // 明細・調整項目の変更も検知（イベント委譲）
+        var modalContent = document.querySelector('#editModal .modal-body');
+        modalContent.removeEventListener('input', showUnsaved);
+        modalContent.addEventListener('input', showUnsaved);
+      }
 
       return isEditable;
     }
@@ -4676,8 +4717,8 @@
       }
 
       // 2. 詳細キャッシュチェック
-      var cached = invoiceDetailCache[invoiceId];
-      if (cached && (Date.now() - cached.timestamp < DETAIL_CACHE_TTL)) {
+      var cached = getDetailCache(invoiceId);
+      if (cached) {
         // キャッシュヒット: 即時に明細表示
         if (token !== editModalRequestToken) return;
         var invoice = cached.data;
@@ -4815,10 +4856,18 @@
         });
       });
 
-      showLoading('保存中...');
+      // 保存ボタンをスピナー状態に
+      var saveBtn = document.getElementById('editSaveBtn');
+      var saveBtnOriginal = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = '保存中...';
+      saveBtn.style.opacity = '0.7';
+
       google.script.run
         .withSuccessHandler(function(result) {
-          hideLoading();
+          saveBtn.disabled = false;
+          saveBtn.textContent = saveBtnOriginal;
+          saveBtn.style.opacity = '';
           if (!result.ok) {
             if (result.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーが変更しました。画面を更新してください', 'warning');
@@ -4855,13 +4904,17 @@
             // クロスタブ同期
             BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
           }
+          // 未保存警告を消す
+          document.getElementById('unsavedWarning').style.display = 'none';
           // モーダルは閉じず、出力を促す
           showToast('保存しました。帳票を出力して確認できます', 'success');
           // 出力ボタンを軽くハイライト
           highlightExportButtons();
         })
         .withFailureHandler(function(error) {
-          hideLoading();
+          saveBtn.disabled = false;
+          saveBtn.textContent = saveBtnOriginal;
+          saveBtn.style.opacity = '';
           console.error('updateInvoiceDetails error:', error);
           showToast('保存に失敗しました。しばらくしてから再度お試しください。', 'error');
         })

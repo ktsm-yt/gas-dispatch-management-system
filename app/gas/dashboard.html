@@ -1469,6 +1469,13 @@
           data: { date: dashboardData.date, dashboardData, maxUpdatedAt: lastMaxUpdatedAt }
         });
       } catch (e) { console.warn('[BC] broadcast failed:', e); }
+
+      // 請求タブにも配置変更を通知
+      try {
+        var invoiceChannel = new BroadcastChannel('invoice_sync');
+        invoiceChannel.postMessage({ type: 'ASSIGNMENT_CHANGED' });
+        invoiceChannel.close();
+      } catch (e) { /* BroadcastChannel非対応時はサイレント */ }
     }
 
     // Polling for updates
