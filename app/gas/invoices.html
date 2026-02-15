@@ -2579,10 +2579,10 @@
       if (showOverdueDays) {
         rowHtml += '<td class="overdue-cell">' + renderOverdueDays(inv) + '</td>';
       }
-      const isEditable = inv.status === 'unsent' || inv.status === 'hold' || inv.status === 'draft' || inv.status === 'issued';
-      const btnLabel = isEditable ? '確認' : '出力';
-      const btnTitle = isEditable ? '請求書を確認・編集' : '請求書を出力';
-      const btnClass = isEditable ? 'action-btn confirm' : 'action-btn export-only';
+      const btnLabel = '確認';
+      const isArchived = inv._archived === true;
+      const btnTitle = isArchived ? '請求書を確認（アーカイブ）' : '請求書を確認・編集';
+      const btnClass = 'action-btn confirm';
       rowHtml += '<td class="actions" onclick="event.stopPropagation()">' +
         '<button class="' + btnClass + '" onclick="openEditModal(\'' + inv.invoice_id + '\')" title="' + btnTitle + '">' + btnLabel + '</button>' +
         '</td>';
@@ -4636,8 +4636,9 @@
     function renderEditModalHeader(invoice) {
       var editableStatuses = ['unsent', 'hold', 'draft', 'issued'];
       var isEditable = editableStatuses.includes(invoice.status);
-      // アーカイブ行は常に閲覧専用
-      if (invoice._archived) isEditable = false;
+      var isArchived = invoice._archived === true;
+      // アーカイブデータはヘッダー（日付・備考）のみ編集可
+      var isHeaderEditable = isEditable || isArchived;
       var companyName = '';
       if (invoice.customer && invoice.customer.company_name) {
         companyName = invoice.customer.company_name;
@@ -4654,21 +4655,22 @@
       document.getElementById('editContextCompany').textContent = '請求先: ' + companyName;
       document.getElementById('editContextMeta').textContent = '請求番号: ' + (invoice.invoice_number || '-') + ' / 請求年月: ' + period;
 
-      document.getElementById('editModalTitle').textContent = isEditable ? '請求書編集' : '請求書出力';
+      document.getElementById('editModalTitle').textContent =
+        isArchived ? '請求書確認（アーカイブ）' : (isEditable ? '請求書編集' : '請求書出力');
       document.getElementById('editIssueDate').value = invoice.issue_date || '';
       document.getElementById('editDueDate').value = invoice.due_date || '';
       document.getElementById('editNotes').value = invoice.notes || '';
       document.getElementById('editInvoiceId').value = invoice.invoice_id;
       document.getElementById('editUpdatedAt').value = invoice.updated_at || '';
 
-      document.getElementById('editIssueDate').disabled = !isEditable;
-      document.getElementById('editDueDate').disabled = !isEditable;
-      document.getElementById('editNotes').disabled = !isEditable;
-      document.getElementById('editSaveBtn').style.display = isEditable ? '' : 'none';
+      document.getElementById('editIssueDate').disabled = !isHeaderEditable;
+      document.getElementById('editDueDate').disabled = !isHeaderEditable;
+      document.getElementById('editNotes').disabled = !isHeaderEditable;
+      document.getElementById('editSaveBtn').style.display = isHeaderEditable ? '' : 'none';
       document.getElementById('unsavedWarning').style.display = 'none';
 
       // 変更検知: ヘッダーフィールドの入力で未保存警告を表示
-      if (isEditable) {
+      if (isHeaderEditable) {
         var showUnsaved = function() { document.getElementById('unsavedWarning').style.display = ''; };
         ['editIssueDate', 'editDueDate', 'editNotes'].forEach(function(id) {
           var el = document.getElementById(id);
@@ -4690,7 +4692,9 @@
      * モーダルに明細・調整をセット
      */
     function renderEditModalDetail(invoice, isEditable) {
-      renderEditLines(invoice.lines || [], isEditable);
+      var isArchived = invoice._archived === true;
+      // アーカイブは明細編集不可
+      renderEditLines(invoice.lines || [], isEditable && !isArchived);
 
       var container = document.getElementById('adjustmentItemsContainer');
       container.innerHTML = '';
@@ -4698,8 +4702,9 @@
       adjustments.forEach(function(adj) {
         addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
       });
-      document.getElementById('adjustmentSection').style.display = isEditable ? '' : 'none';
-      document.getElementById('addAdjustmentBtn').disabled = adjustments.length >= 5;
+      // アーカイブは調整項目セクション表示（閲覧）だが追加は不可
+      document.getElementById('adjustmentSection').style.display = (isEditable || isArchived) ? '' : 'none';
+      document.getElementById('addAdjustmentBtn').disabled = isArchived || adjustments.length >= 5;
 
       updateTotalsPreview();
     }
