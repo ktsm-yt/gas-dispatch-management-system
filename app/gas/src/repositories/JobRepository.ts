@@ -4,30 +4,6 @@
  * T_Jobs テーブルのシートI/O処理
  */
 
-interface JobSearchQuery {
-  customer_id?: string;
-  work_date_from?: string;
-  work_date_to?: string;
-  date_from?: string;
-  date_to?: string;
-  status?: string;
-  time_slot?: string;
-  site_name?: string;
-  limit?: number;
-  sort_order?: 'asc' | 'desc';
-  includeArchive?: boolean;
-  job_ids?: string[];
-}
-
-interface JobUpdateResult {
-  success: boolean;
-  job?: Record<string, unknown>;
-  error?: string;
-  before?: Record<string, unknown>;
-  currentUpdatedAt?: string;
-  message?: string;
-}
-
 const JobRepository = {
   TABLE_NAME: 'T_Jobs',
   ID_COLUMN: 'job_id',
@@ -35,24 +11,18 @@ const JobRepository = {
   /**
    * IDで案件を取得（アーカイブDBフォールバック付き）
    */
-  findById: function(jobId: string): Record<string, unknown> | null {
+  findById: function(jobId: string): JobRecord | null {
     const record = getRecordById(this.TABLE_NAME, this.ID_COLUMN, jobId);
     if (record) {
-      return {
-        ...record,
-        work_date: record.work_date instanceof Date
-          ? Utilities.formatDate(record.work_date, 'Asia/Tokyo', 'yyyy-MM-dd')
-          : record.work_date,
-        start_time: this._normalizeTime(record.start_time)
-      };
+      return this._normalizeRecord(record);
     }
 
     return this._findInArchive(jobId);
   },
 
-  findByDate: function(date: string): Record<string, unknown>[] {
+  findByDate: function(date: string): JobRecord[] {
     const records = getAllRecords(this.TABLE_NAME);
-    const result: Record<string, unknown>[] = [];
+    const result: JobRecord[] = [];
 
     for (let i = 0; i < records.length; i++) {
       const r = records[i];
@@ -62,28 +32,24 @@ const JobRepository = {
       const workDateStr = this._normalizeDate(r.work_date);
       if (workDateStr !== date) continue;
 
-      result.push({
-        ...r,
-        work_date: workDateStr,
-        start_time: this._normalizeTime(r.start_time)
-      });
+      result.push(this._normalizeRecord(r));
     }
 
     return result;
   },
 
-  search: function(query: JobSearchQuery = {}): Record<string, unknown>[] {
+  search: function(query: JobSearchQuery = {}): JobRecord[] {
     let records = getAllRecords(this.TABLE_NAME);
 
     if (query.includeArchive) {
       const archiveRecords = this._getArchiveRecords(query);
-      records = records.concat(archiveRecords);
+      records = records.concat(archiveRecords as unknown as Record<string, unknown>[]);
     }
 
     const dateFrom = this._normalizeDate(query.work_date_from || query.date_from);
     const dateTo = this._normalizeDate(query.work_date_to || query.date_to);
 
-    const normalizedRecords: (Record<string, unknown> & { _sortDate: string })[] = [];
+    const normalizedRecords: (JobRecord & { _sortDate: string })[] = [];
     for (let i = 0; i < records.length; i++) {
       const r = records[i];
       if (r.is_deleted) continue;
@@ -101,9 +67,7 @@ const JobRepository = {
       }
 
       normalizedRecords.push({
-        ...r,
-        work_date: workDateStr,
-        start_time: this._normalizeTime(r.start_time),
+        ...this._normalizeRecord(r),
         _sortDate: workDateStr || ''
       });
     }
@@ -121,10 +85,10 @@ const JobRepository = {
       if (timeA !== timeB) {
         return (timeA - timeB) * sortMultiplier;
       }
-      return ((a.created_at as string) > (b.created_at as string) ? 1 : -1) * sortMultiplier;
+      return (a.created_at > b.created_at ? 1 : -1) * sortMultiplier;
     });
 
-    let result: Record<string, unknown>[] = normalizedRecords;
+    let result = normalizedRecords;
     if (query.limit && query.limit > 0) {
       result = normalizedRecords.slice(0, query.limit);
     }
@@ -135,7 +99,7 @@ const JobRepository = {
     });
   },
 
-  insert: function(job: Record<string, unknown>): Record<string, unknown> {
+  insert: function(job: Record<string, unknown>): JobRecord {
     const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
@@ -171,7 +135,7 @@ const JobRepository = {
 
     insertRecord(this.TABLE_NAME, newJob);
 
-    return newJob;
+    return this._normalizeRecord(newJob);
   },
 
   update: function(job: Record<string, unknown>, expectedUpdatedAt?: string): JobUpdateResult {
@@ -233,7 +197,7 @@ const JobRepository = {
 
     return {
       success: true,
-      job: updatedJob,
+      job: this._normalizeRecord(updatedJob),
       before: currentJob
     };
   },
@@ -252,9 +216,9 @@ const JobRepository = {
       return null;
     }
 
-    return jobs.reduce((max: string, job: Record<string, unknown>) => {
-      return (job.updated_at as string) > max ? (job.updated_at as string) : max;
-    }, jobs[0].updated_at as string);
+    return jobs.reduce((max: string, job: JobRecord) => {
+      return job.updated_at > max ? job.updated_at : max;
+    }, jobs[0].updated_at);
   },
 
   getStatsByTimeSlot: function(date: string): Record<string, { total: number; required: number }> {
@@ -307,8 +271,22 @@ const JobRepository = {
     return String(timeValue);
   },
 
-  _getArchiveRecords: function(query: JobSearchQuery): Record<string, unknown>[] {
-    const archiveRecords: Record<string, unknown>[] = [];
+  _normalizeRecord: function(record: Record<string, unknown>): JobRecord {
+    return {
+      ...record,
+      work_date: this._normalizeDate(record.work_date) || '',
+      start_time: this._normalizeTime(record.start_time),
+      required_count: Number(record.required_count) || 0,
+      pay_unit: (record.pay_unit as string) || '',
+      is_damaged: record.is_damaged === true || record.is_damaged === 'true',
+      is_uncollected: record.is_uncollected === true || record.is_uncollected === 'true',
+      is_claimed: record.is_claimed === true || record.is_claimed === 'true',
+      is_deleted: record.is_deleted === true || record.is_deleted === 'true',
+    } as JobRecord;
+  },
+
+  _getArchiveRecords: function(query: JobSearchQuery): JobRecord[] {
+    const archiveRecords: JobRecord[] = [];
 
     const targetYears = this._getTargetFiscalYears(query);
 
@@ -333,7 +311,7 @@ const JobRepository = {
           }
           record._archived = true;
           record._archiveFiscalYear = fiscalYear;
-          archiveRecords.push(record);
+          archiveRecords.push(this._normalizeRecord(record));
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -352,10 +330,8 @@ const JobRepository = {
       const from = query.work_date_from ? new Date(query.work_date_from) : new Date('2020-03-01');
       const to = query.work_date_to ? new Date(query.work_date_to) : new Date();
 
-      const fromMonth = from.getMonth() + 1;
-      const fromYear = fromMonth >= 3 ? from.getFullYear() : from.getFullYear() - 1;
-      const toMonth = to.getMonth() + 1;
-      const toYear = toMonth >= 3 ? to.getFullYear() : to.getFullYear() - 1;
+      const fromYear = getFiscalYear_(from);
+      const toYear = getFiscalYear_(to);
 
       for (let y = fromYear; y <= toYear && y < currentFiscalYear; y++) {
         years.push(y);
@@ -448,17 +424,13 @@ const JobRepository = {
       const newRow = objectToRow(headers, updatedJob);
       sheet.getRange(targetRowIndex + 2, 1, 1, headers.length).setValues([newRow]);
 
-      const result: Record<string, unknown> = {
-        ...updatedJob,
-        work_date: this._normalizeDate(updatedJob.work_date),
-        start_time: this._normalizeTime(updatedJob.start_time),
-        _archived: true,
-        _archiveFiscalYear: fiscalYear
-      };
+      const normalized = this._normalizeRecord(updatedJob);
+      normalized._archived = true;
+      normalized._archiveFiscalYear = fiscalYear;
 
       return {
         success: true,
-        job: result,
+        job: normalized,
         before: currentRecord
       };
 
@@ -469,7 +441,7 @@ const JobRepository = {
     }
   },
 
-  _findInArchive: function(jobId: string): Record<string, unknown> | null {
+  _findInArchive: function(jobId: string): JobRecord | null {
     const currentFiscalYear = ArchiveService.getCurrentFiscalYear();
 
     for (let y = currentFiscalYear - 1; y >= currentFiscalYear - 3 && y >= 2020; y--) {
@@ -498,11 +470,7 @@ const JobRepository = {
             record._archived = true;
             record._archiveFiscalYear = y;
 
-            return {
-              ...record,
-              work_date: this._normalizeDate(record.work_date),
-              start_time: this._normalizeTime(record.start_time)
-            };
+            return this._normalizeRecord(record);
           }
         }
       } catch (e: unknown) {
