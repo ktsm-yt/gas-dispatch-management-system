@@ -127,6 +127,65 @@ declare global {
     currentUpdatedAt?: string;
   }
 
+  // === Jobドメイン型 ===
+  interface JobRecord {
+    job_id: string;
+    customer_id: string;
+    site_name: string;
+    site_address: string;
+    work_date: string;
+    time_slot: TimeSlot;
+    start_time: string;
+    required_count: number;
+    pay_unit: string;
+    work_category: string;
+    work_detail: string;
+    work_detail_other_text: string;
+    supervisor_name: string;
+    order_number: string;
+    branch_office: string;
+    property_code: string;
+    construction_div: string;
+    status: JobStatus;
+    is_damaged: boolean;
+    is_uncollected: boolean;
+    is_claimed: boolean;
+    notes: string;
+    created_at: string;
+    created_by: string;
+    updated_at: string;
+    updated_by: string;
+    is_deleted: boolean;
+    deleted_at: string;
+    deleted_by: string;
+    _archived?: boolean;
+    _archiveFiscalYear?: number;
+  }
+
+  interface JobSearchQuery {
+    customer_id?: string;
+    work_date_from?: string;
+    work_date_to?: string;
+    date_from?: string;
+    date_to?: string;
+    status?: JobStatus | string;
+    time_slot?: TimeSlot | string;
+    site_name?: string;
+    limit?: number;
+    sort_order?: 'asc' | 'desc';
+    includeArchive?: boolean;
+    job_ids?: string[];
+  }
+
+  interface JobUpdateResult {
+    success: boolean;
+    job?: JobRecord;
+    error?: string;
+    before?: Record<string, unknown>;
+    currentUpdatedAt?: string;
+    message?: string;
+  }
+
   interface UnpaidStaffItem {
     staffId: string;
     staffName: string;

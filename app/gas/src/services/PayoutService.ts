@@ -47,8 +47,8 @@ interface BulkPayConfirmedResult {
 }
 
 interface BulkPayoutCache {
-  jobs: Record<string, unknown>[];
-  jobMap: Map<string, Record<string, unknown>>;
+  jobs: JobRecord[];
+  jobMap: Map<string, JobRecord>;
   jobIdSet: Set<string>;
   lastPayoutMap: Map<string, PayoutRecord>;
   assignmentsByStaff: Map<string, Record<string, unknown>[]>;
@@ -1627,7 +1627,7 @@ const PayoutService = {
       const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
 
       // スタッフごとの配置を集約
-      const subAssignments: { assignment: Record<string, unknown>; job: Record<string, unknown> }[] = [];
+      const subAssignments: { assignment: Record<string, unknown>; job: JobRecord }[] = [];
       for (const staff of staffList) {
         const staffAssignments = assignmentsByStaff.get(staff.staff_id as string) || [];
         for (const a of staffAssignments) {
