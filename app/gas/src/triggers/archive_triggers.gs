@@ -5,10 +5,10 @@
  *
  * スケジュール:
  * - 毎日 3:00 AM: dailyArchiveCheck() - 日付に応じて処理を分岐
- *   - 3/15: 事前通知メール送信
- *   - 4/1: 自動アーカイブ実行（延期設定がなければ）
+ *   - 5/15: 事前通知メール送信
+ *   - 6/1: 自動アーカイブ実行（延期設定がなければ）
  *
- * 猶予期間: 年度終了後12ヶ月（例: 2025年度は2027年4月にアーカイブ）
+ * 猶予期間: 年度終了後約16ヶ月（例: 2025年度は2026年6月にアーカイブ）
  *
  * トリガーの設定:
  * - GASエディタから setupArchiveTriggers() を実行
@@ -34,8 +34,8 @@ function setupArchiveTriggers() {
 
   Logger.log(`✓ アーカイブトリガー設定完了 (ID: ${trigger.getUniqueId()})`);
   Logger.log('  - 実行時刻: 毎日 3:00 AM (JST)');
-  Logger.log('  - 3/15: 事前通知メール送信');
-  Logger.log('  - 4/1: 自動アーカイブ実行（2年前の年度が対象）');
+  Logger.log('  - 5/15: 事前通知メール送信');
+  Logger.log('  - 6/1: 自動アーカイブ実行（前年度が対象）');
 
   Logger.log('\n=== セットアップ完了 ===');
 }
@@ -121,11 +121,11 @@ function dailyArchiveCheck() {
     }
   }
 
-  // 3月15日: 事前通知（4月1日のアーカイブを予告）
-  if (month === 3 && day === 15) {
+  // 5月15日: 事前通知（6月1日のアーカイブを予告）
+  if (month === 5 && day === 15) {
     Logger.log('事前通知を送信します');
     try {
-      // 4月1日にアーカイブされる年度 = 現在年度 - 1（3月時点では前年度扱い）
+      // 6月1日にアーカイブされる年度 = 前年度
       const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
       ArchiveNotificationService.sendArchiveWarning(targetFiscalYear);
       Logger.log(`✓ 事前通知送信完了: ${targetFiscalYear}年度`);
@@ -136,12 +136,12 @@ function dailyArchiveCheck() {
     return;
   }
 
-  // 4月1日: 自動アーカイブ実行（2年前の年度が対象）
-  if (month === 4 && day === 1) {
+  // 6月1日: 自動アーカイブ実行（前年度が対象）
+  if (month === 6 && day === 1) {
     Logger.log('自動アーカイブを実行します');
     try {
-      // 4月時点での2年前 = 12ヶ月の猶予期間を確保
-      const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 2;
+      // 前年度をアーカイブ（年度終了後約16ヶ月の猶予）
+      const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
       const result = ArchiveService.executeYearlyArchive(targetFiscalYear);
 
       if (result.success) {
@@ -156,16 +156,16 @@ function dailyArchiveCheck() {
       Logger.log(`✗ アーカイブエラー: ${error.message}`);
       logErr('Archive execution error', error);
       ArchiveNotificationService.sendArchiveError(
-        ArchiveService.getCurrentFiscalYear() - 2,
+        ArchiveService.getCurrentFiscalYear() - 1,
         error
       );
     }
     return;
   }
 
-  // 4月2日〜4月7日: 中断したアーカイブの継続
-  if (month === 4 && day >= 2 && day <= 7) {
-    const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 2;
+  // 6月2日〜6月7日: 中断したアーカイブの継続
+  if (month === 6 && day >= 2 && day <= 7) {
+    const targetFiscalYear = ArchiveService.getCurrentFiscalYear() - 1;
     const progress = ArchiveService.getProgress(targetFiscalYear);
 
     if (progress.currentStep > 0) {

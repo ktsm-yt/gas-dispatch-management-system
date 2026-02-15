@@ -276,6 +276,15 @@ function saveJob(job, expectedUpdatedAt, slots) {
       );
     }
 
+    // アーカイブフラグ補完（UIからは_archivedが送られないため、DBから取得して付与）
+    if (job.job_id && !job._archived) {
+      const current = JobRepository.findById(job.job_id);
+      if (current && current._archived) {
+        job._archived = current._archived;
+        job._archiveFiscalYear = current._archiveFiscalYear;
+      }
+    }
+
     // Service呼び出し（枠データも渡す）
     Logger.log('saveJob: job data = ' + JSON.stringify(job));
     Logger.log('saveJob: slots data = ' + JSON.stringify(slots));

@@ -258,13 +258,18 @@ const InvoiceService = {
    */
   save: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[] | null, expectedUpdatedAt: string): InvoiceSaveResult {
     try {
+      // アーカイブデータの明細変更はブロック
+      if (invoice._archived && lines && lines.length > 0) {
+        return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
+      }
+
       // 請求書を更新
       const invoiceResult = InvoiceRepository.update(invoice, expectedUpdatedAt);
       if (!invoiceResult.success) {
         return invoiceResult;
       }
 
-      const invoiceId = invoice.invoice_id as string;
+      const invoiceId = String(invoice.invoice_id ?? '');
 
       // 明細を更新（差分適用）
       if (lines && lines.length > 0) {
@@ -384,10 +389,12 @@ const InvoiceService = {
       return { success: false, error: 'INVALID_STATUS_TRANSITION' };
     }
 
-    const result = InvoiceRepository.update(
-      { invoice_id: invoiceId, status: normalizedStatus },
-      expectedUpdatedAt
-    );
+    const updateData: Record<string, unknown> = { invoice_id: invoiceId, status: normalizedStatus };
+    if (current._archived) {
+      updateData._archived = current._archived;
+      updateData._archiveFiscalYear = current._archiveFiscalYear;
+    }
+    const result = InvoiceRepository.update(updateData, expectedUpdatedAt);
 
     // 監査ログを記録（更新成功時のみ）
     if (result.success) {
@@ -943,8 +950,8 @@ const InvoiceService = {
 
     const jobs = JobRepository.search({
       customer_id: customerId,
-      work_date_from: period.startDate,
-      work_date_to: period.endDate
+      work_date_from: period.startDate ?? undefined,
+      work_date_to: period.endDate ?? undefined
     });
 
     if (jobs.length === 0) {
@@ -1267,7 +1274,7 @@ const InvoiceService = {
     const paymentMonthOffset = Number(customer.payment_month_offset) || 1;
 
     // 発行日
-    let issueDate: string;
+    let issueDate: string | undefined;
     if (closingDay === 31) {
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
@@ -1293,7 +1300,7 @@ const InvoiceService = {
 
     const dueDate = `${dueYear}-${String(dueMonth).padStart(2, '0')}-${String(dueDay).padStart(2, '0')}`;
 
-    return { issueDate, dueDate };
+    return { issueDate: issueDate ?? '', dueDate };
   },
 
   /**
@@ -1313,19 +1320,28 @@ const InvoiceService = {
         return { success: false, error: 'NOT_FOUND' };
       }
 
-      // 2. 編集可能なステータスかチェック
-      if (!isInvoiceEditable_(invoice.status as string)) {
+      // 2. 編集可能なステータスかチェック（アーカイブデータはヘッダー編集のみ許可）
+      if (invoice._archived) {
+        // アーカイブデータは明細変更をブロック、ヘッダーのみ許可
+        if (linesData && linesData.length > 0) {
+          return { success: false, error: 'アーカイブデータの明細編集はできません。ヘッダー情報のみ編集可能です。' };
+        }
+      } else if (!isInvoiceEditable_(invoice.status as string)) {
         return { success: false, error: 'CANNOT_EDIT_SENT_INVOICE' };
       }
 
-      // 3. 楽観的ロックチェック
+      // 4. 楽観的ロックチェック
       if (expectedUpdatedAt && invoice.updated_at !== expectedUpdatedAt) {
         return { success: false, error: 'CONFLICT_ERROR' };
       }
 
-      // 4. ヘッダー情報を更新
+      // 5. ヘッダー情報を更新
       const allowedHeaderFields = ['issue_date', 'due_date', 'notes'];
       const headerUpdate: Record<string, unknown> = { invoice_id: invoiceId };
+      if (invoice._archived) {
+        headerUpdate._archived = invoice._archived;
+        headerUpdate._archiveFiscalYear = invoice._archiveFiscalYear;
+      }
       for (const field of allowedHeaderFields) {
         if (headerData && headerData[field] !== undefined) {
           headerUpdate[field] = headerData[field];
