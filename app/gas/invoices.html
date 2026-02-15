@@ -1582,9 +1582,9 @@
           </div>
         </div>
         <div id="bulkGenerateProgress" style="display: none;">
-          <div class="progress-info">
-            <span id="bulkProgressText">処理を開始しています...</span>
-            <span id="bulkProgressPercent"></span>
+          <div class="progress-info" style="display: flex; justify-content: space-between; align-items: center;">
+            <span><span id="bulkProgressText">処理を開始しています...</span> <span id="bulkProgressPercent"></span></span>
+            <span id="bulkGenElapsedTime" style="font-size: 13px; color: #666;">経過: 0秒</span>
           </div>
           <div class="progress-bar-container">
             <div id="bulkProgressBar" class="progress-bar"></div>
@@ -3268,6 +3268,7 @@
     }
 
     function completeBulkGenerate() {
+      bulkGenTimer.stop();
       document.getElementById('bulkGenerateModal').classList.remove('active');
       // 生成が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
@@ -3279,6 +3280,7 @@
     }
 
     function closeBulkGenerateModal() {
+      bulkGenTimer.stop();
       // 実行中なら停止
       if (bulkState.isRunning) {
         bulkState.stopRequested = true;
@@ -3303,12 +3305,14 @@
 
     function bulkGenerateInvoices() {
       bulkState = { offset: 0, totalSuccess: 0, totalSkipped: 0, totalFailed: 0, stopRequested: false, isRunning: true };
+      bulkGenTimer.start();
       runBulkGenerate(0);
     }
 
     function bulkGenerateContinue() {
       bulkState.stopRequested = false;
       bulkState.isRunning = true;
+      bulkGenTimer.resume();
       runBulkGenerate(bulkState.offset);
     }
 
@@ -3350,6 +3354,7 @@
           if (result.ok) {
             showBulkGenerateResult(result.data);
           } else {
+            bulkGenTimer.stop();
             showToast(result.error?.message || '一括生成に失敗しました', 'error');
             document.getElementById('bulkGenerateBtn').style.display = '';
             document.getElementById('bulkStopBtn').style.display = 'none';
@@ -3358,6 +3363,7 @@
           }
         })
         .withFailureHandler(function (error) {
+          bulkGenTimer.stop();
           handleError(error);
           document.getElementById('bulkGenerateBtn').style.display = '';
           document.getElementById('bulkStopBtn').style.display = 'none';
@@ -3382,7 +3388,11 @@
 
       // Update progress bar
       const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
-      document.getElementById('bulkProgressText').textContent = '進捗: ' + processed + '/' + total + '社';
+      var progressLabel = '進捗: ' + processed + '/' + total + '社';
+      if (result.lastCustomerName) {
+        progressLabel += ' (直近: ' + result.lastCustomerName + ')';
+      }
+      document.getElementById('bulkProgressText').textContent = progressLabel;
       document.getElementById('bulkProgressPercent').textContent = percent + '%';
       document.getElementById('bulkProgressBar').className = 'progress-bar';
       document.getElementById('bulkProgressBar').style.width = percent + '%';
@@ -3399,6 +3409,7 @@
 
       // Handle stop request
       if (bulkState.stopRequested) {
+        bulkGenTimer.pause();
         bulkState.isRunning = false;
         document.getElementById('bulkStopBtn').style.display = 'none';
         document.getElementById('bulkAutoGenerateGroup').style.display = '';
@@ -3422,7 +3433,8 @@
             }
           }, 500);
         } else {
-          // 手動モード：ボタンを表示
+          // 手動モード：ボタンを表示、タイマー一時停止
+          bulkGenTimer.pause();
           document.getElementById('bulkProgressDetail').textContent = '次のバッチを待機中...';
           document.getElementById('bulkStopBtn').style.display = 'none';
           document.getElementById('bulkAutoGenerateGroup').style.display = '';
@@ -3432,6 +3444,7 @@
         }
       } else {
         // 完了
+        bulkGenTimer.stop();
         bulkState.isRunning = false;
         document.getElementById('bulkProgressDetail').textContent = '✓ 処理完了';
         document.getElementById('bulkStopBtn').style.display = 'none';
@@ -3766,9 +3779,6 @@
         bulkExportPollInterval = null;
       }
 
-      // 開始時刻をリセット
-      bulkExportStartTime = null;
-
       // モーダル幅をリセット
       document.getElementById('bulkExportModalContent').style.maxWidth = '420px';
 
@@ -3917,8 +3927,31 @@
       showToast('CSVをダウンロードしました', 'success');
     }
 
-    let bulkExportStartTime = null;  // 開始時刻
-    let bulkExportElapsedTimerId = null;  // 経過時間タイマーID
+    // 汎用経過時間タイマーファクトリ
+    function createElapsedTimer(elementId) {
+      let startTime = null;
+      let timerId = null;
+      let pausedElapsed = 0;
+
+      function update() {
+        var elapsed = pausedElapsed + (startTime ? Date.now() - startTime : 0);
+        var seconds = Math.floor(elapsed / 1000);
+        var m = Math.floor(seconds / 60);
+        var s = seconds % 60;
+        var el = document.getElementById(elementId);
+        if (el) el.textContent = '経過: ' + (m > 0 ? m + '分' + s + '秒' : s + '秒');
+      }
+
+      return {
+        start: function() { this.stop(); startTime = Date.now(); pausedElapsed = 0; update(); timerId = setInterval(update, 1000); },
+        pause: function() { if (startTime) pausedElapsed += Date.now() - startTime; startTime = null; if (timerId) { clearInterval(timerId); timerId = null; } },
+        resume: function() { startTime = Date.now(); timerId = setInterval(update, 1000); },
+        stop: function() { if (timerId) { clearInterval(timerId); timerId = null; } startTime = null; pausedElapsed = 0; }
+      };
+    }
+
+    var bulkExportTimer = createElapsedTimer('bulkExportElapsedTime');
+    var bulkGenTimer = createElapsedTimer('bulkGenElapsedTime');
 
     /**
      * 一括出力を開始
@@ -3933,9 +3966,6 @@
         exportMode: exportMode,
         enableUrlSharing: enableUrlSharing
       };
-
-      // 開始時刻を記録
-      bulkExportStartTime = Date.now();
 
       // 蓄積結果をリセット（タイムアウト分割対応）
       bulkExportAccumulatedResults = [];
@@ -3964,34 +3994,9 @@
       executeBulkExportRequest();
     }
 
-    /**
-     * 経過時間の表示を更新（1秒ごと）
-     */
-    function startElapsedTimeUpdate() {
-      stopElapsedTimeUpdate();
-      bulkExportElapsedTimerId = setInterval(updateElapsedTimeDisplay, 1000);
-    }
-
-    function stopElapsedTimeUpdate() {
-      if (bulkExportElapsedTimerId) {
-        clearInterval(bulkExportElapsedTimerId);
-        bulkExportElapsedTimerId = null;
-      }
-    }
-
-    function updateElapsedTimeDisplay() {
-      if (!bulkExportStartTime) return;
-      const elapsed = Math.floor((Date.now() - bulkExportStartTime) / 1000);
-      const minutes = Math.floor(elapsed / 60);
-      const seconds = elapsed % 60;
-      const timeStr = minutes > 0
-        ? minutes + '分' + seconds + '秒'
-        : seconds + '秒';
-      const elapsedEl = document.getElementById('bulkExportElapsedTime');
-      if (elapsedEl) {
-        elapsedEl.textContent = '経過: ' + timeStr;
-      }
-    }
+    // 既存互換ラッパー（一括出力用）
+    function startElapsedTimeUpdate() { bulkExportTimer.start(); }
+    function stopElapsedTimeUpdate() { bulkExportTimer.stop(); }
 
     let bulkExportInFlight = false;  // リクエスト実行中フラグ
 
