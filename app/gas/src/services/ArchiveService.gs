@@ -545,8 +545,20 @@ const ArchiveService = {
       // 有効な英語シート名ならスキップ
       if (validSheetNames.has(name)) continue;
 
-      // それ以外（旧日本語名等）でデータが英語シートと重複していれば削除候補
-      sheetsToDelete.push(sheet);
+      // 旧日本語シート名のマッピング（対応する英語シートが存在する場合のみ削除）
+      const japaneseToEnglish = {
+        '顧客': 'Customers', 'スタッフ': 'Staff', '外注先': 'Subcontractors',
+        '交通費': 'TransportFees', '自社情報': 'Company', '案件': 'Jobs',
+        '案件枠': 'JobSlots', '配置': 'Assignments', '請求': 'Invoices',
+        '請求明細': 'InvoiceLines', '支払': 'Payouts', '月次統計': 'MonthlyStats',
+        '入金記録': 'Payments', 'ログ': 'AuditLog'
+      };
+      const englishName = japaneseToEnglish[name];
+      if (englishName && archiveDb.getSheetByName(englishName)) {
+        // 対応する英語シートが存在するので旧日本語シートは削除候補
+        sheetsToDelete.push(sheet);
+      }
+      // 不明なシート名は削除しない（運用上のタブ等を保護）
     }
 
     // 全シート削除は不可なのでチェック
