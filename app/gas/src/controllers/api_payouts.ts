@@ -20,9 +20,13 @@ function getStaffForPayouts(): unknown {
       return {
         staff_id: s.staff_id as string,
         name: s.name as string,
+        name_kana: (s.name_kana as string) || '',
         payment_frequency: (s.payment_frequency as string) || 'monthly'
       };
     });
+
+    // 50音順（カナ）でソート
+    data.sort(function(a, b) { return (a.name_kana || a.name).localeCompare(b.name_kana || b.name, 'ja'); });
 
     return buildSuccessResponse({ staff: data }, requestId);
 
