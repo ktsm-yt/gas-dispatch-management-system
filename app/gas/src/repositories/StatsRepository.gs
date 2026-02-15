@@ -5,7 +5,7 @@
  * P2-6: 売上分析ダッシュボード用の月次統計データ管理
  *
  * スキーマ: year（西暦年）+ month で管理
- * 会計年度は必要に応じて動的に計算: month >= 3 ? year : year - 1（2月決算）
+ * 会計年度はマスタの決算月に基づいて動的に計算
  */
 
 const StatsRepository = {
@@ -42,14 +42,16 @@ const StatsRepository = {
 
   /**
    * 会計年度で統計を検索
-   * 日本の会計年度（4月〜翌年3月）に対応
-   * @param {number} fiscalYear - 会計年度（例: 2025 = 2025年4月〜2026年3月）
-   * @returns {Object[]} 統計配列（月順: 4,5,...,12,1,2,3）
+   * 会計年度で統計を検索（決算月はマスタから動的取得）
+   * @param {number} fiscalYear - 会計年度
+   * @returns {Object[]} 統計配列
    */
   findByFiscalYear: function(fiscalYear) {
-    // 会計年度は3月〜翌年2月（2月決算）
-    // fiscalYear=2025 → 2025年3月〜2026年2月
-    return this.findByRange(fiscalYear, 3, fiscalYear + 1, 2);
+    const fiscalMonthEnd = _getFiscalMonthEndFromMaster_();
+    const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
+    const endMonth = fiscalMonthEnd;
+    const endYear = fiscalMonthEnd === 12 ? fiscalYear : fiscalYear + 1;
+    return this.findByRange(fiscalYear, startMonth, endYear, endMonth);
   },
 
   /**

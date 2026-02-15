@@ -62,7 +62,7 @@ const TABLE_DEFINITIONS = {
       'company_id', 'company_name', 'postal_code', 'address', 'phone', 'fax',
       'invoice_registration_number', 'bank_name', 'bank_branch',
       'bank_account_type', 'bank_account_number', 'bank_account_name',
-      'logo_file_id', 'stamp_file_id', 'updated_at'
+      'logo_file_id', 'stamp_file_id', 'fiscal_month_end', 'updated_at'
     ]
   },
   // トランザクションテーブル
@@ -407,6 +407,41 @@ function migrateAtagamiToFormat1() {
   if (migratedCount === 0) {
     Logger.log('atamagami形式の顧客は見つかりませんでした');
   }
+}
+
+/**
+ * M_Companyシートに fiscal_month_end カラムを追加（マイグレーション）
+ * GASエディタから実行: migrateAddFiscalMonthEndColumn()
+ */
+function migrateAddFiscalMonthEndColumn() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('Company');
+
+  if (!sheet) {
+    Logger.log('✗ Companyシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('fiscal_month_end')) {
+    Logger.log('✓ fiscal_month_end カラムは既に存在します');
+    return;
+  }
+
+  // stamp_file_id の位置を探す（その直後に挿入）
+  const stampIndex = headers.indexOf('stamp_file_id');
+  if (stampIndex === -1) {
+    Logger.log('✗ stamp_file_id カラムが見つかりません');
+    return;
+  }
+
+  const insertIndex = stampIndex + 2; // 1-based, stamp_file_id の次
+  sheet.insertColumnAfter(stampIndex + 1);
+  sheet.getRange(1, insertIndex).setValue('fiscal_month_end');
+
+  Logger.log('✓ fiscal_month_end カラムを列 ' + insertIndex + ' に追加しました');
+  Logger.log('決算月を設定するには、会社情報画面から変更してください（デフォルト: 2月決算）');
 }
 
 /**
