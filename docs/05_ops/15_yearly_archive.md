@@ -2,7 +2,7 @@
 
 ## 15.1 概要
 
-本システムは3月決算（4月〜翌3月を1年度）を前提とし、年度単位でデータをアーカイブする。
+本システムは2月決算（3月〜翌2月を1年度）を前提とし、年度単位でデータをアーカイブする。
 アーカイブは**自動実行**され、事前に通知メールが送信される。
 
 ---
@@ -86,10 +86,11 @@ function setupArchiveTrigger() {
 📋 6月1日に前年度のデータ整理が行われます
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-6月1日以降、前年度（2024年4月〜2025年3月）のデータは
-「過去データ」として別の場所に移動され、編集できなくなります。
+6月1日以降、前年度（2024年3月〜2025年2月）のデータは
+「過去データ」として別の場所に移動されます。
 
 それまでに、前年度の請求書発行・給与処理を完了してください。
+（アーカイブ後も編集は可能ですが、警告が表示されます）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️ 未処理の項目があります ※処理が必要です
@@ -108,9 +109,9 @@ function setupArchiveTrigger() {
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-■ 6月1日以降でも過去データは確認できます
+■ 6月1日以降でも過去データは確認・編集できます
   請求管理・給与管理画面で「過去年度を表示」にチェックを入れると
-  前年度のデータを確認できます（確認のみ、変更はできません）
+  前年度のデータを確認・編集できます（編集時は警告が表示されます）
 
 ■ ご不明な点があれば
   開発担当までご連絡ください
@@ -127,8 +128,9 @@ function setupArchiveTrigger() {
 📋 6月1日に前年度のデータ整理が行われます
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-6月1日以降、前年度（2024年4月〜2025年3月）のデータは
-「過去データ」として別の場所に移動され、編集できなくなります。
+6月1日以降、前年度（2024年3月〜2025年2月）のデータは
+「過去データ」として別の場所に移動されます。
+（アーカイブ後も編集は可能ですが、警告が表示されます）
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ 未処理の項目はありません
@@ -137,9 +139,9 @@ function setupArchiveTrigger() {
 前年度の請求書・給与処理はすべて完了しています。
 特に対応は必要ありません。
 
-■ 6月1日以降でも過去データは確認できます
+■ 6月1日以降でも過去データは確認・編集できます
   請求管理・給与管理画面で「過去年度を表示」にチェックを入れると
-  前年度のデータを確認できます（確認のみ、変更はできません）
+  前年度のデータを確認・編集できます（編集時は警告が表示されます）
 ```
 
 ### 実装
@@ -155,7 +157,7 @@ function sendArchiveWarningEmail() {
   let body = `6月1日に前年度（${previousFiscalYear}年度）データが自動アーカイブされます。\n\n`;
 
   body += '■ アーカイブ対象\n';
-  body += `・${previousFiscalYear}年4月1日〜${previousFiscalYear + 1}年3月31日の案件・配置データ\n`;
+  body += `・${previousFiscalYear}年3月1日〜${previousFiscalYear + 1}年2月末日の案件・配置データ\n`;
   body += '・上記期間の請求・給与データ\n\n';
 
   body += '■ 未処理項目チェック\n';
@@ -188,9 +190,9 @@ function sendArchiveWarningEmail() {
     body += '✅ 未処理項目はありません。\n\n';
   }
 
-  body += '■ アーカイブ後の参照\n';
+  body += '■ アーカイブ後の参照・編集\n';
   body += 'アーカイブ後も、請求管理・給与管理画面から「過去年度を表示」で\n';
-  body += '前年度データを参照できます（参照のみ、編集不可）。\n';
+  body += '前年度データを参照・編集できます（編集時は警告が表示されます）。\n';
 
   // 管理者メールアドレスに送信
   const recipients = config.ADMIN_EMAILS; // ['{{ADMIN_EMAIL}}']
@@ -265,8 +267,9 @@ function executeYearlyArchive() {
     }
 
     const previousFiscalYear = getCurrentFiscalYear() - 1;
-    const archiveStartDate = previousFiscalYear + '-04-01';
-    const archiveEndDate = (previousFiscalYear + 1) + '-03-31';
+    const archiveStartDate = previousFiscalYear + '-03-01';
+    const lastDay = new Date(previousFiscalYear + 1, 2, 0).getDate(); // 2月末日（閏年対応）
+    const archiveEndDate = (previousFiscalYear + 1) + '-02-' + String(lastDay).padStart(2, '0');
 
     Logger.log('Starting archive for fiscal year ' + previousFiscalYear);
 
@@ -413,8 +416,8 @@ function getCurrentFiscalYear() {
   const today = new Date();
   const month = today.getMonth() + 1;
   const year = today.getFullYear();
-  // 4月〜3月を1年度とする
-  return month >= 4 ? year : year - 1;
+  // 3月〜翌2月を1年度とする（2月決算）
+  return month >= 3 ? year : year - 1;
 }
 
 /**
@@ -422,11 +425,11 @@ function getCurrentFiscalYear() {
  * アーカイブ前に呼び出し、統計データの整合性を保証
  */
 function finalizeYearlyStats(fiscalYear) {
-  // 4月〜翌3月の12ヶ月分を確定
-  for (let m = 4; m <= 12; m++) {
+  // 3月〜翌2月の12ヶ月分を確定（2月決算）
+  for (let m = 3; m <= 12; m++) {
     StatsService.finalizeMonthStats(fiscalYear, m);
   }
-  for (let m = 1; m <= 3; m++) {
+  for (let m = 1; m <= 2; m++) {
     StatsService.finalizeMonthStats(fiscalYear + 1, m);
   }
 
@@ -478,25 +481,34 @@ function getInvoices(customerId, yearMonth, options = {}) {
 }
 ```
 
-### 編集制限
+### 編集時の警告表示
 
-アーカイブデータは参照のみ。編集・削除を試みた場合はエラー。
+アーカイブデータを編集する場合、UIに警告バナーが表示される。
+編集内容はアーカイブDB（別スプレッドシート）に反映される。
 
 ```javascript
+// バックエンド: アーカイブデータの更新はアーカイブDBに書き込み
 function saveInvoice(invoice, expectedUpdatedAt) {
-  // アーカイブデータの編集を防止
-  if (invoice._archived) {
-    return {
-      ok: false,
-      error: {
-        code: 'ARCHIVED_DATA',
-        message: '過去年度のデータは編集できません。'
-      }
-    };
+  // アーカイブデータの場合はアーカイブDBに書き込み
+  if (invoice._archived && invoice._archiveFiscalYear) {
+    return InvoiceRepository._updateArchiveRecord(invoice, expectedUpdatedAt);
   }
 
   // 通常の保存処理
   // ...
+}
+```
+
+```javascript
+// フロントエンド: アーカイブデータ編集時に警告バナーを表示
+function openEditModal(invoiceId) {
+  // ...データ読み込み後...
+  if (invoice._archived) {
+    showArchiveWarningBanner(
+      `このデータは${invoice._archiveFiscalYear}年度のアーカイブです。` +
+      '編集内容はアーカイブDBに反映されます。'
+    );
+  }
 }
 ```
 
@@ -595,8 +607,8 @@ const CONFIG = {
 
 ```
 1. アーカイブ対象年度（前年度）の12ヶ月分を再計算
-   ├── 4月〜12月（前年度）
-   └── 1月〜3月（当年）
+   ├── 3月〜12月（前年度）
+   └── 1月〜2月（当年）
    ↓
 2. 各月の is_final = true に設定
    ↓

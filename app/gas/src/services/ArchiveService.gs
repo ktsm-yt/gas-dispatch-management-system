@@ -506,17 +506,75 @@ const ArchiveService = {
         }
       }
 
-      // デフォルトシートを削除
-      const defaultSheet = archiveDb.getSheetByName('Sheet1') || archiveDb.getSheetByName('シート1');
-      if (defaultSheet && archiveDb.getSheets().length > 1) {
-        archiveDb.deleteSheet(defaultSheet);
-      }
-
       props.setProperty(propKey, archiveDbId);
       Logger.log(`アーカイブDB作成: ${archiveDbId}`);
     }
 
+    // 不要シートのクリーンアップ（毎回実行）
+    this._cleanupArchiveSheets(archiveDbId);
+
     return archiveDbId;
+  },
+
+  /**
+   * アーカイブDBの不要シートを削除
+   * - デフォルトシート（Sheet1/シート1）
+   * - 旧日本語シート名（英語シートが存在する場合のみ）
+   */
+  _cleanupArchiveSheets(archiveDbId) {
+    const archiveDb = SpreadsheetApp.openById(archiveDbId);
+    const sheets = archiveDb.getSheets();
+
+    // 最低1シートは残す必要がある
+    if (sheets.length <= 1) return;
+
+    // 英語シート名の一覧（TABLE_SHEET_MAPの値）
+    const validSheetNames = new Set(Object.values(TABLE_SHEET_MAP));
+
+    // 削除候補: デフォルトシート + 英語シートが存在する場合の旧日本語シート
+    const sheetsToDelete = [];
+    for (const sheet of sheets) {
+      const name = sheet.getName();
+
+      // デフォルトシートは常に削除候補
+      if (name === 'Sheet1' || name === 'シート1') {
+        sheetsToDelete.push(sheet);
+        continue;
+      }
+
+      // 有効な英語シート名ならスキップ
+      if (validSheetNames.has(name)) continue;
+
+      // 旧日本語シート名のマッピング（対応する英語シートが存在する場合のみ削除）
+      const japaneseToEnglish = {
+        '顧客': 'Customers', 'スタッフ': 'Staff', '外注先': 'Subcontractors',
+        '交通費': 'TransportFees', '自社情報': 'Company', '案件': 'Jobs',
+        '案件枠': 'JobSlots', '配置': 'Assignments', '請求': 'Invoices',
+        '請求明細': 'InvoiceLines', '支払': 'Payouts', '月次統計': 'MonthlyStats',
+        '入金記録': 'Payments', 'ログ': 'AuditLog'
+      };
+      const englishName = japaneseToEnglish[name];
+      if (englishName && archiveDb.getSheetByName(englishName)) {
+        // 対応する英語シートが存在するので旧日本語シートは削除候補
+        sheetsToDelete.push(sheet);
+      }
+      // 不明なシート名は削除しない（運用上のタブ等を保護）
+    }
+
+    // 全シート削除は不可なのでチェック
+    const remaining = sheets.length - sheetsToDelete.length;
+    if (remaining < 1) {
+      sheetsToDelete.pop(); // 最後の1つは残す
+    }
+
+    for (const sheet of sheetsToDelete) {
+      try {
+        Logger.log(`不要シート削除: ${sheet.getName()}`);
+        archiveDb.deleteSheet(sheet);
+      } catch (e) {
+        Logger.log(`シート削除エラー: ${sheet.getName()} - ${e.message}`);
+      }
+    }
   },
 
   /**

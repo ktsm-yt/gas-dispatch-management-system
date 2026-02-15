@@ -273,11 +273,16 @@ const PayoutService = {
 
     const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
 
-    const result = PayoutRepository.update({
+    const updateData: Partial<PayoutRecord> & Record<string, unknown> & { payout_id: string } = {
       payout_id: payoutId,
-      status: 'paid',
+      status: 'paid' as PayoutStatus,
       paid_date: paidDate
-    }, options.expectedUpdatedAt);
+    };
+    if (current._archived) {
+      updateData._archived = current._archived;
+      updateData._archiveFiscalYear = current._archiveFiscalYear;
+    }
+    const result = PayoutRepository.update(updateData, options.expectedUpdatedAt);
 
     if (result.success) {
       // 監査ログ
@@ -774,6 +779,20 @@ const PayoutService = {
         success: false,
         error: 'INVALID_STATUS'
       };
+    }
+
+    // アーカイブフラグ補完
+    if (current._archived) {
+      const updateData: Partial<PayoutRecord> & Record<string, unknown> & { payout_id: string } = {
+        payout_id: payoutId,
+        status: status,
+        _archived: current._archived,
+        _archiveFiscalYear: current._archiveFiscalYear
+      };
+      if (status === 'paid') {
+        updateData.paid_date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+      }
+      return PayoutRepository.update(updateData, expectedUpdatedAt);
     }
 
     return PayoutRepository.updateStatus(payoutId, status, expectedUpdatedAt);
