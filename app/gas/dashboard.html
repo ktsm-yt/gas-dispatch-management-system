@@ -1424,14 +1424,7 @@
 
     // ========== C: BroadcastChannel クロスタブ同期 ==========
     function initBroadcastChannel() {
-      if (typeof BroadcastChannel === 'undefined') return; // 非対応ブラウザはA+Bにフォールバック
-
-      try {
-        dashboardChannel = new BroadcastChannel('dashboard_sync');
-        dashboardChannel.onmessage = handleBroadcastMessage;
-      } catch (e) {
-        console.warn('[BC] init failed:', e);
-      }
+      dashboardChannel = BroadcastSync.init('dashboard_sync', handleBroadcastMessage);
     }
 
     function handleBroadcastMessage(event) {
@@ -1463,19 +1456,14 @@
 
     function broadcastDashboardUpdate() {
       if (!dashboardChannel || !dashboardData) return;
-      try {
-        dashboardChannel.postMessage({
-          type: 'DASHBOARD_UPDATED',
-          data: { date: dashboardData.date, dashboardData, maxUpdatedAt: lastMaxUpdatedAt }
-        });
-      } catch (e) { console.warn('[BC] broadcast failed:', e); }
+      BroadcastSync.broadcast(dashboardChannel, 'DASHBOARD_UPDATED', {
+        date: dashboardData.date, dashboardData: dashboardData, maxUpdatedAt: lastMaxUpdatedAt
+      });
 
       // 請求タブにも配置変更を通知
-      try {
-        var invoiceChannel = new BroadcastChannel('invoice_sync');
-        invoiceChannel.postMessage({ type: 'ASSIGNMENT_CHANGED' });
-        invoiceChannel.close();
-      } catch (e) { /* BroadcastChannel非対応時はサイレント */ }
+      var invoiceChannel = BroadcastSync.init('invoice_sync', function() {});
+      BroadcastSync.broadcast(invoiceChannel, 'ASSIGNMENT_CHANGED', {});
+      if (invoiceChannel) invoiceChannel.close();
     }
 
     // Polling for updates
