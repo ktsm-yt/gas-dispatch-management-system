@@ -31,6 +31,7 @@ function initInvoiceSheets() {
     'excel_file_id',
     'sheet_file_id',
     'status',
+    'has_assignment_changes',
     'notes',
     'created_at',
     'updated_at',
@@ -74,6 +75,44 @@ function initInvoiceSheets() {
   results.forEach(r => Logger.log(`${r.sheetName}: ${r.status}`));
 
   return results;
+}
+
+/**
+ * T_Invoices に has_assignment_changes カラムを追加（マイグレーション）
+ * GASエディタから実行: migrateAddHasAssignmentChanges()
+ *
+ * 既存シートにカラムが無い場合、status の次に追加する。
+ * 既存データは空欄 = false 扱い（後方互換）。
+ */
+function migrateAddHasAssignmentChanges() {
+  const db = getDb();
+  const sheet = db.getSheetByName('Invoices');
+  if (!sheet) {
+    Logger.log('Invoices sheet not found');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.includes('has_assignment_changes')) {
+    Logger.log('has_assignment_changes column already exists — skipping');
+    return;
+  }
+
+  // status カラムの次に挿入
+  const statusIdx = headers.indexOf('status');
+  const insertCol = (statusIdx >= 0 ? statusIdx + 1 : headers.length) + 1; // 1-indexed, after status
+
+  sheet.insertColumnAfter(insertCol - 1);
+  sheet.getRange(1, insertCol).setValue('has_assignment_changes');
+
+  // ヘッダー行のスタイルをコピー
+  const prevCell = sheet.getRange(1, insertCol - 1);
+  const newCell = sheet.getRange(1, insertCol);
+  newCell.setBackground(prevCell.getBackground());
+  newCell.setFontColor(prevCell.getFontColor());
+  newCell.setFontWeight(prevCell.getFontWeight());
+
+  Logger.log('✓ Added has_assignment_changes column after status (col ' + insertCol + ')');
 }
 
 /**
