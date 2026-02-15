@@ -165,35 +165,28 @@ const StatsService = {
         }
         break;
 
-      case 'thisYear':
-        // 会計年度（3月〜翌2月、2月決算）
-        if (currentMonth >= 3) {
-          startYear = currentYear;
-          startMonth = 3;
-          endYear = currentYear;
-          endMonth = currentMonth;
-        } else {
-          startYear = currentYear - 1;
-          startMonth = 3;
-          endYear = currentYear;
-          endMonth = currentMonth;
-        }
+      case 'thisYear': {
+        const thisFy = getFiscalYear_(new Date(currentYear, currentMonth - 1, 1));
+        const thisRange = getFiscalYearRange_(thisFy);
+        const thisStart = parseDate_(thisRange.startDate);
+        startYear = thisStart.getFullYear();
+        startMonth = thisStart.getMonth() + 1;
+        endYear = currentYear;
+        endMonth = currentMonth;
         break;
+      }
 
-      case 'lastYear':
-        // 前会計年度（2月決算）
-        if (currentMonth >= 3) {
-          startYear = currentYear - 1;
-          startMonth = 3;
-          endYear = currentYear;
-          endMonth = 2;
-        } else {
-          startYear = currentYear - 2;
-          startMonth = 3;
-          endYear = currentYear - 1;
-          endMonth = 2;
-        }
+      case 'lastYear': {
+        const lastFy = getFiscalYear_(new Date(currentYear, currentMonth - 1, 1)) - 1;
+        const lastRange = getFiscalYearRange_(lastFy);
+        const lastStart = parseDate_(lastRange.startDate);
+        const lastEnd = parseDate_(lastRange.endDate);
+        startYear = lastStart.getFullYear();
+        startMonth = lastStart.getMonth() + 1;
+        endYear = lastEnd.getFullYear();
+        endMonth = lastEnd.getMonth() + 1;
         break;
+      }
 
       case 'custom':
         startYear = options.startYear;
@@ -279,7 +272,7 @@ const StatsService = {
     // アーカイブDBからも取得（期間に含まれる会計年度を特定）
     const fiscalYears = new Set();
     for (const entry of monthly) {
-      fiscalYears.add(entry.month >= 3 ? entry.year : entry.year - 1);
+      fiscalYears.add(getFiscalYear_(new Date(entry.year, entry.month - 1, 1)));
     }
     for (const fy of fiscalYears) {
       const archiveDbId = ArchiveService.getArchiveDbId(fy);

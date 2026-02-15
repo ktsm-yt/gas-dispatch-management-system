@@ -330,10 +330,8 @@ const JobRepository = {
       const from = query.work_date_from ? new Date(query.work_date_from) : new Date('2020-03-01');
       const to = query.work_date_to ? new Date(query.work_date_to) : new Date();
 
-      const fromMonth = from.getMonth() + 1;
-      const fromYear = fromMonth >= 3 ? from.getFullYear() : from.getFullYear() - 1;
-      const toMonth = to.getMonth() + 1;
-      const toYear = toMonth >= 3 ? to.getFullYear() : to.getFullYear() - 1;
+      const fromYear = getFiscalYear_(from);
+      const toYear = getFiscalYear_(to);
 
       for (let y = fromYear; y <= toYear && y < currentFiscalYear; y++) {
         years.push(y);

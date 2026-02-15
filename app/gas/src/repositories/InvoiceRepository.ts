@@ -665,7 +665,7 @@ const InvoiceRepository = {
 
     const targetYears: number[] = [];
     if (month) {
-      const fiscalYear = month >= 3 ? year : year - 1;
+      const fiscalYear = getFiscalYearByEndMonth_(new Date(year, month - 1, 1), _getFiscalMonthEndFromMaster_());
       targetYears.push(fiscalYear);
     } else {
       targetYears.push(year);
