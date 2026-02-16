@@ -31,6 +31,9 @@ interface FindByPeriodOptions {
   customer_id?: string;
 }
 
+// 異常入力で無限ループしないための月スキャン上限（20年分）
+const ARCHIVE_FISCAL_YEAR_SCAN_MAX_MONTHS = 240;
+
 const InvoiceRepository = {
   TABLE_NAME: 'T_Invoices',
   ID_COLUMN: 'invoice_id',
@@ -76,6 +79,8 @@ const InvoiceRepository = {
     if (options.includeArchive) {
       const archiveRecords = this._getArchiveRecords(year, month);
       records = records.concat(archiveRecords);
+      // 現行DB優先で重複IDを除去（search と同じ安全策）
+      records = this._dedupeByInvoiceId(records);
     }
 
     records = records.filter(r =>
@@ -688,6 +693,7 @@ const InvoiceRepository = {
 
   _getArchiveRecordsForQuery: function(query: InvoiceSearchQuery): Record<string, unknown>[] {
     const targetYears = this._getArchiveFiscalYearsForQuery(query);
+    // includeArchive=true でも対象年月が未指定なら全アーカイブ走査は行わない
     if (targetYears.length === 0) return [];
     return this._getArchiveRecordsByFiscalYears(targetYears);
   },
@@ -720,7 +726,7 @@ const InvoiceRepository = {
         let currentMonth = fromYm.month;
 
         // 月単位で会計年度を算出（異常ループ回避のガード付き）
-        for (let i = 0; i < 240; i++) {
+        for (let i = 0; i < ARCHIVE_FISCAL_YEAR_SCAN_MAX_MONTHS; i++) {
           const currentKey = currentYear * 100 + currentMonth;
           if (currentKey > toKey) break;
 
