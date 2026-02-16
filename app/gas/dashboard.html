@@ -1064,6 +1064,11 @@
         const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '';
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
+        const safeJobId = escapeHtml(job.job_id || '');
+        const safeCustomerName = escapeHtml(job.customer_name || '-');
+        const safeSiteName = escapeHtml(job.site_name || '');
+        const safeSiteAddress = escapeHtml(job.site_address || '');
+        const safeStartTime = escapeHtml(job.start_time || '');
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
           .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
@@ -1072,13 +1077,13 @@
           .join('');
 
         return `
-          <div class="${cardClass}" data-job-id="${job.job_id}" onclick="openJobAssignmentsForDashboard('${job.job_id}')">
+          <div class="${cardClass}" data-job-id="${safeJobId}" onclick="openJobAssignmentsForDashboard(this.dataset.jobId)">
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
-              <span class="customer-name">${job.customer_name || '-'}</span>
+              <span class="customer-name">${safeCustomerName}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
-              <button class="card-edit-btn" onclick="event.stopPropagation(); openJobModalForDashboard('${job.job_id}')" title="案件編集">
+              <button class="card-edit-btn" data-job-id="${safeJobId}" onclick="event.stopPropagation(); openJobModalForDashboard(this.dataset.jobId)" title="案件編集">
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -1086,9 +1091,9 @@
               </button>
             </div>
             <div class="job-card-footer">
-              <span class="site-name">${job.site_name}</span>
-              <span class="site-address">${job.site_address || ''}</span>
-              <span class="start-time">${job.start_time || ''}</span>
+              <span class="site-name">${safeSiteName}</span>
+              <span class="site-address">${safeSiteAddress}</span>
+              <span class="start-time">${safeStartTime}</span>
             </div>
             ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}
           </div>
