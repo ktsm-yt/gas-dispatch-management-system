@@ -1407,7 +1407,7 @@ function renderStaffRowHtml(staff, ctx) {
     <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
       <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
       <div class="staff-list-info">
-        <span class="staff-list-name">${escapeHtml(s.name)}${leaderBadge}${conflictBadge}</span>
+        <span class="staff-list-name">${escapeHtml(s.name)}${s.nickname ? ' (' + escapeHtml(s.nickname) + ')' : ''}${leaderBadge}${conflictBadge}</span>
         <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
         ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
         ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
@@ -2014,12 +2014,12 @@ function generateLineTemplate() {
 
   // リーダーを特定
   const leaders = activeAssignments.filter(a => a.is_leader);
-  const leaderNames = leaders.map(a => a.staff_name || '名前未設定').join('、');
+  const leaderNames = leaders.map(a => a.staff_nickname || a.staff_name || '名前未設定').join('、');
   const leaderWithPhone = leaders.length > 0
     ? leaders.map(a => {
         const staff = getStaffById(a.staff_id);
         const phone = staff?.phone || a.staff_phone || '';
-        const name = a.staff_name || '名前未設定';
+        const name = a.staff_nickname || a.staff_name || '名前未設定';
         return phone ? `${name}（${phone}）` : name;
       }).join('、')
     : '';
@@ -2041,7 +2041,7 @@ function generateLineTemplate() {
     if (staff?.staff_type === 'subcontract') {
       roleGroups[role].subCount++;
     } else {
-      roleGroups[role].names.push(a.staff_name || '名前未設定');
+      roleGroups[role].names.push(a.staff_nickname || a.staff_name || '名前未設定');
     }
   });
 
@@ -2074,7 +2074,7 @@ function generateLineTemplate() {
   const memberStr = memberLines.join(memberPadding);
 
   // ヘッダー用メンバー名リスト（シンプル）
-  const headerMemberNames = activeAssignments.map(a => a.staff_name || '名前未設定').join('、');
+  const headerMemberNames = activeAssignments.map(a => a.staff_nickname || a.staff_name || '名前未設定').join('、');
 
   // 単価区分（配置の invoice_unit から判定、混在する場合は「混在」）
   // Note: pay_unit = invoice_unit で同期されているため、どちらを使っても同じ
