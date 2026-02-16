@@ -996,6 +996,73 @@ function getPayoutExportFolderUrl(): unknown {
   }
 }
 
+// ========== Payout Detail Export API ==========
+
+/**
+ * 支払明細の同名ファイル存在チェック
+ * @param payoutId - 支払ID
+ * @returns APIレスポンス
+ */
+function checkPayoutDetailExportFile(payoutId: string): unknown {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, '権限がありません', {}, requestId);
+    }
+
+    if (!payoutId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
+    }
+
+    const result = PayoutDetailExportService.checkExistingFile(payoutId);
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error: unknown) {
+    logErr('checkPayoutDetailExportFile', error, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
+  }
+}
+
+/**
+ * 支払明細をExcel出力
+ * @param payoutId - 支払ID
+ * @param options - オプション { action: 'overwrite'|'rename' }
+ * @returns APIレスポンス
+ */
+function exportPayoutDetail(payoutId: string, options: { action?: string } = {}): unknown {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, '権限がありません', {}, requestId);
+    }
+
+    if (!payoutId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutId is required', {}, requestId);
+    }
+
+    const result = PayoutDetailExportService.exportPayoutDetail(payoutId, options);
+
+    console.log('PAYOUT_DETAIL_EXPORT', JSON.stringify({
+      payout_id: payoutId,
+      file_id: result.fileId,
+      assignment_count: result.assignmentCount,
+      action: options.action || 'default'
+    }));
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error: unknown) {
+    logErr('exportPayoutDetail', error, requestId);
+    const msg = error instanceof Error ? error.message : String(error);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
+  }
+}
+
 // ========== Subcontractor Payout APIs (P2-8) ==========
 
 /**
