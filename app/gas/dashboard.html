@@ -1180,7 +1180,8 @@
 
       // 影響するカラムだけ再描画
       slotsToRender.forEach(slot => {
-        const jobs = dashboardData.jobs.filter(j => j.time_slot === slot);
+        const allJobs = dashboardData.jobs.filter(j => j.time_slot === slot);
+        const jobs = filterByStatus(allJobs);
         renderCards(slot, jobs);
 
         // カラムヘッダーの統計更新
