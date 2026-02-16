@@ -367,6 +367,7 @@ function getAvailableStaff(options = {}) {
       staff_id: s.staff_id,
       name: s.name,
       name_kana: s.name_kana,
+      nickname: s.nickname || '',
       phone: s.phone,
       ng_customers: s.ng_customers,
       skills: s.skills,
@@ -714,7 +715,8 @@ function getDashboardAssignments(date) {
       const staff = staffCache[a.staff_id];
       return {
         ...a,
-        staff_name: staff ? staff.name : '（削除済み）'
+        staff_name: staff ? staff.name : '（削除済み）',
+        staff_nickname: staff ? (staff.nickname || '') : ''
       };
     });
 
