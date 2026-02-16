@@ -87,19 +87,22 @@ const PayoutDetailExportService = {
       // 4. ヘッダー情報書き込み
       this._writeHeader(sheet, payout, staffName);
 
-      // 5. 明細行書き込み
-      this._writeDetailRows(sheet, assignmentsWithJobs);
+      // 5. 明細行書き込み（Row 5〜）
+      const dataStartRow = 5; // Row 1: title, Row 2: company, Row 3: blank, Row 4: col headers, Row 5+: data
+      this._writeDetailRows(sheet, assignmentsWithJobs, dataStartRow);
 
       // 6. 合計行書き込み
-      const dataStartRow = 3; // Row 1: title, Row 2: column headers, Row 3+: data
       this._writeSummaryRow(sheet, payout, assignmentsWithJobs.length, dataStartRow);
 
-      // 7. xlsx変換
+      // 7. 罫線・列幅の書式設定
+      this._applyTableFormatting(sheet, assignmentsWithJobs.length, dataStartRow);
+
+      // 8. xlsx変換
       SpreadsheetApp.flush();
       const xlsxBlob = PayoutExportService._exportToXlsx(ssId);
 
-      // 8. Drive保存
-      const folder = PayoutExportService._getOutputFolder();
+      // 9. Drive保存（支払明細サブフォルダ）
+      const folder = this._getOutputFolder();
       const addTimestamp = options.action === 'rename';
       const fileName = this._generateFileName(staffName, periodYm, { addTimestamp });
       xlsxBlob.setName(fileName);
@@ -141,7 +144,7 @@ const PayoutDetailExportService = {
 
       const staffName = (payout as PayoutRecord & { target_name?: string }).target_name || '不明';
       const periodYm = payout.period_end ? payout.period_end.substring(0, 7) : '';
-      const folder = PayoutExportService._getOutputFolder();
+      const folder = this._getOutputFolder();
       const fileName = this._generateFileName(staffName, periodYm);
 
       const files = folder.getFilesByName(fileName);
@@ -205,7 +208,11 @@ const PayoutDetailExportService = {
   },
 
   /**
-   * ヘッダー情報書き込み（Row 1）
+   * ヘッダー情報書き込み（Row 1〜4）
+   * Row 1: 「支払明細書」(左) / 「作業年月 YYYY年 M月度」(中央) / 氏名(右)
+   * Row 2: 自社情報（会社名・住所・TEL）
+   * Row 3: 空行
+   * Row 4: 列ヘッダー（緑背景・白文字）
    */
   _writeHeader: function(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -214,16 +221,49 @@ const PayoutDetailExportService = {
   ): void {
     const periodYm = payout.period_end ? payout.period_end.substring(0, 7) : '';
     const [year, month] = periodYm.split('-');
-    const title = (year && month)
-      ? year + '年' + parseInt(month, 10) + '月 支払明細書 - ' + staffName
-      : '支払明細書 - ' + staffName;
 
-    sheet.getRange('A1').setValue(title);
-    sheet.getRange('A1').setFontWeight('bold').setFontSize(14);
+    // Row 1: タイトル行
+    sheet.getRange('A1').setValue('支払明細書');
+    sheet.getRange('A1').setFontWeight('bold').setFontSize(16);
+
+    if (year && month) {
+      sheet.getRange('D1').setValue('作業年月  ' + year + '年 ' + parseInt(month, 10) + '月度');
+      sheet.getRange('D1').setFontSize(11);
+    }
+
+    sheet.getRange('K1').setValue(staffName);
+    sheet.getRange('K1').setFontWeight('bold').setFontSize(12)
+      .setHorizontalAlignment('right');
+    sheet.getRange('K1:L1').merge();
+
+    // Row 2: テンプレートの既存ヘッダーをクリアして自社情報に置換
+    sheet.getRange(2, 1, 1, 12).clear();
+    const company = MasterCache.getCompany() || {};
+    const companyName = company.company_name || company['会社名'] || '';
+    const address = company.address || company['住所'] || '';
+    const phone = company.phone || company['電話番号'] || '';
+
+    const companyLine = companyName
+      + (address ? '  ' + address : '')
+      + (phone ? '  TEL: ' + phone : '');
+
+    if (companyLine) {
+      sheet.getRange('A2').setValue(companyLine);
+      sheet.getRange('A2').setFontSize(9).setFontColor('#555555');
+    }
+
+    // Row 4: 列ヘッダー
+    const headers = ['作業日', '案件名', '開始時間', '数量', '単位', '単価', '合計', '延長', '時間外', '残業', '移動', '源泉徴収税'];
+    sheet.getRange(4, 1, 1, 12).setValues([headers]);
+    const headerRange = sheet.getRange(4, 1, 1, 12);
+    headerRange.setBackground('#4CAF50');
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setFontWeight('bold');
+    headerRange.setHorizontalAlignment('center');
   },
 
   /**
-   * 明細行書き込み（Row 3〜）
+   * 明細行書き込み
    */
   _writeDetailRows: function(
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
@@ -234,11 +274,10 @@ const PayoutDetailExportService = {
       pay_unit: string;
       wage_rate: number;
       transport_amount: number;
-    }>
+    }>,
+    dataStartRow: number
   ): void {
     if (assignments.length === 0) return;
-
-    const dataStartRow = 3;
 
     const rows = assignments.map(function(a) {
       // work_date: "2026-02-15" → "2/15"
@@ -303,18 +342,103 @@ const PayoutDetailExportService = {
     summaryRange.setFontWeight('bold');
     summaryRange.setBackground('#EDF2F7');
 
-    // 金額書式
-    [6, 7, 11, 12].forEach(function(col) {
-      sheet.getRange(summaryRow, col, 1, 1).setNumberFormat('#,##0');
+    // 金額書式（¥付き） + フォントサイズ強調
+    [7, 11, 12].forEach(function(col) {
+      sheet.getRange(summaryRow, col, 1, 1).setNumberFormat('¥#,##0');
     });
+    sheet.getRange(summaryRow, 7, 1, 1).setFontSize(12); // 合計金額を強調
 
-    // 差引支給額行
-    const netRow = summaryRow + 1;
+    // お支払金額行（1行空けて表示）
+    const netRow = summaryRow + 2;
     const netAmount = (payout.total_amount || 0);
-    sheet.getRange(netRow, 1).setValue('差引支給額');
+
+    // ラベル（E-F結合で切れ防止）
+    sheet.getRange(netRow, 5, 1, 2).merge();
+    sheet.getRange(netRow, 5).setValue('お支払金額');
+    sheet.getRange(netRow, 5).setFontSize(12).setFontWeight('bold')
+      .setHorizontalAlignment('right');
+
+    // 金額（G-H結合で幅確保 + 太枠囲い）
+    sheet.getRange(netRow, 7, 1, 2).merge();
     sheet.getRange(netRow, 7).setValue(netAmount);
-    sheet.getRange(netRow, 1, 1, 12).setFontWeight('bold');
-    sheet.getRange(netRow, 7, 1, 1).setNumberFormat('#,##0');
+    sheet.getRange(netRow, 7).setNumberFormat('¥#,##0')
+      .setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
+    // merge済みG-H全体に太枠（1,2で結合範囲を指定）
+    sheet.getRange(netRow, 7, 1, 2).setBorder(
+      true, true, true, true,
+      null, null,
+      '#333333', SpreadsheetApp.BorderStyle.SOLID_MEDIUM
+    );
+  },
+
+  /**
+   * テーブル全体に罫線・列幅を適用
+   */
+  _applyTableFormatting: function(
+    sheet: GoogleAppsScript.Spreadsheet.Sheet,
+    rowCount: number,
+    dataStartRow: number
+  ): void {
+    const headerRow = dataStartRow - 1; // 列ヘッダー行（Row 4）
+    const summaryRow = dataStartRow + rowCount + 1;
+    const borderStyle = SpreadsheetApp.BorderStyle.SOLID;
+    const borderMedium = SpreadsheetApp.BorderStyle.SOLID_MEDIUM;
+
+    // ヘッダー + データ行に罫線（Row 4 〜 Row 4+rowCount）
+    const dataRange = sheet.getRange(headerRow, 1, 1 + rowCount, 12);
+    dataRange.setBorder(
+      true, true, true, true,
+      true, true,
+      '#999999', borderStyle
+    );
+    dataRange.setBorder(
+      true, true, true, true,
+      null, null,
+      '#333333', borderMedium
+    );
+
+    // 合計行に罫線（独立した太枠）
+    const summaryRange = sheet.getRange(summaryRow, 1, 1, 12);
+    summaryRange.setBorder(
+      true, true, true, true,
+      true, null,
+      '#333333', borderMedium
+    );
+
+    // 列幅設定
+    sheet.setColumnWidth(1, 70);   // A: 作業日
+    sheet.setColumnWidth(2, 250);  // B: 案件名
+    sheet.setColumnWidth(3, 70);   // C: 開始時間
+    sheet.setColumnWidth(4, 45);   // D: 数量
+    sheet.setColumnWidth(5, 50);   // E: 単位
+    sheet.setColumnWidth(6, 80);   // F: 単価
+    sheet.setColumnWidth(7, 90);   // G: 合計
+    sheet.setColumnWidth(8, 50);   // H: 延長
+    sheet.setColumnWidth(9, 55);   // I: 時間外
+    sheet.setColumnWidth(10, 50);  // J: 残業
+    sheet.setColumnWidth(11, 70);  // K: 移動
+    sheet.setColumnWidth(12, 85);  // L: 源泉徴収税
+
+    // データ行の数値列を右寄せ
+    if (rowCount > 0) {
+      [4, 6, 7, 11].forEach(function(col) {
+        sheet.getRange(dataStartRow, col, rowCount, 1).setHorizontalAlignment('right');
+      });
+    }
+  },
+
+  SUBFOLDER_NAME: '支払明細',
+
+  /**
+   * 支払明細専用の出力フォルダを取得（なければ自動作成）
+   */
+  _getOutputFolder: function(): GoogleAppsScript.Drive.Folder {
+    const parentFolder = PayoutExportService._getOutputFolder();
+    const folders = parentFolder.getFoldersByName(this.SUBFOLDER_NAME);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    return parentFolder.createFolder(this.SUBFOLDER_NAME);
   },
 
   /**
