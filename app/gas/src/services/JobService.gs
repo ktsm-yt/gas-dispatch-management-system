@@ -127,6 +127,7 @@ const JobService = {
           job_id: a.job_id,
           staff_id: a.staff_id,
           staff_name: staff ? staff.name : '（削除済み）',
+          staff_nickname: staff ? (staff.nickname || '') : '',
           staff_phone: staff ? staff.phone : '',
           slot_id: a.slot_id || null,
           pay_unit: a.pay_unit || '',

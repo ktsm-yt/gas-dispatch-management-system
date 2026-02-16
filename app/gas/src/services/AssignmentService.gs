@@ -28,6 +28,7 @@ const AssignmentService = {
       return {
         ...a,
         staff_name: staff ? staff.name : '（削除済み）',
+        staff_nickname: staff ? (staff.nickname || '') : '',
         staff_phone: staff ? staff.phone : ''
       };
     });
@@ -262,6 +263,7 @@ const AssignmentService = {
         return {
           ...a,
           staff_name: staff ? staff.name : '（削除済み）',
+          staff_nickname: staff ? (staff.nickname || '') : '',
           staff_phone: staff ? staff.phone : ''
         };
       });
@@ -325,6 +327,7 @@ const AssignmentService = {
     return {
       ...assignment,
       staff_name: staff ? staff.name : '（削除済み）',
+      staff_nickname: staff ? (staff.nickname || '') : '',
       staff_phone: staff ? staff.phone : ''
     };
   },
