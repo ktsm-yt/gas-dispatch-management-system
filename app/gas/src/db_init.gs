@@ -37,6 +37,7 @@ const TABLE_DEFINITIONS = {
       'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
       'special_training', 'skill_training', 'licenses', 'hire_date', 'foreigner_type',
       'payment_frequency',  // P2-3: 支払いサイクル (daily/weekly/biweekly/monthly)
+      'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name',
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -1302,4 +1303,81 @@ function migrateAddInvoiceAdjustments() {
   }
 
   Logger.log('\n=== 調整項目マイグレーション完了 ===');
+}
+
+/**
+ * M_Staffシートに口座情報カラムを追加（マイグレーション）
+ * 列ごとに存在確認する冪等設計
+ * GASエディタから実行: migrateAddStaffBankFields()
+ */
+function migrateAddStaffBankFields() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('Staff');
+
+  if (!sheet) {
+    Logger.log('✗ Staffシートが見つかりません');
+    return;
+  }
+
+  Logger.log('=== スタッフ口座情報カラム追加マイグレーション ===\n');
+
+  const bankFields = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name'];
+  let addedCount = 0;
+
+  // notes の前に挿入（foreigner_type → notes の間）
+  // payment_frequency が存在すればその後、なければ foreigner_type の後をアンカーにする
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  let anchorField = 'payment_frequency';
+  let anchorIndex = headers.indexOf(anchorField);
+
+  if (anchorIndex === -1) {
+    anchorField = 'foreigner_type';
+    anchorIndex = headers.indexOf(anchorField);
+  }
+
+  if (anchorIndex === -1) {
+    Logger.log('✗ アンカーカラム（payment_frequency / foreigner_type）が見つかりません');
+    return;
+  }
+
+  Logger.log(`アンカー: ${anchorField} (位置: ${anchorIndex + 1})`);
+
+  // 各フィールドを個別に確認・追加（冪等）
+  for (let i = 0; i < bankFields.length; i++) {
+    const field = bankFields[i];
+    // 毎回ヘッダーを再取得（列挿入で位置がずれるため）
+    const currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    if (currentHeaders.includes(field)) {
+      Logger.log(`✓ ${field} カラムは既に存在します`);
+      continue;
+    }
+
+    // アンカーの現在位置を再取得（挿入でずれるため）
+    const currentAnchorIndex = currentHeaders.indexOf(anchorField);
+    // 既に追加済みのbank_*フィールド数をカウント
+    const alreadyAdded = bankFields.slice(0, i).filter(f => currentHeaders.includes(f)).length;
+    const insertPosition = currentAnchorIndex + 1 + alreadyAdded + 1;
+
+    sheet.insertColumnAfter(insertPosition - 1);
+    sheet.getRange(1, insertPosition).setValue(field);
+    Logger.log(`✓ カラム追加: ${field} (位置: ${insertPosition})`);
+    addedCount++;
+  }
+
+  if (addedCount > 0) {
+    const newLastCol = sheet.getLastColumn();
+    sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+  }
+
+  Logger.log(`\n=== マイグレーション完了 ===`);
+  Logger.log(`${addedCount}個のカラムを追加しました（スタッフ口座情報用）`);
 }

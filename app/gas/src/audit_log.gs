@@ -9,6 +9,53 @@
 /**
  * 操作アクションの定義
  */
+/**
+ * 機密フィールド定義（監査ログ記録時にマスクする）
+ * - partial: 末尾4桁のみ表示（例: ****5678）
+ * - full: 完全マスク（例: ***）
+ */
+const SENSITIVE_FIELDS = {
+  partial: ['bank_account_number', 'pension_number'],
+  full: [
+    'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half',
+    'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
+    'unit_price_half', 'unit_price_fullday', 'unit_price_night'
+  ]
+};
+
+/**
+ * 機密データをマスクする（監査ログ用）
+ * ディープコピーで元データを非変異に保つ
+ * @param {Object} data - マスク対象データ
+ * @returns {Object} マスク済みデータ（元データは変更されない）
+ */
+function maskSensitiveData(data) {
+  if (!data || typeof data !== 'object') return data;
+
+  var masked = JSON.parse(JSON.stringify(data));
+
+  for (var i = 0; i < SENSITIVE_FIELDS.partial.length; i++) {
+    var field = SENSITIVE_FIELDS.partial[i];
+    if (masked[field] != null && masked[field] !== '') {
+      var str = String(masked[field]);
+      if (str.length > 4) {
+        masked[field] = '****' + str.slice(-4);
+      } else {
+        masked[field] = '****';
+      }
+    }
+  }
+
+  for (var j = 0; j < SENSITIVE_FIELDS.full.length; j++) {
+    var field = SENSITIVE_FIELDS.full[j];
+    if (masked[field] != null && masked[field] !== '') {
+      masked[field] = '***';
+    }
+  }
+
+  return masked;
+}
+
 const AUDIT_ACTIONS = {
   CREATE: 'CREATE',
   UPDATE: 'UPDATE',
@@ -56,8 +103,8 @@ function logToAudit(action, tableName, recordId, beforeData, afterData) {
       action,
       tableName,
       recordId,
-      beforeData ? JSON.stringify(beforeData) : '',
-      afterData ? JSON.stringify(afterData) : ''
+      beforeData ? JSON.stringify(maskSensitiveData(beforeData)) : '',
+      afterData ? JSON.stringify(maskSensitiveData(afterData)) : ''
     ];
 
     sheet.appendRow(logEntry);
@@ -106,8 +153,8 @@ function logBatch(logs) {
         log.action,
         log.table_name,
         log.record_id,
-        log.before ? JSON.stringify(log.before) : '',
-        log.after ? JSON.stringify(log.after) : ''
+        log.before ? JSON.stringify(maskSensitiveData(log.before)) : '',
+        log.after ? JSON.stringify(maskSensitiveData(log.after)) : ''
       ]);
 
       results.push({
