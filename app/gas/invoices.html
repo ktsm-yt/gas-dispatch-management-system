@@ -1135,7 +1135,7 @@
         <option value="unpaid">未回収</option>
         <option value="paid">入金済</option>
       </select>
-      <label class="archive-toggle" title="アーカイブされた過去年度データも検索対象に含めます（年指定・年月範囲指定）">
+      <label class="archive-toggle" title="アーカイブされた過去年度データも検索対象に含めます（過去年を選ぶと自動ON）">
         <input type="checkbox" id="includeArchive">
         <span>過去年度を含む</span>
       </label>
@@ -1726,12 +1726,42 @@
       return saved ? JSON.parse(saved) : null;
     }
 
+    function getNormalizedFilterYear() {
+      const yearEl = document.getElementById('filterYear');
+      const raw = String(yearEl.value || '').trim();
+      const currentYear = String(new Date().getFullYear());
+      if (!raw || isNaN(Number(raw))) {
+        yearEl.value = currentYear;
+        return currentYear;
+      }
+      return raw;
+    }
+
+    function isPastBillingYear(yearValue) {
+      const year = Number(yearValue);
+      if (isNaN(year)) return false;
+      return year < new Date().getFullYear();
+    }
+
+    function syncIncludeArchiveByFilterYear() {
+      const year = getNormalizedFilterYear();
+      const includeArchiveEl = document.getElementById('includeArchive');
+      const isPastYear = isPastBillingYear(year);
+
+      if (isPastYear) {
+        includeArchiveEl.checked = true;
+        includeArchiveEl.disabled = true;
+      } else {
+        includeArchiveEl.disabled = false;
+      }
+    }
+
     // Restore filter state (called after customers are loaded)
     function restoreFilterState(options = {}) {
       const filter = loadFilterState();
       if (!filter) return false;
 
-      // 空文字（「全て」）も正しく復元するため !== undefined で判定
+      // 旧キャッシュ互換のため undefined 判定で復元
       if (filter.year !== undefined) document.getElementById('filterYear').value = filter.year;
       if (filter.month !== undefined) document.getElementById('filterMonth').value = filter.month;
       if (!options.skipCustomer && filter.customer !== undefined) {
@@ -1749,6 +1779,7 @@
         }
       }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
+      syncIncludeArchiveByFilterYear();
 
       return true;
     }
@@ -2065,13 +2096,6 @@
       const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear', 'billingExportYear'];
       yearSelects.forEach(id => {
         const select = document.getElementById(id);
-        // filterYearのみ「全て」オプションを追加（全期間検索用）
-        if (id === 'filterYear') {
-          const allOption = document.createElement('option');
-          allOption.value = '';
-          allOption.textContent = '全て';
-          select.appendChild(allOption);
-        }
         for (let y = currentYear - 2; y <= currentYear + 1; y++) {
           const option = document.createElement('option');
           option.value = y;
@@ -2100,6 +2124,10 @@
           select.appendChild(option);
         }
       });
+
+      const filterYearEl = document.getElementById('filterYear');
+      filterYearEl.addEventListener('change', syncIncludeArchiveByFilterYear);
+      syncIncludeArchiveByFilterYear();
     }
 
     function loadCustomers() {
@@ -2351,27 +2379,17 @@
     function loadInvoices(skipCache = false) {
       clearSelection();
 
-      const year = document.getElementById('filterYear').value;
+      const year = getNormalizedFilterYear();
       const month = document.getElementById('filterMonth').value;
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
 
       const query = {};
 
-      // 年が「全て」の場合 → 全期間表示（フィルタなし）
-      if (!year) {
-        // billing_ym_from/to を設定しない = 全件
-        // ただし顧客指定がない場合は警告
-        if (!customerId) {
-          showToast('全期間表示は顧客を選択してください', 'warning');
-          return;
-        }
-      }
-      // 顧客指定あり → 期間制限なし（既存動作維持）
-      else if (customerId) {
+      // 顧客指定あり → 顧客＋対象年（必要なら月）で検索
+      if (customerId) {
         query.customer_id = customerId;
-        // 年/月指定があれば適用
-        if (year) query.billing_year = parseInt(year);
+        query.billing_year = parseInt(year);
         if (month) query.billing_month = parseInt(month);
       }
       // 月指定あり → 単一月表示
@@ -2401,8 +2419,8 @@
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
 
-      // 過去年度を含む
-      const includeArchive = document.getElementById('includeArchive').checked;
+      // 過去年度指定は自動でアーカイブを含む
+      const includeArchive = isPastBillingYear(year) || document.getElementById('includeArchive').checked;
       if (includeArchive) query.includeArchive = true;
 
       // Save filter state
