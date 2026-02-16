@@ -172,33 +172,6 @@
       width: 100%;
     }
 
-    .archive-toggle {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      color: var(--text-secondary);
-      cursor: pointer;
-      padding: 6px 10px;
-      border-radius: var(--radius-sm);
-      transition: background 0.2s;
-      margin-left: 8px;
-    }
-
-    .archive-toggle:hover {
-      background: var(--bg-secondary);
-    }
-
-    .archive-toggle input[type="checkbox"] {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-    }
-
-    .archive-toggle span {
-      white-space: nowrap;
-    }
-
     .toolbar-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -1135,10 +1108,6 @@
         <option value="unpaid">未回収</option>
         <option value="paid">入金済</option>
       </select>
-      <label class="archive-toggle" title="アーカイブされた過去年度データも検索対象に含めます（過去年を選ぶと自動ON）">
-        <input type="checkbox" id="includeArchive">
-        <span>過去年度を含む</span>
-      </label>
       <button class="btn btn-secondary" onclick="loadInvoices()">検索</button>
     </div>
   </div>
@@ -1727,33 +1696,15 @@
     }
 
     function getNormalizedFilterYear() {
-      const yearEl = document.getElementById('filterYear');
-      const raw = String(yearEl.value || '').trim();
+      const raw = String(document.getElementById('filterYear').value || '').trim();
       const currentYear = String(new Date().getFullYear());
-      if (!raw || isNaN(Number(raw))) {
-        yearEl.value = currentYear;
-        return currentYear;
-      }
-      return raw;
+      return (!raw || isNaN(Number(raw))) ? currentYear : raw;
     }
 
     function isPastBillingYear(yearValue) {
       const year = Number(yearValue);
       if (isNaN(year)) return false;
       return year < new Date().getFullYear();
-    }
-
-    function syncIncludeArchiveByFilterYear() {
-      const year = getNormalizedFilterYear();
-      const includeArchiveEl = document.getElementById('includeArchive');
-      const isPastYear = isPastBillingYear(year);
-
-      if (isPastYear) {
-        includeArchiveEl.checked = true;
-        includeArchiveEl.disabled = true;
-      } else {
-        includeArchiveEl.disabled = false;
-      }
     }
 
     // Restore filter state (called after customers are loaded)
@@ -1779,7 +1730,6 @@
         }
       }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
-      syncIncludeArchiveByFilterYear();
 
       return true;
     }
@@ -2092,11 +2042,11 @@
       const currentYear = now.getFullYear();
       const currentMonth = now.getMonth() + 1;
 
-      // 年の選択肢を生成（過去2年〜来年）
+      // 年の選択肢を生成（過去3年〜来年）
       const yearSelects = ['filterYear', 'generateYear', 'bulkGenerateYear', 'billingExportYear'];
       yearSelects.forEach(id => {
         const select = document.getElementById(id);
-        for (let y = currentYear - 2; y <= currentYear + 1; y++) {
+        for (let y = currentYear - 3; y <= currentYear + 1; y++) {
           const option = document.createElement('option');
           option.value = y;
           option.textContent = y;
@@ -2125,9 +2075,6 @@
         }
       });
 
-      const filterYearEl = document.getElementById('filterYear');
-      filterYearEl.addEventListener('change', syncIncludeArchiveByFilterYear);
-      syncIncludeArchiveByFilterYear();
     }
 
     function loadCustomers() {
@@ -2380,6 +2327,11 @@
       clearSelection();
 
       const year = getNormalizedFilterYear();
+      const yearEl = document.getElementById('filterYear');
+      // 不正値が残っていた場合のみ、検索実行時に明示的に補正する
+      if (String(yearEl.value || '').trim() !== year) {
+        yearEl.value = year;
+      }
       const month = document.getElementById('filterMonth').value;
       const customerId = document.getElementById('filterCustomer').value;
       const status = document.getElementById('filterStatus').value;
@@ -2419,9 +2371,8 @@
       if (customerId) query.customer_id = customerId;
       if (status) query.status = status;
 
-      // 過去年度指定は自動でアーカイブを含む
-      const includeArchive = isPastBillingYear(year) || document.getElementById('includeArchive').checked;
-      if (includeArchive) query.includeArchive = true;
+      // 過去年度指定は自動でアーカイブを含む（内部判定のみ）
+      if (isPastBillingYear(year)) query.includeArchive = true;
 
       // Save filter state
       saveFilterState();
