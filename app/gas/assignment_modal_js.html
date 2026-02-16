@@ -428,6 +428,13 @@ const WORK_DETAIL_LABELS = {
   'other': 'その他'
 };
 
+const SKILL_BADGE_CLASS_MAP = {
+  '鳶': 'skill-tobi',
+  '揚げ': 'skill-age',
+  '鳶揚げ': 'skill-tobiage',
+  'ボード': 'skill-board'
+};
+
 /**
  * 作業内容の表示ラベルを取得
  * @param {string} workDetail - work_detail値
@@ -1403,6 +1410,13 @@ function renderStaffRowHtml(staff, ctx) {
   // チェックボックスの状態（選択中のみチェック、配置済みは背景色で表示）
   const checkboxChecked = isSelected;
 
+  const skillBadges = skills.map(sk => {
+    const skillClass = SKILL_BADGE_CLASS_MAP[sk] || 'skill-tobi';
+    const matchClass = sk === workCategory ? 'match' : '';
+    const className = ['skill-badge', skillClass, matchClass].filter(Boolean).join(' ');
+    return `<span class="${className}">${escapeHtml(sk)}</span>`;
+  }).join('');
+
   return `
     <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
       <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
@@ -1410,7 +1424,7 @@ function renderStaffRowHtml(staff, ctx) {
         <span class="staff-list-name">${escapeHtml(s.name)}${s.nickname ? ' (' + escapeHtml(s.nickname) + ')' : ''}${leaderBadge}${conflictBadge}</span>
         <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
         ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
-        ${skills.map(sk => `<span class="skill-badge ${sk === workCategory ? 'match' : ''}">${escapeHtml(sk)}</span>`).join('')}
+        ${skillBadges}
       </div>
       <div class="staff-list-actions">
         ${deleteBtn}${undoBtn}
