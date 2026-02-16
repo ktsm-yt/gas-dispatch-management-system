@@ -243,19 +243,20 @@
     /* 5-column layout for unit prices */
     .form-row-5 {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 6px;
+      grid-template-columns: repeat(5, minmax(88px, 120px));
+      gap: var(--spacing-sm);
       margin-bottom: var(--spacing-md);
+      justify-content: start;
     }
 
     .form-row-5 .form-group input {
-      padding: 4px 6px;
-      font-size: 11px;
+      width: 100%;
+      font-size: 13px;
       text-align: right;
     }
 
     .form-row-5 .form-group label {
-      font-size: 10px;
+      font-size: 12px;
     }
 
     /* Stats bar */
