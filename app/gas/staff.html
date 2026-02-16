@@ -848,6 +848,39 @@
             </div>
           </div>
 
+          <!-- 口座情報 -->
+          <div class="form-section">
+            <div class="form-section-title">口座情報</div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="bank-name">銀行名</label>
+                <input type="text" id="bank-name" name="bank_name" placeholder="〇〇銀行">
+              </div>
+              <div class="form-group">
+                <label for="bank-branch">支店名</label>
+                <input type="text" id="bank-branch" name="bank_branch" placeholder="〇〇支店">
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label for="bank-account-type">口座種別</label>
+                <select id="bank-account-type" name="bank_account_type">
+                  <option value="">選択してください</option>
+                  <option value="普通">普通</option>
+                  <option value="当座">当座</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="bank-account-number">口座番号</label>
+                <input type="text" id="bank-account-number" name="bank_account_number" placeholder="1234567" maxlength="8">
+              </div>
+              <div class="form-group">
+                <label for="bank-account-name">口座名義</label>
+                <input type="text" id="bank-account-name" name="bank_account_name" placeholder="ヤマダ タロウ">
+              </div>
+            </div>
+          </div>
+
           <!-- その他 -->
           <div class="form-section">
             <div class="form-section-title">その他</div>
@@ -1455,6 +1488,11 @@
       document.getElementById('pension-number').value = staff.pension_number || '';
       document.getElementById('kensetsu-kyosai').value = staff.kensetsu_kyosai || '';
       document.getElementById('chusho-kyosai').value = staff.chusho_kyosai || '';
+      document.getElementById('bank-name').value = staff.bank_name || '';
+      document.getElementById('bank-branch').value = staff.bank_branch || '';
+      document.getElementById('bank-account-type').value = staff.bank_account_type || '';
+      document.getElementById('bank-account-number').value = staff.bank_account_number || '';
+      document.getElementById('bank-account-name').value = staff.bank_account_name || '';
       document.getElementById('foreigner-type').value = staff.foreigner_type || '';
       document.getElementById('ng-customers').value = staff.ng_customers || '';
       document.getElementById('notes').value = staff.notes || '';
@@ -1586,6 +1624,14 @@
           } else {
             staff[key] = value;
           }
+        }
+      });
+
+      // 口座フィールドは空値も明示的に送信（空に戻す操作を許可）
+      var bankFields = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name'];
+      bankFields.forEach(function(field) {
+        if (!(field in staff)) {
+          staff[field] = '';
         }
       });
 
