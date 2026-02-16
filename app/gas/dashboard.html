@@ -1066,7 +1066,7 @@
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
-          .map(a => (a.staff_name || '').slice(0, 4))
+          .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
           .filter(n => n)
           .map(n => `<span class="staff-chip">${escapeHtml(n)}</span>`)
           .join('');
