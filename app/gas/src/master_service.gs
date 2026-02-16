@@ -386,8 +386,14 @@ function searchCustomers(params) {
   const requestId = generateRequestId();
 
   try {
-    const searchTerm = (params.search_term || '').trim();
-    const limit = params.limit || 10;
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return errorResponse('PERMISSION_DENIED', authResult.message || '権限がありません', {}, requestId);
+    }
+
+    const safeParams = params || {};
+    const searchTerm = (safeParams.search_term || '').trim();
+    const limit = safeParams.limit || 10;
 
     if (!searchTerm) {
       return successResponse({ customers: [] }, requestId);
