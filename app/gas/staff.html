@@ -653,6 +653,10 @@
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label for="nickname">通称</label>
+                <input type="text" id="nickname" name="nickname" placeholder="やまちゃん（ダッシュボード表示用）">
+              </div>
+              <div class="form-group">
                 <label for="staff-type">種別<span class="required">*</span></label>
                 <select id="staff-type" name="staff_type" required>
                   <option value="regular">自社スタッフ</option>
@@ -1461,6 +1465,7 @@
       document.getElementById('staff-updated-at').value = staff.updated_at || '';
       document.getElementById('name').value = staff.name || '';
       document.getElementById('name-kana').value = staff.name_kana || '';
+      document.getElementById('nickname').value = staff.nickname || '';
       document.getElementById('staff-type').value = staff.staff_type || 'regular';
       document.getElementById('subcontractor-id').value = staff.subcontractor_id || '';
       document.getElementById('phone').value = staff.phone || '';
