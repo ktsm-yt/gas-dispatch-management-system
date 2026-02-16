@@ -87,7 +87,14 @@ function saveMasterRecord(sheetName, idColumn, tableName, data, expectedUpdatedA
         return successResponse(newData, requestId);
 
       } else {
-        // 更新
+        // 更新 - バリデーション実行（正規化処理を含むため更新時にも必要）
+        if (validation) {
+          const validationResult = validation(data);
+          if (!validationResult.valid) {
+            return errorResponse('VALIDATION_ERROR', validationResult.message, validationResult.details, requestId);
+          }
+        }
+
         const existing = findById(sheet, idColumn, data[idColumn]);
 
         if (!existing) {
@@ -446,6 +453,25 @@ function validateStaff(data) {
   if (!data.name || data.name.trim() === '') {
     return { valid: false, message: '名前は必須です', details: { field: 'name' } };
   }
+
+  // 口座番号バリデーション（入力がある場合のみ）
+  if (data.bank_account_number != null && data.bank_account_number !== '') {
+    // 全角数字→半角変換、ハイフン除去
+    var normalized = String(data.bank_account_number)
+      .replace(/[０-９]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); })
+      .replace(/[-ー－]/g, '');
+
+    if (!/^\d+$/.test(normalized)) {
+      return { valid: false, message: '口座番号は数字のみで入力してください', details: { field: 'bank_account_number' } };
+    }
+    if (normalized.length > 8) {
+      return { valid: false, message: '口座番号は8桁以内で入力してください', details: { field: 'bank_account_number' } };
+    }
+
+    // 正規化した値で上書き（文字列型で保持 → 先頭ゼロ保護）
+    data.bank_account_number = normalized;
+  }
+
   return { valid: true };
 }
 
