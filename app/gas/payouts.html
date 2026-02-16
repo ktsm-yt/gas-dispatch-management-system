@@ -648,6 +648,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closePayoutModal()">閉じる</button>
+        <button class="btn btn-secondary" id="modalDetailExportBtn" onclick="handleExportPayoutDetail()" style="display:none;">明細出力</button>
         <button class="btn btn-primary" id="modalPayBtn" onclick="markAsPaidFromModal()">支払済にする</button>
       </div>
     </div>
@@ -2885,6 +2886,8 @@
         const payBtn = document.getElementById('modalPayBtn');
         payBtn.style.display = 'none';
         payBtn.disabled = false;
+        const detailExportBtnEmpty = document.getElementById('modalDetailExportBtn');
+        if (detailExportBtnEmpty) detailExportBtnEmpty.style.display = 'none';
         return;
       }
 
@@ -2898,6 +2901,13 @@
       // 確認済みの場合、調整額・備考は既に確定しているので無効化
       const isConfirmed = status === 'confirmed';
       const adjustmentDisabled = isConfirmed ? 'disabled' : disabledAttr;
+
+      // 明細出力ボタン: confirmed/paid の場合のみ表示
+      const detailExportBtn = document.getElementById('modalDetailExportBtn');
+      const isPaid = status === 'paid';
+      if (detailExportBtn) {
+        detailExportBtn.style.display = (isConfirmed || isPaid) ? '' : 'none';
+      }
 
       if (isConfirmed) {
         payBtn.textContent = '支払済にする';
@@ -3208,6 +3218,79 @@
       if (banner) {
         banner.style.display = 'none';
       }
+    }
+
+    // ========== 支払明細出力 ==========
+
+    function handleExportPayoutDetail() {
+      if (!modalPayoutId) {
+        showToast('error', '支払データが選択されていません');
+        return;
+      }
+
+      // ポップアップブロック対策: 先に空タブを開く
+      const preOpenedTab = window.open('about:blank', '_blank');
+
+      showLoading('ファイル確認中...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result.ok && result.data.exists) {
+            // 既存ファイルあり → タブ閉じて確認
+            if (preOpenedTab) preOpenedTab.close();
+            showConfirmModal(
+              'ファイルが既に存在します',
+              '<p>同名のファイルが既に存在します: <strong>' + escapeHtml(result.data.existingFile.name) + '</strong></p>' +
+              '<p>上書きしますか？</p>',
+              '上書き',
+              'btn-primary',
+              function() {
+                doExportPayoutDetail({ action: 'overwrite' }, null);
+              }
+            );
+          } else {
+            doExportPayoutDetail({}, preOpenedTab);
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          // チェック失敗でも出力を試みる
+          doExportPayoutDetail({}, preOpenedTab);
+        })
+        .checkPayoutDetailExportFile(modalPayoutId);
+    }
+
+    function doExportPayoutDetail(options, preOpenedTab) {
+      const newTab = preOpenedTab || window.open('about:blank', '_blank');
+
+      if (newTab) {
+        newTab.document.write(
+          '<!DOCTYPE html><html><head><title>明細生成中...</title></head>' +
+          '<body><div style="text-align:center;padding:50px;font-family:sans-serif;">' +
+          '<p>支払明細を生成中...</p></div></body></html>'
+        );
+      }
+
+      showLoading('支払明細を生成中...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result.ok) {
+            if (newTab) {
+              newTab.location.href = result.data.url;
+            }
+            showToast('success', result.data.fileName + ' を生成しました');
+          } else {
+            if (newTab) newTab.close();
+            showToast('error', result.error || '明細出力に失敗しました');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          if (newTab) newTab.close();
+          showToast('error', err.message || '明細出力に失敗しました');
+        })
+        .exportPayoutDetail(modalPayoutId, options);
     }
 
     function handlePayoutModalOverlayClick(event) {
