@@ -28,7 +28,7 @@ const TABLE_DEFINITIONS = {
   M_Staff: {
     sheetName: 'Staff',
     headers: [
-      'staff_id', 'name', 'name_kana', 'phone', 'line_id', 'postal_code',
+      'staff_id', 'name', 'name_kana', 'nickname', 'phone', 'line_id', 'postal_code',
       'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
       'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'staff_type',
       'subcontractor_id', 'ccus_id', 'birth_date', 'gender', 'blood_type',
@@ -1380,4 +1380,47 @@ function migrateAddStaffBankFields() {
 
   Logger.log(`\n=== マイグレーション完了 ===`);
   Logger.log(`${addedCount}個のカラムを追加しました（スタッフ口座情報用）`);
+}
+
+/**
+ * M_Staffシートに nickname カラムを追加（マイグレーション）
+ * name_kana の直後に挿入。冪等設計。
+ * GASエディタから実行: migrateAddStaffNicknameColumn()
+ */
+function migrateAddStaffNicknameColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('Staff');
+
+  if (!sheet) {
+    Logger.log('✗ Staffシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('nickname')) {
+    Logger.log('✓ nickname カラムは既に存在します');
+    return;
+  }
+
+  const nameKanaIndex = headers.indexOf('name_kana');
+  if (nameKanaIndex === -1) {
+    Logger.log('✗ name_kana カラムが見つかりません');
+    return;
+  }
+
+  const insertPosition = nameKanaIndex + 2; // 1-based, name_kana の次
+  sheet.insertColumnAfter(nameKanaIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('nickname');
+  sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('✓ nickname カラムを name_kana の後に追加しました');
 }
