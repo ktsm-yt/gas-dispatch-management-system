@@ -494,6 +494,14 @@ function testInvoiceYmRangeArchiveSearch() {
 }
 
 /**
+ * GASエディタ実行用ラッパー
+ * 関数一覧で選びやすい短い名前を用意
+ */
+function runTestInvoiceYmRangeArchiveSearch() {
+  testInvoiceYmRangeArchiveSearch();
+}
+
+/**
  * ★ アーカイブデータ編集テスト
  * GASエディタから実行: testArchiveEditing()
  */
