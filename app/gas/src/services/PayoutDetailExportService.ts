@@ -98,8 +98,8 @@ const PayoutDetailExportService = {
       SpreadsheetApp.flush();
       const xlsxBlob = PayoutExportService._exportToXlsx(ssId);
 
-      // 8. Drive保存
-      const folder = PayoutExportService._getOutputFolder();
+      // 8. Drive保存（支払明細サブフォルダ）
+      const folder = this._getOutputFolder();
       const addTimestamp = options.action === 'rename';
       const fileName = this._generateFileName(staffName, periodYm, { addTimestamp });
       xlsxBlob.setName(fileName);
@@ -141,7 +141,7 @@ const PayoutDetailExportService = {
 
       const staffName = (payout as PayoutRecord & { target_name?: string }).target_name || '不明';
       const periodYm = payout.period_end ? payout.period_end.substring(0, 7) : '';
-      const folder = PayoutExportService._getOutputFolder();
+      const folder = this._getOutputFolder();
       const fileName = this._generateFileName(staffName, periodYm);
 
       const files = folder.getFilesByName(fileName);
@@ -315,6 +315,20 @@ const PayoutDetailExportService = {
     sheet.getRange(netRow, 7).setValue(netAmount);
     sheet.getRange(netRow, 1, 1, 12).setFontWeight('bold');
     sheet.getRange(netRow, 7, 1, 1).setNumberFormat('#,##0');
+  },
+
+  SUBFOLDER_NAME: '支払明細',
+
+  /**
+   * 支払明細専用の出力フォルダを取得（なければ自動作成）
+   */
+  _getOutputFolder: function(): GoogleAppsScript.Drive.Folder {
+    const parentFolder = PayoutExportService._getOutputFolder();
+    const folders = parentFolder.getFoldersByName(this.SUBFOLDER_NAME);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    return parentFolder.createFolder(this.SUBFOLDER_NAME);
   },
 
   /**
