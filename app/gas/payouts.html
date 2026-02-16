@@ -605,6 +605,10 @@
     <div class="tab-nav">
       <button class="tab-btn active" onclick="switchTab('staff')" id="tabStaff">スタッフ支払</button>
       <button class="tab-btn" onclick="switchTab('subcontractor')" id="tabSubcontractor">外注費管理</button>
+      <div class="tab-actions" style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <button class="btn btn-secondary" onclick="showExportModal()" style="font-size: 13px; padding: 4px 10px;">集計エクスポート</button>
+        <a id="payout-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleFolderLinkClick(this)" style="font-size: 13px; padding: 4px 10px;">📁 出力先</a>
+      </div>
     </div>
   </div>
 
@@ -732,10 +736,6 @@
         <button class="btn btn-secondary" onclick="loadAllPayoutHistory()">検索</button>
       </div>
       <span style="flex: 1;"></span>
-      <div class="toolbar-actions">
-        <button class="btn btn-secondary" onclick="showExportModal()">集計エクスポート</button>
-        <a id="payout-folder-link" href="#" target="_blank" class="btn btn-secondary" title="エクスポートフォルダを開く" onclick="return handleFolderLinkClick(this)">📁 出力先</a>
-      </div>
     </div>
 
     <!-- ========== 未払い集計ビュー ========== -->
@@ -1628,7 +1628,7 @@
           </div>
           <div class="summary-item">
             <div class="label">期間</div>
-            <div class="value" style="font-size:14px">${data.periodStart || '-'} ~ ${data.periodEnd}</div>
+            <div class="value" style="font-size:14px">${data.periodStart || '-'}<br>~ ${data.periodEnd}</div>
           </div>
         </div>
         <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap;">
@@ -2960,7 +2960,7 @@
               </div>
               <div class="summary-item">
                 <div class="label">期間</div>
-                <div class="value" style="font-size:14px">${data.periodStart || '-'} ~ ${data.periodEnd}</div>
+                <div class="value" style="font-size:14px">${data.periodStart || '-'}<br>~ ${data.periodEnd}</div>
               </div>
               <div class="summary-item">
                 <div class="label">基本給与</div>
