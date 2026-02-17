@@ -10,16 +10,24 @@
  * @returns {Object} { ok: true, data: { customers: [] } }
  */
 function getCustomers() {
+  const requestId = generateRequestId();
+
   try {
+    // 認可チェック（staff以上）
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
     const result = listCustomers({ activeOnly: true });
     if (result.ok) {
       // listCustomers returns { items: [...], count: N }
-      return buildSuccessResponse({ customers: result.data?.items || [] });
+      return buildSuccessResponse({ customers: result.data?.items || [] }, requestId);
     }
     return result;
   } catch (error: unknown) {
     logErr('getCustomers', error);
-    return buildErrorResponse('SYSTEM_ERROR', (error instanceof Error) ? error.message : String(error));
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
   }
 }
 
@@ -549,14 +557,22 @@ function regenerateInvoice(invoiceId: string) {
     const result = InvoiceService.regenerate(invoiceId);
 
     if (!result.success) {
+      const errorCode = result.error === 'NOT_FOUND'
+        ? ERROR_CODES.NOT_FOUND
+        : result.error === 'CONFLICT_ERROR'
+        ? ERROR_CODES.CONFLICT_ERROR
+        : ERROR_CODES.VALIDATION_ERROR;
       const errorMessages: Record<string, string> = {
         'NOT_FOUND': '請求書が見つかりません',
         'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再集計できません',
         'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再集計できません',
-        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません'
+        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
+        'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください',
+        'CANNOT_DELETE_SENT_INVOICE': '送付済みの請求書は再集計できません',
+        'DELETE_FAILED': '請求書の再集計に失敗しました'
       };
       const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, message, {}, requestId);
+      return buildErrorResponse(errorCode, message, {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
@@ -1048,7 +1064,10 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
         'NEGATIVE_TOTAL': '合計金額がマイナスになるため保存できません'
       };
       const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
-      return buildErrorResponse(errorCode, message, {}, requestId);
+      return buildErrorResponse(errorCode, message, {
+        partialUpdate: !!result.partialUpdate,
+        errors: result.errors || []
+      }, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
