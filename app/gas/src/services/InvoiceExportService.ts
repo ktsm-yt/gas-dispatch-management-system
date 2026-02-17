@@ -737,8 +737,10 @@ const InvoiceExportService = {
     _t.coverPage = Date.now();
     Logger.log(`[TIMING][_createFilledSheet] coverPage (hasCover=${hasCoverPage}): ${_t.coverPage - _t.openSheet}ms`);
 
+    const invoiceFormat = String(invoice.invoice_format || '');
+
     // フォーマットに応じてデータを入力
-    switch (invoice.invoice_format) {
+    switch (invoiceFormat) {
       case 'format1':
         this._populateFormat1(sheet, invoice, lines, customer, company);
         break;
@@ -755,13 +757,13 @@ const InvoiceExportService = {
         this._populateFormat1(sheet, invoice, lines, customer, company);
     }
     _t.populate = Date.now();
-    Logger.log(`[TIMING][_createFilledSheet] populate (${invoice.invoice_format}): ${_t.populate - _t.coverPage}ms`);
+    Logger.log(`[TIMING][_createFilledSheet] populate (${invoiceFormat}): ${_t.populate - _t.coverPage}ms`);
 
     // PDFページ分割用シート作成（format1/format2共通）
     let hasPrintSheets = false;
     if (lines.length > 0 && forPdf) {
-      if (['format1', 'format2'].includes(invoice.invoice_format)) {
-        this._createFixedPageSheets(spreadsheet, sheet, lines, invoice, invoice.invoice_format);
+      if (invoiceFormat === 'format1' || invoiceFormat === 'format2') {
+        this._createFixedPageSheets(spreadsheet, sheet, lines, invoice, invoiceFormat);
         hasPrintSheets = true;
       }
     }
@@ -1410,7 +1412,13 @@ const InvoiceExportService = {
    * @param {Object} invoice - 請求書データ
    * @param {string} format - 'format1' or 'format2'
    */
-  _createFixedPageSheets: function(spreadsheet, dataSheet, lines, invoice, format) {
+  _createFixedPageSheets: function(
+    spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet,
+    dataSheet: GoogleAppsScript.Spreadsheet.Sheet,
+    lines: Record<string, unknown>[],
+    invoice: Record<string, unknown>,
+    format: 'format1' | 'format2'
+  ) {
     const COLS = 10;
     const DATA_START_ROW = 10;
     const HEADER_ROWS = 9;
@@ -1418,7 +1426,7 @@ const InvoiceExportService = {
     // 実描画行数ベースのページ定数（A4縦、テンプレート実測値）
     // firstPageRows: ヘッダー9行の後に入るデータ行数
     // subsequentPageRows: 列ヘッダー1行の後に入るデータ行数
-    const PAGE_CONFIG = {
+    const PAGE_CONFIG: Record<'format1' | 'format2', { firstPageRows: number; subsequentPageRows: number }> = {
       format1: { firstPageRows: 54, subsequentPageRows: 70 },
       format2: { firstPageRows: 54, subsequentPageRows: 70 },
     };
@@ -1426,10 +1434,11 @@ const InvoiceExportService = {
 
     // 実描画行数を計算（job切替空行を含む）
     let jobTransitions = 0;
-    let prevJobId = null;
+    let prevJobId: string | null = null;
     for (const line of lines) {
-      if (prevJobId !== null && line.job_id !== prevJobId) jobTransitions++;
-      prevJobId = line.job_id;
+      const jobId = String(line.job_id || '');
+      if (prevJobId !== null && jobId !== prevJobId) jobTransitions++;
+      prevJobId = jobId;
     }
     const totalDataRows = lines.length + jobTransitions;
 
@@ -1442,7 +1451,13 @@ const InvoiceExportService = {
     console.log(`合計行位置(source): ${totalRowInSource}`);
 
     // データ行をページ単位に分割
-    const pages = [];
+    type FixedPage = {
+      sourceStartRow: number;
+      dataRowCount: number;
+      isFirstPage: boolean;
+      isLastPage: boolean;
+    };
+    const pages: FixedPage[] = [];
     let rowOffset = 0;
     while (rowOffset < totalDataRows) {
       const isFirstPage = pages.length === 0;
