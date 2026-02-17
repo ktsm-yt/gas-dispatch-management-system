@@ -23,20 +23,26 @@ function runPayoutTests() {
 
   let passed = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const test of tests) {
     try {
-      test();
-      passed++;
-      Logger.log(`✓ ${test.name} PASSED`);
+      const result = test();
+      if (result && result.skipped) {
+        skipped++;
+        Logger.log(`- ${test.name} SKIPPED: ${result.reason || 'no reason'}`);
+      } else {
+        passed++;
+        Logger.log(`✓ ${test.name} PASSED`);
+      }
     } catch (error) {
       failed++;
       Logger.log(`✗ ${test.name} FAILED: ${error.message}`);
     }
   }
 
-  Logger.log(`=== Payout Tests Complete: ${passed} passed, ${failed} failed ===`);
-  return { passed, failed };
+  Logger.log(`=== Payout Tests Complete: ${passed} passed, ${failed} failed, ${skipped} skipped ===`);
+  return { passed, failed, skipped };
 }
 
 /**
@@ -133,6 +139,9 @@ function testPayoutRepository() {
   assert(!afterDelete, 'findById should return null after soft delete');
   Logger.log('  SoftDelete: OK');
 
+  // メインの挿入データもクリーンアップ
+  PayoutRepository.softDelete(inserted.payout_id, inserted.updated_at);
+
   Logger.log('--- testPayoutRepository PASSED ---');
 }
 
@@ -146,7 +155,7 @@ function testPayoutService() {
   const staffList = StaffRepository.search({ is_active: true, limit: 1 });
   if (staffList.length === 0) {
     Logger.log('  SKIP: No active staff found');
-    return;
+    return { skipped: true, reason: 'No active staff found' };
   }
 
   const testStaffId = staffList[0].staff_id;
@@ -643,7 +652,7 @@ function testDoubleEntryPrevention() {
   const staffList = StaffRepository.search({ is_active: true, limit: 1 });
   if (staffList.length === 0) {
     Logger.log('  SKIP: No active staff found');
-    return;
+    return { skipped: true, reason: 'No active staff found' };
   }
 
   const testStaffId = staffList[0].staff_id;
@@ -655,7 +664,7 @@ function testDoubleEntryPrevention() {
 
   if (initialAssignments.length === 0) {
     Logger.log('  SKIP: No unpaid assignments found');
-    return;
+    return { skipped: true, reason: 'No unpaid assignments found' };
   }
 
   // 2. confirmPayout でレコード作成（payout_id紐付け）
@@ -816,4 +825,3 @@ function testPaidDateValidation() {
 
   Logger.log('--- testPaidDateValidation PASSED ---');
 }
-
