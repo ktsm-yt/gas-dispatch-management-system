@@ -270,6 +270,12 @@ function createCustomerFolder(customerId) {
   const requestId = generateRequestId();
 
   try {
+    // 認可チェック（manager以上）
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return errorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
     const customerResult = getCustomer(customerId);
     if (!customerResult.ok) {
       return errorResponse('NOT_FOUND', '顧客が見つかりません', {}, requestId);

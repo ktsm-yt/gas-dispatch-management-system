@@ -810,7 +810,10 @@ const InvoiceService = {
     const existingAdjustments = InvoiceAdjustmentRepository.findByInvoiceId(invoiceId);
 
     // 既存を削除
-    this.delete(invoiceId, invoice.updated_at);
+    const deleteResult = this.delete(invoiceId, invoice.updated_at);
+    if (!deleteResult.success) {
+      return { success: false, error: deleteResult.error || 'DELETE_FAILED' };
+    }
 
     // 新規生成
     const result: RegenerateResult = this.generate(
