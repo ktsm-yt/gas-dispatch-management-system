@@ -13,6 +13,11 @@ function getStaffForPayouts(): unknown {
   const requestId = generateRequestId();
 
   try {
+    const authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
     const staffList = StaffRepository.search({ is_active: true });
 
     // 必要なフィールドのみ返す
@@ -32,8 +37,7 @@ function getStaffForPayouts(): unknown {
 
   } catch (error: unknown) {
     logErr('getStaffForPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -208,6 +212,8 @@ function getUnpaidStaffList(endDate: string, options: { staffId?: string } = {})
     if (!endDate) {
       // デフォルトは今日
       endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
     const result = PayoutService.getUnpaidStaffList(endDate, options);
@@ -743,6 +749,22 @@ function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; ex
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutIds array is required', {}, requestId);
     }
 
+    if (!options.expectedUpdatedAtMap || typeof options.expectedUpdatedAtMap !== 'object') {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'expectedUpdatedAtMap is required', {}, requestId);
+    }
+
+    const missingExpectedUpdatedAt = payoutIds.filter(function(payoutId) {
+      return !options.expectedUpdatedAtMap || !options.expectedUpdatedAtMap[payoutId];
+    });
+    if (missingExpectedUpdatedAt.length > 0) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAtMap must include all payoutIds',
+        { missingPayoutIds: missingExpectedUpdatedAt },
+        requestId
+      );
+    }
+
     // paid_dateのフォーマット検証
     if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
@@ -774,7 +796,7 @@ function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; ex
     // Service呼び出し（楽観ロックを伝播）
     const result = PayoutService.bulkPayConfirmed(payoutIds, {
       paid_date: options.paid_date,
-      expectedUpdatedAtMap: options.expectedUpdatedAtMap || {}
+      expectedUpdatedAtMap: options.expectedUpdatedAtMap
     });
 
     return buildSuccessResponse(result, requestId);
@@ -1149,6 +1171,8 @@ function getUnpaidSubcontractorList(endDate: string): unknown {
 
     if (!endDate) {
       endDate = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
     const result = PayoutService.getUnpaidSubcontractorList(endDate) as unknown as Record<string, unknown>[];
@@ -1300,6 +1324,7 @@ function searchSubcontractorPayouts(query: PayoutSearchQuery = {}): unknown {
     // 外注先支払いのみを検索
     const searchQuery: PayoutSearchQuery = {
       ...query,
+      limit: query.limit || 200,
       payout_type: 'SUBCONTRACTOR'
     };
 
