@@ -11,8 +11,9 @@
  * 1. createArchiveTestData() - テストデータ作成
  * 2. testArchiveExecution() - アーカイブ実行テスト
  * 3. testArchiveDataRetrieval() - 過去データ参照テスト
- * 4. testArchiveEditing() - アーカイブデータ編集テスト ★NEW
- * 5. cleanupArchiveTestData() - テストデータクリーンアップ
+ * 4. testInvoiceYmRangeArchiveSearch() - 年月範囲×アーカイブ検索テスト
+ * 5. testArchiveEditing() - アーカイブデータ編集テスト ★NEW
+ * 6. cleanupArchiveTestData() - テストデータクリーンアップ
  */
 
 // テスト用の年度（実際の本番データに影響しないよう過去年度を使用）
@@ -422,7 +423,82 @@ function testArchiveDataRetrieval() {
   }
 
   Logger.log(`\n=== 過去データ参照テスト完了: ${passed} passed, ${failed} failed ===`);
+  Logger.log('\n次のステップ: testInvoiceYmRangeArchiveSearch() を実行して年月範囲検索をテスト');
+}
+
+/**
+ * 年月範囲検索で includeArchive が効くことを確認
+ * GASエディタから実行: testInvoiceYmRangeArchiveSearch()
+ */
+function testInvoiceYmRangeArchiveSearch() {
+  Logger.log('=== 年月範囲×アーカイブ検索テスト開始 ===');
+
+  const fiscalYear = TEST_FISCAL_YEAR;
+  const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
+  if (!archiveDbId) {
+    Logger.log('✗ アーカイブDBが存在しません。先に testArchiveExecution() を実行してください。');
+    return;
+  }
+
+  const archiveDb = SpreadsheetApp.openById(archiveDbId);
+  const invSheet = archiveDb.getSheetByName('Invoices');
+  if (!invSheet || invSheet.getLastRow() <= 1) {
+    Logger.log('✗ アーカイブDBの Invoices にテストデータがありません。');
+    return;
+  }
+
+  const headers = invSheet.getRange(1, 1, 1, invSheet.getLastColumn()).getValues()[0];
+  const invIdCol = headers.indexOf('invoice_id');
+  const yearCol = headers.indexOf('billing_year');
+  const monthCol = headers.indexOf('billing_month');
+  if (invIdCol === -1 || yearCol === -1 || monthCol === -1) {
+    Logger.log('✗ Invoices シートのヘッダーが不正です。');
+    return;
+  }
+
+  const firstRow = invSheet.getRange(2, 1, 1, invSheet.getLastColumn()).getValues()[0];
+  const archivedInvoiceId = String(firstRow[invIdCol] || '');
+  const billingYear = Number(firstRow[yearCol]);
+  const billingMonth = Number(firstRow[monthCol]);
+  const targetYm = `${billingYear}-${String(billingMonth).padStart(2, '0')}`;
+
+  Logger.log(`対象YM: ${targetYm}, 対象請求ID: ${archivedInvoiceId}`);
+
+  const withoutArchive = InvoiceRepository.search({
+    billing_ym_from: targetYm,
+    billing_ym_to: targetYm
+  });
+  const hitWithoutArchive = withoutArchive.some(inv => String(inv.invoice_id) === archivedInvoiceId);
+
+  const withArchive = InvoiceRepository.search({
+    billing_ym_from: targetYm,
+    billing_ym_to: targetYm,
+    includeArchive: true
+  });
+  const archivedRecord = withArchive.find(inv => String(inv.invoice_id) === archivedInvoiceId);
+
+  if (hitWithoutArchive) {
+    Logger.log('✗ includeArchive=false でもアーカイブ請求IDがヒットしました');
+  } else {
+    Logger.log('✓ includeArchive=false ではアーカイブ請求IDはヒットしない');
+  }
+
+  if (archivedRecord && archivedRecord._archived === true) {
+    Logger.log('✓ includeArchive=true でアーカイブ請求IDがヒット（_archived=true）');
+  } else {
+    Logger.log('✗ includeArchive=true でもアーカイブ請求IDを取得できませんでした');
+  }
+
+  Logger.log('=== 年月範囲×アーカイブ検索テスト完了 ===');
   Logger.log('\n次のステップ: testArchiveEditing() を実行してアーカイブ編集をテスト');
+}
+
+/**
+ * GASエディタ実行用ラッパー
+ * 関数一覧で選びやすい短い名前を用意
+ */
+function runTestInvoiceYmRangeArchiveSearch() {
+  testInvoiceYmRangeArchiveSearch();
 }
 
 /**
@@ -881,22 +957,25 @@ function runAllArchiveTests() {
   // 注意: 実際の本番データに影響を与える可能性があるため、
   // 開発環境でのみ実行してください
 
-  Logger.log('1/6 進捗管理テスト');
+  Logger.log('1/7 進捗管理テスト');
   testArchiveProgress();
 
-  Logger.log('\n\n2/6 未処理項目チェックテスト');
+  Logger.log('\n\n2/7 未処理項目チェックテスト');
   testCheckPendingItems();
 
-  Logger.log('\n\n3/6 テストデータ作成');
+  Logger.log('\n\n3/7 テストデータ作成');
   createArchiveTestData();
 
-  Logger.log('\n\n4/6 アーカイブ実行テスト');
+  Logger.log('\n\n4/7 アーカイブ実行テスト');
   testArchiveExecution();
 
-  Logger.log('\n\n5/6 過去データ参照テスト');
+  Logger.log('\n\n5/7 過去データ参照テスト');
   testArchiveDataRetrieval();
 
-  Logger.log('\n\n6/6 アーカイブ編集テスト');
+  Logger.log('\n\n6/7 年月範囲×アーカイブ検索テスト');
+  testInvoiceYmRangeArchiveSearch();
+
+  Logger.log('\n\n7/7 アーカイブ編集テスト');
   testArchiveEditing();
 
   Logger.log('\n\n========================================');

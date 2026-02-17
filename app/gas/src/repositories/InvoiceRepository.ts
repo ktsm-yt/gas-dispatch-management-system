@@ -31,6 +31,9 @@ interface FindByPeriodOptions {
   customer_id?: string;
 }
 
+// 異常入力で無限ループしないための月スキャン上限（20年分）
+const ARCHIVE_FISCAL_YEAR_SCAN_MAX_MONTHS = 240;
+
 const InvoiceRepository = {
   TABLE_NAME: 'T_Invoices',
   ID_COLUMN: 'invoice_id',
@@ -76,6 +79,8 @@ const InvoiceRepository = {
     if (options.includeArchive) {
       const archiveRecords = this._getArchiveRecords(year, month);
       records = records.concat(archiveRecords);
+      // 現行DB優先で重複IDを除去（search と同じ安全策）
+      records = this._dedupeByInvoiceId(records);
     }
 
     records = records.filter(r =>
@@ -101,10 +106,13 @@ const InvoiceRepository = {
     let records = getAllRecords(this.TABLE_NAME);
 
     // アーカイブデータを含める場合
-    if (query.includeArchive && query.billing_year) {
-      const archiveRecords = this._getArchiveRecords(query.billing_year, query.billing_month);
+    if (query.includeArchive) {
+      const archiveRecords = this._getArchiveRecordsForQuery(query);
       records = records.concat(archiveRecords);
     }
+
+    // 現行DBを優先して重複IDを除去（同一IDが混在した場合の保険）
+    records = this._dedupeByInvoiceId(records);
 
     // 論理削除除外
     records = records.filter(r => !r.is_deleted);
@@ -660,19 +668,94 @@ const InvoiceRepository = {
     return `${y}-${String(m).padStart(2, '0')}`;
   },
 
-  _getArchiveRecords: function(year: number, month: number | null | undefined): Record<string, unknown>[] {
-    const archiveRecords: Record<string, unknown>[] = [];
+  _parseBillingYm: function(ym: unknown): { year: number; month: number } | null {
+    if (!ym) return null;
+    const raw = String(ym).trim();
+    if (!/^\d{4}-\d{2}$/.test(raw)) return null;
 
-    const targetYears: number[] = [];
-    if (month) {
-      const fiscalYear = getFiscalYearByEndMonth_(new Date(year, month - 1, 1), _getFiscalMonthEndFromMaster_());
-      targetYears.push(fiscalYear);
-    } else {
-      targetYears.push(year);
-      targetYears.push(year - 1);
+    const [yearStr, monthStr] = raw.split('-');
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    if (!year || month < 1 || month > 12) return null;
+    return { year, month };
+  },
+
+  _dedupeByInvoiceId: function(records: Record<string, unknown>[]): Record<string, unknown>[] {
+    const seenIds = new Set<string>();
+    return records.filter((record) => {
+      const id = String(record.invoice_id || '');
+      if (!id) return true;
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
+      return true;
+    });
+  },
+
+  _getArchiveRecordsForQuery: function(query: InvoiceSearchQuery): Record<string, unknown>[] {
+    const targetYears = this._getArchiveFiscalYearsForQuery(query);
+    // includeArchive=true でも対象年月が未指定なら全アーカイブ走査は行わない
+    if (targetYears.length === 0) return [];
+    return this._getArchiveRecordsByFiscalYears(targetYears);
+  },
+
+  _getArchiveFiscalYearsForQuery: function(query: InvoiceSearchQuery): number[] {
+    const targetYears = new Set<number>();
+    const fiscalMonthEnd = _getFiscalMonthEndFromMaster_();
+
+    const year = Number(query.billing_year);
+    const month = Number(query.billing_month);
+
+    if (!isNaN(year) && year > 0) {
+      if (!isNaN(month) && month >= 1 && month <= 12) {
+        targetYears.add(getFiscalYearByEndMonth_(new Date(year, month - 1, 1), fiscalMonthEnd));
+      } else {
+        targetYears.add(year);
+        targetYears.add(year - 1);
+      }
     }
 
-    for (const fiscalYear of targetYears) {
+    const fromYm = this._parseBillingYm(query.billing_ym_from);
+    const toYm = this._parseBillingYm(query.billing_ym_to);
+
+    if (fromYm && toYm) {
+      const fromKey = fromYm.year * 100 + fromYm.month;
+      const toKey = toYm.year * 100 + toYm.month;
+
+      if (fromKey <= toKey) {
+        let currentYear = fromYm.year;
+        let currentMonth = fromYm.month;
+
+        // 月単位で会計年度を算出（異常ループ回避のガード付き）
+        for (let i = 0; i < ARCHIVE_FISCAL_YEAR_SCAN_MAX_MONTHS; i++) {
+          const currentKey = currentYear * 100 + currentMonth;
+          if (currentKey > toKey) break;
+
+          targetYears.add(getFiscalYearByEndMonth_(new Date(currentYear, currentMonth - 1, 1), fiscalMonthEnd));
+
+          currentMonth++;
+          if (currentMonth > 12) {
+            currentMonth = 1;
+            currentYear++;
+          }
+        }
+      }
+    } else {
+      const singleYm = fromYm || toYm;
+      if (singleYm) {
+        targetYears.add(getFiscalYearByEndMonth_(new Date(singleYm.year, singleYm.month - 1, 1), fiscalMonthEnd));
+      }
+    }
+
+    return Array.from(targetYears).sort((a, b) => a - b);
+  },
+
+  _getArchiveRecordsByFiscalYears: function(fiscalYears: number[]): Record<string, unknown>[] {
+    const archiveRecords: Record<string, unknown>[] = [];
+    const uniqueYears = Array.from(new Set(fiscalYears))
+      .map(y => Number(y))
+      .filter(y => !isNaN(y) && y > 0);
+
+    for (const fiscalYear of uniqueYears) {
       const archiveDbId = ArchiveService.getArchiveDbId(fiscalYear);
       if (!archiveDbId) continue;
 
@@ -702,6 +785,18 @@ const InvoiceRepository = {
     }
 
     return archiveRecords;
+  },
+
+  _getArchiveRecords: function(year: number, month: number | null | undefined): Record<string, unknown>[] {
+    const targetYears: number[] = [];
+    if (month) {
+      const fiscalYear = getFiscalYearByEndMonth_(new Date(year, month - 1, 1), _getFiscalMonthEndFromMaster_());
+      targetYears.push(fiscalYear);
+    } else {
+      targetYears.push(year);
+      targetYears.push(year - 1);
+    }
+    return this._getArchiveRecordsByFiscalYears(targetYears);
   },
 
   /**
