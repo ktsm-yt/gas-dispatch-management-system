@@ -115,6 +115,7 @@ function testPaymentRepository_create() {
 
   // クリーンアップ
   PaymentRepository.softDelete(payment.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -141,6 +142,7 @@ function testPaymentRepository_findById() {
 
   // クリーンアップ
   PaymentRepository.softDelete(created.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -163,6 +165,7 @@ function testPaymentRepository_findByInvoiceId() {
   // クリーンアップ
   PaymentRepository.softDelete(payment1.payment_id);
   PaymentRepository.softDelete(payment2.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -189,6 +192,7 @@ function testPaymentRepository_sumByInvoiceId() {
   const totalAfterDelete = PaymentRepository.sumByInvoiceId(invoice.invoice_id);
   assertEqual(totalAfterDelete, 0, 'sum after delete should be 0');
   Logger.log('  SumByInvoiceId (after delete): OK');
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -221,6 +225,7 @@ function testPaymentRepository_softDelete() {
   assertEqual(doubleDelete.success, false, 'double delete should fail');
   assertEqual(doubleDelete.error, 'ALREADY_DELETED', 'error should be ALREADY_DELETED');
   Logger.log('  Double delete prevention: OK');
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 // ============================================================
@@ -274,6 +279,7 @@ function testPaymentService_recordPayment_normalCase() {
   // クリーンアップ
   PaymentRepository.softDelete(result.payment.payment_id);
   PaymentRepository.softDelete(result2.payment.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -315,6 +321,7 @@ function testPaymentService_recordPayment_overPaymentError() {
 
   // クリーンアップ
   PaymentRepository.softDelete(result1.payment.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -367,6 +374,7 @@ function testPaymentService_recordPayment_invalidAmount() {
   assertEqual(result3.success, false, 'non-numeric amount should fail');
   assertEqual(result3.error, 'INVALID_AMOUNT', 'error should be INVALID_AMOUNT');
   Logger.log('  Non-numeric amount validation: OK');
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -409,6 +417,7 @@ function testPaymentService_deletePayment_statusRevert() {
   const invoiceAfterDelete = InvoiceRepository.findById(invoice.invoice_id);
   assertEqual(invoiceAfterDelete.status, 'unpaid', 'invoice should revert to unpaid');
   Logger.log('  Invoice status reverted to unpaid: OK');
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 /**
@@ -441,6 +450,7 @@ function testPaymentService_getPaymentsByInvoice() {
   // クリーンアップ
   PaymentRepository.softDelete(payment1.payment_id);
   PaymentRepository.softDelete(payment2.payment_id);
+  InvoiceRepository.softDelete(invoice.invoice_id);
 }
 
 // ============================================================
