@@ -327,7 +327,7 @@ const PayoutExportService = {
     if (!folderId) {
       throw new Error(
         'PAYOUT_EXPORT_FOLDER_ID が未設定です。\n' +
-        'GASエディタで setPayoutExportFolderId() を実行してください。'
+        'GASエディタで setPayoutExportFolderId("フォルダID") を実行してください。'
       );
     }
 
@@ -352,7 +352,7 @@ const PayoutExportService = {
     if (!folderId) {
       return {
         configured: false,
-        setupGuide: 'GASエディタで setPayoutExportFolderId() を実行してください。'
+        setupGuide: 'GASエディタで setPayoutExportFolderId("フォルダID") を実行してください。'
       };
     }
 
@@ -369,7 +369,7 @@ const PayoutExportService = {
         configured: false,
         folderId: folderId,
         error: 'フォルダにアクセスできません',
-        setupGuide: 'setPayoutExportFolderId() を再実行してフォルダIDを更新してください。'
+        setupGuide: 'setPayoutExportFolderId("フォルダID") を再実行してフォルダIDを更新してください。'
       };
     }
   }
@@ -380,8 +380,10 @@ const PayoutExportService = {
  * gas-dispatch-system > 出力 > 給与明細
  * https://drive.google.com/drive/folders/1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI
  */
-function setPayoutExportFolderId(): void {
-  const folderId = '1IIs43RoTkaKPOWPQgjEmvGgWxc4n_ohI';
+function setPayoutExportFolderId(folderId: string): void {
+  if (!folderId) {
+    throw new Error('folderId is required');
+  }
   PropertiesService.getScriptProperties().setProperty('PAYOUT_EXPORT_FOLDER_ID', folderId);
   Logger.log('Payout export folder set to: ' + folderId);
   Logger.log('URL: https://drive.google.com/drive/folders/' + folderId);

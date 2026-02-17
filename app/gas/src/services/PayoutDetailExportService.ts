@@ -68,7 +68,7 @@ const PayoutDetailExportService = {
     if (!templateId) {
       throw new Error(
         'PAYOUT_DETAIL_TEMPLATE_ID が未設定です。\n' +
-        'GASエディタで setPayoutDetailTemplateId() を実行してください。'
+        'GASエディタで setPayoutDetailTemplateId("テンプレートID") を実行してください。'
       );
     }
 
@@ -459,8 +459,10 @@ const PayoutDetailExportService = {
 /**
  * テンプレートIDをScriptPropertiesに設定（GASエディタから1回だけ実行）
  */
-function setPayoutDetailTemplateId(): void {
-  const templateId = '1TO5V3iRix34buH-HLdZjtqkSpB7Erv9hjgYZM_I4-M8';
+function setPayoutDetailTemplateId(templateId: string): void {
+  if (!templateId) {
+    throw new Error('templateId is required');
+  }
   PropertiesService.getScriptProperties().setProperty('PAYOUT_DETAIL_TEMPLATE_ID', templateId);
   Logger.log('Payout detail template set to: ' + templateId);
 }
