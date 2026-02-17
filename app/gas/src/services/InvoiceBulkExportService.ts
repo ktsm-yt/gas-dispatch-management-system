@@ -675,8 +675,8 @@ const InvoiceBulkExportService = {
    * @returns {string} 進捗キー
    */
   _generateKey: function(params: { invoiceIds: string[]; exportMode: string }) {
-    // invoiceIdsのハッシュを使用（同じ請求書セットなら同じキー）
-    const idsHash = params.invoiceIds.sort().join(',').substring(0, 100);
+    // invoiceIds全体を使ってハッシュ化（衝突リスク低減）
+    const idsHash = [...params.invoiceIds].map((id) => String(id)).sort().join(',');
     return `${params.exportMode}_${Utilities.computeDigest(
       Utilities.DigestAlgorithm.MD5,
       idsHash
