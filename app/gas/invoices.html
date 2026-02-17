@@ -3619,11 +3619,13 @@
     function showFileOverwriteModal(existingFile) {
       const body = document.getElementById('fileOverwriteBody');
       const modifiedDate = new Date(existingFile.modifiedDate).toLocaleString('ja-JP');
+      const fileName = escapeHtml(existingFile.name || '');
+      const safeModifiedDate = escapeHtml(modifiedDate || '');
       body.innerHTML =
         '<p style="margin-bottom: 12px;">以下の同名ファイルが既に存在します：</p>' +
         '<div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 16px;">' +
-        '<div style="font-weight: 500; margin-bottom: 4px;">' + existingFile.name + '</div>' +
-        '<div style="font-size: 13px; color: #666;">更新日時: ' + modifiedDate + '</div>' +
+        '<div style="font-weight: 500; margin-bottom: 4px;">' + fileName + '</div>' +
+        '<div style="font-size: 13px; color: #666;">更新日時: ' + safeModifiedDate + '</div>' +
         '</div>' +
         '<p style="color: #666; font-size: 13px;">' +
         '<strong>上書き</strong>: 既存ファイルを削除して新規作成<br>' +
@@ -3659,12 +3661,13 @@
     let bulkExportParams = null;
     let bulkExportPollInterval = null;
     let bulkExportResults = null;  // CSV出力用に結果を保持
+    let bulkExportErrors = [];     // 直近完了時のエラー詳細を保持
     let bulkExportAccumulatedResults = [];  // タイムアウト時の部分結果を蓄積
     let bulkExportAccumulatedErrors = [];   // タイムアウト時のエラーを蓄積
 
     // 前回の一括出力結果を保持（localStorage で永続化）
     let lastBulkExportResults = null;
-    let lastBulkExportErrors = null;
+    let lastBulkExportErrors = [];
 
     // localStorageキー
     const LAST_EXPORT_STORAGE_KEY = 'lastBulkExportResult';
@@ -3678,7 +3681,7 @@
         if (stored) {
           const data = JSON.parse(stored);
           lastBulkExportResults = data.results || null;
-          lastBulkExportErrors = data.errors || '';
+          lastBulkExportErrors = Array.isArray(data.errors) ? data.errors : [];
           updateLastResultButton();
         }
       } catch (e) {
@@ -3700,6 +3703,33 @@
       } catch (e) {
         console.warn('前回の出力結果の保存に失敗:', e);
       }
+    }
+
+    function normalizeBulkExportErrors(errors) {
+      if (!Array.isArray(errors)) return [];
+      return errors.map(function(err) {
+        const inv = invoices.find(function(i) { return i.invoice_id === err.invoiceId; });
+        const customerName = inv ? ((inv.customer && inv.customer.company_name) || inv.customer_name || '') : '';
+        const invoiceNumber = inv ? (inv.invoice_number || '') : '';
+        const label = (customerName || invoiceNumber)
+          ? (customerName + ' ' + invoiceNumber).trim()
+          : String(err.invoiceId || '-');
+        return {
+          label: label,
+          message: String(err.message || err.error || '不明なエラー')
+        };
+      });
+    }
+
+    function renderBulkExportErrorList(errorItems) {
+      const errorList = document.getElementById('bulkExportErrorList');
+      errorList.innerHTML = '';
+      if (!Array.isArray(errorItems)) return;
+      errorItems.forEach(function(item) {
+        const li = document.createElement('li');
+        li.textContent = String(item.label || '-') + ': ' + String(item.message || '');
+        errorList.appendChild(li);
+      });
     }
 
     /**
@@ -3755,9 +3785,8 @@
       // 結果があれば退避（前回の結果として保持 + localStorage に永続化）
       if (bulkExportResults && bulkExportResults.length > 0) {
         lastBulkExportResults = bulkExportResults;
-        // エラー情報も保持
-        const errorList = document.getElementById('bulkExportErrorList');
-        lastBulkExportErrors = errorList && errorList.innerHTML ? errorList.innerHTML : '';
+        // エラー情報も保持（構造化データ）
+        lastBulkExportErrors = Array.isArray(bulkExportErrors) ? bulkExportErrors : [];
         // localStorage に保存
         saveLastExportToStorage();
         // 「前回の結果」ボタンを表示
@@ -3766,6 +3795,7 @@
 
       bulkExportParams = null;
       bulkExportResults = null;
+      bulkExportErrors = [];
     }
 
     /**
@@ -3826,12 +3856,10 @@
       }).join('');
 
       // エラー情報を復元
-      if (lastBulkExportErrors) {
+      if (lastBulkExportErrors.length > 0) {
         document.getElementById('bulkExportCompleteErrors').style.display = 'block';
-        document.getElementById('bulkExportErrorList').innerHTML = lastBulkExportErrors;
-        // エラー件数をカウント
-        const errorCount = (lastBulkExportErrors.match(/<li>/g) || []).length;
-        document.getElementById('bulkExportCompleteErrorCount').textContent = errorCount;
+        renderBulkExportErrorList(lastBulkExportErrors);
+        document.getElementById('bulkExportCompleteErrorCount').textContent = lastBulkExportErrors.length;
       } else {
         document.getElementById('bulkExportCompleteErrors').style.display = 'none';
       }
@@ -3940,6 +3968,7 @@
       // 蓄積結果をリセット（タイムアウト分割対応）
       bulkExportAccumulatedResults = [];
       bulkExportAccumulatedErrors = [];
+      bulkExportErrors = [];
 
       // 進捗画面に切り替え
       document.getElementById('bulkExportSelectView').style.display = 'none';
@@ -4095,6 +4124,7 @@
       const finalErrors = data.errors || [];
       const results = bulkExportAccumulatedResults.concat(finalResults);
       const errors = bulkExportAccumulatedErrors.concat(finalErrors);
+      bulkExportErrors = normalizeBulkExportErrors(errors);
       const successCount = results.length;
 
       console.log('一括出力完了: 蓄積=' + bulkExportAccumulatedResults.length + '件, 最終=' + finalResults.length + '件, 合計=' + results.length + '件');
@@ -4143,20 +4173,14 @@
       }
 
       // エラーがあれば表示
-      if (errors.length > 0) {
+      if (bulkExportErrors.length > 0) {
         document.getElementById('bulkExportCompleteErrors').style.display = 'block';
-        document.getElementById('bulkExportCompleteErrorCount').textContent = errors.length;
-
-        const errorList = document.getElementById('bulkExportErrorList');
-        errorList.innerHTML = errors.map(function(err) {
-          const inv = invoices.find(function(i) { return i.invoice_id === err.invoiceId; });
-          const label = inv ? (inv.customer_name + ' ' + inv.invoice_number) : err.invoiceId;
-          return '<li>' + label + ': ' + (err.message || err.error) + '</li>';
-        }).join('');
+        document.getElementById('bulkExportCompleteErrorCount').textContent = bulkExportErrors.length;
+        renderBulkExportErrorList(bulkExportErrors);
       } else {
         document.getElementById('bulkExportCompleteErrors').style.display = 'none';
         // エラーリストをクリア（「前回の結果」表示時に古いエラーが残らないように）
-        document.getElementById('bulkExportErrorList').innerHTML = '';
+        renderBulkExportErrorList([]);
       }
 
       // 成功メッセージ
@@ -4771,7 +4795,7 @@
         if (!result.ok) {
           if (!summary) { /* モーダル未表示 */ }
           else { document.getElementById('editModal').classList.remove('active'); }
-          showToast(result.message || '請求書の取得に失敗しました', 'error');
+          showToast(result.error?.message || result.message || '請求書の取得に失敗しました', 'error');
           return;
         }
 
@@ -4926,15 +4950,17 @@
           saveBtn.textContent = saveBtnOriginal;
           saveBtn.style.opacity = '';
           if (!result.ok) {
-            if (result.code === 'CONFLICT_ERROR') {
+            const errorCode = result.error?.code || '';
+            const errorDetails = result.error?.details || {};
+            if (errorCode === 'CONFLICT_ERROR') {
               showToast('他のユーザーが変更しました。画面を更新してください', 'warning');
-            } else if (result.data && result.data.partialUpdate) {
+            } else if (errorDetails.partialUpdate) {
               // ヘッダーは更新済みだが明細更新に失敗
               showToast('ヘッダーは保存されましたが、一部の明細更新に失敗しました。画面を更新してください', 'warning');
               closeEditModal();
               loadInvoices(true);
             } else {
-              showToast(result.message || '保存に失敗しました', 'error');
+              showToast(result.error?.message || result.message || '保存に失敗しました', 'error');
             }
             return;
           }
