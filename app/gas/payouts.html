@@ -14,6 +14,7 @@
       --color-danger: #DC3545;
       --bg-main: #FFFFFF;
       --bg-card: #F7FAFC;
+      --bg-secondary: #EEF2F7;
       --bg-hover: #EEF2F7;
       --text-primary: #1F2937;
       --text-muted: #6B7280;
@@ -296,10 +297,19 @@
 
     .toast.success { background: var(--color-success); }
     .toast.error { background: var(--color-danger); }
+    .toast.info { background: var(--color-secondary); }
+    .toast.warning { background: #B45309; }
 
     @keyframes slideIn {
       from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .toast,
+      .spinner {
+        animation: none;
+      }
     }
 
     /* Page-specific modal overrides */
@@ -448,7 +458,7 @@
 
     /* ========== Bulk Action Bar ========== */
     .bulk-action-bar {
-      display: flex;
+      display: none;
       position: sticky;
       top: 0;
       z-index: 50;
@@ -517,6 +527,31 @@
 
     .tab-content.active {
       display: block;
+    }
+
+    .sort-btn {
+      border: none;
+      background: transparent;
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     /* Archive Warning Banner */
@@ -617,10 +652,11 @@
     <div class="spinner"></div>
     <div class="loading-text" id="loadingText">処理中...</div>
   </div>
+  <div id="toastLiveRegion" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <!-- Confirm Modal -->
   <div class="modal-overlay" id="confirmModal" onclick="handleModalOverlayClick(event)">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmModalTitle" tabindex="-1">
       <div class="modal-header">
         <h2 id="confirmModalTitle">確認</h2>
       </div>
@@ -636,16 +672,16 @@
 
   <!-- Payout Detail Modal -->
   <div class="modal-overlay" id="payoutDetailModal" onclick="handlePayoutModalOverlayClick(event)">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="payoutModalTitle" tabindex="-1">
       <div class="modal-header">
-        <h2>未払詳細 - <span id="modalStaffName"></span></h2>
-        <button class="modal-close" onclick="closePayoutModal()">&times;</button>
+        <h2 id="payoutModalTitle">未払詳細 - <span id="modalStaffName"></span></h2>
+        <button type="button" class="modal-close" aria-label="閉じる" onclick="closePayoutModal()">&times;</button>
       </div>
       <!-- アーカイブデータ警告バナー -->
       <div id="payout-archive-warning-banner" class="archive-warning-banner" style="display: none; margin: 0 16px 16px;">
         <span class="banner-icon">⚠️</span>
         <span id="payout-archive-warning-message">このデータは過去年度のアーカイブです。編集内容はアーカイブDBに反映されます。</span>
-        <button class="banner-close" onclick="hidePayoutArchiveWarning()">&times;</button>
+        <button type="button" class="banner-close" aria-label="警告を閉じる" onclick="hidePayoutArchiveWarning()">&times;</button>
       </div>
       <div class="modal-body" id="payoutModalBody">
         <div class="loading">読み込み中...</div>
@@ -660,18 +696,18 @@
 
   <!-- Export Modal -->
   <div class="modal-overlay" id="exportModal" onclick="handleExportModalOverlayClick(event)">
-    <div class="modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle" tabindex="-1">
       <div class="modal-header">
-        <h2>振込集計エクスポート</h2>
-        <button class="modal-close" onclick="closeExportModal()">&times;</button>
+        <h2 id="exportModalTitle">振込集計エクスポート</h2>
+        <button type="button" class="modal-close" aria-label="閉じる" onclick="closeExportModal()">&times;</button>
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label>開始日</label>
+          <label for="exportFromDate">開始日</label>
           <input type="date" id="exportFromDate" class="form-control">
         </div>
         <div class="form-group">
-          <label>終了日</label>
+          <label for="exportToDate">終了日</label>
           <input type="date" id="exportToDate" class="form-control">
         </div>
         <p style="font-size: 12px; color: #6B7280; margin-top: 8px;">
@@ -690,7 +726,7 @@
     <div class="modal" style="max-width: 450px;">
       <div class="modal-header">
         <h2>同名ファイルが存在します</h2>
-        <button class="modal-close" onclick="closeFileOverwriteModal()">&times;</button>
+        <button type="button" class="modal-close" aria-label="閉じる" onclick="closeFileOverwriteModal()">&times;</button>
       </div>
       <div class="modal-body" id="fileOverwriteBody">
         <!-- 動的に設定 -->
@@ -1108,13 +1144,41 @@
       // Load subcontractor list for second tab
       loadSubcontractorList();
 
-      // Event delegation for subcontractor payout undo buttons
+      // Event delegation for row/action buttons
       document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('btn-undo-sub-payout')) {
-          const payoutId = e.target.dataset.payoutId;
-          const updatedAt = e.target.dataset.updatedAt;
-          const targetName = e.target.dataset.targetName;
+        const target = e.target.closest('button');
+        if (!target) return;
+
+        if (target.classList.contains('btn-undo-sub-payout')) {
+          const payoutId = target.dataset.payoutId;
+          const updatedAt = target.dataset.updatedAt;
+          const targetName = target.dataset.targetName;
           undoSubcontractorPayoutConfirm(payoutId, updatedAt, targetName);
+          return;
+        }
+
+        if (target.classList.contains('js-open-payout-modal')) {
+          const staffId = target.dataset.staffId;
+          const staffName = target.dataset.staffName || '';
+          const status = target.dataset.status || 'unpaid';
+          const payoutId = target.dataset.payoutId || null;
+          const updatedAt = target.dataset.updatedAt || null;
+          openPayoutModal(staffId, staffName, { status, payoutId, updatedAt });
+          return;
+        }
+
+        if (target.classList.contains('js-pay-confirmed')) {
+          payConfirmed(target.dataset.payoutId, target.dataset.updatedAt, target.dataset.staffName || '');
+          return;
+        }
+
+        if (target.classList.contains('js-undo-confirm')) {
+          undoConfirm(target.dataset.payoutId, target.dataset.updatedAt, target.dataset.staffName || '');
+          return;
+        }
+
+        if (target.classList.contains('js-toggle-sign')) {
+          toggleSign(target.dataset.staffId);
         }
       });
 
@@ -1256,6 +1320,11 @@
             link.dataset.configured = 'false';
           }
         })
+        .withFailureHandler(function(err) {
+          const link = document.getElementById('payout-folder-link');
+          if (link) link.dataset.configured = 'false';
+          showToast('error', err && err.message ? err.message : '出力先フォルダ情報の取得に失敗しました');
+        })
         .getPayoutExportFolderUrl();
     }
 
@@ -1264,7 +1333,7 @@
         return true; // 通常のリンク動作
       }
       if (link.dataset.configured === 'false') {
-        showToast('エクスポート先フォルダが設定されていません。設定画面で設定してください。', 'warning');
+        showToast('warning', 'エクスポート先フォルダが設定されていません。設定画面で設定してください。');
       }
       return false; // リンク遷移を阻止
     }
@@ -1534,6 +1603,11 @@
             if (result.ok) {
               const unpaidData = result.data;
               const confirmedData = unpaidData.confirmedPayouts || [];
+              const oldCached = loadFromSession(endDate);
+              const oldConfirmed = oldCached?.confirmedData || oldCached?.data?.confirmedPayouts || [];
+              const hasChanged = !oldCached ||
+                JSON.stringify(oldCached.data) !== JSON.stringify(unpaidData) ||
+                JSON.stringify(oldConfirmed) !== JSON.stringify(confirmedData);
 
               // キャッシュを更新（syncTimestamp付き）
               saveToSession({
@@ -1546,8 +1620,7 @@
               });
 
               // 差分があればUIを更新
-              const currentData = loadFromSession(endDate);
-              if (!currentData || JSON.stringify(currentData.data) !== JSON.stringify(unpaidData)) {
+              if (hasChanged) {
                 renderUnpaidStaffList(unpaidData, confirmedData);
                 showToast('info', 'データを更新しました');
               }
@@ -1716,17 +1789,18 @@
             <div class="value amount">${formatCurrency(unpaidTotal + confirmedTotal)}</div>
           </div>
         </div>
+        <div class="table-scroll">
         <table class="data-table" id="payoutTable">
           <thead>
             <tr>
-              <th><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+              <th><input type="checkbox" id="selectAll" aria-label="全件選択" onchange="toggleSelectAll(this)"></th>
               <th>スタッフ</th>
               <th>配置数</th>
               <th>期間</th>
               <th>基本金額</th>
               <th>調整額</th>
               <th>備考</th>
-              <th class="sortable" onclick="toggleStatusSort()" style="cursor: pointer;">ステータス ⇅</th>
+              <th><button type="button" class="sort-btn" onclick="toggleStatusSort()" aria-label="ステータスで並び替え">ステータス ⇅</button></th>
               <th>操作</th>
             </tr>
           </thead>
@@ -1744,10 +1818,11 @@
       html += `
           </tbody>
         </table>
+        </div>
       `;
 
       summaryDiv.innerHTML = html;
-      currentSortOrder = 'unpaid-first';
+      currentSortOrder = 'confirmed-first';
       updateFab();
 
       // 自動モーダルオープン
@@ -1776,21 +1851,26 @@
 
     // Render a single unpaid row
     function renderUnpaidRow(s) {
+      const staffId = escapeHtml(s.staffId || '');
+      const staffName = escapeHtml(s.staffName || '');
+      const staffNameKana = escapeHtml(s.staffNameKana || s.staffName || '');
+      const periodStart = escapeHtml(s.periodStart || '-');
+      const periodEnd = escapeHtml(s.periodEnd || '-');
       return `
-        <tr data-staff-id="${s.staffId}" data-status="unpaid" data-row-id="${s.rowId}" data-name-kana="${s.staffNameKana || s.staffName}" class="clickable-row" onclick="toggleRowCheck(this, event)">
-          <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${s.staffId}"></td>
-          <td>${s.staffName}</td>
+        <tr data-staff-id="${staffId}" data-status="unpaid" data-row-id="${escapeHtml(s.rowId || '')}" data-name-kana="${staffNameKana}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+          <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${staffId}"></td>
+          <td>${staffName}</td>
           <td>${s.unpaidCount}件</td>
-          <td style="font-size:12px">${s.periodStart || '-'} ~ ${s.periodEnd}</td>
+          <td style="font-size:12px">${periodStart} ~ ${periodEnd}</td>
           <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
           <td style="white-space: nowrap;">
-            <button type="button" class="btn-sign positive" data-staff-id="${s.staffId}" onclick="toggleSign('${s.staffId}')">+</button>
-            <input type="number" class="adjustment-input" data-staff-id="${s.staffId}" value="0" min="0" />
+            <button type="button" class="btn-sign positive js-toggle-sign" data-staff-id="${staffId}">+</button>
+            <input type="number" class="adjustment-input" data-staff-id="${staffId}" value="0" min="0" />
           </td>
-          <td><input type="text" class="notes-input" data-staff-id="${s.staffId}" placeholder="" /></td>
+          <td><input type="text" class="notes-input" data-staff-id="${staffId}" placeholder="" /></td>
           <td><span class="status-badge draft">未払</span></td>
           <td>
-            <button class="btn btn-secondary" onclick="openPayoutModal('${s.staffId}', '${s.staffName}', { status: 'unpaid' })">詳細</button>
+            <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${staffId}" data-staff-name="${staffName}" data-status="unpaid">詳細</button>
           </td>
         </tr>
       `;
@@ -1798,23 +1878,30 @@
 
     // Render a single confirmed row
     function renderConfirmedRow(p) {
+      const staffId = escapeHtml(p.staffId || '');
+      const payoutId = escapeHtml(p.payoutId || '');
+      const updatedAt = escapeHtml(p.updatedAt || '');
+      const staffName = escapeHtml(p.staffName || '');
+      const staffNameKana = escapeHtml(p.staffNameKana || p.staffName || '');
+      const periodStart = escapeHtml(p.periodStart || '-');
+      const periodEnd = escapeHtml(p.periodEnd || '-');
       const adjustmentDisplay = p.adjustmentAmount !== 0
         ? `<span style="color: ${p.adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${p.adjustmentAmount > 0 ? '+' : ''}${formatCurrency(p.adjustmentAmount).replace('¥', '')}</span>`
         : '-';
       return `
-        <tr data-payout-id="${p.payoutId}" data-staff-id="${p.staffId}" data-status="confirmed" data-row-id="${p.rowId}" data-updated-at="${p.updatedAt}" data-name-kana="${p.staffNameKana || p.staffName}" class="clickable-row" onclick="toggleRowCheck(this, event)">
-          <td><input type="checkbox" class="payout-check" data-status="confirmed" value="${p.payoutId}"></td>
-          <td>${p.staffName}</td>
+        <tr data-payout-id="${payoutId}" data-staff-id="${staffId}" data-status="confirmed" data-row-id="${escapeHtml(p.rowId || '')}" data-updated-at="${updatedAt}" data-name-kana="${staffNameKana}" class="clickable-row" onclick="toggleRowCheck(this, event)">
+          <td><input type="checkbox" class="payout-check" data-status="confirmed" value="${payoutId}"></td>
+          <td>${staffName}</td>
           <td>${p.unpaidCount}件</td>
-          <td style="font-size:12px">${p.periodStart || '-'} ~ ${p.periodEnd}</td>
+          <td style="font-size:12px">${periodStart} ~ ${periodEnd}</td>
           <td class="amount">${formatCurrency(p.estimatedAmount)}</td>
           <td class="amount">${adjustmentDisplay}</td>
-          <td style="max-width: 150px; white-space: normal;">${p.notes}</td>
+          <td style="max-width: 150px; white-space: normal;">${escapeHtml(p.notes || '')}</td>
           <td><span class="status-badge confirmed">確認済み</span></td>
           <td style="white-space: nowrap;">
-            <button class="btn btn-secondary" onclick="openPayoutModal('${p.staffId}', '${p.staffName}', { status: 'confirmed', payoutId: '${p.payoutId}', updatedAt: '${p.updatedAt}' })">詳細</button>
-            <button class="btn btn-primary" onclick="payConfirmed('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">支払</button>
-            <button class="btn btn-secondary" onclick="undoConfirm('${p.payoutId}', '${p.updatedAt}', '${p.staffName}')">取消</button>
+            <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${staffId}" data-staff-name="${staffName}" data-status="confirmed" data-payout-id="${payoutId}" data-updated-at="${updatedAt}">詳細</button>
+            <button type="button" class="btn btn-primary js-pay-confirmed" data-payout-id="${payoutId}" data-updated-at="${updatedAt}" data-staff-name="${staffName}">支払</button>
+            <button type="button" class="btn btn-secondary js-undo-confirm" data-payout-id="${payoutId}" data-updated-at="${updatedAt}" data-staff-name="${staffName}">取消</button>
           </td>
         </tr>
       `;
@@ -1935,7 +2022,7 @@
       const toDate = document.getElementById('historyToDate').value;
 
       if (!fromDate || !toDate) {
-        showToast('期間を指定してください', 'error');
+        showToast('error', '期間を指定してください');
         return;
       }
 
@@ -1975,7 +2062,7 @@
       const toDate = document.getElementById('subHistoryToDate').value;
 
       if (!fromDate || !toDate) {
-        showToast('期間を指定してください', 'error');
+        showToast('error', '期間を指定してください');
         return;
       }
 
@@ -2180,7 +2267,7 @@
 
       showConfirmModal(
         '支払済確認',
-        `<p><strong>${currentUnpaid.staffName}</strong> を支払済にします。</p>
+        `<p><strong>${escapeHtml(currentUnpaid.staffName)}</strong> を支払済にします。</p>
          <p>配置数: ${currentUnpaid.assignmentCount}件</p>
          <p>支払日: ${paidDate}</p>
          <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
@@ -2344,10 +2431,22 @@
 
       const checkboxes = document.querySelectorAll('.payout-check[data-status="confirmed"]:checked');
       const payoutIds = Array.from(checkboxes).map(cb => cb.value);
+      const expectedUpdatedAtMap = {};
+      Array.from(checkboxes).forEach(cb => {
+        const row = cb.closest('tr');
+        const updatedAt = row?.dataset?.updatedAt || '';
+        if (cb.value && updatedAt) {
+          expectedUpdatedAtMap[cb.value] = updatedAt;
+        }
+      });
       console.log('[bulkPayConfirmed] payoutIds:', payoutIds);
 
       if (payoutIds.length === 0) {
         showToast('error', '確認済みのスタッフを選択してください');
+        return;
+      }
+      if (Object.keys(expectedUpdatedAtMap).length !== payoutIds.length) {
+        showToast('error', '更新競合チェック情報が不足しています。画面を再読み込みして再実行してください。');
         return;
       }
 
@@ -2400,7 +2499,7 @@
               hideLoading();
               showToast('error', err.message);
             })
-            .bulkPayConfirmed(payoutIds, { paid_date: paidDate });
+            .bulkPayConfirmed(payoutIds, { paid_date: paidDate, expectedUpdatedAtMap: expectedUpdatedAtMap });
         }
       );
     }
@@ -2411,7 +2510,7 @@
 
       showConfirmModal(
         '振込完了確認',
-        `<p><strong>${staffName}</strong> を支払済にします。</p>
+        `<p><strong>${escapeHtml(staffName)}</strong> を支払済にします。</p>
          <p>支払日: ${paidDate}</p>`,
         '支払済にする',
         'btn-primary',
@@ -2449,7 +2548,7 @@
     function undoConfirm(payoutId, updatedAt, staffName) {
       showConfirmModal(
         '確認取消',
-        `<p><strong>${staffName}</strong> の確認を取り消しますか？</p>
+        `<p><strong>${escapeHtml(staffName)}</strong> の確認を取り消しますか？</p>
          <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
@@ -2519,7 +2618,7 @@
     function undoPayoutConfirm(payoutId, updatedAt, staffName) {
       showConfirmModal(
         '支払取消確認',
-        `<p><strong>${staffName}</strong> の支払を取り消しますか？</p>
+        `<p><strong>${escapeHtml(staffName)}</strong> の支払を取り消しますか？</p>
          <p>取り消すと未払状態に戻ります。</p>`,
         '取り消す',
         'btn-danger',
@@ -3054,7 +3153,7 @@
       if (modalPayoutStatus === 'confirmed' && modalPayoutId) {
         showConfirmModal(
           '支払済確認',
-          `<p><strong>${modalUnpaidData.staffName}</strong> を支払済にします。</p>
+          `<p><strong>${escapeHtml(modalUnpaidData.staffName)}</strong> を支払済にします。</p>
            <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
            <p>支払日: ${paidDate}</p>
            <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
@@ -3096,7 +3195,7 @@
       // 未払から直接支払い（従来の処理、ただし通常はconfirmFromModalが呼ばれるはず）
       showConfirmModal(
         '支払済確認',
-        `<p><strong>${modalUnpaidData.staffName}</strong> を支払済にします。</p>
+        `<p><strong>${escapeHtml(modalUnpaidData.staffName)}</strong> を支払済にします。</p>
          <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
          <p>支払日: ${paidDate}</p>
          <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
@@ -3154,7 +3253,7 @@
 
       showConfirmModal(
         '確認済みにする',
-        `<p><strong>${modalUnpaidData.staffName}</strong> を確認済みにします。</p>
+        `<p><strong>${escapeHtml(modalUnpaidData.staffName)}</strong> を確認済みにします。</p>
          <p>配置数: ${modalUnpaidData.assignmentCount}件</p>
          <p>合計金額: <strong>${formatCurrency(total)}</strong></p>`,
         '確認済みにする',
@@ -3388,10 +3487,16 @@
      */
     function updateUnpaidListSummary() {
       const rows = document.querySelectorAll('#unpaidSummary tbody tr[data-staff-id]');
-      let totalCount = rows.length;
+      let unpaidCount = 0;
+      let confirmedCount = 0;
       let totalAmount = 0;
 
       rows.forEach(row => {
+        if (row.dataset.status === 'confirmed') {
+          confirmedCount++;
+        } else {
+          unpaidCount++;
+        }
         const amountCell = row.querySelector('td.amount');
         if (amountCell) {
           // 半角¥(U+00A5)と全角￥(U+FFE5)の両方を除去
@@ -3402,13 +3507,14 @@
 
       // サマリーを更新
       const summaryItems = document.querySelectorAll('#unpaidSummary .summary-item .value');
-      if (summaryItems.length >= 2) {
-        summaryItems[0].textContent = `${totalCount}名`;
-        summaryItems[1].textContent = formatCurrency(totalAmount);
+      if (summaryItems.length >= 3) {
+        summaryItems[0].textContent = `${unpaidCount}名`;
+        summaryItems[1].textContent = `${confirmedCount}名`;
+        summaryItems[2].textContent = formatCurrency(totalAmount);
       }
 
       // 全員支払済の場合
-      if (totalCount === 0) {
+      if (unpaidCount + confirmedCount === 0) {
         const summaryDiv = document.getElementById('unpaidSummary');
         summaryDiv.innerHTML = '<div class="empty-state">未払のスタッフはいません</div>';
         clearSession();
@@ -3599,7 +3705,12 @@
       const toast = document.createElement('div');
       toast.className = `toast ${type}`;
       toast.textContent = message;
+      toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
       document.body.appendChild(toast);
+      const liveRegion = document.getElementById('toastLiveRegion');
+      if (liveRegion) {
+        liveRegion.textContent = message;
+      }
       setTimeout(() => toast.remove(), 3000);
     }
 
@@ -4094,7 +4205,7 @@
       const endDate = document.getElementById('subEndDateFilter').value;
 
       if (!endDate) {
-        showToast('締日を指定してください', 'error');
+        showToast('error', '締日を指定してください');
         return;
       }
 
@@ -4134,13 +4245,13 @@
               currentSubUnpaid = response.data;
               renderSubcontractorUnpaidDetail(response.data, { preview: false });
             } else {
-              showToast(response.error?.message || '取得に失敗しました', 'error');
+              showToast('error', response.error?.message || '取得に失敗しました');
             }
           })
           .withFailureHandler(function(error) {
             if (showedLoading) hideLoading();
             if (document.getElementById('subcontractorFilter').value !== requestedSubId) return;
-            showToast('エラー: ' + error.message, 'error');
+            showToast('error', 'エラー: ' + error.message);
           })
           .getUnpaidSummaryForSubcontractor(subId, endDate);
       } else {
@@ -4154,12 +4265,12 @@
               // キャッシュに保存
               saveSubUnpaidToSession(response.data, endDate);
             } else {
-              showToast(response.error?.message || '取得に失敗しました', 'error');
+              showToast('error', response.error?.message || '取得に失敗しました');
             }
           })
           .withFailureHandler(function(error) {
             hideLoading();
-            showToast('エラー: ' + error.message, 'error');
+            showToast('error', 'エラー: ' + error.message);
           })
           .getUnpaidSubcontractorList(endDate);
       }
@@ -4182,7 +4293,7 @@
               // 差分があればUIを更新
               if (!oldData || JSON.stringify(oldData) !== JSON.stringify(newData)) {
                 renderSubcontractorUnpaidList(newData);
-                showToast('データを更新しました', 'info');
+                showToast('info', 'データを更新しました');
               }
             }
           }
