@@ -88,10 +88,10 @@ const PayoutService = {
     }
     const jobs = JobRepository.search(jobQuery);
     const jobMap = new Map(jobs.map(j => [j.job_id as string, j]));
-    const jobIds = jobs.map(j => j.job_id as string);
+    const jobIdSet = new Set(jobs.map(j => j.job_id as string));
     Logger.log(`[getUnpaidAssignments] jobs found: ${jobs.length}, jobQuery=${JSON.stringify(jobQuery)}`);
 
-    if (jobIds.length === 0) {
+    if (jobIdSet.size === 0) {
       return [];
     }
 
@@ -104,7 +104,7 @@ const PayoutService = {
       !a.is_deleted &&
       a.status === 'ASSIGNED' &&
       !a.payout_id &&  // 二重計上防止: payout_idが設定されていない配置のみ
-      jobIds.includes(a.job_id as string)
+      jobIdSet.has(a.job_id as string)
     );
     Logger.log(`[getUnpaidAssignments] unpaidAssignments after filter: ${unpaidAssignments.length}`);
 
@@ -231,7 +231,20 @@ const PayoutService = {
     });
 
     // 4. 対象Assignmentにpayout_idを設定（二重計上防止）
-    this._linkAssignmentsToPayout(calc.assignments!, payout.payout_id);
+    const linked = this._linkAssignmentsToPayout(calc.assignments!, payout.payout_id);
+    if (!linked) {
+      try {
+        PayoutRepository.softDelete(payout.payout_id, payout.updated_at);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`[confirmPayout] Rollback failed: ${msg}`);
+      }
+      return {
+        success: false,
+        error: 'ASSIGNMENT_LINK_FAILED',
+        message: '配置データの紐付けに失敗しました'
+      };
+    }
 
     // 5. 監査ログ
     try {
@@ -363,7 +376,20 @@ const PayoutService = {
     });
 
     // 5. 対象Assignmentにpayout_idを設定（二重計上防止）
-    this._linkAssignmentsToPayout(calc.assignments!, payout.payout_id);
+    const linked = this._linkAssignmentsToPayout(calc.assignments!, payout.payout_id);
+    if (!linked) {
+      try {
+        PayoutRepository.softDelete(payout.payout_id, payout.updated_at);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`[markAsPaid] Rollback failed: ${msg}`);
+      }
+      return {
+        success: false,
+        error: 'ASSIGNMENT_LINK_FAILED',
+        message: '配置データの紐付けに失敗しました'
+      };
+    }
 
     // 6. 監査ログ
     try {
@@ -641,12 +667,28 @@ const PayoutService = {
   bulkPayConfirmed: function(payoutIds: string[], options: { paid_date?: string; expectedUpdatedAtMap?: Record<string, string> } = {}): BulkPayConfirmedResult {
     Logger.log(`[bulkPayConfirmed] Starting bulk update for ${payoutIds.length} payouts`);
 
+    const expectedUpdatedAtMap = options.expectedUpdatedAtMap || {};
+    const missingExpected = payoutIds.filter(payoutId => !expectedUpdatedAtMap[payoutId]);
+    if (missingExpected.length > 0) {
+      return {
+        success: 0,
+        failed: payoutIds.length,
+        results: payoutIds.map(payoutId => ({
+          payoutId: payoutId,
+          success: false,
+          error: 'EXPECTED_UPDATED_AT_REQUIRED',
+          message: 'expectedUpdatedAt is required'
+        })),
+        payouts: []
+      };
+    }
+
     const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
 
     // バルク更新を使用（シートI/Oを1回に集約）
     const result = PayoutRepository.bulkUpdateStatus(payoutIds, 'paid', {
       paid_date: paidDate,
-      expectedUpdatedAtMap: options.expectedUpdatedAtMap || {}
+      expectedUpdatedAtMap: expectedUpdatedAtMap
     });
 
     Logger.log(`[bulkPayConfirmed] Completed: success=${result.success}, failed=${result.failed}`);
@@ -811,7 +853,13 @@ const PayoutService = {
     }
 
     // 1. 関連Assignmentのpayout_idをクリア
-    this._unlinkAssignmentsFromPayout(payoutId);
+    const unlinked = this._unlinkAssignmentsFromPayout(payoutId);
+    if (!unlinked) {
+      return {
+        success: false,
+        error: 'ASSIGNMENT_UNLINK_FAILED'
+      };
+    }
 
     // 2. 論理削除で取り消し
     const result = PayoutRepository.softDelete(payoutId, expectedUpdatedAt) as PayoutUpdateResult & { undone?: PayoutRecord & { target_name: string } };
@@ -916,8 +964,6 @@ const PayoutService = {
 
     if (staffList.length === 0) return [];
 
-    const staffMap = new Map(staffList.map(s => [s.staff_id as string, s]));
-
     // 2. 対象期間のJobを一括取得
     const jobs = JobRepository.search({ work_date_to: endDate, sort_order: 'asc' });
     if (jobs.length === 0) return [];
@@ -928,6 +974,17 @@ const PayoutService = {
     // 3. 全Assignmentsを一括取得（ASSIGNEDかつpayout_id未設定のみ）
     const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' })
       .filter(a => !a.payout_id);  // 二重計上防止
+    const assignmentsByStaff = new Map<string, Record<string, unknown>[]>();
+    for (const assignment of allAssignments) {
+      const staffId = assignment.staff_id as string;
+      if (!staffId) continue;
+      const existing = assignmentsByStaff.get(staffId);
+      if (existing) {
+        existing.push(assignment);
+      } else {
+        assignmentsByStaff.set(staffId, [assignment]);
+      }
+    }
 
     // 4. 支払済み/確認済みPayoutsを取得
     const allPayouts = PayoutRepository.search({
@@ -961,8 +1018,7 @@ const PayoutService = {
       const startDate = lastPayout ? this._addDays(lastPayout.period_end, 1) : null;
 
       // このスタッフの対象Assignmentsをフィルタ
-      const staffAssignments = allAssignments.filter(a => {
-        if (a.staff_id !== staffId) return false;
+      const staffAssignments = (assignmentsByStaff.get(staffId) || []).filter(a => {
         if (!jobIds.has(a.job_id as string)) return false;
 
         const job = jobMap.get(a.job_id as string);
@@ -1053,14 +1109,16 @@ const PayoutService = {
     }
 
     // 5. 変更があったスタッフの未払い情報を再計算
-    const fullList = this.getUnpaidStaffList(endDate);
-
-    // 変更があったスタッフのみフィルタ
-    const deltaStaffList = fullList.filter(s => changedStaffIdSet.has(s.staffId));
-
-    // 6. 削除されたスタッフを特定（変更があったが未払いリストにいない）
-    const unpaidStaffIdSet = new Set(fullList.map(s => s.staffId));
-    const removedStaffIds = changedStaffIds.filter(id => !unpaidStaffIdSet.has(id));
+    const deltaStaffList: UnpaidStaffItem[] = [];
+    const removedStaffIds: string[] = [];
+    for (const staffId of changedStaffIds) {
+      const staffResult = this.getUnpaidStaffList(endDate, { staffId: staffId });
+      if (staffResult.length > 0) {
+        deltaStaffList.push(staffResult[0]);
+      } else {
+        removedStaffIds.push(staffId);
+      }
+    }
 
     Logger.log(`[getUnpaidStaffListDelta] delta: ${deltaStaffList.length} updated, ${removedStaffIds.length} removed`);
 
@@ -1175,9 +1233,9 @@ const PayoutService = {
    * @param assignments - 配置リスト
    * @param payoutId - 支払ID
    */
-  _linkAssignmentsToPayout: function(assignments: Record<string, unknown>[], payoutId: string): void {
+  _linkAssignmentsToPayout: function(assignments: Record<string, unknown>[], payoutId: string): boolean {
     if (!assignments || assignments.length === 0) {
-      return;
+      return true;
     }
 
     const updates = assignments.map(a => ({
@@ -1188,9 +1246,11 @@ const PayoutService = {
     try {
       const result = AssignmentRepository.bulkUpdatePayoutId(updates);
       Logger.log(`[_linkAssignmentsToPayout] Updated ${result.success} assignments with payout_id: ${payoutId}`);
+      return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Logger.log(`[_linkAssignmentsToPayout] Error: ${msg}`);
+      return false;
     }
   },
 
@@ -1198,13 +1258,12 @@ const PayoutService = {
    * PayoutIDに紐付いたAssignmentsのpayout_idをクリア（バルク処理版）
    * @param payoutId - 支払ID
    */
-  _unlinkAssignmentsFromPayout: function(payoutId: string): void {
+  _unlinkAssignmentsFromPayout: function(payoutId: string): boolean {
     // payout_idで関連するAssignmentsを検索
-    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
-    const linkedAssignments = allAssignments.filter(a => a.payout_id === payoutId);
+    const linkedAssignments = AssignmentRepository.search({ payout_id: payoutId, status: 'ASSIGNED' });
 
     if (linkedAssignments.length === 0) {
-      return;
+      return true;
     }
 
     // バルク更新用のデータを作成
@@ -1216,9 +1275,11 @@ const PayoutService = {
     try {
       // 一括でpayout_idをクリア
       AssignmentRepository.bulkUpdatePayoutId(updates);
+      return true;
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       Logger.log(`[_unlinkAssignmentsFromPayout] Bulk update error: ${msg}`);
+      return false;
     }
   },
 
@@ -1492,7 +1553,20 @@ const PayoutService = {
     });
 
     // 対象Assignmentにpayout_idを設定
-    this._linkAssignmentsToPayout(calc.assignments as Record<string, unknown>[], payout.payout_id);
+    const linked = this._linkAssignmentsToPayout(calc.assignments as Record<string, unknown>[], payout.payout_id);
+    if (!linked) {
+      try {
+        PayoutRepository.softDelete(payout.payout_id, payout.updated_at);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`[confirmPayoutForSubcontractor] Rollback failed: ${msg}`);
+      }
+      return {
+        success: false,
+        error: 'ASSIGNMENT_LINK_FAILED',
+        message: '配置データの紐付けに失敗しました'
+      };
+    }
 
     try {
       logCreate('T_Payouts', payout.payout_id, payout);
@@ -1547,7 +1621,20 @@ const PayoutService = {
       notes: options.notes || ''
     });
 
-    this._linkAssignmentsToPayout(calc.assignments as Record<string, unknown>[], payout.payout_id);
+    const linked = this._linkAssignmentsToPayout(calc.assignments as Record<string, unknown>[], payout.payout_id);
+    if (!linked) {
+      try {
+        PayoutRepository.softDelete(payout.payout_id, payout.updated_at);
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Logger.log(`[markAsPaidForSubcontractor] Rollback failed: ${msg}`);
+      }
+      return {
+        success: false,
+        error: 'ASSIGNMENT_LINK_FAILED',
+        message: '配置データの紐付けに失敗しました'
+      };
+    }
 
     try {
       logCreate('T_Payouts', payout.payout_id, payout);

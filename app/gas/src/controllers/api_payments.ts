@@ -51,6 +51,24 @@ function recordPayment(invoiceId: string, paymentData: Record<string, unknown>, 
       );
     }
 
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt is required',
+        {},
+        requestId
+      );
+    }
+
+    if (!paymentData.payment_date) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '入金日は必須です',
+        {},
+        requestId
+      );
+    }
+
     const amount = parseFloat(String(paymentData.amount));
     if (isNaN(amount) || amount <= 0) {
       return buildErrorResponse(
@@ -82,8 +100,16 @@ function recordPayment(invoiceId: string, paymentData: Record<string, unknown>, 
       );
     }
 
+    const paymentInput: PaymentInput = {
+      payment_date: String(paymentData.payment_date),
+      amount: amount,
+      payment_method: paymentData.payment_method ? String(paymentData.payment_method) : 'bank_transfer',
+      bank_ref: paymentData.bank_ref ? String(paymentData.bank_ref) : '',
+      notes: paymentData.notes ? String(paymentData.notes) : ''
+    };
+
     // 3. Service呼び出し
-    const result = PaymentService.recordPayment(invoiceId, paymentData as unknown as PaymentInput, expectedUpdatedAt);
+    const result = PaymentService.recordPayment(invoiceId, paymentInput, expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT' ? ERROR_CODES.CONFLICT_ERROR : ERROR_CODES.VALIDATION_ERROR;
@@ -169,6 +195,15 @@ function deletePayment(paymentId: string, invoiceExpectedUpdatedAt: string) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         'paymentId is required',
+        {},
+        requestId
+      );
+    }
+
+    if (!invoiceExpectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'invoiceExpectedUpdatedAt is required',
         {},
         requestId
       );
