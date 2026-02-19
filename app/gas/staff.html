@@ -553,6 +553,18 @@
       background: var(--bg-card);
     }
 
+    .btn-icon {
+      background: none;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      padding: 4px 8px;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .btn-icon:hover { background: var(--bg-hover); }
+    .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
   </style>
 </head>
 <body>
@@ -876,11 +888,18 @@
               </div>
               <div class="form-group">
                 <label for="bank-account-number">口座番号</label>
-                <input type="text" id="bank-account-number" name="bank_account_number" placeholder="1234567" maxlength="8">
+                <div style="display: flex; gap: 4px;">
+                  <input type="text" id="bank-account-number" name="bank_account_number"
+                         placeholder="1234567" maxlength="8" readonly>
+                  <button type="button" id="bank-account-toggle" class="btn-icon"
+                          onclick="toggleBankAccountNumber()" title="口座番号を表示">
+                    👁
+                  </button>
+                </div>
               </div>
               <div class="form-group">
                 <label for="bank-account-name">口座名義</label>
-                <input type="text" id="bank-account-name" name="bank_account_name" placeholder="ヤマダ タロウ">
+                <input type="text" id="bank-account-name" name="bank_account_name" placeholder="〇〇 〇〇">
               </div>
             </div>
           </div>
@@ -951,6 +970,8 @@
     let staffList = [];
     let filteredStaff = [];
     let currentStaff = null;
+    var bankAccountRevealed = false;
+    var bankAccountRevealStaffId = null;
     let subcontractors = [];
     let currentSkills = [];  // 編集中のスキルタグ
 
@@ -1073,7 +1094,7 @@
           handleStaffData(response);
         })
         .withFailureHandler(handleError)
-        .listStaff({ includeDeleted: false });
+        .listStaff({ includeDeleted: false, maskSensitive: true });
     }
 
     function refreshStaffInBackground() {
@@ -1089,7 +1110,7 @@
             filterStaff();
           }
         })
-        .listStaff({ includeDeleted: false });
+        .listStaff({ includeDeleted: false, maskSensitive: true });
     }
 
     function loadSubcontractors() {
@@ -1415,6 +1436,69 @@
     // Modal Functions
     // ========================================
 
+    function toggleBankAccountNumber() {
+      var input = document.getElementById('bank-account-number');
+      var toggle = document.getElementById('bank-account-toggle');
+      var staffId = document.getElementById('staff-id').value;
+
+      // 新規 → そのまま編集可
+      if (!staffId) {
+        input.readOnly = false;
+        input.focus();
+        return;
+      }
+
+      // 既にreveal済み → マスクに戻す
+      if (bankAccountRevealed) {
+        var masked = input.dataset.maskedValue || '****';
+        input.value = masked;
+        input.readOnly = true;
+        bankAccountRevealed = false;
+        toggle.textContent = '👁';
+        toggle.title = '口座番号を表示';
+        return;
+      }
+
+      // API呼び出しで生データ取得
+      toggle.disabled = true;
+      toggle.textContent = '...';
+      bankAccountRevealStaffId = staffId;
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          toggle.disabled = false;
+          // レース対策: 現在表示中のスタッフと一致するか確認
+          var currentId = document.getElementById('staff-id').value;
+          if (currentId !== bankAccountRevealStaffId) return;
+
+          if (res.ok && res.data) {
+            var realValue = res.data.bank_account_number || '';
+            // マスク値と同じなら権限不足
+            if (realValue.indexOf('****') === 0) {
+              showToast('口座番号の表示権限がありません', 'error');
+              toggle.textContent = '🔒';
+              return;
+            }
+            input.dataset.maskedValue = input.value; // 元のマスク値を保存
+            input.value = realValue;
+            input.readOnly = false;
+            bankAccountRevealed = true;
+            toggle.textContent = '🔒';
+            toggle.title = '口座番号を隠す';
+            input.focus();
+          } else {
+            showToast('取得に失敗しました', 'error');
+            toggle.textContent = '👁';
+          }
+        })
+        .withFailureHandler(function(err) {
+          toggle.disabled = false;
+          toggle.textContent = '👁';
+          showToast('口座番号の取得に失敗しました', 'error');
+        })
+        .getStaff(staffId);
+    }
+
     function openModal(staffId) {
       const modal = document.getElementById('staff-modal');
       const form = document.getElementById('staff-form');
@@ -1443,6 +1527,7 @@
           const isSubcontract = currentStaff.staff_type === 'subcontract';
           subcontractorGroup.classList.toggle('is-hidden', !isSubcontract);
         }
+        document.getElementById('bank-account-toggle').style.display = '';
       } else {
         // Create mode
         document.getElementById('modal-title').textContent = '新規スタッフ';
@@ -1455,6 +1540,11 @@
         document.getElementById('has-motorbike').value = 'false';
         document.getElementById('gender').value = 'male';
         subcontractorGroup.classList.add('is-hidden');
+
+        // 新規時は口座番号を直接入力可、トグル不要
+        bankAccountRevealed = false;
+        document.getElementById('bank-account-number').readOnly = false;
+        document.getElementById('bank-account-toggle').style.display = 'none';
       }
 
       modal.style.display = 'flex';
@@ -1497,6 +1587,12 @@
       document.getElementById('bank-branch').value = staff.bank_branch || '';
       document.getElementById('bank-account-type').value = staff.bank_account_type || '';
       document.getElementById('bank-account-number').value = staff.bank_account_number || '';
+      document.getElementById('bank-account-number').readOnly = true;
+      bankAccountRevealed = false;
+      bankAccountRevealStaffId = null;
+      document.getElementById('bank-account-toggle').textContent = '👁';
+      document.getElementById('bank-account-toggle').disabled = false;
+      document.getElementById('bank-account-toggle').title = '口座番号を表示';
       document.getElementById('bank-account-name').value = staff.bank_account_name || '';
       document.getElementById('foreigner-type').value = staff.foreigner_type || '';
       document.getElementById('ng-customers').value = staff.ng_customers || '';
@@ -1632,19 +1728,28 @@
         }
       });
 
+      // staffId/updatedAt を先に取得（bank_account_number分岐で参照するため）
+      const staffId = document.getElementById('staff-id').value;
+      const updatedAt = document.getElementById('staff-updated-at').value;
+
       // 口座フィールドは空値も明示的に送信（空に戻す操作を許可）
-      var bankFields = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name'];
-      bankFields.forEach(function(field) {
+      // bank_account_number は reveal/未reveal で分離制御
+      var bankFieldsAlways = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_name'];
+      bankFieldsAlways.forEach(function(field) {
         if (!(field in staff)) {
           staff[field] = '';
         }
       });
 
+      // bank_account_number: reveal済みなら送信、未revealなら除外（既存値維持）
+      if (!bankAccountRevealed && staffId) {
+        delete staff.bank_account_number;
+      } else if (!staff.bank_account_number) {
+        staff.bank_account_number = '';
+      }
+
       // Collect skills from tags
       staff.skills = currentSkills.join(',');
-
-      const staffId = document.getElementById('staff-id').value;
-      const updatedAt = document.getElementById('staff-updated-at').value;
 
       if (staffId) {
         staff.staff_id = staffId;
@@ -1663,12 +1768,18 @@
           saveBtn.textContent = '保存';
 
           if (response.ok) {
+            // 口座番号を再マスクしてからstaffListに入れる（平文がリストに残るのを防止）
+            var savedData = response.data;
+            if (savedData.bank_account_number) {
+              var val = String(savedData.bank_account_number);
+              savedData.bank_account_number = val.length > 4 ? '****' + val.slice(-4) : '****';
+            }
             // 差分更新（全件再取得せずローカル更新）
             if (isNew) {
-              staffList.push(response.data);
+              staffList.push(savedData);
             } else {
-              const idx = staffList.findIndex(s => s.staff_id === response.data.staff_id);
-              if (idx !== -1) staffList[idx] = response.data;
+              const idx = staffList.findIndex(s => s.staff_id === savedData.staff_id);
+              if (idx !== -1) staffList[idx] = savedData;
             }
             // キャッシュ更新
             PageCache.set(STAFF_CACHE_KEY, staffList);
