@@ -426,6 +426,10 @@
             filterData();
             showToast('保存しました', 'success');
             closeModal();
+            // 他タブ（payouts等）に変更を通知
+            var _ch = BroadcastSync.init('payout_sync', function() {});
+            BroadcastSync.broadcast(_ch, 'SUBCONTRACTORS_CHANGED', {});
+            if (_ch) _ch.close();
           } else {
             showToast(response.error?.message || '保存失敗', 'error');
           }
@@ -465,6 +469,11 @@
               if (!response.ok) {
                 showToast(response.error?.message || '削除失敗。再読み込みします。', 'error');
                 loadData();
+              } else {
+                // 他タブ（payouts等）に変更を通知（バックエンド確定後）
+                var _ch = BroadcastSync.init('payout_sync', function() {});
+                BroadcastSync.broadcast(_ch, 'SUBCONTRACTORS_CHANGED', {});
+                if (_ch) _ch.close();
               }
             })
             .withFailureHandler((e) => {
