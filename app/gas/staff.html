@@ -1472,7 +1472,8 @@
           if (currentId !== bankAccountRevealStaffId) return;
 
           if (res.ok && res.data) {
-            var realValue = res.data.bank_account_number || '';
+            var rawBankAccount = res.data.bank_account_number;
+            var realValue = (rawBankAccount == null) ? '' : String(rawBankAccount);
             // マスク値と同じなら権限不足
             if (realValue.indexOf('****') === 0) {
               showToast('口座番号の表示権限がありません', 'error');
