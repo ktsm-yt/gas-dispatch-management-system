@@ -2,6 +2,7 @@
  * Job Module Tests
  *
  * 案件管理モジュールのテスト関数
+ * assert関数はtest_helpers.gsで定義
  */
 
 /**
@@ -50,26 +51,28 @@ function testUtils() {
 
   // generateId
   const jobId = generateId('job');
-  Logger.log(`generateId('job'): ${jobId}`);
-  Logger.log(`  ✓ Starts with 'job_': ${jobId.startsWith('job_')}`);
+  assertTrue(jobId.startsWith('job_'), 'generateId should start with job_');
 
   // validateRequired
   const result1 = validateRequired({ a: 1, b: '', c: null }, ['a', 'b', 'c']);
-  Logger.log(`validateRequired: valid=${result1.valid}, missing=${result1.missing.join(',')}`);
+  assertFalse(result1.valid, 'validateRequired should be invalid with empty/null fields');
+  assert(result1.missing.length > 0, 'validateRequired should report missing fields');
 
   // isValidDate
-  Logger.log(`isValidDate('2025-12-15'): ${isValidDate('2025-12-15')}`);
-  Logger.log(`isValidDate('invalid'): ${isValidDate('invalid')}`);
+  assertTrue(isValidDate('2025-12-15'), 'isValidDate should accept valid date');
+  assertFalse(isValidDate('invalid'), 'isValidDate should reject invalid date');
 
   // buildSuccessResponse
   const successResp = buildSuccessResponse({ test: 'data' });
-  Logger.log(`buildSuccessResponse: ok=${successResp.ok}, hasRequestId=${!!successResp.requestId}`);
+  assertTrue(successResp.ok, 'buildSuccessResponse ok should be true');
+  assert(successResp.requestId, 'buildSuccessResponse should have requestId');
 
   // buildErrorResponse
   const errorResp = buildErrorResponse('TEST_ERROR', 'Test message');
-  Logger.log(`buildErrorResponse: ok=${errorResp.ok}, code=${errorResp.error.code}`);
+  assertFalse(errorResp.ok, 'buildErrorResponse ok should be false');
+  assertEqual(errorResp.error.code, 'TEST_ERROR', 'buildErrorResponse error code');
 
-  Logger.log('');
+  Logger.log('  All utils assertions passed');
 }
 
 /**
@@ -78,7 +81,6 @@ function testUtils() {
 function testJobRepository() {
   Logger.log('--- JobRepository Tests ---');
 
-  // テストデータ作成
   const testDate = '2025-12-20';
   const testCustomerId = 'cus_test_' + Utilities.getUuid().substring(0, 8);
 
@@ -91,48 +93,52 @@ function testJobRepository() {
     required_count: 3,
     pay_unit: 'basic'
   });
-  Logger.log(`insert: job_id=${newJob.job_id}`);
-  Logger.log(`  ✓ Created: ${!!newJob.job_id}`);
+  assert(newJob.job_id, 'insert should return job_id');
+  assertTrue(newJob.job_id.startsWith('job_'), 'job_id should start with job_');
 
   // findById
   const found = JobRepository.findById(newJob.job_id);
-  Logger.log(`findById: found=${!!found}`);
-  Logger.log(`  ✓ site_name matches: ${found && found.site_name === 'テスト現場'}`);
+  assert(found, 'findById should return a job');
+  assertEqual(found.site_name, 'テスト現場', 'findById site_name should match');
+  assertEqual(found.customer_id, testCustomerId, 'findById customer_id should match');
+  assertEqual(found.work_date, testDate, 'findById work_date should match');
+  assertEqual(found.time_slot, 'am', 'findById time_slot should match');
+  assertEqual(found.required_count, 3, 'findById required_count should match');
 
   // findByDate
   const byDate = JobRepository.findByDate(testDate);
-  Logger.log(`findByDate('${testDate}'): count=${byDate.length}`);
-  Logger.log(`  ✓ Contains test job: ${byDate.some(j => j.job_id === newJob.job_id)}`);
+  assert(byDate.length > 0, 'findByDate should return results');
+  assertTrue(byDate.some(j => j.job_id === newJob.job_id), 'findByDate should contain test job');
 
   // search
   const searchResult = JobRepository.search({ customer_id: testCustomerId });
-  Logger.log(`search(customer_id): count=${searchResult.length}`);
+  assert(searchResult.length > 0, 'search should return results');
+  assertEqual(searchResult[0].job_id, newJob.job_id, 'search should find the test job');
 
   // update
   const updateResult = JobRepository.update(
     { job_id: newJob.job_id, site_name: 'テスト現場（更新）' },
     newJob.updated_at
   );
-  Logger.log(`update: success=${updateResult.success}`);
-  Logger.log(`  ✓ site_name updated: ${updateResult.job && updateResult.job.site_name === 'テスト現場（更新）'}`);
+  assertTrue(updateResult.success, 'update should succeed');
+  assertEqual(updateResult.job.site_name, 'テスト現場（更新）', 'update site_name should be changed');
 
   // 競合テスト（古いupdated_atで更新を試みる）
   const conflictResult = JobRepository.update(
     { job_id: newJob.job_id, notes: 'conflict test' },
     newJob.updated_at // 古いタイムスタンプ
   );
-  Logger.log(`conflict test: error=${conflictResult.error}`);
-  Logger.log(`  ✓ CONFLICT_ERROR: ${conflictResult.error === 'CONFLICT_ERROR'}`);
+  assertEqual(conflictResult.error, 'CONFLICT_ERROR', 'conflict should return CONFLICT_ERROR');
 
   // getMaxUpdatedAt
   const maxUpdatedAt = JobRepository.getMaxUpdatedAt(testDate);
-  Logger.log(`getMaxUpdatedAt: ${maxUpdatedAt}`);
+  assert(maxUpdatedAt, 'getMaxUpdatedAt should return a value');
 
   // softDelete（クリーンアップ）
   const deleteResult = JobRepository.softDelete(newJob.job_id, updateResult.job.updated_at);
-  Logger.log(`softDelete: success=${deleteResult.success}`);
+  assertTrue(deleteResult.success, 'softDelete should succeed');
 
-  Logger.log('');
+  Logger.log('  All JobRepository assertions passed');
 }
 
 /**
@@ -152,56 +158,54 @@ function testJobService() {
     required_count: 2,
     pay_unit: 'tobi'
   }, null);
-  Logger.log(`save (create): success=${createResult.success}`);
-  Logger.log(`  ✓ Has job_id: ${!!createResult.job?.job_id}`);
+  assertTrue(createResult.success, 'save (create) should succeed');
+  assert(createResult.job.job_id, 'save should return job_id');
 
-  if (createResult.success) {
-    const jobId = createResult.job.job_id;
+  const jobId = createResult.job.job_id;
 
-    // get
-    const getResult = JobService.get(jobId);
-    Logger.log(`get: found=${!!getResult}`);
-    Logger.log(`  ✓ Has job: ${!!getResult?.job}`);
-    Logger.log(`  ✓ Has assignments array: ${Array.isArray(getResult?.assignments)}`);
+  // get
+  const getResult = JobService.get(jobId);
+  assert(getResult, 'get should return result');
+  assert(getResult.job, 'get should have job');
+  assertTrue(Array.isArray(getResult.assignments), 'get should have assignments array');
 
-    // getDashboard
-    const dashboard = JobService.getDashboard(testDate);
-    Logger.log(`getDashboard: jobs=${dashboard.jobs.length}, total=${dashboard.stats.total}`);
-    Logger.log(`  ✓ Has byTimeSlot: ${!!dashboard.stats.byTimeSlot}`);
+  // getDashboard
+  const dashboard = JobService.getDashboard(testDate);
+  assert(dashboard.jobs.length > 0, 'getDashboard should return jobs');
+  assert(typeof dashboard.stats.total === 'number', 'getDashboard should have stats.total');
+  assert(dashboard.stats.byTimeSlot, 'getDashboard should have byTimeSlot');
 
-    // getDashboardMeta
-    const meta = JobService.getDashboardMeta(testDate);
-    Logger.log(`getDashboardMeta: maxUpdatedAt=${meta.maxUpdatedAt}`);
+  // getDashboardMeta
+  const meta = JobService.getDashboardMeta(testDate);
+  assert(meta.maxUpdatedAt, 'getDashboardMeta should return maxUpdatedAt');
 
-    // save (update)
-    const updateResult = JobService.save(
-      { job_id: jobId, notes: 'Updated via service' },
-      createResult.job.updated_at
-    );
-    Logger.log(`save (update): success=${updateResult.success}`);
+  // save (update)
+  const updateResult = JobService.save(
+    { job_id: jobId, notes: 'Updated via service' },
+    createResult.job.updated_at
+  );
+  assertTrue(updateResult.success, 'save (update) should succeed');
 
-    // updateStatus
-    const statusResult = JobService.updateStatus(
-      jobId,
-      'assigned',
-      updateResult.job.updated_at
-    );
-    Logger.log(`updateStatus: success=${statusResult.success}`);
-    Logger.log(`  ✓ Status is 'assigned': ${statusResult.job?.status === 'assigned'}`);
+  // updateStatus
+  const statusResult = JobService.updateStatus(
+    jobId,
+    'assigned',
+    updateResult.job.updated_at
+  );
+  assertTrue(statusResult.success, 'updateStatus should succeed');
+  assertEqual(statusResult.job.status, 'assigned', 'status should be assigned');
 
-    // validation error test
-    const invalidResult = JobService.save({
-      customer_id: 'test',
-      // missing required fields
-    }, null);
-    Logger.log(`validation test: error=${invalidResult.error}`);
-    Logger.log(`  ✓ VALIDATION_ERROR: ${invalidResult.error === 'VALIDATION_ERROR'}`);
+  // validation error test
+  const invalidResult = JobService.save({
+    customer_id: 'test',
+    // missing required fields
+  }, null);
+  assertEqual(invalidResult.error, 'VALIDATION_ERROR', 'missing fields should return VALIDATION_ERROR');
 
-    // クリーンアップ
-    JobRepository.softDelete(jobId, statusResult.job.updated_at);
-  }
+  // クリーンアップ
+  JobRepository.softDelete(jobId, statusResult.job.updated_at);
 
-  Logger.log('');
+  Logger.log('  All JobService assertions passed');
 }
 
 /**
@@ -221,60 +225,61 @@ function testJobApi() {
     required_count: 5,
     pay_unit: 'tobiage'
   }, null);
-  Logger.log(`saveJob (create): ok=${createResp.ok}`);
-  Logger.log(`  ✓ Has requestId: ${!!createResp.requestId}`);
-  Logger.log(`  ✓ Has serverTime: ${!!createResp.serverTime}`);
+  assertTrue(createResp.ok, 'saveJob (create) should be ok');
+  assert(createResp.requestId, 'saveJob should have requestId');
+  assert(createResp.serverTime, 'saveJob should have serverTime');
 
-  if (createResp.ok) {
-    const jobId = createResp.data.job.job_id;
-    const updatedAt = createResp.data.job.updated_at;
+  const jobId = createResp.data.job.job_id;
+  const updatedAt = createResp.data.job.updated_at;
 
-    // getJob
-    const getResp = getJob(jobId);
-    Logger.log(`getJob: ok=${getResp.ok}`);
-    Logger.log(`  ✓ Has job: ${!!getResp.data?.job}`);
+  // getJob
+  const getResp = getJob(jobId);
+  assertTrue(getResp.ok, 'getJob should be ok');
+  assert(getResp.data.job, 'getJob should have job');
+  assertEqual(getResp.data.job.site_name, 'APIテスト現場', 'getJob site_name should match');
 
-    // getDashboard
-    const dashResp = getDashboard(testDate);
-    Logger.log(`getDashboard: ok=${dashResp.ok}, jobs=${dashResp.data?.jobs?.length}`);
+  // getDashboard
+  const dashResp = getDashboard(testDate);
+  assertTrue(dashResp.ok, 'getDashboard should be ok');
+  assert(dashResp.data.jobs.length > 0, 'getDashboard should have jobs');
 
-    // getDashboardMeta
-    const metaResp = getDashboardMeta(testDate);
-    Logger.log(`getDashboardMeta: ok=${metaResp.ok}`);
+  // getDashboardMeta
+  const metaResp = getDashboardMeta(testDate);
+  assertTrue(metaResp.ok, 'getDashboardMeta should be ok');
 
-    // searchJobs
-    const searchResp = searchJobs({ work_date_from: testDate, work_date_to: testDate });
-    Logger.log(`searchJobs: ok=${searchResp.ok}, count=${searchResp.data?.jobs?.length}`);
+  // searchJobs
+  const searchResp = searchJobs({ work_date_from: testDate, work_date_to: testDate });
+  assertTrue(searchResp.ok, 'searchJobs should be ok');
+  assert(searchResp.data.jobs.length > 0, 'searchJobs should return results');
 
-    // saveJob (update)
-    const updateResp = saveJob(
-      { job_id: jobId, required_count: 6 },
-      updatedAt
-    );
-    Logger.log(`saveJob (update): ok=${updateResp.ok}`);
+  // saveJob (update)
+  const updateResp = saveJob(
+    { job_id: jobId, required_count: 6 },
+    updatedAt
+  );
+  assertTrue(updateResp.ok, 'saveJob (update) should be ok');
 
-    // updateJobStatus
-    const statusResp = updateJobStatus(jobId, 'hold', updateResp.data?.job?.updated_at);
-    Logger.log(`updateJobStatus: ok=${statusResp.ok}`);
+  // updateJobStatus
+  const statusResp = updateJobStatus(jobId, 'hold', updateResp.data.job.updated_at);
+  assertTrue(statusResp.ok, 'updateJobStatus should be ok');
 
-    // エラーケース: NOT_FOUND
-    const notFoundResp = getJob('job_nonexistent');
-    Logger.log(`getJob (not found): ok=${notFoundResp.ok}, code=${notFoundResp.error?.code}`);
-    Logger.log(`  ✓ NOT_FOUND: ${notFoundResp.error?.code === 'NOT_FOUND'}`);
+  // エラーケース: NOT_FOUND
+  const notFoundResp = getJob('job_nonexistent');
+  assertFalse(notFoundResp.ok, 'getJob (not found) should not be ok');
+  assertEqual(notFoundResp.error.code, 'NOT_FOUND', 'should return NOT_FOUND');
 
-    // エラーケース: VALIDATION_ERROR
-    const validationResp = saveJob({ customer_id: 'test' }, null); // missing fields
-    Logger.log(`saveJob (validation): ok=${validationResp.ok}, code=${validationResp.error?.code}`);
-    Logger.log(`  ✓ VALIDATION_ERROR: ${validationResp.error?.code === 'VALIDATION_ERROR'}`);
+  // エラーケース: VALIDATION_ERROR
+  const validationResp = saveJob({ customer_id: 'test' }, null);
+  assertFalse(validationResp.ok, 'saveJob (validation) should not be ok');
+  assertEqual(validationResp.error.code, 'VALIDATION_ERROR', 'should return VALIDATION_ERROR');
 
-    // クリーンアップ
-    const finalJob = statusResp.data?.job || updateResp.data?.job;
-    if (finalJob) {
-      JobRepository.softDelete(jobId, finalJob.updated_at);
-    }
+  // クリーンアップ
+  const finalJob = statusResp.data.job || updateResp.data.job;
+  if (finalJob) {
+    JobRepository.softDelete(jobId, finalJob.updated_at);
   }
 
-  Logger.log('');
+  Logger.log('  All Job API assertions passed');
 }
 
 /**
@@ -283,26 +288,15 @@ function testJobApi() {
 function testSearchJobs() {
   Logger.log('=== searchJobs テスト ===');
 
-  try {
-    const query = {
-      work_date_from: '2025-11-01',
-      work_date_to: '2025-12-31',
-      limit: 10
-    };
-    Logger.log('Query: ' + JSON.stringify(query));
+  const query = {
+    work_date_from: '2025-11-01',
+    work_date_to: '2025-12-31',
+    limit: 10
+  };
 
-    const result = searchJobs(query);
-    Logger.log('Result: ' + JSON.stringify(result, null, 2));
-
-    if (result && result.ok) {
-      Logger.log('✓ 成功: ' + (result.data.jobs?.length || 0) + '件');
-    } else {
-      Logger.log('✗ 失敗: ' + (result?.error?.message || 'Unknown error'));
-    }
-  } catch (e) {
-    Logger.log('✗ 例外: ' + e.message);
-    Logger.log(e.stack);
-  }
+  const result = searchJobs(query);
+  assertTrue(result.ok, 'searchJobs should be ok');
+  assertTrue(Array.isArray(result.data.jobs), 'searchJobs should return jobs array');
 }
 
 /**
@@ -311,19 +305,11 @@ function testSearchJobs() {
 function quickTest() {
   Logger.log('=== Quick Test ===');
 
-  // 今日の日付でダッシュボード取得
   const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
-  Logger.log(`Today: ${today}`);
-
   const dashResp = getDashboard(today);
-  Logger.log(`Dashboard: ok=${dashResp.ok}`);
-
-  if (dashResp.ok) {
-    Logger.log(`  Jobs: ${dashResp.data.jobs.length}`);
-    Logger.log(`  Stats: total=${dashResp.data.stats.total}, pending=${dashResp.data.stats.pending}`);
-  } else {
-    Logger.log(`  Error: ${dashResp.error?.message}`);
-  }
+  assertTrue(dashResp.ok, 'getDashboard should be ok');
+  assert(typeof dashResp.data.jobs.length === 'number', 'should have jobs array');
+  assert(typeof dashResp.data.stats.total === 'number', 'should have stats.total');
 }
 
 /**
@@ -365,14 +351,12 @@ function insertTestData() {
   );
 
   const testJobs = [
-    // 今日の案件
     { work_date: today, time_slot: 'jotou', site_name: '○○邸 新築工事', site_address: '東京都新宿区西新宿1-1-1', required_count: 5, pay_unit: 'tobiage', status: 'pending', supervisor_name: '山田太郎' },
     { work_date: today, time_slot: 'am', site_name: '△△マンション改修', site_address: '東京都渋谷区渋谷2-2-2', required_count: 3, pay_unit: 'basic', status: 'assigned', supervisor_name: '鈴木一郎' },
     { work_date: today, time_slot: 'am', site_name: '□□ビル解体', site_address: '東京都港区六本木3-3-3', required_count: 4, pay_unit: 'tobi', status: 'pending', supervisor_name: '佐藤次郎' },
     { work_date: today, time_slot: 'pm', site_name: '◇◇倉庫建設', site_address: '東京都品川区大井4-4-4', required_count: 2, pay_unit: 'basic', status: 'pending', supervisor_name: '田中三郎' },
     { work_date: today, time_slot: 'shuujitsu', site_name: '××商業施設', site_address: '東京都中央区銀座5-5-5', required_count: 6, pay_unit: 'tobiage', status: 'assigned', supervisor_name: '高橋四郎' },
     { work_date: today, time_slot: 'yakin', site_name: '☆☆病院増築', site_address: '東京都文京区本郷6-6-6', required_count: 3, pay_unit: 'tobi', status: 'pending', supervisor_name: '伊藤五郎' },
-    // 明日の案件
     { work_date: tomorrow, time_slot: 'am', site_name: '▲▲学校体育館', site_address: '東京都世田谷区三軒茶屋7-7-7', required_count: 4, pay_unit: 'basic', status: 'pending', supervisor_name: '渡辺六郎' },
     { work_date: tomorrow, time_slot: 'pm', site_name: '●●オフィスビル', site_address: '東京都千代田区丸の内8-8-8', required_count: 5, pay_unit: 'tobiage', status: 'pending', supervisor_name: '小林七郎' },
   ];
