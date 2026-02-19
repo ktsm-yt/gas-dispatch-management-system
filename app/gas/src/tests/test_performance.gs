@@ -605,7 +605,7 @@ function testCacheEffectiveness() {
 
   return {
     name: testName,
-    passed: true, // キャッシュが効かなくても失敗ではない
+    passed: avgFirst > 0 && avgSecond >= 0, // 実際の測定が完了していれば成功
     cacheEffective,
     avgFirst,
     avgSecond,

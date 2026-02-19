@@ -1,3 +1,6 @@
+// NOTE: Manual integration test - not part of automated suite (runAllTests)
+// アーカイブテストはスプレッドシートの構造変更を伴うため、手動実行前提
+
 /**
  * Archive Test Functions
  *

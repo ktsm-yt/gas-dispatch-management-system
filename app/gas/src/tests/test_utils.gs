@@ -614,47 +614,7 @@ function testCalculateJobStatus() {
   assertEqual(calculateJobStatus_(job5, fullAssignments), 'problem', 'problem stays problem');
 }
 
-// ============================================================
-// テストヘルパー関数
-// ============================================================
-
-function assertEqual(actual, expected, message) {
-  if (actual !== expected) {
-    throw new Error(`${message}: expected "${expected}", got "${actual}"`);
-  }
-}
-
-function assertTrue(value, message) {
-  if (value !== true) {
-    throw new Error(`${message}: expected true, got ${value}`);
-  }
-}
-
-function assertFalse(value, message) {
-  if (value !== false) {
-    throw new Error(`${message}: expected false, got ${value}`);
-  }
-}
-
-function assertThrows(fn, message) {
-  let threw = false;
-  try {
-    fn();
-  } catch (e) {
-    threw = true;
-  }
-  if (!threw) {
-    throw new Error(`${message}: expected to throw, but did not`);
-  }
-}
-
-function assertNoThrow(fn, message) {
-  try {
-    fn();
-  } catch (e) {
-    throw new Error(`${message}: expected not to throw, but threw: ${e.message}`);
-  }
-}
+// assert関数はtest_helpers.gsで統一定義
 
 // ============================================
 // 正規化関数テスト（KTSM-xxx 税率・大小文字不整合修正）

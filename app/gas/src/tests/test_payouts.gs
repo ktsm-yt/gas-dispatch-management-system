@@ -76,6 +76,10 @@ function testPayoutRepository() {
   assert(found, 'findById should return payout');
   assertEqual(found.staff_id, testPayout.staff_id, 'staff_id should match');
   assertEqual(found.base_amount, 50000, 'base_amount should match');
+  assertEqual(found.period_start, '2025-01-01', 'period_start should match');
+  assertEqual(found.period_end, '2025-01-15', 'period_end should match');
+  assertEqual(found.total_amount, 55000, 'total_amount should match');
+  assertEqual(found.status, 'draft', 'status should be draft');
   Logger.log('  FindById: OK');
 
   // 3. FindByStaffId テスト
@@ -96,6 +100,7 @@ function testPayoutRepository() {
     status: 'draft'
   });
   assert(Array.isArray(searchResult), 'search should return array');
+  assert(searchResult.length > 0, 'search should return at least 1 result');
   Logger.log(`  Search: OK (${searchResult.length} results)`);
 
   // 6. Update テスト
@@ -313,20 +318,7 @@ function testPayoutCalculations() {
   Logger.log('--- testPayoutCalculations PASSED ---');
 }
 
-/**
- * テストユーティリティ
- */
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(`Assertion failed: ${message}`);
-  }
-}
-
-function assertEqual(actual, expected, message) {
-  if (actual !== expected) {
-    throw new Error(`${message}: expected ${expected}, got ${actual}`);
-  }
-}
+// assert関数はtest_helpers.gsで統一定義
 
 /**
  * T_Payoutsシートのヘッダーと実データを確認
@@ -715,11 +707,10 @@ function testWithholdingTaxCalculation() {
   };
 
   const baseAmount1 = 100000;
-  const expectedTax = Math.floor(baseAmount1 * WITHHOLDING_TAX_RATE);  // 10,210
 
   const tax1 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount1);
-  assertEqual(tax1, expectedTax, `withholding tax should be ${expectedTax}`);
-  Logger.log(`  Tax applicable (100,000): ${tax1} (expected ${expectedTax}): OK`);
+  assertEqual(tax1, 10210, 'withholding tax for 100000 should be 10210');
+  Logger.log(`  Tax applicable (100,000): ${tax1} (expected 10210): OK`);
 
   // 2. 源泉徴収非対象スタッフのテスト
   const staffWithoutTax = {
@@ -749,10 +740,9 @@ function testWithholdingTaxCalculation() {
 
   // 5. 計算精度テスト（端数切り捨て確認）
   const baseAmount2 = 123456;
-  const expectedTax2 = Math.floor(baseAmount2 * WITHHOLDING_TAX_RATE);  // 12,604
   const tax5 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount2);
-  assertEqual(tax5, expectedTax2, 'should floor the tax amount');
-  Logger.log(`  Floor precision (123,456): ${tax5} (expected ${expectedTax2}): OK`);
+  assertEqual(tax5, 12604, 'withholding tax for 123456 should be 12604 (floor)');
+  Logger.log(`  Floor precision (123,456): ${tax5} (expected 12604): OK`);
 
   Logger.log('--- testWithholdingTaxCalculation PASSED ---');
 }
