@@ -21,12 +21,17 @@ function runAllTests() {
     totalErrors: []
   };
 
-  // テストスイート定義
+  // テストスイート定義（全スイート登録）
   const testSuites = [
     { name: 'ユーティリティ関数テスト', fn: runAllUtilTests },
     { name: 'マスターCRUDテスト', fn: runAllMasterTests },
     { name: '案件管理テスト', fn: runAllJobTests },
-    { name: '配置管理テスト', fn: runAssignmentTests }
+    { name: '配置管理テスト', fn: runAssignmentTests },
+    { name: '枠（Slot）テスト', fn: runAllSlotTests },
+    { name: '請求管理テスト', fn: runInvoiceTests },
+    { name: '支払管理テスト', fn: runPayoutTests },
+    { name: '入金管理テスト', fn: runPaymentTests }
+    // パフォーマンステストは時間がかかるため runTestSuite('performance') で個別実行
   ];
 
   for (const suite of testSuites) {
@@ -164,7 +169,12 @@ function runTestSuite(suiteName) {
     'utils': runAllUtilTests,
     'masters': runAllMasterTests,
     'jobs': runAllJobTests,
-    'assignments': runAssignmentTests
+    'assignments': runAssignmentTests,
+    'slots': runAllSlotTests,
+    'invoices': runInvoiceTests,
+    'payouts': runPayoutTests,
+    'payments': runPaymentTests,
+    'performance': runPerformanceTests
   };
 
   const fn = suiteMap[suiteName.toLowerCase()];
