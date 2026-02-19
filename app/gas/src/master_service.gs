@@ -519,7 +519,15 @@ function saveStaff(staff, expectedUpdatedAt) {
  * @param {string} staffId - スタッフID
  */
 function getStaff(staffId) {
-  return getMasterRecord(SHEET_NAMES.STAFF, ID_COLUMNS.STAFF, staffId);
+  const result = getMasterRecord(SHEET_NAMES.STAFF, ID_COLUMNS.STAFF, staffId);
+  // staffロールには口座番号をマスクして返す
+  if (result.ok && result.data) {
+    const auth = checkPermission(ROLES.MANAGER);
+    if (!auth.allowed) {
+      result.data.bank_account_number = maskPartial(result.data.bank_account_number);
+    }
+  }
+  return result;
 }
 
 /**
@@ -531,6 +539,12 @@ function listStaff(options = {}) {
     Logger.log('listStaff called with options: ' + JSON.stringify(options));
     const result = listMasterRecords(SHEET_NAMES.STAFF, options);
     Logger.log('listStaff result: ' + JSON.stringify(result ? 'ok' : 'null'));
+    // UI向けマスク（サーバー内部呼び出しには影響しない）
+    if (options.maskSensitive && result.ok && result.data && result.data.items) {
+      result.data.items.forEach(item => {
+        item.bank_account_number = maskPartial(item.bank_account_number);
+      });
+    }
     return result;
   } catch (e) {
     Logger.log('listStaff error: ' + e.message);
