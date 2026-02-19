@@ -2308,14 +2308,14 @@
       if (type === 'ASSIGNMENT_CHANGED') {
         // ダッシュボードで配置変更 → 一覧リロードでフラグ反映
         PageCache.clearByPrefix('invoices_list');
-        loadInvoices(true);
+        loadInvoices(true, '請求書一覧を更新中...');
         return;
       }
 
       if (type === 'INVOICES_BULK_UPDATED') {
         PageCache.clearByPrefix('invoices_list');
         invalidateDetailCache(); // 全詳細キャッシュも無効化
-        loadInvoices(true);
+        loadInvoices(true, '請求書一覧を更新中...');
         return;
       }
 
@@ -2392,7 +2392,7 @@
       if (pendingSync.invoices) {
         pendingSync.invoices = false;
         invalidateDetailCache();
-        loadInvoices(true);
+        loadInvoices(true, '請求書一覧を更新中...');
       }
       if (pendingSync.customers) {
         pendingSync.customers = false;
@@ -2438,7 +2438,7 @@
       return true;
     }
 
-    function loadInvoices(skipCache = false) {
+    function loadInvoices(skipCache = false, loadingMessage = '請求書一覧を読み込み中...') {
       clearSelection();
 
       const year = getNormalizedFilterYear();
@@ -2513,7 +2513,7 @@
       }
 
       // キャッシュなし: ローディング表示してAPI取得
-      showLoading('請求書一覧を読み込み中...');
+      showLoading(loadingMessage);
       var _searchStart = performance.now();
 
       google.script.run
@@ -3241,7 +3241,7 @@
               } else {
                 // フィルタに一致しない場合、キャッシュをクリアしてリロード
                 PageCache.clearByPrefix('invoices_list');
-                loadInvoices(true);
+                loadInvoices(true, '請求書一覧を更新中...');
               }
               // クロスタブ同期
               BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
@@ -3312,7 +3312,7 @@
                     } else {
                       // フィルタに一致しない場合はリロード
                       PageCache.clearByPrefix('invoices_list');
-                      loadInvoices(true);
+                      loadInvoices(true, '請求書一覧を更新中...');
                     }
                     // クロスタブ同期
                     BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: newInvoice });
@@ -3360,7 +3360,7 @@
       document.getElementById('bulkGenerateModal').classList.remove('active');
       // 集計が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
-        loadInvoices(true);  // Skip cache after data change
+        loadInvoices(true, '請求書一覧を更新中...');
         // クロスタブ同期（一括集計完了時のみ1回）
         BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
@@ -3376,7 +3376,7 @@
       document.getElementById('bulkGenerateModal').classList.remove('active');
       // 集計が実行された場合のみリロード
       if (bulkState.totalSuccess > 0) {
-        loadInvoices(true);  // Skip cache after data change
+        loadInvoices(true, '請求書一覧を更新中...');
         BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { action: 'bulk_generate' });
       }
       processPendingInvalidation();
@@ -3719,7 +3719,7 @@
             }
 
             // Update invoice list to show new file IDs
-            loadInvoices(true);  // Skip cache after data change
+            loadInvoices(true, '請求書一覧を更新中...');
           } else {
             if (newTab) newTab.close();
             showToast(result.error?.message || '出力に失敗しました', 'error');
@@ -5076,7 +5076,7 @@
               // ヘッダーは更新済みだが明細更新に失敗
               showToast('ヘッダーは保存されましたが、一部の明細更新に失敗しました。画面を更新してください', 'warning');
               closeEditModal();
-              loadInvoices(true);
+              loadInvoices(true, '請求書一覧を更新中...');
             } else {
               showToast(result.error?.message || result.message || '保存に失敗しました', 'error');
             }
