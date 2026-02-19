@@ -1450,7 +1450,7 @@
 
       // 既にreveal済み → マスクに戻す
       if (bankAccountRevealed) {
-        var masked = input.dataset.maskedValue || '****';
+        var masked = (input.dataset.maskedValue !== undefined) ? input.dataset.maskedValue : '****';
         input.value = masked;
         input.readOnly = true;
         bankAccountRevealed = false;
@@ -1476,7 +1476,10 @@
             // マスク値と同じなら権限不足
             if (realValue.indexOf('****') === 0) {
               showToast('口座番号の表示権限がありません', 'error');
-              toggle.textContent = '🔒';
+              bankAccountRevealed = false;
+              input.readOnly = true;
+              toggle.textContent = '👁';
+              toggle.title = '口座番号を表示';
               return;
             }
             input.dataset.maskedValue = input.value; // 元のマスク値を保存
@@ -1543,7 +1546,9 @@
 
         // 新規時は口座番号を直接入力可、トグル不要
         bankAccountRevealed = false;
-        document.getElementById('bank-account-number').readOnly = false;
+        var bankAccountInput = document.getElementById('bank-account-number');
+        bankAccountInput.readOnly = false;
+        bankAccountInput.dataset.maskedValue = '';
         document.getElementById('bank-account-toggle').style.display = 'none';
       }
 
@@ -1586,8 +1591,10 @@
       document.getElementById('bank-name').value = staff.bank_name || '';
       document.getElementById('bank-branch').value = staff.bank_branch || '';
       document.getElementById('bank-account-type').value = staff.bank_account_type || '';
-      document.getElementById('bank-account-number').value = staff.bank_account_number || '';
-      document.getElementById('bank-account-number').readOnly = true;
+      var bankAccountInput = document.getElementById('bank-account-number');
+      bankAccountInput.value = staff.bank_account_number || '';
+      bankAccountInput.dataset.maskedValue = bankAccountInput.value;
+      bankAccountInput.readOnly = true;
       bankAccountRevealed = false;
       bankAccountRevealStaffId = null;
       document.getElementById('bank-account-toggle').textContent = '👁';
