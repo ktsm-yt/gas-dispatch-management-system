@@ -1676,6 +1676,10 @@
             filterStaff();
             showToast('保存しました', 'success');
             closeModal();
+            // 他タブ（payouts等）に変更を通知
+            var _ch = BroadcastSync.init('payout_sync', function() {});
+            BroadcastSync.broadcast(_ch, 'STAFF_CHANGED', {});
+            if (_ch) _ch.close();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1725,6 +1729,11 @@
                   showToast(response.error?.message || '削除に失敗しました。再読み込みします。', 'error');
                 }
                 loadStaff();
+              } else {
+                // 他タブ（payouts等）に変更を通知（バックエンド確定後）
+                var _ch = BroadcastSync.init('payout_sync', function() {});
+                BroadcastSync.broadcast(_ch, 'STAFF_CHANGED', {});
+                if (_ch) _ch.close();
               }
             })
             .withFailureHandler((error) => {

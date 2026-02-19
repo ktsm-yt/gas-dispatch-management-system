@@ -881,6 +881,9 @@
     let currentTab = 'staff';
     let currentUnpaidQuery = null;  // 現在の検索条件（バックグラウンド更新時に使用）
 
+    // BroadcastSync State
+    let payoutSyncChannel = null;
+
     // Subcontractor State
     let subcontractorList = [];
     let currentSubUnpaid = null;
@@ -1144,6 +1147,9 @@
       // Load subcontractor list for second tab
       loadSubcontractorList();
 
+      // BroadcastSync: staff/subcontractors変更を受信
+      payoutSyncChannel = BroadcastSync.init('payout_sync', handlePayoutSyncMessage);
+
       // Event delegation for row/action buttons
       document.addEventListener('click', function(e) {
         const target = e.target.closest('button');
@@ -1339,6 +1345,22 @@
     }
 
     // Load staff list for filter (Stale-While-Revalidate)
+    // BroadcastSync: 他タブからのスタッフ/外注先変更通知ハンドラ
+    function handlePayoutSyncMessage(event) {
+      var data = event && event.data;
+      if (!data || !data.type) return;
+      var type = data.type;
+
+      if (type === 'STAFF_CHANGED') {
+        PageCache.clear('payouts_staff');
+        loadStaffList();
+      }
+      if (type === 'SUBCONTRACTORS_CHANGED') {
+        PageCache.clear('payouts_sub_list');
+        loadSubcontractorList();
+      }
+    }
+
     function loadStaffList() {
       // Check cache first
       const cached = loadStaffFromCache();
@@ -1384,7 +1406,7 @@
 
     function populateStaffFilter() {
       const select = document.getElementById('staffFilter');
-      // Clear existing options (except first "全て" option)
+      const prevValue = select.value;
       select.innerHTML = '<option value="">全て</option>';
       staffList.forEach(s => {
         const option = document.createElement('option');
@@ -1392,6 +1414,10 @@
         option.textContent = s.name;
         select.appendChild(option);
       });
+      // 選択保持: 候補に残っていれば復元
+      if (prevValue && [...select.options].some(o => o.value === prevValue)) {
+        select.value = prevValue;
+      }
     }
 
     // Load unpaid summary (Stale-While-Revalidate)
@@ -4174,6 +4200,7 @@
 
     function renderSubcontractorFilter(list) {
       const select = document.getElementById('subcontractorFilter');
+      const prevValue = select.value;
       select.innerHTML = '<option value="">全て</option>';
       list.forEach(function(sub) {
         const option = document.createElement('option');
@@ -4181,6 +4208,10 @@
         option.textContent = sub.company_name;
         select.appendChild(option);
       });
+      // 選択保持: 候補に残っていれば復元
+      if (prevValue && [...select.options].some(o => o.value === prevValue)) {
+        select.value = prevValue;
+      }
     }
 
     // 末締集計: 当月末日を設定して集計
