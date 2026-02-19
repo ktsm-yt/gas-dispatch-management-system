@@ -1099,6 +1099,10 @@
         <input type="hidden" id="filterCustomer" value="">
         <div class="autocomplete-dropdown" id="filterCustomerDropdown"></div>
       </div>
+      <label>締め日:</label>
+      <select id="filterClosingDay" onchange="loadInvoices()">
+        <option value="">全て</option>
+      </select>
       <label>ステータス:</label>
       <select id="filterStatus">
         <option value="">全て</option>
@@ -1676,6 +1680,77 @@
     const INVOICES_CUSTOMERS_KEY = 'invoices_customers';
     const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分（請求書一覧用）
 
+    // 締め日マップ（顧客ロード時に構築）
+    let closingDayMap = {};      // customer_id → closing_day(number)
+    let closingDayCustomers = {}; // closing_day → Set of customer_ids
+    let pendingClosingDayRestore = null; // option生成前の復元値を一時保存
+
+    function normalizeClosingDay(raw) {
+      var n = Number(raw);
+      if (isNaN(n) || n < 1 || n > 31) return 31;
+      return n;
+    }
+
+    function buildClosingDayMaps() {
+      closingDayMap = {};
+      closingDayCustomers = {};
+      customers.forEach(function(c) {
+        if (!c.customer_id) return;
+        var cd = normalizeClosingDay(c.closing_day);
+        closingDayMap[c.customer_id] = cd;
+        if (!closingDayCustomers[cd]) closingDayCustomers[cd] = new Set();
+        closingDayCustomers[cd].add(c.customer_id);
+      });
+    }
+
+    function closingDayLabel(day) {
+      return day === 31 ? '末締め' : day + '日締め';
+    }
+
+    function populateClosingDayFilter() {
+      var select = document.getElementById('filterClosingDay');
+      var currentValue = select.value;
+      // 「全て」以外をクリア
+      while (select.options.length > 1) select.remove(1);
+      // 使用中の締め日パターンをソート
+      var days = Object.keys(closingDayCustomers).map(Number).sort(function(a, b) { return a - b; });
+      days.forEach(function(day) {
+        var opt = document.createElement('option');
+        opt.value = String(day);
+        opt.textContent = closingDayLabel(day);
+        select.appendChild(opt);
+      });
+      // 復元（pending値 or 既存値）
+      var restoreValue = pendingClosingDayRestore || currentValue;
+      if (restoreValue) {
+        select.value = restoreValue;
+        pendingClosingDayRestore = null;
+      }
+    }
+
+    function filterByClosingDay(invoiceList) {
+      var cd = document.getElementById('filterClosingDay').value;
+      if (!cd) return invoiceList;
+      var cdNum = Number(cd);
+      var customerSet = closingDayCustomers[cdNum];
+      if (!customerSet || customerSet.size === 0) return [];
+      return invoiceList.filter(function(inv) {
+        var cid = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
+        return customerSet.has(cid);
+      });
+    }
+
+    // 締め日セレクトfocus時に顧客キャッシュ鮮度チェック
+    function initClosingDayFreshness() {
+      var el = document.getElementById('filterClosingDay');
+      el.addEventListener('focus', function() {
+        var cached = PageCache.get(INVOICES_CUSTOMERS_KEY);
+        if (!cached || cached.age > PageCache.MASTER_TTL) {
+          refreshCustomersInBackground();
+        }
+      });
+    }
+
     // Filter state用（localStorage維持）
     const SS_FILTER_KEY = 'invoices_filter';
 
@@ -1685,6 +1760,7 @@
         year: document.getElementById('filterYear').value,
         month: document.getElementById('filterMonth').value,
         customer: document.getElementById('filterCustomer').value,
+        closingDay: document.getElementById('filterClosingDay').value,
         status: document.getElementById('filterStatus').value
       };
       localStorage.setItem(SS_FILTER_KEY, JSON.stringify(filter));
@@ -1729,6 +1805,14 @@
           document.getElementById('filterCustomer').value = filter.customer || '';
         }
       }
+      if (filter.closingDay !== undefined) {
+        // option未生成の場合はpendingに保存（populateClosingDayFilterで復元）
+        var cdSelect = document.getElementById('filterClosingDay');
+        cdSelect.value = filter.closingDay;
+        if (filter.closingDay && cdSelect.value !== filter.closingDay) {
+          pendingClosingDayRestore = filter.closingDay;
+        }
+      }
       if (filter.status !== undefined) document.getElementById('filterStatus').value = filter.status;
 
       return true;
@@ -1743,6 +1827,7 @@
       restoreFilterState({ skipCustomer: true });
       initCustomerLazyLoad();
       initCustomersFromCache();
+      initClosingDayFreshness();
       initModalHandlers();
       loadBillingFolderLink();
       loadLastExportFromStorage();  // 前回の出力結果を復元
@@ -2155,6 +2240,9 @@
       // データを設定
       filterAutocomplete.setItems(customers);
       generateAutocomplete.setItems(customers);
+      // 締め日マップ構築 & フィルター選択肢生成
+      buildClosingDayMaps();
+      populateClosingDayFilter();
     }
 
     /**
@@ -2599,7 +2687,10 @@
       headerHtml += '</tr>';
       thead.innerHTML = headerHtml;
 
-      if (invoices.length === 0) {
+      // 締め日フィルタリング（クライアント側）
+      const displayInvoices = filterByClosingDay(invoices);
+
+      if (displayInvoices.length === 0) {
         tbody.innerHTML = '';
         emptyState.style.display = 'block';
         return;
@@ -2608,7 +2699,7 @@
       emptyState.style.display = 'none';
 
       const customerById = new Map(customers.map(c => [c.customer_id, c]));
-      tbody.innerHTML = invoices.map(inv => renderSingleInvoiceRow(inv, showOverdueDays, customerById)).join('');
+      tbody.innerHTML = displayInvoices.map(inv => renderSingleInvoiceRow(inv, showOverdueDays, customerById)).join('');
       // チェックボックス状態をリセット
       document.getElementById('selectAll').checked = false;
       updateBulkActionBar();
