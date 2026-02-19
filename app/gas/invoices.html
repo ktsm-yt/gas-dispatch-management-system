@@ -1674,11 +1674,15 @@
 
     // クロスタブ同期
     let invoiceSyncChannel = null;
-    let pendingInvalidation = false;
+    let pendingSync = { invoices: false, customers: false };
 
     // キャッシュキー（PageCache統一）
     const INVOICES_CUSTOMERS_KEY = 'invoices_customers';
     const INVOICES_CACHE_TTL = 5 * 60 * 1000;  // 5分（請求書一覧用）
+
+    // 顧客バックグラウンド更新の制御
+    let lastCustomerFetchTime = 0;
+    let customersRefreshing = false;
 
     // 締め日マップ（顧客ロード時に構築）
     let closingDayMap = {};      // customer_id → closing_day(number)
@@ -1867,11 +1871,9 @@
         customers = cached.data;
         customersLoaded = true;
         populateCustomerSelects();
-        // TTL超過ならバックグラウンド更新
-        if (cached.age > PageCache.MASTER_TTL) {
-          refreshCustomersInBackground();
-        }
       }
+      // 常にバックグラウンド更新（スロットル付き）
+      refreshCustomersInBackground();
       // 顧客キャッシュの有無に関わらず、フィルター状態を復元して自動検索を試みる
       const restored = restoreFilterState();
       if (restored) {
@@ -2201,21 +2203,28 @@
         .getCustomers();
     }
 
-    // 顧客マスターをバックグラウンドで更新
-    function refreshCustomersInBackground() {
+    // 顧客マスターをバックグラウンドで更新（スロットル30秒 + 二重呼び出し防止）
+    function refreshCustomersInBackground(force) {
+      var now = Date.now();
+      if (customersRefreshing) return;
+      if (!force && (now - lastCustomerFetchTime < 30000)) return;
+      customersRefreshing = true;
+      lastCustomerFetchTime = now;
       google.script.run
         .withSuccessHandler(function (result) {
+          customersRefreshing = false;
           if (result.ok) {
             const newCustomers = result.data.customers || [];
             PageCache.set(INVOICES_CUSTOMERS_KEY, newCustomers);
             // 差分があればUIを更新
             if (JSON.stringify(customers) !== JSON.stringify(newCustomers)) {
               customers = newCustomers;
+              customersLoaded = true;
               populateCustomerSelects();
             }
           }
         })
-        .withFailureHandler(function () {}) // サイレント
+        .withFailureHandler(function () { customersRefreshing = false; }) // サイレント
         .getCustomers();
     }
 
@@ -2277,13 +2286,25 @@
     function handleInvoiceSyncMessage(event) {
       const { type, data, timestamp } = event.data;
       if (isAnyInvoiceModalOpen()) {
-        pendingInvalidation = true;
+        if (type === 'CUSTOMERS_CHANGED') {
+          pendingSync.customers = true;
+        } else {
+          pendingSync.invoices = true;
+        }
         return;
       }
       applyInvoiceSyncMessage(type, data, timestamp);
     }
 
     function applyInvoiceSyncMessage(type, data, timestamp) {
+      if (type === 'CUSTOMERS_CHANGED') {
+        // 顧客マスター変更 → キャッシュクリア＆強制再取得
+        PageCache.clear(INVOICES_CUSTOMERS_KEY);
+        customersLoaded = false;
+        refreshCustomersInBackground(true);
+        return;
+      }
+
       if (type === 'ASSIGNMENT_CHANGED') {
         // ダッシュボードで配置変更 → 一覧リロードでフラグ反映
         PageCache.clearByPrefix('invoices_list');
@@ -2368,10 +2389,16 @@
     }
 
     function processPendingInvalidation() {
-      if (pendingInvalidation) {
-        pendingInvalidation = false;
+      if (pendingSync.invoices) {
+        pendingSync.invoices = false;
         invalidateDetailCache();
         loadInvoices(true);
+      }
+      if (pendingSync.customers) {
+        pendingSync.customers = false;
+        PageCache.clear(INVOICES_CUSTOMERS_KEY);
+        customersLoaded = false;
+        refreshCustomersInBackground(true);
       }
     }
 
