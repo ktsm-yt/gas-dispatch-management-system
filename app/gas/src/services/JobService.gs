@@ -379,13 +379,16 @@ const JobService = {
         }
       }
 
-      // 最新のjobを取得（スロット保存でrequired_countが更新されている可能性）
-      const createdJob = JobRepository.findById(newJob.job_id);
+      // スロット保存で required_count が更新された場合のみ再取得
+      if (savedSlots.length > 0) {
+        const refreshedJob = JobRepository.findById(newJob.job_id);
+        return { success: true, job: refreshedJob, slots: savedSlots };
+      }
 
       return {
         success: true,
-        job: createdJob,
-        slots: savedSlots
+        job: newJob,
+        slots: []
       };
     }
 
@@ -423,12 +426,15 @@ const JobService = {
       }
     }
 
-    // 最新の job を取得
-    const updatedJob = JobRepository.findById(job.job_id);
+    // スロット保存で required_count が更新された場合のみ再取得
+    if (savedSlots.length > 0) {
+      const refreshedJob = JobRepository.findById(job.job_id);
+      return { success: true, job: refreshedJob, slots: savedSlots };
+    }
 
     return {
       success: true,
-      job: updatedJob,
+      job: result.job,
       slots: savedSlots
     };
   },
