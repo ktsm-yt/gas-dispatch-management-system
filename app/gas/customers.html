@@ -1090,6 +1090,10 @@
             filterCustomers();
             showToast('保存しました', 'success');
             closeModal();
+            // 他タブ（請求ページ等）に顧客変更を通知
+            var ch = BroadcastSync.init('invoice_sync', function() {});
+            BroadcastSync.broadcast(ch, 'CUSTOMERS_CHANGED', {});
+            if (ch) ch.close();
           } else {
             if (response.error?.code === 'CONFLICT_ERROR') {
               showToast('他のユーザーによって更新されています。画面を再読み込みしてください。', 'error');
@@ -1127,6 +1131,10 @@
           filterCustomers();
           closeModal();
           showToast(`${deleteName}を削除しました`, 'success');
+          // 他タブ（請求ページ等）に顧客変更を通知
+          var ch = BroadcastSync.init('invoice_sync', function() {});
+          BroadcastSync.broadcast(ch, 'CUSTOMERS_CHANGED', {});
+          if (ch) ch.close();
 
           // バックグラウンドでAPI呼び出し
           google.script.run
