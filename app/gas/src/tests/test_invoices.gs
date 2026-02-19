@@ -64,6 +64,11 @@ function testInvoiceRepository() {
   assert(found, 'findById should return invoice');
   assertEqual(found.customer_id, testInvoice.customer_id, 'customer_id should match');
   assertEqual(found.billing_year, 2025, 'billing_year should match');
+  assertEqual(found.billing_month, 1, 'billing_month should match');
+  assertEqual(found.subtotal, 100000, 'subtotal should match');
+  assertEqual(found.tax_amount, 10000, 'tax_amount should match');
+  assertEqual(found.total_amount, 110000, 'total_amount should match');
+  assertEqual(found.status, 'unsent', 'status should match');
   Logger.log('  FindById: OK');
 
   // 3. Search テスト
@@ -72,6 +77,7 @@ function testInvoiceRepository() {
     billing_month: 1
   });
   assert(Array.isArray(searchResult), 'search should return array');
+  assert(searchResult.length > 0, 'search should return at least 1 result');
   Logger.log(`  Search: OK (${searchResult.length} results)`);
 
   // 4. Update テスト
@@ -253,27 +259,7 @@ function testInvoiceCalculations() {
   Logger.log('  Customer tax rounding mode: OK');
 }
 
-// ============================================
-// Test Utilities
-// ============================================
-
-function assert(condition, message) {
-  if (!condition) {
-    throw new Error(`Assertion failed: ${message}`);
-  }
-}
-
-function assertEqual(actual, expected, message) {
-  if (actual !== expected) {
-    throw new Error(`${message}: expected ${expected}, got ${actual}`);
-  }
-}
-
-function assertNotEqual(actual, expected, message) {
-  if (actual === expected) {
-    throw new Error(`${message}: expected not ${expected}, but got same value`);
-  }
-}
+// assert関数はtest_helpers.gsで統一定義
 
 /**
  * テストデータをクリーンアップ
