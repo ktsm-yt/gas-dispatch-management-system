@@ -11,6 +11,18 @@
  * - M_Company (自社情報)
  */
 
+/**
+ * 値の末尾4桁を残してマスクする（口座番号等の機密フィールド用）
+ * audit_log.gs の SENSITIVE_FIELDS.partial と同じ形式
+ * @param {*} value - マスク対象の値
+ * @returns {string|*} マスク済み文字列、またはnull/空文字はそのまま返す
+ */
+function maskPartial(value) {
+  if (value == null || value === '') return value;
+  var s = String(value);
+  return s.length > 4 ? '****' + s.slice(-4) : '****';
+}
+
 // シート名定義（TABLE_SHEET_MAP から派生）
 const SHEET_NAMES = {
   CUSTOMERS: TABLE_SHEET_MAP['M_Customers'],

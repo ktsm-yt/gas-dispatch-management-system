@@ -37,12 +37,7 @@ function maskSensitiveData(data) {
   for (var i = 0; i < SENSITIVE_FIELDS.partial.length; i++) {
     var field = SENSITIVE_FIELDS.partial[i];
     if (masked[field] != null && masked[field] !== '') {
-      var str = String(masked[field]);
-      if (str.length > 4) {
-        masked[field] = '****' + str.slice(-4);
-      } else {
-        masked[field] = '****';
-      }
+      masked[field] = maskPartial(masked[field]);
     }
   }
 
