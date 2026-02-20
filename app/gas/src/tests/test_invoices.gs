@@ -147,10 +147,11 @@ function testInvoiceLineRepository() {
     }
   ];
 
-  const inserted = InvoiceLineRepository.bulkInsert(testLines);
-  assertEqual(inserted.length, 2, 'bulkInsert should insert 2 lines');
-  assert(inserted[0].line_id.startsWith('line_'), 'line_id should start with line_');
-  Logger.log(`  BulkInsert: OK (${inserted.length} lines)`);
+  const insertResult = InvoiceLineRepository.bulkInsert(testLines);
+  assert(insertResult.success, 'bulkInsert should succeed');
+  assertEqual(insertResult.lines.length, 2, 'bulkInsert should insert 2 lines');
+  assert(insertResult.lines[0].line_id.startsWith('line_'), 'line_id should start with line_');
+  Logger.log(`  BulkInsert: OK (${insertResult.lines.length} lines)`);
 
   // 2. FindByInvoiceId テスト
   const foundLines = InvoiceLineRepository.findByInvoiceId(testInvoiceId);
@@ -166,7 +167,7 @@ function testInvoiceLineRepository() {
 
   // 4. Update テスト
   const updateResult = InvoiceLineRepository.update({
-    line_id: inserted[0].line_id,
+    line_id: insertResult.lines[0].line_id,
     quantity: 3,
     amount: 45000
   });
