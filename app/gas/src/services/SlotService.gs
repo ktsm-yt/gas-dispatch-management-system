@@ -268,6 +268,10 @@ const SlotService = {
         pay_unit: slot.slot_pay_unit
       });
 
+      // ダッシュボードキャッシュ無効化（配置の単価区分が変わるため）
+      const job = JobRepository.findById(assignment.job_id);
+      if (job) JobService.invalidateDashboardCache(job.work_date);
+
       return buildSuccessResponse({
         assignment: updateResult.assignment,
         slot: slot

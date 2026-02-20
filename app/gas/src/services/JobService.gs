@@ -78,10 +78,67 @@ const JobService = {
    * @param {string} date - 日付（YYYY-MM-DD形式）
    * @returns {Object} { jobs[], stats }
    */
+  /** CacheService key for dashboard results */
+  _dashboardCacheKey: function(date) {
+    return 'dashboard_v1_' + date;
+  },
+
+  /** Invalidate dashboard cache for a given date */
+  invalidateDashboardCache: function(date) {
+    if (!date) return;
+    try {
+      const cache = CacheService.getScriptCache();
+      const key = this._dashboardCacheKey(date);
+      const meta = cache.get(key);
+      if (meta) {
+        try {
+          const parsed = JSON.parse(meta);
+          if (parsed._chunks) {
+            const keys = [key];
+            for (let i = 0; i < parsed._chunks; i++) {
+              keys.push(key + '_' + i);
+            }
+            cache.removeAll(keys);
+            return;
+          }
+        } catch (e) { /* not JSON meta, just remove key */ }
+      }
+      cache.remove(key);
+    } catch (e) {
+      // CacheService errors are non-fatal
+    }
+  },
+
   getDashboard: function(date) {
     // 日付バリデーション
     if (!isValidDate(date)) {
       throw new Error('Invalid date format. Expected YYYY-MM-DD');
+    }
+
+    // CacheService: キャッシュヒットなら即座に返却
+    const cacheKey = this._dashboardCacheKey(date);
+    try {
+      const cache = CacheService.getScriptCache();
+      const meta = cache.get(cacheKey);
+      if (meta) {
+        const parsed = JSON.parse(meta);
+        if (parsed._chunks) {
+          // チャンク分割キャッシュの復元
+          const chunks = [];
+          for (let i = 0; i < parsed._chunks; i++) {
+            const chunk = cache.get(cacheKey + '_' + i);
+            if (!chunk) break; // 1つでも欠けたらキャッシュミス扱い
+            chunks.push(chunk);
+          }
+          if (chunks.length === parsed._chunks) {
+            return JSON.parse(chunks.join(''));
+          }
+        } else {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      // CacheService errors are non-fatal
     }
 
     const jobs = JobRepository.findByDate(date);
@@ -184,13 +241,37 @@ const JobService = {
     // 統計情報（配置情報付きのjobsWithCustomerを使用）
     const stats = this._calculateStats(jobsWithCustomer);
 
-    return {
+    const result = {
       date: date,
       jobs: jobsWithCustomer,
       stats: stats,
       maxUpdatedAt: maxUpdatedAt,
       hasFullAssignments: true  // 配置データはモーダル初期表示・競合チェックに十分なフィールドを含む
     };
+
+    // CacheService: 結果をキャッシュ（TTL 60秒）
+    try {
+      const json = JSON.stringify(result);
+      const cache = CacheService.getScriptCache();
+      const MAX_CHUNK = 90000; // 100KB制限に余裕を持たせる
+      if (json.length <= MAX_CHUNK) {
+        cache.put(cacheKey, json, 60);
+      } else {
+        // チャンク分割キャッシュ
+        const numChunks = Math.ceil(json.length / MAX_CHUNK);
+        const entries = {};
+        entries[cacheKey] = JSON.stringify({ _chunks: numChunks });
+        for (let i = 0; i < numChunks; i++) {
+          entries[cacheKey + '_' + i] = json.slice(i * MAX_CHUNK, (i + 1) * MAX_CHUNK);
+        }
+        cache.putAll(entries, 60);
+      }
+    } catch (e) {
+      // キャッシュ失敗は non-fatal
+      Logger.log('[CACHE] put failed: ' + e.message);
+    }
+
+    return result;
   },
 
   /**
@@ -329,6 +410,9 @@ const JobService = {
       }
     }
 
+    // ダッシュボードキャッシュ無効化用に日付を記録
+    const _workDate = job.work_date ? JobRepository._normalizeDate(job.work_date) : null;
+
     // 新規作成時のデフォルト値設定
     if (!job.job_id && !job.status) {
       job.status = 'pending';
@@ -363,10 +447,8 @@ const JobService = {
           savedSlots = slotResult.data.slots || [];
           // 枠合計で required_count を更新（DBにも反映済み）
         } else {
-          // スロット保存失敗 - エラーを返す
-          // 注: 案件は既に作成されているが、スロットがないため不整合状態
-          // より厳密には、案件も削除してロールバックすべきだが、
-          // GASの制約上トランザクション制御が困難なため、エラーで通知
+          // スロット保存失敗でも案件はDB作成済み → キャッシュ無効化
+          this.invalidateDashboardCache(_workDate);
           return {
             success: false,
             error: 'SLOT_SAVE_ERROR',
@@ -378,6 +460,9 @@ const JobService = {
           };
         }
       }
+
+      // ダッシュボードキャッシュ無効化
+      this.invalidateDashboardCache(_workDate);
 
       // スロット保存で required_count が更新された場合のみ再取得
       if (savedSlots.length > 0) {
@@ -412,8 +497,8 @@ const JobService = {
         savedSlots = slotResult.data.slots || [];
         // required_countはSlotService.saveSlotsで既に更新済み
       } else {
-        // スロット保存失敗 - エラーを返す
-        // 注: 案件は既に更新されているが、スロットは古いまま不整合状態
+        // スロット保存失敗でも案件はDB更新済み → キャッシュ無効化
+        this.invalidateDashboardCache(_workDate);
         return {
           success: false,
           error: 'SLOT_SAVE_ERROR',
@@ -423,6 +508,15 @@ const JobService = {
             jobUpdated: true // 案件は更新済み
           }
         };
+      }
+    }
+
+    // ダッシュボードキャッシュ無効化（更新前後の日付を両方無効化）
+    this.invalidateDashboardCache(_workDate);
+    if (result.before && result.before.work_date) {
+      const prevDate = JobRepository._normalizeDate(result.before.work_date);
+      if (prevDate !== _workDate) {
+        this.invalidateDashboardCache(prevDate);
       }
     }
 
