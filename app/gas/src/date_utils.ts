@@ -248,16 +248,18 @@ function countWorkingDays_(startDate: string, endDate: string): number {
 
 function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = true): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
-  const year = d.getFullYear();
+  let year = d.getFullYear();
   const holidays = excludeHolidays ? getJapaneseHolidays_(year) : new Set<string>();
 
   d.setDate(d.getDate() + 1);
-  while (!isBusinessDay_(d, holidays)) {
-    d.setDate(d.getDate() + 1);
+  while (true) {
     if (d.getFullYear() !== year && excludeHolidays) {
       const newHolidays = getJapaneseHolidays_(d.getFullYear());
       newHolidays.forEach(h => holidays.add(h));
+      year = d.getFullYear();
     }
+    if (isBusinessDay_(d, holidays)) break;
+    d.setDate(d.getDate() + 1);
   }
 
   return d;
