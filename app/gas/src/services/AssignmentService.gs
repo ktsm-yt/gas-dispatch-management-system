@@ -288,6 +288,9 @@ const AssignmentService = {
         Logger.log('Invoice change flag update failed (non-critical): ' + flagError);
       }
 
+      // ダッシュボードキャッシュ無効化
+      JobService.invalidateDashboardCache(job.work_date);
+
       return buildSuccessResponse({
         assignments: enrichedAssignments,
         inserted: results.inserted.length,

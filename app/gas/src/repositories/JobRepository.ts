@@ -248,7 +248,14 @@ const JobRepository = {
     if (!dateValue) return null;
 
     if (dateValue instanceof Date) {
-      return Utilities.formatDate(dateValue, 'Asia/Tokyo', 'yyyy-MM-dd');
+      if (isNaN(dateValue.getTime())) return null;
+      // JST = UTC+9 固定（日本はDSTなし）
+      const jst = new Date(dateValue.getTime() + 9 * 3600000);
+      const y = jst.getUTCFullYear();
+      if (y < 1901) return null; // 1899年問題ガード
+      const m = String(jst.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(jst.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
     }
 
     return String(dateValue).replace(/\//g, '-');
@@ -258,7 +265,9 @@ const JobRepository = {
     if (!timeValue && timeValue !== 0) return '';
 
     if (timeValue instanceof Date) {
-      return Utilities.formatDate(timeValue, 'Asia/Tokyo', 'HH:mm');
+      if (isNaN(timeValue.getTime())) return '';
+      const jst = new Date(timeValue.getTime() + 9 * 3600000);
+      return String(jst.getUTCHours()).padStart(2, '0') + ':' + String(jst.getUTCMinutes()).padStart(2, '0');
     }
 
     if (typeof timeValue === 'number') {
