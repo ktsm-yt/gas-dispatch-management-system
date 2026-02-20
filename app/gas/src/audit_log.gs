@@ -29,22 +29,28 @@ const SENSITIVE_FIELDS = {
  * @param {Object} data - マスク対象データ
  * @returns {Object} マスク済みデータ（元データは変更されない）
  */
+function maskPartial(value) {
+  var str = String(value);
+  if (str.length <= 4) return '****';
+  return '****' + str.slice(-4);
+}
+
 function maskSensitiveData(data) {
   if (!data || typeof data !== 'object') return data;
 
   var masked = JSON.parse(JSON.stringify(data));
 
   for (var i = 0; i < SENSITIVE_FIELDS.partial.length; i++) {
-    var field = SENSITIVE_FIELDS.partial[i];
-    if (masked[field] != null && masked[field] !== '') {
-      masked[field] = maskPartial(masked[field]);
+    var partialField = SENSITIVE_FIELDS.partial[i];
+    if (masked[partialField] != null && masked[partialField] !== '') {
+      masked[partialField] = maskPartial(masked[partialField]);
     }
   }
 
   for (var j = 0; j < SENSITIVE_FIELDS.full.length; j++) {
-    var field = SENSITIVE_FIELDS.full[j];
-    if (masked[field] != null && masked[field] !== '') {
-      masked[field] = '***';
+    var fullField = SENSITIVE_FIELDS.full[j];
+    if (masked[fullField] != null && masked[fullField] !== '') {
+      masked[fullField] = '***';
     }
   }
 
@@ -354,10 +360,10 @@ function getRecordHistory(tableName, recordId) {
       });
       // JSONを解析
       if (log.before_data) {
-        try { log.before_data = JSON.parse(log.before_data); } catch (e) {}
+        try { log.before_data = JSON.parse(log.before_data); } catch (_e) { /* non-JSON is kept as-is */ }
       }
       if (log.after_data) {
-        try { log.after_data = JSON.parse(log.after_data); } catch (e) {}
+        try { log.after_data = JSON.parse(log.after_data); } catch (_e) { /* non-JSON is kept as-is */ }
       }
       return log;
     });
