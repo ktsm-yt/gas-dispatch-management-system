@@ -174,7 +174,9 @@ function runTestSuite(suiteName) {
     'invoices': runInvoiceTests,
     'payouts': runPayoutTests,
     'payments': runPaymentTests,
-    'performance': runPerformanceTests
+    'performance': runPerformanceTests,
+    'perf_invoices': function() { return runPerfSubset('invoices', [testSearchInvoices, testInvoiceCalculateTotals, testGenerateInvoice, testSaveInvoice, testBulkGenerateInvoices]); },
+    'perf_payouts': function() { return runPerfSubset('payouts', [testCalculatePayout, testSearchPayouts, testGetUnpaidStaffList, testConfirmPayout, testMarkAsPaid]); }
   };
 
   const fn = suiteMap[suiteName.toLowerCase()];
