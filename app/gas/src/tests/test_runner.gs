@@ -180,7 +180,9 @@ function runTestSuite(suiteName) {
     'calc-advanced': runCalcAdvancedTests,
     'date-advanced': runDateAdvancedTests,
     'status-advanced': runStatusAdvancedTests,
-    'performance': runPerformanceTests
+    'performance': runPerformanceTests,
+    'perf_invoices': function() { return runPerfSubset('invoices', [testSearchInvoices, testInvoiceCalculateTotals, testGenerateInvoice, testSaveInvoice, testBulkGenerateInvoices]); },
+    'perf_payouts': function() { return runPerfSubset('payouts', [testCalculatePayout, testSearchPayouts, testGetUnpaidStaffList, testConfirmPayout, testMarkAsPaid]); }
   };
 
   const fn = suiteMap[suiteName.toLowerCase()];
