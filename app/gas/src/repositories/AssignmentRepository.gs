@@ -212,6 +212,7 @@ const AssignmentRepository = {
 
     const newRow = objectToRow(headers, updatedAssignment);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache('T_JobAssignments');
 
     return {
       success: true,
@@ -254,6 +255,7 @@ const AssignmentRepository = {
 
     const newRow = objectToRow(headers, updatedAssignment);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache('T_JobAssignments');
 
     return {
       success: true,
@@ -372,6 +374,7 @@ const AssignmentRepository = {
     // 6. 変更があれば一括書き込み
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache('T_JobAssignments');
     }
 
     return {
@@ -466,6 +469,7 @@ const AssignmentRepository = {
     // 6. 変更があれば一括書き込み
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache('T_JobAssignments');
     }
 
     return {
@@ -525,6 +529,7 @@ const AssignmentRepository = {
     const rows = newAssignments.map(a => objectToRow(headers, a));
     const lastRow = sheet.getLastRow();
     sheet.getRange(lastRow + 1, 1, rows.length, headers.length).setValues(rows);
+    invalidateExecutionCache('T_JobAssignments');
 
     return newAssignments;
   },
@@ -592,6 +597,7 @@ const AssignmentRepository = {
       successCount += range.length;
     }
 
+    invalidateExecutionCache('T_JobAssignments');
     Logger.log(`[bulkUpdatePayoutId] Completed: ${successCount}/${updates.length} updated (${ranges.length} batch writes)`);
     return { success: successCount, failed: updates.length - successCount };
   },

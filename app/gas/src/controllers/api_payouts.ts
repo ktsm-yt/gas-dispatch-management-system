@@ -311,8 +311,13 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
  */
 function markAsPaid(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; paid_date?: string } = {}): unknown {
   const requestId = generateRequestId();
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
 
   try {
+    lock.waitLock(5000);
+    lockAcquired = true;
+
     // 認可チェック（manager以上）
     const authResult = checkPermission(ROLES.MANAGER);
     if (!authResult.allowed) {
@@ -343,9 +348,16 @@ function markAsPaid(staffId: string, endDate: string, options: { adjustment_amou
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('markAsPaid', error, requestId);
     const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -599,8 +611,13 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
  */
 function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
 
   try {
+    lock.waitLock(5000);
+    lockAcquired = true;
+
     // 認可チェック（manager以上）
     const authResult = checkPermission(ROLES.MANAGER);
     if (!authResult.allowed) {
@@ -626,9 +643,16 @@ function confirmPayout(staffId: string, endDate: string, options: { adjustment_a
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('confirmPayout', error, requestId);
     const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, msg, {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 

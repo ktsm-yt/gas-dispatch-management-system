@@ -415,6 +415,7 @@ const PayoutRepository = {
 
     const newRow = objectToRow(headers, updatedPayout);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache('T_Payouts');
 
     return {
       success: true,
@@ -581,6 +582,7 @@ const PayoutRepository = {
     // 6. 変更があれば一括書き込み
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache('T_Payouts');
     }
 
     return {

@@ -29,6 +29,9 @@ const TABLE_SHEET_MAP = {
 let REQUEST_DB_CACHE = null;
 const REQUEST_SHEET_CACHE = {};
 
+// getAllRecords用の実行内キャッシュ（同一リクエスト内でのシートフルスキャン重複を削減）
+var REQUEST_RECORDS_CACHE = {};
+
 /**
  * DB Spreadsheetを取得
  * ID取得は config.ts::getSpreadsheetId() に委譲
@@ -198,11 +201,17 @@ function objectToRow(headers, obj) {
  * @returns {Object[]} レコード配列
  */
 function getAllRecords(tableName, options = {}) {
+  var cacheKey = tableName + (options.includeDeleted ? ':all' : ':active');
+  if (REQUEST_RECORDS_CACHE[cacheKey]) {
+    return REQUEST_RECORDS_CACHE[cacheKey].map(function(r) { return Object.assign({}, r); });
+  }
+
   const sheet = getSheet(tableName);
   const lastRow = sheet.getLastRow();
 
   if (lastRow <= 1) {
-    return []; // ヘッダーのみ
+    REQUEST_RECORDS_CACHE[cacheKey] = [];
+    return [];
   }
 
   const data = sheet.getDataRange().getValues();
@@ -217,7 +226,24 @@ function getAllRecords(tableName, options = {}) {
     records = records.filter(record => !record.is_deleted);
   }
 
-  return records;
+  REQUEST_RECORDS_CACHE[cacheKey] = records;
+  return records.map(function(r) { return Object.assign({}, r); });
+}
+
+/**
+ * 実行内キャッシュを無効化
+ * @param {string} [tableName] - テーブル名（省略時は全キャッシュクリア）
+ */
+function invalidateExecutionCache(tableName) {
+  if (!tableName) {
+    REQUEST_RECORDS_CACHE = {};
+    return;
+  }
+  Object.keys(REQUEST_RECORDS_CACHE).forEach(function(key) {
+    if (key.indexOf(tableName) === 0) {
+      delete REQUEST_RECORDS_CACHE[key];
+    }
+  });
 }
 
 /**
@@ -260,6 +286,7 @@ function insertRecord(tableName, record) {
   const row = objectToRow(headers, record);
 
   sheet.appendRow(row);
+  invalidateExecutionCache(tableName);
 
   return record;
 }
@@ -281,6 +308,7 @@ function insertRecords(tableName, records) {
 
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow + 1, 1, rows.length, headers.length).setValues(rows);
+  invalidateExecutionCache(tableName);
 
   return records;
 }
@@ -310,6 +338,7 @@ function updateRecord(tableName, idColumn, id, updates) {
   const newRow = objectToRow(headers, updatedRecord);
 
   sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+  invalidateExecutionCache(tableName);
 
   return updatedRecord;
 }
