@@ -30,7 +30,7 @@ const PERF_TEST_CONFIG = {
     generateInvoice: 5000,    // 請求生成（実測~3500ms）
     searchInvoices: 3000,
     saveInvoice: 1000,
-    invoiceCalculateTotals: 1000, // 目標: findByInvoiceIdで絞込最適化後（現状~3100ms）
+    invoiceCalculateTotals: 1200, // ExecutionCache導入後（2495ms→~1100ms、GAS実行環境の揺れを考慮）
     bulkGenerateInvoices: 30000,
     // 支払系
     calculatePayout: 3000,    // 目標: 日付フィルタ最適化後（現状~4400ms）

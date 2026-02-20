@@ -278,6 +278,7 @@ const InvoiceLineRepository = {
 
     const newRow = objectToRow(headers, updatedLine);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache('T_InvoiceLines');
 
     return {
       success: true,
@@ -367,6 +368,7 @@ const InvoiceLineRepository = {
 
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache('T_InvoiceLines');
     }
 
     return {
@@ -413,6 +415,7 @@ const InvoiceLineRepository = {
 
     if (deleted > 0) {
       sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+      invalidateExecutionCache('T_InvoiceLines');
     }
 
     return { success: true, deleted };
@@ -483,6 +486,7 @@ const InvoiceLineRepository = {
 
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache('T_InvoiceLines');
     }
 
     return { success: true, reordered };

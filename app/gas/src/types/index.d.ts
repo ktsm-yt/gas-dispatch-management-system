@@ -209,6 +209,7 @@ declare global {
   function getHeaders(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[];
   function rowToObject(headers: string[], row: unknown[]): Record<string, unknown>;
   function objectToRow(headers: string[], obj: Record<string, unknown>): unknown[];
+  function invalidateExecutionCache(tableName?: string): void;
 
   // === ユーティリティ関数宣言（utils.gs） ===
   function generateId(prefix: string): string;
