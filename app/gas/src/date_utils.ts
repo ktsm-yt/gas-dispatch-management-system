@@ -252,7 +252,7 @@ function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = tru
   const holidays = excludeHolidays ? getJapaneseHolidays_(year) : new Set<string>();
 
   d.setDate(d.getDate() + 1);
-  while (true) {
+  for (;;) {
     if (d.getFullYear() !== year && excludeHolidays) {
       const newHolidays = getJapaneseHolidays_(d.getFullYear());
       newHolidays.forEach(h => holidays.add(h));
