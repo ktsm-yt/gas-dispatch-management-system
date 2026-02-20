@@ -30,7 +30,10 @@ function runAllTests() {
     { name: '枠（Slot）テスト', fn: runAllSlotTests },
     { name: '請求管理テスト', fn: runInvoiceTests },
     { name: '支払管理テスト', fn: runPayoutTests },
-    { name: '入金管理テスト', fn: runPaymentTests }
+    { name: '入金管理テスト', fn: runPaymentTests },
+    { name: '金額計算テスト(Advanced)', fn: runCalcAdvancedTests },
+    { name: '日付計算テスト(Advanced)', fn: runDateAdvancedTests },
+    { name: 'ステータステスト(Advanced)', fn: runStatusAdvancedTests }
     // パフォーマンステストは時間がかかるため runTestSuite('performance') で個別実行
   ];
 
@@ -174,6 +177,9 @@ function runTestSuite(suiteName) {
     'invoices': runInvoiceTests,
     'payouts': runPayoutTests,
     'payments': runPaymentTests,
+    'calc-advanced': runCalcAdvancedTests,
+    'date-advanced': runDateAdvancedTests,
+    'status-advanced': runStatusAdvancedTests,
     'performance': runPerformanceTests
   };
 
