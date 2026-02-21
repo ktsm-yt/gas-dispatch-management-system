@@ -148,7 +148,7 @@ const ArchiveService = {
         // テーブルアーカイブ
         const tableName = stepName.replace('archive_', '');
         const tableConfig = this.ARCHIVE_TABLES.find(t => t.name === tableName);
-        const result = this.archiveTable(tableName, tableConfig, fiscalYear, startDate, endDate, progress.archiveDbId);
+        const result = this.archiveTable(tableName, tableConfig, fiscalYear, startDate, endDate, progress.archiveDbId, Date.now());
         return { success: true, data: result };
 
       case 'send_notification':
@@ -169,7 +169,7 @@ const ArchiveService = {
   /**
    * テーブルデータをアーカイブ
    */
-  archiveTable(tableName, tableConfig, fiscalYear, startDate, endDate, archiveDbId) {
+  archiveTable(tableName, tableConfig, fiscalYear, startDate, endDate, archiveDbId, startTime) {
     const currentDb = SpreadsheetApp.openById(getSpreadsheetId());
     const archiveDb = SpreadsheetApp.openById(archiveDbId);
 
@@ -234,7 +234,22 @@ const ArchiveService = {
     const rowsToArchive = [];
     const rowsToKeep = [headers];
 
+    let timeoutRemaining = null;
     for (let i = 1; i < data.length; i++) {
+      // 500行ごとにタイムアウトチェック（4.5分 = 270秒）
+      if (startTime && i % 500 === 0) {
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed > 270) {
+          Logger.log(`${tableName}: タイムアウト警告 - ${i-1}/${data.length-1}行処理済み, 残り${data.length - i}行未処理`);
+          timeoutRemaining = data.length - i;
+          // 未処理行を全てrowsToKeepに退避（データロス防止）
+          for (let j = i; j < data.length; j++) {
+            rowsToKeep.push(data[j]);
+          }
+          break;
+        }
+      }
+
       const row = data[i];
       let shouldArchive = false;
 
@@ -284,7 +299,8 @@ const ArchiveService = {
 
     return {
       movedCount: rowsToArchive.length,
-      remainingCount: rowsToKeep.length - 1
+      remainingCount: rowsToKeep.length - 1,
+      ...(timeoutRemaining !== null ? { timeoutRemaining } : {})
     };
   },
 

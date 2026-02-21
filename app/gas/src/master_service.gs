@@ -334,6 +334,7 @@ function validateCustomer(data) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveCustomer(customer, expectedUpdatedAt) {
+  requireManager();
   const isNew = !customer.customer_id;
 
   const result = saveMasterRecord(
@@ -446,6 +447,7 @@ function searchCustomers(params) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteCustomer(customerId, expectedUpdatedAt) {
+  requireManager();
   const result = deleteMasterRecord(
     SHEET_NAMES.CUSTOMERS,
     ID_COLUMNS.CUSTOMERS,
@@ -499,6 +501,7 @@ function validateStaff(data) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveStaff(staff, expectedUpdatedAt) {
+  requireManager();
   const result = saveMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
@@ -558,6 +561,7 @@ function listStaff(options = {}) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteStaff(staffId, expectedUpdatedAt) {
+  requireManager();
   const result = deleteMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
@@ -630,6 +634,7 @@ function validateSubcontractor(data) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function saveSubcontractor(subcontractor, expectedUpdatedAt) {
+  requireManager();
   const result = saveMasterRecord(
     SHEET_NAMES.SUBCONTRACTORS,
     ID_COLUMNS.SUBCONTRACTORS,
@@ -667,6 +672,7 @@ function listSubcontractors(options = {}) {
  * @param {string} expectedUpdatedAt - 楽観ロック用
  */
 function deleteSubcontractor(subcontractorId, expectedUpdatedAt) {
+  requireManager();
   const result = deleteMasterRecord(
     SHEET_NAMES.SUBCONTRACTORS,
     ID_COLUMNS.SUBCONTRACTORS,
@@ -707,6 +713,7 @@ function validateTransportFee(data) {
  * @param {Object} transportFee - 交通費データ
  */
 function saveTransportFee(transportFee) {
+  requireManager();
   const requestId = generateRequestId();
 
   try {
@@ -788,6 +795,7 @@ function listTransportFees() {
  * @param {string} areaCode - エリアコード
  */
 function deleteTransportFee(areaCode) {
+  requireManager();
   const requestId = generateRequestId();
 
   try {
@@ -849,6 +857,7 @@ function validateCompany(data) {
  * @param {Object} company - 自社情報データ
  */
 function saveCompany(company) {
+  requireManager();
   const requestId = generateRequestId();
 
   try {
