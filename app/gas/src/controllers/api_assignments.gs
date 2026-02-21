@@ -71,6 +71,15 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
       );
     }
 
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt は必須です',
+        { field: 'expectedUpdatedAt' },
+        requestId
+      );
+    }
+
     if (!changes || ((!changes.upserts || changes.upserts.length === 0) &&
                      (!changes.deletes || changes.deletes.length === 0))) {
       return buildErrorResponse(
@@ -362,23 +371,29 @@ function getAvailableStaff(options = {}) {
       return nameA.localeCompare(nameB, 'ja');
     });
 
-    // 必要な情報のみ返す
-    const staffList = staff.map(s => ({
-      staff_id: s.staff_id,
-      name: s.name,
-      name_kana: s.name_kana,
-      nickname: s.nickname || '',
-      phone: s.phone,
-      ng_customers: s.ng_customers,
-      skills: s.skills,
-      has_motorbike: s.has_motorbike,
-      staff_type: s.staff_type,
-      daily_rate_half: s.daily_rate_half,
-      daily_rate_basic: s.daily_rate_basic,
-      daily_rate_fullday: s.daily_rate_fullday,
-      daily_rate_night: s.daily_rate_night,
-      daily_rate_tobi: s.daily_rate_tobi
-    }));
+    // 必要な情報のみ返す（STAFF権限では給与単価を除外）
+    const isManager = authResult.userRole === ROLES.ADMIN || authResult.userRole === ROLES.MANAGER;
+    const staffList = staff.map(s => {
+      const base = {
+        staff_id: s.staff_id,
+        name: s.name,
+        name_kana: s.name_kana,
+        nickname: s.nickname || '',
+        phone: s.phone,
+        ng_customers: s.ng_customers,
+        skills: s.skills,
+        has_motorbike: s.has_motorbike,
+        staff_type: s.staff_type
+      };
+      if (isManager) {
+        base.daily_rate_half = s.daily_rate_half;
+        base.daily_rate_basic = s.daily_rate_basic;
+        base.daily_rate_fullday = s.daily_rate_fullday;
+        base.daily_rate_night = s.daily_rate_night;
+        base.daily_rate_tobi = s.daily_rate_tobi;
+      }
+      return base;
+    });
 
     return buildSuccessResponse({ staff: staffList }, requestId);
 
@@ -549,6 +564,15 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
         ERROR_CODES.VALIDATION_ERROR,
         '配置IDと枠IDは必須です',
         {},
+        requestId
+      );
+    }
+
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt は必須です',
+        { field: 'expectedUpdatedAt' },
         requestId
       );
     }

@@ -484,7 +484,7 @@ function executeDeleteJob(jobId, job) {
       } else {
         if (response.error?.code === 'CONFLICT_ERROR') {
           showToast('他のユーザーによって更新されています。再読み込みします。', 'error');
-        } else if (response.error?.code === 'HAS_ASSIGNMENTS') {
+        } else if (response.error?.code === 'HAS_DEPENDENCIES') {
           showToast('この案件には配置データが存在するため削除できません。', 'error');
         } else {
           showToast(response.error?.message || '削除に失敗しました', 'error');

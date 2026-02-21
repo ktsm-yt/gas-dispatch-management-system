@@ -303,6 +303,12 @@ function updateInvoiceStatus(invoiceId: string, status: string, expectedUpdatedA
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'status is required', {}, requestId);
     }
 
+    // ステータス値のホワイトリスト検証
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
+    if (!validStatuses.includes(status)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status: ' + status, {}, requestId);
+    }
+
     // Service呼び出し
     const result = InvoiceService.updateStatus(invoiceId, status, expectedUpdatedAt);
 
@@ -352,6 +358,19 @@ function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
     const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
     if (!validStatuses.includes(status)) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
+    }
+
+    // 各要素の必須フィールドを検証
+    const invalid = (updates as Record<string, unknown>[]).filter(
+      (item: Record<string, unknown>) => !item.invoiceId || !item.updatedAt
+    );
+    if (invalid.length > 0) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        `updates の各要素に invoiceId と updatedAt は必須です（不正: ${invalid.length}件）`,
+        {},
+        requestId
+      );
     }
 
     // 入力形式を変換 (updatedAt → expectedUpdatedAt)
@@ -467,8 +486,9 @@ function exportInvoice(invoiceId: string, mode: string, options: Record<string, 
       );
     }
 
-    // アーカイブデータのエクスポートを拒否（P2-5）
-    if ((options as Record<string, unknown>)._archived) {
+    // アーカイブデータのエクスポートを拒否（サーバー側DB検証）
+    const invoiceRecord = InvoiceRepository.findById(invoiceId);
+    if (invoiceRecord && invoiceRecord._archived) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '過去年度のデータは出力できません。一覧からの参照のみ可能です。',
