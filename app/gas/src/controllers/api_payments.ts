@@ -112,7 +112,14 @@ function recordPayment(invoiceId: string, paymentData: Record<string, unknown>, 
     const result = PaymentService.recordPayment(invoiceId, paymentInput, expectedUpdatedAt);
 
     if (!result.success) {
-      const errorCode = result.error === 'CONFLICT' ? ERROR_CODES.CONFLICT_ERROR : ERROR_CODES.VALIDATION_ERROR;
+      let errorCode: string = ERROR_CODES.VALIDATION_ERROR;
+      if (result.error === 'CONFLICT') {
+        errorCode = ERROR_CODES.CONFLICT_ERROR;
+      } else if (result.error === 'LOCK_TIMEOUT') {
+        errorCode = ERROR_CODES.BUSY_ERROR;
+      } else if (result.error === 'INVOICE_NOT_FOUND' || result.error === 'NOT_FOUND') {
+        errorCode = ERROR_CODES.NOT_FOUND;
+      }
       return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
     }
 
@@ -213,7 +220,14 @@ function deletePayment(paymentId: string, invoiceExpectedUpdatedAt: string) {
     const result = PaymentService.deletePayment(paymentId, invoiceExpectedUpdatedAt);
 
     if (!result.success) {
-      const errorCode = result.error === 'CONFLICT' ? ERROR_CODES.CONFLICT_ERROR : ERROR_CODES.VALIDATION_ERROR;
+      let errorCode: string = ERROR_CODES.VALIDATION_ERROR;
+      if (result.error === 'CONFLICT') {
+        errorCode = ERROR_CODES.CONFLICT_ERROR;
+      } else if (result.error === 'LOCK_TIMEOUT') {
+        errorCode = ERROR_CODES.BUSY_ERROR;
+      } else if (result.error === 'INVOICE_NOT_FOUND' || result.error === 'NOT_FOUND' || result.error === 'PAYMENT_NOT_FOUND') {
+        errorCode = ERROR_CODES.NOT_FOUND;
+      }
       return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
     }
 

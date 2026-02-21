@@ -177,6 +177,17 @@ const InvoiceRepository = {
   },
 
   insert: function(invoice: Record<string, unknown>): Record<string, unknown> {
+    // 必須フィールド検証
+    if (!invoice.customer_id) {
+      throw new Error('customer_id is required for invoice insert');
+    }
+    if (invoice.billing_year === undefined || invoice.billing_year === null) {
+      throw new Error('billing_year is required for invoice insert');
+    }
+    if (invoice.billing_month === undefined || invoice.billing_month === null) {
+      throw new Error('billing_month is required for invoice insert');
+    }
+
     const user = getCurrentUserEmail();
     const now = getCurrentTimestamp();
 

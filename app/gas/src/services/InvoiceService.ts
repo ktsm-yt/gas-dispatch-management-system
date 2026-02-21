@@ -553,6 +553,7 @@ const InvoiceService = {
       // バッチ用の新規請求書・明細を集約
       const newInvoices: Record<string, unknown>[] = [];
       const newLines: Record<string, unknown>[] = [];
+      const pendingSuccess: { customerId: string; companyName: string; invoiceId: string; invoiceNumber: string }[] = [];
 
       for (const customer of customers) {
         const customerId = customer.customer_id as string;
@@ -642,7 +643,7 @@ const InvoiceService = {
             });
           }
 
-          results.success.push({
+          pendingSuccess.push({
             customerId,
             companyName,
             invoiceId: invoiceId,
@@ -662,11 +663,26 @@ const InvoiceService = {
       }
 
       // === 一括挿入 ===
-      if (newInvoices.length > 0) {
-        insertRecords('T_Invoices', newInvoices);
-      }
-      if (newLines.length > 0) {
-        insertRecords('T_InvoiceLines', newLines);
+      try {
+        if (newInvoices.length > 0) {
+          insertRecords('T_Invoices', newInvoices);
+        }
+        if (newLines.length > 0) {
+          insertRecords('T_InvoiceLines', newLines);
+        }
+        // DB書込み成功後に成功結果を確定
+        results.success.push(...pendingSuccess);
+      } catch (insertError: unknown) {
+        // DB書込み失敗時は全件を失敗に移す
+        const insertMsg = insertError instanceof Error ? insertError.message : String(insertError);
+        for (const pending of pendingSuccess) {
+          results.failed.push({
+            customerId: pending.customerId,
+            companyName: pending.companyName,
+            error: `DB書込みエラー: ${insertMsg}`
+          });
+        }
+        throw insertError;
       }
 
     } catch (e: unknown) {

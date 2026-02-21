@@ -36,6 +36,16 @@ function getDashboard(date) {
       );
     }
 
+    // 日付フォーマット検証（YYYY-MM-DD）
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'date must be in YYYY-MM-DD format',
+        {},
+        requestId
+      );
+    }
+
     // Service呼び出し
     const result = JobService.getDashboard(date);
 
@@ -68,6 +78,10 @@ function getDashboardMeta(date) {
 
     if (!date) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'date is required', {}, requestId);
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'date must be in YYYY-MM-DD format', {}, requestId);
     }
 
     const result = JobService.getDashboardMeta(date);
