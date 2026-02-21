@@ -156,11 +156,18 @@ function buildSuccessResponse(data, requestId) {
  * @see errors.ts apiHandler_() - Service層での自動エラーハンドリング
  */
 function buildErrorResponse(code, message, details, requestId) {
+  // SYSTEM_ERROR 時は内部エラーメッセージをクライアントに漏洩させない
+  var safeMessage = message;
+  if (code === ERROR_CODES.SYSTEM_ERROR) {
+    Logger.log('SYSTEM_ERROR detail: ' + message);
+    safeMessage = 'システムエラーが発生しました';
+  }
+
   const response = {
     ok: false,
     error: {
       code: code,
-      message: message,
+      message: safeMessage,
       details: serializeForWeb(details) || {}
     },
     serverTime: getCurrentTimestamp(),

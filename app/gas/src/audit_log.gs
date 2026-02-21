@@ -280,6 +280,7 @@ function logExport(exportType, targetInfo) {
  * @returns {Array} ログエントリの配列
  */
 function searchAuditLogs(options = {}) {
+  try {
   const sheet = getAuditLogSheet();
   const data = sheet.getDataRange().getValues();
 
@@ -325,6 +326,11 @@ function searchAuditLogs(options = {}) {
   // 件数制限
   const limit = options.limit || 100;
   return logs.slice(0, limit);
+
+  } catch (error) {
+    Logger.log(`searchAuditLogs error: ${error.message}`);
+    return [];
+  }
 }
 
 /**
@@ -343,6 +349,7 @@ function getRecentAuditLogs(count = 10) {
  * @returns {Array} ログエントリの配列
  */
 function getRecordHistory(tableName, recordId) {
+  try {
   const sheet = getAuditLogSheet();
   const data = sheet.getDataRange().getValues();
 
@@ -372,6 +379,11 @@ function getRecordHistory(tableName, recordId) {
   logs.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   return logs;
+
+  } catch (error) {
+    Logger.log(`getRecordHistory error: ${error.message}`);
+    return [];
+  }
 }
 
 /**
