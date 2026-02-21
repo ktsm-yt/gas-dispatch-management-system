@@ -242,6 +242,10 @@ const ArchiveService = {
         if (elapsed > 270) {
           Logger.log(`${tableName}: タイムアウト警告 - ${i-1}/${data.length-1}行処理済み, 残り${data.length - i}行未処理`);
           timeoutRemaining = data.length - i;
+          // 未処理行を全てrowsToKeepに退避（データロス防止）
+          for (let j = i; j < data.length; j++) {
+            rowsToKeep.push(data[j]);
+          }
           break;
         }
       }
