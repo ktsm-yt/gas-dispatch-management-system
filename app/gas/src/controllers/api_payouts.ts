@@ -68,7 +68,8 @@ function getUnpaidSummary(staffId: string, endDate: string, options: Record<stri
     }
 
     // Service呼び出し
-    const result = PayoutService.calculatePayout(staffId, endDate, options) as unknown as Record<string, unknown>;
+    const calcResult = PayoutService.calculatePayout(staffId, endDate, options);
+    const result: Record<string, unknown> = { ...calcResult };
 
     // スタッフ名を付与
     const staff = StaffRepository.findById(staffId);
@@ -1165,7 +1166,8 @@ function getUnpaidSummaryForSubcontractor(subcontractorId: string, endDate: stri
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    const result = PayoutService.calculatePayoutForSubcontractor(subcontractorId, endDate) as unknown as Record<string, unknown>;
+    const calcResult = PayoutService.calculatePayoutForSubcontractor(subcontractorId, endDate);
+    const result: Record<string, unknown> = { ...calcResult };
 
     const subcontractor = SubcontractorRepository.findById(subcontractorId);
     result.companyName = subcontractor ? subcontractor.company_name as string : '(不明)';
@@ -1199,7 +1201,7 @@ function getUnpaidSubcontractorList(endDate: string): unknown {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
     }
 
-    const result = PayoutService.getUnpaidSubcontractorList(endDate) as unknown as Record<string, unknown>[];
+    const result = PayoutService.getUnpaidSubcontractorList(endDate) as Record<string, unknown>[];
 
     return buildSuccessResponse({
       endDate: endDate,

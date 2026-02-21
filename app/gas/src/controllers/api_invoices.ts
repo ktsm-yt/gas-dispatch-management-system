@@ -9,7 +9,7 @@
  * 顧客一覧を取得（請求画面用）
  * @returns {Object} { ok: true, data: { customers: [] } }
  */
-function getCustomers() {
+function getCustomers(): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -139,7 +139,7 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
  * @param {Object} query - 検索条件
  * @returns {Object} APIレスポンス
  */
-function searchInvoices(query: Record<string, unknown>) {
+function searchInvoices(query: Record<string, unknown>): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -198,7 +198,7 @@ function searchInvoices(query: Record<string, unknown>) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function getInvoice(invoiceId: string) {
+function getInvoice(invoiceId: string): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -577,8 +577,16 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    // Service呼び出し（expectedUpdatedAt は後方互換のためオプショナル）
-    const result = InvoiceService.regenerate(invoiceId, expectedUpdatedAt);
+    // 楽観ロック検証（expectedUpdatedAt指定時のみ）
+    if (expectedUpdatedAt) {
+      const current = InvoiceRepository.findById(invoiceId);
+      if (current && current.updated_at !== expectedUpdatedAt) {
+        return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーが変更しました。画面を更新してください', {}, requestId);
+      }
+    }
+
+    // Service呼び出し
+    const result = InvoiceService.regenerate(invoiceId);
 
     if (!result.success) {
       const errorCode = result.error === 'NOT_FOUND'
