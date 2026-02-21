@@ -354,6 +354,19 @@ function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status', {}, requestId);
     }
 
+    // 各要素の必須フィールドを検証
+    const invalid = (updates as Record<string, unknown>[]).filter(
+      (item: Record<string, unknown>) => !item.invoiceId || !item.updatedAt
+    );
+    if (invalid.length > 0) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        `updates の各要素に invoiceId と updatedAt は必須です（不正: ${invalid.length}件）`,
+        {},
+        requestId
+      );
+    }
+
     // 入力形式を変換 (updatedAt → expectedUpdatedAt)
     const bulkUpdates = (updates as Record<string, unknown>[]).map((item: Record<string, unknown>) => ({
       invoiceId: item.invoiceId as string,

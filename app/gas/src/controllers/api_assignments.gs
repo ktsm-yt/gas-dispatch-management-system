@@ -71,6 +71,15 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
       );
     }
 
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt は必須です',
+        { field: 'expectedUpdatedAt' },
+        requestId
+      );
+    }
+
     if (!changes || ((!changes.upserts || changes.upserts.length === 0) &&
                      (!changes.deletes || changes.deletes.length === 0))) {
       return buildErrorResponse(
@@ -549,6 +558,15 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
         ERROR_CODES.VALIDATION_ERROR,
         '配置IDと枠IDは必須です',
         {},
+        requestId
+      );
+    }
+
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt は必須です',
+        { field: 'expectedUpdatedAt' },
         requestId
       );
     }
