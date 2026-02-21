@@ -440,7 +440,7 @@ function deleteJob(jobId, expectedUpdatedAt) {
 
     if (relatedAssignments.length > 0) {
       return buildErrorResponse(
-        'HAS_ASSIGNMENTS',
+        ERROR_CODES.HAS_DEPENDENCIES,
         `この案件には${relatedAssignments.length}件の配置データが存在するため削除できません。先に配置を削除してください。`,
         { assignmentCount: relatedAssignments.length },
         requestId
