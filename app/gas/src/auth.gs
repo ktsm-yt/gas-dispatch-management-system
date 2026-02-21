@@ -15,7 +15,11 @@
  */
 function getAllowedDomain() {
   const prop = PropertiesService.getScriptProperties();
-  return prop.getProperty('ALLOWED_DOMAIN') || 'example.com';
+  const domain = prop.getProperty('ALLOWED_DOMAIN');
+  if (!domain) {
+    throw new Error('ALLOWED_DOMAIN が ScriptProperties に設定されていません');
+  }
+  return domain;
 }
 
 /**
@@ -351,6 +355,11 @@ function testAuth() {
  * gmail.com ドメインを許可し、現在のユーザーを管理者に設定
  */
 function setupDevAuth() {
+  // 本番環境では開発用認証設定を拒否
+  if (isProductionDeployment()) {
+    throw new Error('本番環境では setupDevAuth を実行できません');
+  }
+
   const prop = PropertiesService.getScriptProperties();
   const user = Session.getActiveUser().getEmail();
   const domain = user.split('@')[1];
