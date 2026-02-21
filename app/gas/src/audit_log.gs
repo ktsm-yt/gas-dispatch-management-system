@@ -338,8 +338,7 @@ function searchAuditLogs(options = {}) {
   // 新しい順にソート
   logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-  // 件数制限
-  const limit = options.limit || 100;
+  // 件数制限（limitはL302で定義済み）
   return logs.slice(0, limit);
 
   } catch (error) {
