@@ -108,7 +108,8 @@ function logToAudit(action, tableName, recordId, beforeData, afterData) {
       afterData ? JSON.stringify(maskSensitiveData(afterData)) : ''
     ];
 
-    sheet.appendRow(logEntry);
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, 1, logEntry.length).setValues([logEntry]);
 
     return {
       log_id: logId,
@@ -280,16 +281,30 @@ function logExport(exportType, targetInfo) {
  * @returns {Array} ログエントリの配列
  */
 function searchAuditLogs(options = {}) {
+  // 認可チェック: 監査ログ閲覧は管理者以上
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    throw new Error('PERMISSION_DENIED: 監査ログの閲覧には管理者以上の権限が必要です');
+  }
+
   try {
   const sheet = getAuditLogSheet();
-  const data = sheet.getDataRange().getValues();
+  const totalRows = sheet.getLastRow();
 
-  if (data.length <= 1) {
+  if (totalRows <= 1) {
     return []; // ヘッダーのみ
   }
 
-  const headers = data[0];
-  let logs = data.slice(1).map(row => {
+  // ヘッダー取得
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // 最新 maxRows 行のみ取得（パフォーマンス最適化）
+  const limit = options.limit || 100;
+  const maxRows = Math.min(totalRows - 1, limit * 3); // フィルタ余裕を持って3倍取得
+  const startRow = Math.max(2, totalRows - maxRows + 1);
+  const dataRows = sheet.getRange(startRow, 1, totalRows - startRow + 1, headers.length).getValues();
+
+  let logs = dataRows.map(row => {
     const log = {};
     headers.forEach((header, index) => {
       log[header] = row[index];
@@ -323,8 +338,7 @@ function searchAuditLogs(options = {}) {
   // 新しい順にソート
   logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-  // 件数制限
-  const limit = options.limit || 100;
+  // 件数制限（limitはL302で定義済み）
   return logs.slice(0, limit);
 
   } catch (error) {
@@ -349,17 +363,34 @@ function getRecentAuditLogs(count = 10) {
  * @returns {Array} ログエントリの配列
  */
 function getRecordHistory(tableName, recordId) {
+  // 認可チェック: 変更履歴閲覧は管理者以上
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    throw new Error('PERMISSION_DENIED: 変更履歴の閲覧には管理者以上の権限が必要です');
+  }
+
   try {
   const sheet = getAuditLogSheet();
-  const data = sheet.getDataRange().getValues();
+  const totalRows = sheet.getLastRow();
 
-  if (data.length <= 1) {
+  if (totalRows <= 1) {
     return [];
   }
 
-  const headers = data[0];
-  const logs = data.slice(1)
-    .filter(row => row[4] === tableName && row[5] === recordId)
+  const numCols = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, numCols).getValues()[0];
+
+  // 最新 5000 行に限定（レコード履歴は通常少ないが、全件スキャン回避）
+  const maxScanRows = Math.min(totalRows - 1, 5000);
+  const startRow = Math.max(2, totalRows - maxScanRows + 1);
+  const dataRows = sheet.getRange(startRow, 1, totalRows - startRow + 1, numCols).getValues();
+
+  // ヘッダーから列インデックスを動的取得（マジックナンバー排除）
+  const tableNameCol = headers.indexOf('table_name');
+  const recordIdCol = headers.indexOf('record_id');
+
+  const logs = dataRows
+    .filter(row => row[tableNameCol] === tableName && row[recordIdCol] === recordId)
     .map(row => {
       const log = {};
       headers.forEach((header, index) => {

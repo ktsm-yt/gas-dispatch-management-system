@@ -336,6 +336,40 @@ declare global {
     includeArchive?: boolean;
   }
 
+  // === calc_utils.ts ドメイン型 ===
+  interface CalcStaff {
+    daily_rate_tobi?: number;
+    daily_rate_age?: number;
+    daily_rate_tobiage?: number;
+    daily_rate_half?: number;
+    daily_rate_basic?: number;
+    daily_rate_fullday?: number;
+    daily_rate_night?: number;
+    [key: string]: unknown;
+  }
+
+  interface CalcCustomer {
+    unit_price_tobi?: number;
+    unit_price_age?: number;
+    unit_price_tobiage?: number;
+    unit_price_half?: number;
+    unit_price_basic?: number;
+    unit_price_fullday?: number;
+    unit_price_night?: number;
+    [key: string]: unknown;
+  }
+
+  interface CalcAssignment {
+    wage_rate?: number | null | string;
+    invoice_rate?: number | null | string;
+    pay_unit?: string;
+    invoice_unit?: string;
+    transport_amount?: number;
+    transport_area?: string;
+    transport_is_manual?: boolean;
+    [key: string]: unknown;
+  }
+
   // === MasterCache（utils.gs） ===
   const MasterCache: {
     getStaff(): Record<string, unknown>[];
@@ -343,7 +377,13 @@ declare global {
     getSubcontractors(): Record<string, unknown>[];
     getCustomers(): Record<string, unknown>[];
     getCustomerMap(): Record<string, Record<string, unknown>>;
+    getTransportFees(): Record<string, unknown>[];
     getCompany(): Record<string, unknown> | null;
+    invalidateCustomers(): void;
+    invalidateStaff(): void;
+    invalidateSubcontractors(): void;
+    invalidateTransportFees(): void;
+    invalidateCompany(): void;
   };
 
   // === 計算ユーティリティ（calc_utils.ts） ===
@@ -388,6 +428,16 @@ declare global {
     findByIds(ids: string[]): Map<string, Record<string, unknown>>;
     search(query: Record<string, unknown>): Record<string, unknown>[];
   };
+
+  // === PayoutService 戻り値型 ===
+  interface PayoutCalculationResult extends Record<string, unknown> {
+    assignments: Record<string, unknown>[];
+    baseAmount: number;
+    transportAmount: number;
+    totalAmount: number;
+    taxAmount: number;
+    assignmentCount: number;
+  }
 
   // === 未移行サービスのambient宣言 ===
   const ArchiveService: {

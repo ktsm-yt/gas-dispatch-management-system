@@ -9,7 +9,7 @@
  * 顧客一覧を取得（請求画面用）
  * @returns {Object} { ok: true, data: { customers: [] } }
  */
-function getCustomers() {
+function getCustomers(): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -27,7 +27,7 @@ function getCustomers() {
     return result;
   } catch (error: unknown) {
     logErr('getCustomers', error);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -95,7 +95,7 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
 
   } catch (error: unknown) {
     Logger.log(`generateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -130,7 +130,7 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
 
   } catch (error: unknown) {
     Logger.log(`bulkGenerateInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -139,7 +139,7 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
  * @param {Object} query - 検索条件
  * @returns {Object} APIレスポンス
  */
-function searchInvoices(query: Record<string, unknown>) {
+function searchInvoices(query: Record<string, unknown>): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -189,7 +189,7 @@ function searchInvoices(query: Record<string, unknown>) {
 
   } catch (error: unknown) {
     Logger.log(`searchInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -198,7 +198,7 @@ function searchInvoices(query: Record<string, unknown>) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function getInvoice(invoiceId: string) {
+function getInvoice(invoiceId: string): ApiResponse {
   const requestId = generateRequestId();
 
   try {
@@ -224,7 +224,7 @@ function getInvoice(invoiceId: string) {
 
   } catch (error: unknown) {
     Logger.log(`getInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -273,7 +273,7 @@ function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expecte
 
   } catch (error: unknown) {
     Logger.log(`saveInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -325,7 +325,7 @@ function updateInvoiceStatus(invoiceId: string, status: string, expectedUpdatedA
 
   } catch (error: unknown) {
     Logger.log(`updateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -348,6 +348,10 @@ function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
     // 入力検証
     if (!Array.isArray(updates) || updates.length === 0) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'updates is required', {}, requestId);
+    }
+
+    if (updates.length > 100) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '一括更新は100件以内で指定してください', {}, requestId);
     }
 
     if (!status) {
@@ -408,7 +412,7 @@ function bulkUpdateInvoiceStatus(updates: unknown[], status: string) {
 
   } catch (error: unknown) {
     Logger.log(`bulkUpdateInvoiceStatus error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -450,7 +454,7 @@ function checkInvoiceExportFile(invoiceId: string, mode: string, options: Record
 
   } catch (error: unknown) {
     Logger.log(`checkInvoiceExportFile error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -508,7 +512,7 @@ function exportInvoice(invoiceId: string, mode: string, options: Record<string, 
 
   } catch (error: unknown) {
     Logger.log(`exportInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -549,7 +553,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
 
   } catch (error: unknown) {
     Logger.log(`deleteInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -558,7 +562,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function regenerateInvoice(invoiceId: string) {
+function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
   const requestId = generateRequestId();
 
   try {
@@ -571,6 +575,14 @@ function regenerateInvoice(invoiceId: string) {
     // 入力検証
     if (!invoiceId) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
+    }
+
+    // 楽観ロック検証（expectedUpdatedAt指定時のみ）
+    if (expectedUpdatedAt) {
+      const current = InvoiceRepository.findById(invoiceId);
+      if (current && current.updated_at !== expectedUpdatedAt) {
+        return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーが変更しました。画面を更新してください', {}, requestId);
+      }
     }
 
     // Service呼び出し
@@ -599,7 +611,7 @@ function regenerateInvoice(invoiceId: string) {
 
   } catch (error: unknown) {
     Logger.log(`regenerateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -700,7 +712,7 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
 
   } catch (error: unknown) {
     Logger.log(`exportBillingData error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -722,7 +734,7 @@ function getBillingExportFolderUrl() {
 
   } catch (error: unknown) {
     Logger.log(`getBillingExportFolderUrl error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -783,7 +795,7 @@ function checkInvoiceExistsForJob(customerId: string, workDate: string) {
 
   } catch (error: unknown) {
     Logger.log(`checkInvoiceExistsForJob error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -835,6 +847,10 @@ function getInvoiceChangeFlags(invoiceIds: string[]) {
       return buildSuccessResponse({ flags: {} }, requestId);
     }
 
+    if (invoiceIds.length > 100) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '一度に確認できる請求書は100件以内です', {}, requestId);
+    }
+
     console.time('getInvoiceChangeFlags');
 
     // T_Invoices の has_assignment_changes カラムから直接取得（フルスキャン不要）
@@ -873,7 +889,7 @@ function getInvoiceChangeFlags(invoiceIds: string[]) {
 
   } catch (error: unknown) {
     Logger.log(`getInvoiceChangeFlags error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -915,6 +931,15 @@ function startBulkExport(params: Record<string, unknown>) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '出力する請求書を選択してください',
+        {},
+        requestId
+      );
+    }
+
+    if (params.invoiceIds.length > 100) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        '一括出力は100件以内で指定してください',
         {},
         requestId
       );
@@ -1045,9 +1070,10 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
         if (String(adj.item_name).length > 50) {
           return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名は50文字以内です`, {}, requestId);
         }
-        // 式注入防止
-        if (String(adj.item_name).charAt(0) === '=') {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名の先頭に = は使用できません`, {}, requestId);
+        // 数式インジェクション防止（=, +, -, @, \t, \r）
+        const firstChar = String(adj.item_name).charAt(0);
+        if ('=+-@'.includes(firstChar) || firstChar === '\t' || firstChar === '\r') {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名の先頭に特殊文字は使用できません`, {}, requestId);
         }
         // 金額チェック
         const amount = Number(adj.amount);
@@ -1094,6 +1120,6 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
 
   } catch (error: unknown) {
     Logger.log(`updateInvoiceDetails error: ${(error instanceof Error) ? error.message : String(error)}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, (error instanceof Error) ? error.message : String(error), {}, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }

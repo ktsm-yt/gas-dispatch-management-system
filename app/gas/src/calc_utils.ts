@@ -282,9 +282,7 @@ function calculateMonthlyPayout_(
   let transportAmount = 0;
 
   assignments.forEach(asg => {
-    const wage = asg.wage_rate || getDailyRateByJobType_(staff, asg.pay_unit || 'basic');
-    const multiplier = getUnitMultiplier_(asg.pay_unit);
-    baseAmount += applyRounding_(wage * multiplier, RoundingMode.FLOOR);
+    baseAmount += calculateWage_(asg, staff, asg.pay_unit || 'basic');
 
     if (asg.transport_amount) {
       transportAmount += Number(asg.transport_amount) || 0;

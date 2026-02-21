@@ -6,6 +6,24 @@
  */
 
 /**
+ * PaymentService のエラーコードを API エラーコードに変換
+ */
+function mapPaymentServiceError_(error: string | undefined): string {
+  switch (error) {
+    case 'CONFLICT':
+      return ERROR_CODES.CONFLICT_ERROR;
+    case 'LOCK_TIMEOUT':
+      return ERROR_CODES.BUSY_ERROR;
+    case 'INVOICE_NOT_FOUND':
+    case 'NOT_FOUND':
+    case 'PAYMENT_NOT_FOUND':
+      return ERROR_CODES.NOT_FOUND;
+    default:
+      return ERROR_CODES.VALIDATION_ERROR;
+  }
+}
+
+/**
  * 入金を記録
  * @param {string} invoiceId - 請求書ID
  * @param {Object} paymentData - 入金データ
@@ -112,15 +130,7 @@ function recordPayment(invoiceId: string, paymentData: Record<string, unknown>, 
     const result = PaymentService.recordPayment(invoiceId, paymentInput, expectedUpdatedAt);
 
     if (!result.success) {
-      let errorCode: string = ERROR_CODES.VALIDATION_ERROR;
-      if (result.error === 'CONFLICT') {
-        errorCode = ERROR_CODES.CONFLICT_ERROR;
-      } else if (result.error === 'LOCK_TIMEOUT') {
-        errorCode = ERROR_CODES.BUSY_ERROR;
-      } else if (result.error === 'INVOICE_NOT_FOUND' || result.error === 'NOT_FOUND') {
-        errorCode = ERROR_CODES.NOT_FOUND;
-      }
-      return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
+      return buildErrorResponse(mapPaymentServiceError_(result.error), result.message || result.error || "エラー", {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);
@@ -220,15 +230,7 @@ function deletePayment(paymentId: string, invoiceExpectedUpdatedAt: string) {
     const result = PaymentService.deletePayment(paymentId, invoiceExpectedUpdatedAt);
 
     if (!result.success) {
-      let errorCode: string = ERROR_CODES.VALIDATION_ERROR;
-      if (result.error === 'CONFLICT') {
-        errorCode = ERROR_CODES.CONFLICT_ERROR;
-      } else if (result.error === 'LOCK_TIMEOUT') {
-        errorCode = ERROR_CODES.BUSY_ERROR;
-      } else if (result.error === 'INVOICE_NOT_FOUND' || result.error === 'NOT_FOUND' || result.error === 'PAYMENT_NOT_FOUND') {
-        errorCode = ERROR_CODES.NOT_FOUND;
-      }
-      return buildErrorResponse(errorCode, result.message || result.error || "エラー", result, requestId);
+      return buildErrorResponse(mapPaymentServiceError_(result.error), result.message || result.error || "エラー", {}, requestId);
     }
 
     return buildSuccessResponse(result, requestId);

@@ -304,8 +304,8 @@ function createBulkCustomers() {
 
   // 一括挿入
   if (toInsert.length > 0) {
-    insertRecords('M_Customers', toInsert);
-    console.log(`顧客作成完了: ${toInsert.length}件（バッチ挿入）`);
+    const result = insertRecords('M_Customers', toInsert);
+    console.log(`顧客作成完了: ${result ? result.length : 0}/${toInsert.length}件（バッチ挿入）`);
   } else {
     console.log('顧客作成: 新規データなし');
   }
@@ -412,8 +412,8 @@ function createBulkStaff() {
 
   // 一括挿入
   if (toInsert.length > 0) {
-    insertRecords('M_Staff', toInsert);
-    console.log(`スタッフ作成完了: ${toInsert.length}件（バッチ挿入）`);
+    const result = insertRecords('M_Staff', toInsert);
+    console.log(`スタッフ作成完了: ${result ? result.length : 0}/${toInsert.length}件（バッチ挿入）`);
   } else {
     console.log('スタッフ作成: 新規データなし');
   }
@@ -543,8 +543,8 @@ function createBulkJobs() {
 
   // 一括挿入
   if (toInsert.length > 0) {
-    insertRecords('T_Jobs', toInsert);
-    console.log(`案件作成完了: ${toInsert.length}件（バッチ挿入）`);
+    const result = insertRecords('T_Jobs', toInsert);
+    console.log(`案件作成完了: ${result ? result.length : 0}/${toInsert.length}件（バッチ挿入）`);
   }
 
   return toInsert.length;
@@ -647,8 +647,8 @@ function createBulkAssignments() {
   // 一括挿入
   if (toInsert.length > 0) {
     console.log(`配置データ準備完了: ${toInsert.length}件`);
-    AssignmentRepository.bulkInsert(toInsert);
-    console.log(`配置作成完了: ${toInsert.length}件（バッチ挿入）`);
+    const result = AssignmentRepository.bulkInsert(toInsert);
+    console.log(`配置作成完了: ${result ? result.inserted : 0}/${toInsert.length}件（バッチ挿入）`);
   }
 
   return toInsert.length;
