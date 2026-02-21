@@ -108,7 +108,8 @@ function logToAudit(action, tableName, recordId, beforeData, afterData) {
       afterData ? JSON.stringify(maskSensitiveData(afterData)) : ''
     ];
 
-    sheet.appendRow(logEntry);
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, 1, logEntry.length).setValues([logEntry]);
 
     return {
       log_id: logId,
@@ -288,14 +289,22 @@ function searchAuditLogs(options = {}) {
 
   try {
   const sheet = getAuditLogSheet();
-  const data = sheet.getDataRange().getValues();
+  const totalRows = sheet.getLastRow();
 
-  if (data.length <= 1) {
+  if (totalRows <= 1) {
     return []; // ヘッダーのみ
   }
 
-  const headers = data[0];
-  let logs = data.slice(1).map(row => {
+  // ヘッダー取得
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // 最新 maxRows 行のみ取得（パフォーマンス最適化）
+  const limit = options.limit || 100;
+  const maxRows = Math.min(totalRows - 1, limit * 3); // フィルタ余裕を持って3倍取得
+  const startRow = Math.max(2, totalRows - maxRows + 1);
+  const dataRows = sheet.getRange(startRow, 1, totalRows - startRow + 1, headers.length).getValues();
+
+  let logs = dataRows.map(row => {
     const log = {};
     headers.forEach((header, index) => {
       log[header] = row[index];
@@ -363,14 +372,21 @@ function getRecordHistory(tableName, recordId) {
 
   try {
   const sheet = getAuditLogSheet();
-  const data = sheet.getDataRange().getValues();
+  const totalRows = sheet.getLastRow();
 
-  if (data.length <= 1) {
+  if (totalRows <= 1) {
     return [];
   }
 
-  const headers = data[0];
-  const logs = data.slice(1)
+  const numCols = sheet.getLastColumn();
+  const headers = sheet.getRange(1, 1, 1, numCols).getValues()[0];
+
+  // 最新 5000 行に限定（レコード履歴は通常少ないが、全件スキャン回避）
+  const maxScanRows = Math.min(totalRows - 1, 5000);
+  const startRow = Math.max(2, totalRows - maxScanRows + 1);
+  const dataRows = sheet.getRange(startRow, 1, totalRows - startRow + 1, numCols).getValues();
+
+  const logs = dataRows
     .filter(row => row[4] === tableName && row[5] === recordId)
     .map(row => {
       const log = {};

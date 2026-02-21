@@ -429,7 +429,7 @@ function getTransportFeeAreas() {
       );
     }
 
-    const areas = getAllRecords('M_TransportFee');
+    const areas = MasterCache.getTransportFees();
 
     return buildSuccessResponse({ areas: areas }, requestId);
 
@@ -736,19 +736,24 @@ function getDashboardAssignments(date) {
     // スタッフ情報を取得（MasterCacheでキャッシュ）
     const staffCache = MasterCache.getStaffMap();
 
-    // 配置にスタッフ名を付加
-    const enrichedAssignments = assignments.map(a => {
+    // 配置を job_id でグループ化（O(A) → Map）
+    const assignmentsByJobId = new Map();
+    for (const a of assignments) {
       const staff = staffCache[a.staff_id];
-      return {
+      const enriched = {
         ...a,
         staff_name: staff ? staff.name : '（削除済み）',
         staff_nickname: staff ? (staff.nickname || '') : ''
       };
-    });
+      if (!assignmentsByJobId.has(a.job_id)) {
+        assignmentsByJobId.set(a.job_id, []);
+      }
+      assignmentsByJobId.get(a.job_id).push(enriched);
+    }
 
     // 案件ごとに配置をグループ化（一意なスタッフIDでカウント）
     const jobsWithAssignments = jobs.map(job => {
-      const jobAssignments = enrichedAssignments.filter(a => a.job_id === job.job_id);
+      const jobAssignments = assignmentsByJobId.get(job.job_id) || [];
       const activeAssignments = jobAssignments.filter(a => a.status !== 'CANCELLED');
       const uniqueStaffIds = new Set(activeAssignments.map(a => a.staff_id));
       const assignedCount = uniqueStaffIds.size;

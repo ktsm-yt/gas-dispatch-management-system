@@ -155,10 +155,12 @@ function getUserRole(email) {
  * @returns {Object} { allowed: boolean, userRole: string, message: string }
  */
 function checkPermission(requiredRole) {
+  // PropertiesService は1回のみ取得（checkDomain/getUserRole 内でも使用されるが、GASが内部キャッシュ）
   const prop = PropertiesService.getScriptProperties();
+  const allProps = prop.getProperties();
 
   // DEMO_MODE: 全権限を許可
-  if (prop.getProperty('DEMO_MODE') === 'true') {
+  if (allProps['DEMO_MODE'] === 'true') {
     Logger.log('WARNING: DEMO_MODE is active — permission check bypassed (requiredRole: ' + requiredRole + ')');
     return {
       allowed: true,
