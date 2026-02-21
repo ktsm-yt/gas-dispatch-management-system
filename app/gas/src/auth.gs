@@ -79,6 +79,7 @@ function checkDomain() {
   // デモモード: 外部ユーザーでもアクセス可能にする
   const prop = PropertiesService.getScriptProperties();
   if (prop.getProperty('DEMO_MODE') === 'true') {
+    Logger.log('WARNING: DEMO_MODE is active — domain check bypassed');
     return {
       allowed: true,
       email: 'demo@example.com',
@@ -151,6 +152,7 @@ function checkPermission(requiredRole) {
 
   // DEMO_MODE: 全権限を許可
   if (prop.getProperty('DEMO_MODE') === 'true') {
+    Logger.log('WARNING: DEMO_MODE is active — permission check bypassed (requiredRole: ' + requiredRole + ')');
     return {
       allowed: true,
       userRole: ROLES.ADMIN,
@@ -367,6 +369,11 @@ function setupDevAuth() {
  * 外部ユーザー（ドメイン外）でもアプリにアクセス可能にする
  */
 function enableDemoMode() {
+  // 本番環境ではDEMO_MODEの有効化を拒否
+  if (isProductionDeployment()) {
+    throw new Error('本番環境ではDEMO_MODEを有効化できません');
+  }
+
   const prop = PropertiesService.getScriptProperties();
   prop.setProperty('DEMO_MODE', 'true');
   Logger.log('✓ デモモード有効化完了');
