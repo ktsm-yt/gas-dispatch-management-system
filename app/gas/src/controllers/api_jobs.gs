@@ -99,9 +99,10 @@ function getDashboardMeta(date) {
  * @returns {Object} APIレスポンス
  */
 function searchJobs(query) {
+  const requestId = generateRequestId();
+
   try {
     Logger.log('searchJobs called with: ' + JSON.stringify(query));
-    const requestId = generateRequestId();
 
     // 認可チェック
     const authResult = checkPermission(ROLES.STAFF);
@@ -129,9 +130,9 @@ function searchJobs(query) {
     Logger.log(error.stack);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
-      'req_error'
+      requestId
     );
   }
 }
@@ -389,6 +390,15 @@ function deleteJob(jobId, expectedUpdatedAt) {
       );
     }
 
+    if (!expectedUpdatedAt) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'expectedUpdatedAt は必須です',
+        { field: 'expectedUpdatedAt' },
+        requestId
+      );
+    }
+
     // ロック取得
     lock = acquireLock(3000);
     if (!lock) {
@@ -491,6 +501,17 @@ function updateJobStatus(jobId, status, expectedUpdatedAt) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         'jobId and status are required',
+        {},
+        requestId
+      );
+    }
+
+    // ステータス値のホワイトリスト検証
+    var validJobStatuses = ['active', 'assigned', 'completed', 'cancelled'];
+    if (!validJobStatuses.includes(status)) {
+      return buildErrorResponse(
+        ERROR_CODES.VALIDATION_ERROR,
+        'Invalid status: ' + status,
         {},
         requestId
       );
