@@ -303,6 +303,12 @@ function updateInvoiceStatus(invoiceId: string, status: string, expectedUpdatedA
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'status is required', {}, requestId);
     }
 
+    // ステータス値のホワイトリスト検証
+    const validStatuses = ['unsent', 'sent', 'unpaid', 'paid', 'hold'];
+    if (!validStatuses.includes(status)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'Invalid status: ' + status, {}, requestId);
+    }
+
     // Service呼び出し
     const result = InvoiceService.updateStatus(invoiceId, status, expectedUpdatedAt);
 
@@ -480,8 +486,9 @@ function exportInvoice(invoiceId: string, mode: string, options: Record<string, 
       );
     }
 
-    // アーカイブデータのエクスポートを拒否（P2-5）
-    if ((options as Record<string, unknown>)._archived) {
+    // アーカイブデータのエクスポートを拒否（サーバー側DB検証）
+    const invoiceRecord = InvoiceRepository.findById(invoiceId);
+    if (invoiceRecord && invoiceRecord._archived) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,
         '過去年度のデータは出力できません。一覧からの参照のみ可能です。',
