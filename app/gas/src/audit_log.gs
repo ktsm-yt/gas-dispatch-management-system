@@ -386,8 +386,12 @@ function getRecordHistory(tableName, recordId) {
   const startRow = Math.max(2, totalRows - maxScanRows + 1);
   const dataRows = sheet.getRange(startRow, 1, totalRows - startRow + 1, numCols).getValues();
 
+  // ヘッダーから列インデックスを動的取得（マジックナンバー排除）
+  const tableNameCol = headers.indexOf('table_name');
+  const recordIdCol = headers.indexOf('record_id');
+
   const logs = dataRows
-    .filter(row => row[4] === tableName && row[5] === recordId)
+    .filter(row => row[tableNameCol] === tableName && row[recordIdCol] === recordId)
     .map(row => {
       const log = {};
       headers.forEach((header, index) => {
