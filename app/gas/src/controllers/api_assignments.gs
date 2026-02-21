@@ -90,9 +90,8 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
       );
     }
 
-    // サービス呼び出し
-    const result = AssignmentService.saveAssignments(jobId, changes, expectedUpdatedAt);
-    return buildSuccessResponse(result, requestId);
+    // サービス呼び出し（Service層で既にbuildSuccessResponse済み）
+    return AssignmentService.saveAssignments(jobId, changes, expectedUpdatedAt);
 
   } catch (e) {
     logErr('saveAssignments', e, requestId);
@@ -579,8 +578,8 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
     }
 
     // サービス呼び出し
-    const result = SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
-    return buildSuccessResponse(result, requestId);
+    // Service層で既にbuildSuccessResponse済み
+    return SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
 
   } catch (e) {
     logErr('assignToSlot', e, requestId);
