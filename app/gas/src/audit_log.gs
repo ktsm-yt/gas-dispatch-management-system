@@ -280,6 +280,12 @@ function logExport(exportType, targetInfo) {
  * @returns {Array} ログエントリの配列
  */
 function searchAuditLogs(options = {}) {
+  // 認可チェック: 監査ログ閲覧は管理者以上
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    throw new Error('PERMISSION_DENIED: 監査ログの閲覧には管理者以上の権限が必要です');
+  }
+
   try {
   const sheet = getAuditLogSheet();
   const data = sheet.getDataRange().getValues();
@@ -349,6 +355,12 @@ function getRecentAuditLogs(count = 10) {
  * @returns {Array} ログエントリの配列
  */
 function getRecordHistory(tableName, recordId) {
+  // 認可チェック: 変更履歴閲覧は管理者以上
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    throw new Error('PERMISSION_DENIED: 変更履歴の閲覧には管理者以上の権限が必要です');
+  }
+
   try {
   const sheet = getAuditLogSheet();
   const data = sheet.getDataRange().getValues();

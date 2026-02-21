@@ -84,9 +84,12 @@ function checkDomain() {
   const prop = PropertiesService.getScriptProperties();
   if (prop.getProperty('DEMO_MODE') === 'true') {
     Logger.log('WARNING: DEMO_MODE is active — domain check bypassed');
+    // 監査ログ用に実際のセッションユーザーも記録
+    const actualUser = getCurrentUser();
     return {
       allowed: true,
       email: 'demo@example.com',
+      demo_actual_user: actualUser.email || 'unknown',
       message: 'OK (Demo Mode)'
     };
   }

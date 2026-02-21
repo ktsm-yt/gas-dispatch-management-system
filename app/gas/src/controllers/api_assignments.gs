@@ -98,7 +98,7 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -154,7 +154,7 @@ function getAssignments(jobId) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -199,7 +199,7 @@ function getJobShortage(jobId) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -245,7 +245,7 @@ function getShortageByDate(date) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -292,7 +292,7 @@ function checkStaffAvailability(staffId, jobId) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -402,7 +402,7 @@ function getAvailableStaff(options = {}) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -437,7 +437,7 @@ function getTransportFeeAreas() {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -483,7 +483,7 @@ function getJobSlots(jobId) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -529,7 +529,7 @@ function getSlotStatus(jobId) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -585,7 +585,7 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -631,7 +631,7 @@ function getSlotStatusByDate(date) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -680,7 +680,7 @@ function getDayAssignmentsForConflictCheck(date) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
@@ -804,7 +804,7 @@ function getDashboardAssignments(date) {
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
-      { message: e.message },
+      {},
       requestId
     );
   }
