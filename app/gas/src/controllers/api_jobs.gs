@@ -506,8 +506,8 @@ function updateJobStatus(jobId, status, expectedUpdatedAt) {
       );
     }
 
-    // ステータス値のホワイトリスト検証
-    var validJobStatuses = ['active', 'assigned', 'completed', 'cancelled'];
+    // ステータス値のホワイトリスト検証（validation.ts の JOB_STATUSES を使用）
+    var validJobStatuses = Object.values(JOB_STATUSES);
     if (!validJobStatuses.includes(status)) {
       return buildErrorResponse(
         ERROR_CODES.VALIDATION_ERROR,

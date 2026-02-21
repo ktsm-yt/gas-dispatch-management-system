@@ -48,8 +48,8 @@ function isProductionDeployment(): boolean {
     const url = ScriptApp.getService().getUrl();
     return url.includes(PRODUCTION_DEPLOYMENT_ID);
   } catch (_e) {
-    // スクリプトエディタからの実行など、URL取得不可の場合は安全側（本番扱い）
-    return true;
+    // スクリプトエディタからの実行など、URL取得不可の場合は開発環境と推定
+    return false;
   }
 }
 
