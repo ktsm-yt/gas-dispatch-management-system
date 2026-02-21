@@ -21,8 +21,32 @@
 
 // テスト用の年度（実際の本番データに影響しないよう過去年度を使用）
 // 年度は3月〜2月（例: FY2023 = 2023-03-01 〜 2024-02-29）
-const TEST_FISCAL_YEAR = 2023;
-const TEST_FISCAL_YEARS = [2022, 2023]; // 複数年度テスト用
+// テスト結果カウンタ
+function createTestCounter_() {
+  return { passed: 0, failed: 0, errors: [] };
+}
+function assertTest_(counter, condition, testName) {
+  if (condition) {
+    counter.passed++;
+    Logger.log(`  ✓ ${testName}`);
+  } else {
+    counter.failed++;
+    counter.errors.push(testName);
+    Logger.log(`  ✗ ${testName}`);
+  }
+}
+function reportTestResults_(counter, suiteName) {
+  Logger.log(`\n=== ${suiteName} 結果 ===`);
+  Logger.log(`  合格: ${counter.passed}, 不合格: ${counter.failed}`);
+  if (counter.failed > 0) {
+    Logger.log(`  失敗テスト: ${counter.errors.join(', ')}`);
+    throw new Error(`${suiteName}: ${counter.failed}件のテストが失敗しました`);
+  }
+}
+
+// 現在年から2年前を使用（本番データに影響しない過去年度）
+const TEST_FISCAL_YEAR = new Date().getFullYear() - 2;
+const TEST_FISCAL_YEARS = [TEST_FISCAL_YEAR - 1, TEST_FISCAL_YEAR]; // 複数年度テスト用
 
 /**
  * アーカイブフォルダIDを設定（初回のみ実行）
