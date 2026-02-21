@@ -562,7 +562,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function regenerateInvoice(invoiceId: string) {
+function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
   const requestId = generateRequestId();
 
   try {
@@ -577,8 +577,8 @@ function regenerateInvoice(invoiceId: string) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
-    // Service呼び出し
-    const result = InvoiceService.regenerate(invoiceId);
+    // Service呼び出し（expectedUpdatedAt は後方互換のためオプショナル）
+    const result = InvoiceService.regenerate(invoiceId, expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'NOT_FOUND'

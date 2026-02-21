@@ -91,7 +91,8 @@ function saveAssignments(jobId, changes, expectedUpdatedAt) {
     }
 
     // サービス呼び出し
-    return AssignmentService.saveAssignments(jobId, changes, expectedUpdatedAt);
+    const result = AssignmentService.saveAssignments(jobId, changes, expectedUpdatedAt);
+    return buildSuccessResponse(result, requestId);
 
   } catch (e) {
     logErr('saveAssignments', e, requestId);
@@ -578,7 +579,8 @@ function assignToSlot(assignmentId, slotId, expectedUpdatedAt) {
     }
 
     // サービス呼び出し
-    return SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
+    const result = SlotService.assignToSlot(assignmentId, slotId, expectedUpdatedAt);
+    return buildSuccessResponse(result, requestId);
 
   } catch (e) {
     logErr('assignToSlot', e, requestId);
