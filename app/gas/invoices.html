@@ -3124,56 +3124,87 @@
       processPendingInvalidation();
     }
 
+    function chunkArray(arr, size) {
+      var chunks = [];
+      for (var i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    }
+
     function executeStatusUpdate() {
       if (!pendingStatusUpdate) return;
 
       const { updates, status, statusLabel } = pendingStatusUpdate;
       const confirmBtn = document.getElementById('statusConfirmBtn');
+      var CHUNK_SIZE = 100;
 
       // ローディング表示
       confirmBtn.disabled = true;
-      confirmBtn.textContent = '更新中...';
 
+      // 100件以下は既存ロジックそのまま
+      if (updates.length <= CHUNK_SIZE) {
+        confirmBtn.textContent = '更新中...';
+        sendBulkUpdate(updates, status, statusLabel, confirmBtn);
+        return;
+      }
+
+      // 100件超: チャンク分割して順次送信
+      var chunks = chunkArray(updates, CHUNK_SIZE);
+      var totalChunks = chunks.length;
+      var currentChunk = 0;
+      var merged = { updated: 0, failed: 0, errors: [], updatedItems: [] };
+
+      function sendNextChunk() {
+        if (currentChunk >= totalChunks) {
+          // 全バッチ完了 → マージ結果で後処理
+          applyBulkUpdateResult(merged, updates, status, statusLabel, confirmBtn);
+          return;
+        }
+        confirmBtn.textContent = '更新中... (' + (currentChunk + 1) + '/' + totalChunks + ')';
+        google.script.run
+          .withSuccessHandler(function (result) {
+            console.log('bulkUpdateStatus chunk ' + (currentChunk + 1) + '/' + totalChunks + ':', result);
+            if (result.ok) {
+              var data = result.data || {};
+              merged.updated += (data.updated || 0);
+              merged.failed += (data.failed || 0);
+              merged.errors = merged.errors.concat(data.errors || []);
+              merged.updatedItems = merged.updatedItems.concat(data.updatedItems || []);
+              currentChunk++;
+              sendNextChunk();
+            } else {
+              // APIエラー: ここまでの成功分を反映して中止
+              console.error('bulkUpdateStatus chunk error:', result);
+              var errorMsg = result.error?.message || result.error || '更新に失敗しました';
+              merged.errors.push({ message: errorMsg, chunk: currentChunk + 1 });
+              applyBulkUpdateResult(merged, updates, status, statusLabel, confirmBtn, errorMsg);
+            }
+          })
+          .withFailureHandler(function (error) {
+            // 通信エラー: ここまでの成功分を反映して中止
+            console.error('bulkUpdateStatus chunk failure:', error);
+            applyBulkUpdateResult(merged, updates, status, statusLabel, confirmBtn,
+              '更新中にエラーが発生しました（' + (currentChunk + 1) + '/' + totalChunks + 'バッチ目）。成功分は反映済みです。');
+          })
+          .bulkUpdateInvoiceStatus(chunks[currentChunk], status);
+      }
+
+      sendNextChunk();
+    }
+
+    // 単一バッチ送信（100件以下の既存パス）
+    function sendBulkUpdate(updates, status, statusLabel, confirmBtn) {
       google.script.run
         .withSuccessHandler(function (result) {
           console.log('bulkUpdateStatus result:', result);
-          closeStatusConfirm();
+          var merged;
           if (result.ok) {
-            const data = result.data || {};
-            var msg, toastType;
-            if (data.updated === 0 && data.failed > 0) {
-              msg = 'ステータスの変更に失敗しました。しばらくしてから再度お試しください';
-              toastType = 'error';
-            } else if (data.failed > 0) {
-              msg = '「' + statusLabel + '」に変更しました（' + (data.updated + data.failed) + '件中' + data.updated + '件）。一部の請求書は変更できませんでした';
-              toastType = 'warning';
-            } else {
-              msg = '「' + statusLabel + '」に変更しました（' + data.updated + '件）';
-              toastType = 'success';
-            }
-            showToast(msg, toastType);
-            if (data.errors) {
-              console.warn('Update errors:', data.errors);
-            }
-            // 差分更新: 成功した行のステータスバッジのみ更新
-            const failedIds = new Set((data.errors || []).map(e => e.invoiceId));
-            const updatedAtMap = new Map((data.updatedItems || []).map(item => [item.invoiceId, item.updatedAt]));
-            updates.forEach(u => {
-              if (!failedIds.has(u.invoiceId)) {
-                updateInvoiceStatusInDOM(u.invoiceId, status, updatedAtMap.get(u.invoiceId));
-              }
-            });
-            // Clear cache since data changed
-            PageCache.clearByPrefix('invoices_list');
-            // クロスタブ同期（一括更新）
-            BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { status });
-            clearSelection();
-            document.getElementById('bulkStatusSelect').value = '';
-          } else {
-            console.error('bulkUpdateStatus error:', result);
-            const errorMsg = result.error?.message || result.error || '更新に失敗しました';
-            showToast(errorMsg, 'error');
+            var data = result.data || {};
+            merged = { updated: data.updated || 0, failed: data.failed || 0, errors: data.errors || [], updatedItems: data.updatedItems || [] };
           }
+          applyBulkUpdateResult(merged, updates, status, statusLabel, confirmBtn,
+            result.ok ? null : (result.error?.message || result.error || '更新に失敗しました'));
         })
         .withFailureHandler(function (error) {
           closeStatusConfirm();
@@ -3181,6 +3212,56 @@
           showToast('更新に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
         .bulkUpdateInvoiceStatus(updates, status);
+    }
+
+    // マージ済み結果を使ってDOM更新・toast表示・キャッシュクリア
+    function applyBulkUpdateResult(merged, updates, status, statusLabel, confirmBtn, abortError) {
+      closeStatusConfirm();
+
+      // merged が無い場合（result.ok=false で単一バッチ）
+      if (!merged) {
+        showToast(abortError || '更新に失敗しました', 'error');
+        return;
+      }
+
+      // 成功分のDOM反映（updatedItemsに含まれるもののみ — 未送信チャンク分を誤更新しない）
+      if (merged.updated > 0) {
+        merged.updatedItems.forEach(function(item) {
+          updateInvoiceStatusInDOM(item.invoiceId, status, item.updatedAt);
+        });
+        PageCache.clearByPrefix('invoices_list');
+        BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICES_BULK_UPDATED', { status: status });
+      }
+
+      // toast表示
+      var totalAttempted = merged.updated + merged.failed;
+      var msg, toastType;
+      if (abortError) {
+        if (merged.updated > 0) {
+          msg = '「' + statusLabel + '」に一部変更しました（' + merged.updated + '件成功）。' + abortError;
+          toastType = 'warning';
+        } else {
+          msg = abortError;
+          toastType = 'error';
+        }
+      } else if (merged.updated === 0 && merged.failed > 0) {
+        msg = 'ステータスの変更に失敗しました。しばらくしてから再度お試しください';
+        toastType = 'error';
+      } else if (merged.failed > 0) {
+        msg = '「' + statusLabel + '」に変更しました（' + totalAttempted + '件中' + merged.updated + '件）。一部の請求書は変更できませんでした';
+        toastType = 'warning';
+      } else {
+        msg = '「' + statusLabel + '」に変更しました（' + merged.updated + '件）';
+        toastType = 'success';
+      }
+      showToast(msg, toastType);
+
+      if (merged.errors.length > 0) {
+        console.warn('Update errors:', merged.errors);
+      }
+
+      clearSelection();
+      document.getElementById('bulkStatusSelect').value = '';
     }
 
     // ========== モーダル機能 ==========
