@@ -1046,6 +1046,7 @@
             assignmentCount: row.unpaidCount,
             baseAmount: row.baseAmount,
             transportAmount: row.transportAmount,
+            ninkuAdjustmentAmount: row.ninkuAdjustmentAmount || 0,
             taxAmount: row.taxAmount,
             totalAmount: row.estimatedAmount,
             periodStart: row.periodStart,
@@ -1081,6 +1082,7 @@
           baseAmount: payout.base_amount,
           transportAmount: payout.transport_amount,
           adjustmentAmount: payout.adjustment_amount || 0,
+          ninkuAdjustmentAmount: payout.ninku_adjustment_amount || 0,
           totalAmount: payout.total_amount,
           periodStart: payout.period_start,
           periodEnd: payout.period_end,
@@ -1721,6 +1723,11 @@
             <div class="label">交通費</div>
             <div class="value amount">${formatCurrency(data.transportAmount)}</div>
           </div>
+          ${data.ninkuAdjustmentAmount ? `
+          <div class="summary-item">
+            <div class="label" style="color:#D97706">人工割調整</div>
+            <div class="value amount" style="color:#D97706">${data.ninkuAdjustmentAmount > 0 ? '+' : ''}${formatCurrency(data.ninkuAdjustmentAmount)}</div>
+          </div>` : ''}
           <div class="summary-item">
             <div class="label">合計</div>
             <div class="value amount" id="singleTotalAmount">${formatCurrency(data.totalAmount)}</div>
@@ -2365,6 +2372,7 @@
               assignmentIds: staff.assignmentIds || [],
               baseAmount: staff.baseAmount || 0,
               transportAmount: staff.transportAmount || 0,
+              ninkuAdjustmentAmount: staff.ninkuAdjustmentAmount || 0,
               taxAmount: staff.taxAmount || 0,
               estimatedAmount: staff.estimatedAmount || 0,
               periodStart: staff.periodStart,
@@ -3095,6 +3103,11 @@
                 <div class="label">交通費</div>
                 <div class="value amount">${transportText}</div>
               </div>
+              ${(data.ninkuAdjustmentAmount) ? `
+              <div class="summary-item">
+                <div class="label" style="color:#D97706">人工割調整</div>
+                <div class="value amount" style="color:#D97706">${data.ninkuAdjustmentAmount > 0 ? '+' : ''}${formatCurrency(data.ninkuAdjustmentAmount)}</div>
+              </div>` : ''}
               <div class="summary-item">
                 <div class="label">合計</div>
                 <div class="value amount" id="modalTotalAmount">${totalText}</div>

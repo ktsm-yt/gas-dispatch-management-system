@@ -1101,9 +1101,24 @@ const InvoiceService = {
     let prevDateSite: string | null = null;
     const expenseAddedForJob: Record<string, boolean> = {};
 
+    // 人工割（CR-029）: jobごとの単価グループ数をカウント（複数単価混在判定用）
+    const unitGroupCountByJob: Record<string, number> = {};
+    for (const key of Object.keys(workGroups)) {
+      const jobId = workGroups[key].job.job_id as string;
+      unitGroupCountByJob[jobId] = (unitGroupCountByJob[jobId] || 0) + 1;
+    }
+
     for (const group of workGroupsSorted) {
       const job = group.job;
-      const quantity = group.assignments.length;
+      let quantity = group.assignments.length;
+
+      // 人工割（CR-029）: 過剰配置時は required_count でキャップ
+      // ただし複数単価グループ混在の場合は保留（実人数のまま）
+      const requiredCount = Number(job.required_count) || 0;
+      if (requiredCount > 0 && quantity > requiredCount && (unitGroupCountByJob[job.job_id as string] || 0) <= 1) {
+        quantity = requiredCount;
+      }
+
       const unitPrice = group.unitPrice;
       const amount = Math.floor(unitPrice * quantity);
       const itemName = this._getItemName({ invoice_unit: group.invoiceUnit }, job, customer.invoice_format as string);

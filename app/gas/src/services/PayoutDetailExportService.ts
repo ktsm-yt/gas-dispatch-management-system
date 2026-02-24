@@ -348,8 +348,18 @@ const PayoutDetailExportService = {
     });
     sheet.getRange(summaryRow, 7, 1, 1).setFontSize(12); // 合計金額を強調
 
-    // お支払金額行（1行空けて表示）
-    const netRow = summaryRow + 2;
+    // 人工割調整額行（CR-029）
+    const ninkuAmount = (payout as any).ninku_adjustment_amount || 0;
+    if (ninkuAmount !== 0) {
+      const ninkuRow = summaryRow + 1;
+      sheet.getRange(ninkuRow, 1).setValue('人工割調整額');
+      sheet.getRange(ninkuRow, 1).setFontWeight('bold').setFontColor('#D97706');
+      sheet.getRange(ninkuRow, 7).setValue(ninkuAmount);
+      sheet.getRange(ninkuRow, 7).setNumberFormat('¥#,##0').setFontWeight('bold').setFontColor('#D97706');
+    }
+
+    // お支払金額行（人工割調整額行の有無に応じてオフセット）
+    const netRow = summaryRow + (ninkuAmount !== 0 ? 3 : 2);
     const netAmount = (payout.total_amount || 0);
 
     // ラベル（E-F結合で切れ防止）

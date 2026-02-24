@@ -15,6 +15,7 @@ interface PayoutCalcResult {
   assignmentCount: number;
   baseAmount: number;
   transportAmount: number;
+  ninkuAdjustmentAmount: number;
   taxAmount: number;
   totalAmount: number;
   periodStart: string | null;
@@ -52,12 +53,14 @@ interface BulkPayoutCache {
   jobIdSet: Set<string>;
   lastPayoutMap: Map<string, PayoutRecord>;
   assignmentsByStaff: Map<string, Record<string, unknown>[]>;
+  assignmentCountByJob?: Map<string, number>;  // 人工割: job_idごとの全ASSIGNED配置数
 }
 
 interface PreCalculatedStaffData {
   assignmentIds: string[];
   baseAmount: number;
   transportAmount: number;
+  ninkuAdjustmentAmount: number;
   taxAmount: number;
   estimatedAmount: number;
   periodStart: string;
@@ -140,6 +143,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
         periodStart: null,
@@ -153,8 +157,15 @@ const PayoutService = {
     // 金額計算
     const result = calculateMonthlyPayout_(assignments, staff);
 
-    // 源泉徴収税を計算（STAFFで withholding_tax_applicable の場合のみ）
-    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount);
+    // 人工割計算（CR-029）
+    const jobIds = new Set(assignments.map(a => a.job_id as string).filter(Boolean));
+    const jobs = JobRepository.search({ work_date_to: endDate, sort_order: 'asc' });
+    const jobMap = new Map(jobs.map(j => [j.job_id as string, j]));
+    const assignmentCountByJob = this._buildAssignmentCountByJob(jobIds);
+    const ninku = this._calculateNinkuAdjustments(assignments, staff, jobMap, assignmentCountByJob);
+
+    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用）
+    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -166,8 +177,9 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
+      ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.totalAmount - taxAmount,  // 税引き後
+      totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -223,6 +235,7 @@ const PayoutService = {
       base_amount: calc.baseAmount,
       transport_amount: calc.transportAmount,
       adjustment_amount: adjustmentAmount,
+      ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
       tax_amount: calc.taxAmount,
       total_amount: totalAmount,
       status: 'confirmed',  // confirmed状態
@@ -440,13 +453,14 @@ const PayoutService = {
             assignmentCount: preCalc.assignmentIds.length,
             baseAmount: preCalc.baseAmount || 0,
             transportAmount: preCalc.transportAmount || 0,
+            ninkuAdjustmentAmount: preCalc.ninkuAdjustmentAmount || 0,
             taxAmount: preCalc.taxAmount || 0,
             totalAmount: preCalc.estimatedAmount + (preCalc.taxAmount || 0),  // 税引き前に戻す
             periodStart: preCalc.periodStart,
             periodEnd: preCalc.periodEnd || endDate
           });
         } else {
-          staffCalcMap.set(staffId, { assignments: [], assignmentCount: 0, baseAmount: 0, transportAmount: 0, taxAmount: 0, totalAmount: 0, periodStart: null, periodEnd: endDate });
+          staffCalcMap.set(staffId, { assignments: [], assignmentCount: 0, baseAmount: 0, transportAmount: 0, ninkuAdjustmentAmount: 0, taxAmount: 0, totalAmount: 0, periodStart: null, periodEnd: endDate });
         }
       }
     } else {
@@ -480,8 +494,26 @@ const PayoutService = {
       Logger.log(`[bulkConfirmPayouts] Preloaded ${allPayouts.length} payouts`);
 
       // 3. Assignmentデータを事前ロード
-      const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' })
-        .filter(a => !a.is_deleted && !a.payout_id);
+      const allAssignmentsRaw = AssignmentRepository.search({ status: 'ASSIGNED' })
+        .filter(a => !a.is_deleted);
+
+      // 人工割用: 外注スタッフを除外してカウント
+      const bulkStaff = MasterCache.getStaff();
+      const bulkSubcontractIds = new Set(
+        bulkStaff.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+          .map(s => s.staff_id as string)
+      );
+      const assignmentCountByJob = new Map<string, number>();
+      for (const a of allAssignmentsRaw) {
+        if (bulkSubcontractIds.has(a.staff_id as string)) continue;
+        const jid = a.job_id as string;
+        if (jid && jobIdSet.has(jid)) {
+          assignmentCountByJob.set(jid, (assignmentCountByJob.get(jid) || 0) + 1);
+        }
+      }
+
+      // 未払い配置のみフィルタ
+      const allAssignments = allAssignmentsRaw.filter(a => !a.payout_id);
       const assignmentsByStaff = new Map<string, Record<string, unknown>[]>();
       for (const a of allAssignments) {
         const sid = a.staff_id as string;
@@ -490,9 +522,9 @@ const PayoutService = {
         }
         assignmentsByStaff.get(sid)!.push(a);
       }
-      Logger.log(`[bulkConfirmPayouts] Preloaded ${allAssignments.length} assignments`);
+      Logger.log(`[bulkConfirmPayouts] Preloaded ${allAssignmentsRaw.length} assignments (${allAssignments.length} unpaid)`);
 
-      const bulkCache: BulkPayoutCache = { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff };
+      const bulkCache: BulkPayoutCache = { jobs, jobMap, jobIdSet, lastPayoutMap, assignmentsByStaff, assignmentCountByJob };
 
       // 4. 全スタッフの未払い計算
       for (const staffId of staffIds) {
@@ -569,6 +601,7 @@ const PayoutService = {
         base_amount: calc.baseAmount,
         transport_amount: calc.transportAmount,
         adjustment_amount: adjustmentAmount,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
         tax_amount: calc.taxAmount,
         total_amount: totalAmount,
         status: 'confirmed',
@@ -971,9 +1004,29 @@ const PayoutService = {
     const jobMap = new Map(jobs.map(j => [j.job_id as string, j]));
     const jobIds = new Set(jobs.map(j => j.job_id as string));
 
-    // 3. 全Assignmentsを一括取得（ASSIGNEDかつpayout_id未設定のみ）
-    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' })
-      .filter(a => !a.payout_id);  // 二重計上防止
+    // 3. 全Assignmentsを一括取得
+    const allAssignmentsRaw = AssignmentRepository.search({ status: 'ASSIGNED' });
+
+    // 人工割用: 外注スタッフIDセットを構築（カウントから除外するため）
+    const allStaffForNinku = MasterCache.getStaff();
+    const subcontractStaffIds = new Set(
+      allStaffForNinku.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+        .map(s => s.staff_id as string)
+    );
+
+    // 人工割用: job_idごとの全ASSIGNED配置数（payout_id有無問わず、外注除外）
+    const assignmentCountByJob = new Map<string, number>();
+    for (const a of allAssignmentsRaw) {
+      if (a.is_deleted) continue;
+      if (subcontractStaffIds.has(a.staff_id as string)) continue;
+      const jid = a.job_id as string;
+      if (jid && jobIds.has(jid)) {
+        assignmentCountByJob.set(jid, (assignmentCountByJob.get(jid) || 0) + 1);
+      }
+    }
+
+    // 未払い配置のみフィルタ（二重計上防止）
+    const allAssignments = allAssignmentsRaw.filter(a => !a.payout_id);
     const assignmentsByStaff = new Map<string, Record<string, unknown>[]>();
     for (const assignment of allAssignments) {
       const staffId = assignment.staff_id as string;
@@ -1041,8 +1094,11 @@ const PayoutService = {
       // 金額計算
       const calcResult = calculateMonthlyPayout_(assignmentsWithJob, staff);
 
-      // 源泉徴収税を計算
-      const taxAmount = this._calculateWithholdingTax(staff, calcResult.baseAmount);
+      // 人工割計算（CR-029）
+      const ninku = this._calculateNinkuAdjustments(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
+
+      // 源泉徴収税を計算（baseAmount + 人工割調整額に対して適用）
+      const taxAmount = this._calculateWithholdingTax(staff, calcResult.baseAmount + ninku.totalAdjustment);
 
       const dates = assignmentsWithJob.map(a => a.work_date as string).filter(d => d);
       const periodStart = dates.length > 0 ? dates[0] : endDate;
@@ -1054,7 +1110,8 @@ const PayoutService = {
         unpaidCount: staffAssignments.length,
         baseAmount: calcResult.baseAmount,
         transportAmount: calcResult.transportAmount,
-        estimatedAmount: calcResult.totalAmount - taxAmount,
+        ninkuAdjustmentAmount: ninku.totalAdjustment,
+        estimatedAmount: calcResult.totalAmount + ninku.totalAdjustment - taxAmount,
         taxAmount: taxAmount,
         periodStart: periodStart,
         periodEnd: endDate,
@@ -1147,6 +1204,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
         periodStart: null,
@@ -1161,8 +1219,12 @@ const PayoutService = {
     // 金額計算
     const result = calculateMonthlyPayout_(assignments, staff);
 
-    // 源泉徴収税を計算（STAFFで withholding_tax_applicable の場合のみ）
-    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount);
+    // 人工割計算（CR-029）
+    const assignmentCountByJob = bulkCache.assignmentCountByJob || new Map();
+    const ninku = this._calculateNinkuAdjustments(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
+
+    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用）
+    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -1174,8 +1236,9 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
+      ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.totalAmount - taxAmount,  // 税引き後
+      totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -1284,9 +1347,87 @@ const PayoutService = {
   },
 
   /**
+   * 人工割（CR-029）: 配置リストに対する人工割調整額を算出する。
+   * ジョブごとに required_count vs actual_count で係数を計算し、
+   * 各配置の賃金に係数を適用した差分を合計する。
+   *
+   * @param staffAssignments - このスタッフの未払い配置（job_id, wage_rate等を含む）
+   * @param staff - スタッフマスタ
+   * @param jobMap - job_id → JobRecord マップ
+   * @param assignmentCountByJob - job_id → 全ASSIGNED配置数 マップ
+   * @returns { totalAdjustment, avgCoefficient }
+   */
+  _calculateNinkuAdjustments: function(
+    staffAssignments: Record<string, unknown>[],
+    staff: Record<string, unknown> | null,
+    jobMap: Map<string, any>,
+    assignmentCountByJob: Map<string, number>
+  ): { totalAdjustment: number; avgCoefficient: number } {
+    if (!staffAssignments || staffAssignments.length === 0) {
+      return { totalAdjustment: 0, avgCoefficient: 1.0 };
+    }
+
+    let totalAdjustment = 0;
+    let coefficientSum = 0;
+    let coefficientCount = 0;
+
+    for (const asg of staffAssignments) {
+      const jobId = asg.job_id as string;
+      const job = jobMap.get(jobId);
+      if (!job) continue;
+
+      const requiredCount = Number(job.required_count) || 0;
+      const actualCount = assignmentCountByJob.get(jobId) || 0;
+
+      const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+      if (coefficient === 1.0) continue;  // 調整不要
+
+      // この配置の賃金を計算
+      const wage = calculateWage_(asg as any, staff as any, (asg.pay_unit as string) || 'basic');
+      const adjustment = calculateNinkuAdjustment_(wage, coefficient);
+
+      totalAdjustment += adjustment;
+      coefficientSum += coefficient;
+      coefficientCount++;
+    }
+
+    const avgCoefficient = coefficientCount > 0
+      ? Math.floor((coefficientSum / coefficientCount) * 10) / 10
+      : 1.0;
+
+    return { totalAdjustment, avgCoefficient };
+  },
+
+  /**
+   * job_idごとの全ASSIGNED配置数をカウントするマップを構築する。
+   * 人工割の actual_count 算出用。payout_idの有無にかかわらず全配置をカウント。
+   */
+  _buildAssignmentCountByJob: function(jobIds: Set<string>): Map<string, number> {
+    const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
+
+    // 外注スタッフ（staff_type 5）を除外するためスタッフマスタを取得
+    const allStaff = MasterCache.getStaff();
+    const subcontractStaffIds = new Set(
+      allStaff.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+        .map(s => s.staff_id as string)
+    );
+
+    const countMap = new Map<string, number>();
+    for (const a of allAssignments) {
+      if (a.is_deleted) continue;
+      const jobId = a.job_id as string;
+      if (!jobIds.has(jobId)) continue;
+      // 外注スタッフは人工割カウントから除外
+      if (subcontractStaffIds.has(a.staff_id as string)) continue;
+      countMap.set(jobId, (countMap.get(jobId) || 0) + 1);
+    }
+    return countMap;
+  },
+
+  /**
    * 源泉徴収税を計算
    * @param staff - スタッフ情報
-   * @param baseAmount - 基本給
+   * @param baseAmount - 基本給（人工割調整額を含む）
    * @returns 源泉徴収税額
    */
   _calculateWithholdingTax: function(staff: Record<string, unknown> | null, baseAmount: number): number {
@@ -1478,6 +1619,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
         periodStart: null,
@@ -1506,6 +1648,7 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: baseAmount,
       transportAmount: transportAmount,
+      ninkuAdjustmentAmount: 0,  // 外注には人工割なし
       taxAmount: 0,  // 外注費は源泉徴収なし
       totalAmount: totalAmount,
       periodStart: periodStart,
