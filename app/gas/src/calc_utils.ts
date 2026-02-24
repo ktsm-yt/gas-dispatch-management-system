@@ -356,25 +356,6 @@ function calculateNinkuCoefficient_(
 }
 
 /**
- * 配置リストから人工割の実人数（actual_count）を算出する。
- * 外注スタッフ（staff_type === 5）は暫定で除外。
- */
-function countNinkuEligibleStaff_(
-  assignments: Record<string, any>[],
-  staffMap?: Map<string, Record<string, any>>
-): number {
-  if (!assignments || assignments.length === 0) return 0;
-
-  return assignments.filter(asg => {
-    if (!staffMap) return true;
-    const staff = staffMap.get(asg.staff_id);
-    // staff_type 5 = 外注 → 暫定で人工割対象外
-    if (staff && Number(staff.staff_type) === 5) return false;
-    return true;
-  }).length;
-}
-
-/**
  * 人工割による支払調整額を計算する。
  * adjustmentAmount = wage × coefficient - wage（係数適用後の差分）
  */

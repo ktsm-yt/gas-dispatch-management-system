@@ -167,7 +167,10 @@ const PayoutService = {
     const assignmentCountByJob = this._buildAssignmentCountByJob(jobIds);
     const ninku = this._calculateNinkuAdjustments(assignments, staff, jobMap, assignmentCountByJob);
 
-    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用）
+    // 人工割: 過剰配置時の交通費キャップを適用
+    const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
+
+    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用。交通費は対象外）
     const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
 
     // 期間を算出
@@ -179,11 +182,11 @@ const PayoutService = {
       assignments: includeAssignments ? assignments : null,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: result.transportAmount,
+      transportAmount: adjustedTransport,
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
+      totalAmount: result.baseAmount + adjustedTransport + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -1232,7 +1235,10 @@ const PayoutService = {
     const assignmentCountByJob = bulkCache.assignmentCountByJob || new Map();
     const ninku = this._calculateNinkuAdjustments(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
-    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用）
+    // 人工割: 過剰配置時の交通費キャップを適用
+    const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
+
+    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用。交通費は対象外）
     const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
 
     // 期間を算出
@@ -1244,11 +1250,11 @@ const PayoutService = {
       assignments: assignments,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: result.transportAmount,
+      transportAmount: adjustedTransport,
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
+      totalAmount: result.baseAmount + adjustedTransport + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -1372,14 +1378,19 @@ const PayoutService = {
     staff: Record<string, unknown> | null,
     jobMap: Map<string, any>,
     assignmentCountByJob: Map<string, number>
-  ): { totalAdjustment: number; avgCoefficient: number } {
+  ): { totalAdjustment: number; avgCoefficient: number; transportAdjustment: number } {
     if (!staffAssignments || staffAssignments.length === 0) {
-      return { totalAdjustment: 0, avgCoefficient: 1.0 };
+      return { totalAdjustment: 0, avgCoefficient: 1.0, transportAdjustment: 0 };
     }
 
     let totalAdjustment = 0;
+    let transportAdjustment = 0;
     let coefficientSum = 0;
     let coefficientCount = 0;
+
+    // 人工割（CR-029）: 過剰配置時の交通費キャップ
+    // job単位で「このスタッフが何番目か」を追跡し、required_count超過分の交通費をカット
+    const jobStaffIndex: Map<string, number> = new Map();
 
     for (const asg of staffAssignments) {
       const jobId = asg.job_id as string;
@@ -1390,6 +1401,20 @@ const PayoutService = {
       const actualCount = assignmentCountByJob.get(jobId) || 0;
 
       const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+
+      // 交通費キャップ: 過剰配置時（actual > required）、required_count人分まで
+      if (requiredCount > 0 && actualCount > requiredCount) {
+        const idx = (jobStaffIndex.get(jobId) || 0) + 1;
+        jobStaffIndex.set(jobId, idx);
+        if (idx > requiredCount) {
+          // このスタッフはrequired_count超過分 → 交通費カット
+          const transport = Number(asg.transport_amount) || 0;
+          if (transport > 0) {
+            transportAdjustment -= transport;
+          }
+        }
+      }
+
       if (coefficient === 1.0) continue;
 
       // この配置の賃金を計算
@@ -1405,7 +1430,7 @@ const PayoutService = {
       ? Math.floor((coefficientSum / coefficientCount) * 10) / 10
       : 1.0;
 
-    return { totalAdjustment, avgCoefficient };
+    return { totalAdjustment, avgCoefficient, transportAdjustment };
   },
 
   /**
