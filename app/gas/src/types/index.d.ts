@@ -91,6 +91,7 @@ declare global {
     base_amount: number;
     transport_amount: number;
     adjustment_amount: number;
+    ninku_coefficient: number;
     ninku_adjustment_amount: number;
     tax_amount: number;
     total_amount: number;
@@ -194,6 +195,7 @@ declare global {
     unpaidCount: number;
     baseAmount: number;
     transportAmount: number;
+    ninkuCoefficient: number;
     ninkuAdjustmentAmount: number;
     estimatedAmount: number;
     taxAmount: number;

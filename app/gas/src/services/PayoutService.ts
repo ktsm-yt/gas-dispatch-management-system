@@ -15,6 +15,7 @@ interface PayoutCalcResult {
   assignmentCount: number;
   baseAmount: number;
   transportAmount: number;
+  ninkuCoefficient: number;
   ninkuAdjustmentAmount: number;
   taxAmount: number;
   totalAmount: number;
@@ -60,6 +61,7 @@ interface PreCalculatedStaffData {
   assignmentIds: string[];
   baseAmount: number;
   transportAmount: number;
+  ninkuCoefficient: number;
   ninkuAdjustmentAmount: number;
   taxAmount: number;
   estimatedAmount: number;
@@ -143,6 +145,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuCoefficient: 0,
         ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -177,6 +180,7 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
+      ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
       totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
@@ -235,6 +239,7 @@ const PayoutService = {
       base_amount: calc.baseAmount,
       transport_amount: calc.transportAmount,
       adjustment_amount: adjustmentAmount,
+      ninku_coefficient: calc.ninkuCoefficient,
       ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
       tax_amount: calc.taxAmount,
       total_amount: totalAmount,
@@ -453,6 +458,7 @@ const PayoutService = {
             assignmentCount: preCalc.assignmentIds.length,
             baseAmount: preCalc.baseAmount || 0,
             transportAmount: preCalc.transportAmount || 0,
+            ninkuCoefficient: preCalc.ninkuCoefficient || 0,
             ninkuAdjustmentAmount: preCalc.ninkuAdjustmentAmount || 0,
             taxAmount: preCalc.taxAmount || 0,
             totalAmount: preCalc.estimatedAmount + (preCalc.taxAmount || 0),  // 税引き前に戻す
@@ -460,7 +466,7 @@ const PayoutService = {
             periodEnd: preCalc.periodEnd || endDate
           });
         } else {
-          staffCalcMap.set(staffId, { assignments: [], assignmentCount: 0, baseAmount: 0, transportAmount: 0, ninkuAdjustmentAmount: 0, taxAmount: 0, totalAmount: 0, periodStart: null, periodEnd: endDate });
+          staffCalcMap.set(staffId, { assignments: [], assignmentCount: 0, baseAmount: 0, transportAmount: 0, ninkuCoefficient: 0, ninkuAdjustmentAmount: 0, taxAmount: 0, totalAmount: 0, periodStart: null, periodEnd: endDate });
         }
       }
     } else {
@@ -601,7 +607,8 @@ const PayoutService = {
         base_amount: calc.baseAmount,
         transport_amount: calc.transportAmount,
         adjustment_amount: adjustmentAmount,
-        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        ninku_coefficient: calc.ninkuCoefficient,
+      ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
         tax_amount: calc.taxAmount,
         total_amount: totalAmount,
         status: 'confirmed',
@@ -1110,6 +1117,7 @@ const PayoutService = {
         unpaidCount: staffAssignments.length,
         baseAmount: calcResult.baseAmount,
         transportAmount: calcResult.transportAmount,
+        ninkuCoefficient: ninku.avgCoefficient,
         ninkuAdjustmentAmount: ninku.totalAdjustment,
         estimatedAmount: calcResult.totalAmount + ninku.totalAdjustment - taxAmount,
         taxAmount: taxAmount,
@@ -1204,6 +1212,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuCoefficient: 0,
         ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -1236,6 +1245,7 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
       transportAmount: result.transportAmount,
+      ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
       totalAmount: result.totalAmount + ninku.totalAdjustment - taxAmount,  // 人工割調整 + 税引き後
@@ -1619,6 +1629,7 @@ const PayoutService = {
         assignmentCount: 0,
         baseAmount: 0,
         transportAmount: 0,
+        ninkuCoefficient: 0,
         ninkuAdjustmentAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -1648,6 +1659,7 @@ const PayoutService = {
       assignmentCount: assignments.length,
       baseAmount: baseAmount,
       transportAmount: transportAmount,
+      ninkuCoefficient: 0,
       ninkuAdjustmentAmount: 0,  // 外注には人工割なし
       taxAmount: 0,  // 外注費は源泉徴収なし
       totalAmount: totalAmount,
