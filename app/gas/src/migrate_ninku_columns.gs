@@ -31,9 +31,10 @@ function migrateNinkuColumns(dryRun) {
   var INSERT_AFTER = 'adjustment_amount';  // この列の右に挿入
 
   var db = getDb();
-  var sheet = db.getSheetByName('T_Payouts');
+  // シート名は TABLE_SHEET_MAP 経由で 'Payouts' にマッピングされている
+  var sheet = db.getSheetByName('Payouts') || db.getSheetByName('T_Payouts');
   if (!sheet) {
-    Logger.log('ERROR: T_Payouts シートが見つかりません');
+    Logger.log('ERROR: Payouts シートが見つかりません');
     return;
   }
 

@@ -1390,7 +1390,7 @@ const PayoutService = {
       const actualCount = assignmentCountByJob.get(jobId) || 0;
 
       const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
-      if (coefficient === 1.0) continue;  // 調整不要
+      if (coefficient === 1.0) continue;
 
       // この配置の賃金を計算
       const wage = calculateWage_(asg as any, staff as any, (asg.pay_unit as string) || 'basic');
