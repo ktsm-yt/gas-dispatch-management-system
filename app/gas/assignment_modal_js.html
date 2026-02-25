@@ -1458,7 +1458,7 @@ function renderStaffList() {
   const typeLabels = {
     'regular': '自社',
     'student': '学生',
-    'sole_proprietor': '個人',
+    'sole_proprietor': '親方',
     'subcontract': '外注'
   };
 
@@ -1703,7 +1703,7 @@ function doSaveAllChanges() {
   // wage_rate, invoice_rate = null（マスタ参照）
   const upserts = selectedIds.map(staffId => {
     const staff = getStaffById(staffId);
-    const workerType = staff?.staff_type === 'subcontract' ? 'SUBCONTRACT' : 'STAFF';
+    const workerType = (staff?.staff_type === 'subcontract' || Number(staff?.staff_type) === 5) ? 'SUBCONTRACT' : 'STAFF';
 
     const data = {
       staff_id: staffId,
@@ -2052,7 +2052,7 @@ function generateLineTemplate() {
     const role = a.assignment_role || '未指定';
     if (!roleGroups[role]) roleGroups[role] = { names: [], subCount: 0 };
     const staff = getStaffById(a.staff_id);
-    if (staff?.staff_type === 'subcontract') {
+    if (staff?.staff_type === 'subcontract' || Number(staff?.staff_type) === 5) {
       roleGroups[role].subCount++;
     } else {
       roleGroups[role].names.push(a.staff_nickname || a.staff_name || '名前未設定');
