@@ -578,9 +578,10 @@ function openJobAssignments(jobId, options = {}) {
   updateSaveButton();
 
   // 6. データ読み込み（キャッシュがあっても最新データを取得）
+  // Note: 請求書集計済みチェックは handleAssignmentData 内で実行
   loadAssignmentModalData(jobId, !!cachedData);
 
-  // 7. 交通費エリアマスタ読み込み
+  // 8. 交通費エリアマスタ読み込み
   loadTransportAreas();
 }
 
@@ -747,6 +748,9 @@ function handleAssignmentData(response, requestJobId) {
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
   updateWorkContent(job.work_detail, job.work_detail_other_text);
+
+  // 請求書集計済みチェック（サーバーからデータ取得後）
+  checkInvoiceExistsNotification();
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -1797,7 +1801,13 @@ function batchAddStaff() {
 /**
  * 請求書存在チェック - 配置変更後に請求担当への通知を促す
  * トーストではなくモーダル内バナーで表示
+ *
+ * in-flight制御: リクエスト連番で重複・stale応答を防止
+ * キャッシュ: 同一案件なら前回結果を即座表示 → バックグラウンドで再確認
  */
+var _invoiceCheckSeq = 0;  // リクエスト連番
+var _invoiceCheckCache = {};  // { jobId: { exists, message } }
+
 function checkInvoiceExistsNotification() {
   const job = assignmentModalState.job;
   if (!job || !job.customer_id || !job.work_date) {
@@ -1805,22 +1815,39 @@ function checkInvoiceExistsNotification() {
     return;
   }
 
+  const currentJobId = assignmentModalState.jobId;
+
+  // キャッシュがあれば即座に表示（RPCの応答を待たずに安定表示）
+  var cached = _invoiceCheckCache[currentJobId];
+  if (cached) {
+    if (cached.exists) {
+      showInvoiceExistsBanner(cached.message);
+    } else {
+      hideInvoiceExistsBanner();
+    }
+  }
+
+  // リクエスト連番をインクリメント（前のin-flightは無視される）
+  var seq = ++_invoiceCheckSeq;
+
   google.script.run
     .withSuccessHandler(function(response) {
+      if (seq !== _invoiceCheckSeq) return; // 古いリクエストの応答は無視
+      if (assignmentModalState.jobId !== currentJobId) return; // stale
       if (response.ok && response.data.exists) {
-        const inv = response.data.invoice;
-        const periodLabel = `${inv.billing_year}年${inv.billing_month}月`;
-        showInvoiceExistsBanner(
-          `この案件の請求書は集計済みです（${periodLabel}）。変更は請求書に反映されません。`
-        );
+        var inv = response.data.invoice;
+        var msg = 'この案件の請求書は集計済みです（' + inv.billing_year + '年' + inv.billing_month + '月）。変更は請求書に反映されません。';
+        _invoiceCheckCache[currentJobId] = { exists: true, message: msg };
+        showInvoiceExistsBanner(msg);
       } else {
+        _invoiceCheckCache[currentJobId] = { exists: false, message: '' };
         hideInvoiceExistsBanner();
       }
     })
     .withFailureHandler(function(error) {
-      // 失敗しても通知するだけなので無視
+      if (seq !== _invoiceCheckSeq) return;
+      // 失敗時はバナー状態を変えない（キャッシュがあればそのまま表示継続）
       console.log('checkInvoiceExistsForJob error:', error);
-      hideInvoiceExistsBanner();
     })
     .checkInvoiceExistsForJob(job.customer_id, job.work_date);
 }
