@@ -141,7 +141,7 @@ WebUI 請求書一覧
 | daily_rate_fullday | NUMBER | - | 日給（終日） |
 | daily_rate_night | NUMBER | - | 日給（夜間） |
 | daily_rate_tobi | NUMBER | - | 日給（鳶）※鳶揚げは鳶×1.5で計算 |
-| staff_type | STRING | ○ | 種別（regular/subcontract） |
+| staff_type | STRING | ○ | 種別（regular/student/sole_proprietor/subcontract） |
 | employment_type | STRING | - | 雇用形態（employee/sole_proprietor）※2025/12/19追加 |
 | withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（employee=true、sole_proprietor=false）※2025/12/19追加 |
 | subcontractor_id | STRING | - | 外注先ID（外注の場合） |
