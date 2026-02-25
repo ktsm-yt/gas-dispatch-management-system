@@ -444,8 +444,20 @@
       font-size: 12px;
       white-space: nowrap;
       position: relative;
-      text-align: center;
+      text-align: right;
       font-family: 'Menlo', 'Monaco', monospace;
+    }
+
+    .payment-cell-content {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .payment-status-text {
+      margin-left: auto;
+      text-align: right;
     }
 
     .payment-cell-compact:hover .payment-hover-btn {
@@ -472,7 +484,7 @@
     }
 
     .payment-hover-btn {
-      margin-left: 8px;
+      margin-left: 0;
       padding: 2px 6px;
       font-size: 11px;
       background: var(--color-secondary);
@@ -1478,7 +1490,7 @@
         <h2 id="generateModalTitle">請求集計</h2>
         <button class="modal-close" onclick="closeGenerateModal()" aria-label="閉じる">&times;</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="overflow: visible;">
         <div class="form-group">
           <label for="generateCustomerInput">顧客 *</label>
           <div class="autocomplete-wrapper" id="generateCustomerWrapper">
@@ -2628,6 +2640,32 @@
       }
     }
 
+    function renderPaymentCellContent(inv) {
+      const totalPaid = inv.total_paid || 0;
+      const outstanding = (inv.outstanding !== undefined && inv.outstanding !== null)
+        ? inv.outstanding
+        : (inv.total_amount - totalPaid);
+      const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
+      inv.outstanding = outstanding;
+
+      let html = '<div class="payment-cell-content">';
+      if (isPayable) {
+        html += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
+          (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
+      }
+      if (outstanding === 0 && inv.total_amount > 0) {
+        html += '<span class="payment-status-text payment-complete">✓ 完済</span>';
+      } else if (totalPaid > 0) {
+        html += '<span class="payment-status-text payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
+      } else if (outstanding > 0) {
+        html += '<span class="payment-status-text payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
+      } else {
+        html += '<span class="payment-status-text payment-none">-</span>';
+      }
+      html += '</div>';
+      return html;
+    }
+
     function renderSingleInvoiceRow(inv, showOverdueDays, customerById) {
       const customerId = (inv.customer && inv.customer.customer_id) || inv.customer_id || '';
       const masterCustomer = customerById ? customerById.get(customerId) : customers.find(c => c.customer_id === customerId);
@@ -2653,23 +2691,8 @@
       rowHtml += '<td>' + (inv.issue_date || '-') + '</td>';
       rowHtml += '<td>' + (inv.due_date || '-') + '</td>';
       rowHtml += '<td class="amount">' + formatCurrency(inv.total_amount) + '</td>';
-      const totalPaid = inv.total_paid || 0;
-      const outstanding = inv.outstanding || (inv.total_amount - totalPaid);
-      const isPayable = inv.status === 'sent' || inv.status === 'unpaid' || inv.status === 'paid';
       rowHtml += '<td class="payment-cell-compact" onclick="event.stopPropagation()">';
-      if (outstanding === 0 && inv.total_amount > 0) {
-        rowHtml += '<span class="payment-complete">✓ 完済</span>';
-      } else if (totalPaid > 0) {
-        rowHtml += '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
-      } else if (outstanding > 0) {
-        rowHtml += '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
-      } else {
-        rowHtml += '<span class="payment-none">-</span>';
-      }
-      if (isPayable) {
-        rowHtml += '<button class="payment-hover-btn" onclick="showPaymentModal(\'' + inv.invoice_id + '\', \'' +
-          (inv.updated_at || '') + '\')" title="入金を記録">入金</button>';
-      }
+      rowHtml += renderPaymentCellContent(inv);
       rowHtml += '</td>';
       rowHtml += '<td><span class="status-badge status-' + inv.status + '">' + getStatusLabel(inv.status) + '</span></td>';
       if (showOverdueDays) {
@@ -2794,16 +2817,7 @@
 
       // 入金状況セル(cells[8])の残高も更新
       if (cells[8]) {
-        const totalPaid = inv.total_paid || 0;
-        const outstanding = inv.total_amount - totalPaid;
-        inv.outstanding = outstanding;
-        if (outstanding === 0 && inv.total_amount > 0) {
-          cells[8].innerHTML = '<span class="payment-complete">✓ 完済</span>';
-        } else if (totalPaid > 0) {
-          cells[8].innerHTML = '<span class="payment-partial">' + formatCurrency(totalPaid) + ' / 残 ' + formatCurrency(outstanding) + '</span>';
-        } else if (outstanding > 0) {
-          cells[8].innerHTML = '<span class="payment-outstanding">残 ' + formatCurrency(outstanding) + '</span>';
-        }
+        cells[8].innerHTML = renderPaymentCellContent(inv);
       }
 
       // ステータスバッジ(cells[9])を更新
@@ -3065,6 +3079,10 @@
         if (badge) {
           badge.className = 'status-badge status-' + newStatus;
           badge.textContent = getStatusLabel(newStatus);
+        }
+        const paymentCell = row.querySelector('.payment-cell-compact');
+        if (paymentCell && inv) {
+          paymentCell.innerHTML = renderPaymentCellContent(inv);
         }
         if (updatedAt) {
           const checkbox = row.querySelector('.invoice-checkbox');
@@ -4726,6 +4744,10 @@
         updatePaymentSummary(invoice);
       }
 
+      // 入金履歴を即座にクリア（前の請求書のデータが残らないように）
+      document.getElementById('paymentHistorySection').style.display = 'none';
+      document.getElementById('paymentHistoryBody').innerHTML = '';
+
       // 入金履歴を読み込み
       loadPaymentHistory(invoiceId);
 
@@ -5390,7 +5412,7 @@
           <td>${formatCurrency(p.amount)}</td>
           <td>${methodLabels[p.payment_method] || p.payment_method}</td>
           <td>
-            <button class="undo-btn" onclick="confirmDeletePayment('${p.payment_id}')" title="この入金を取り消し">↩️</button>
+            <button class="undo-btn" onclick="confirmDeletePayment('${p.payment_id}')" title="この入金を取り消し">取消</button>
           </td>
         </tr>
       `).join('');
