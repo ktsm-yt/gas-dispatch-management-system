@@ -100,6 +100,8 @@ const ASSIGNMENT_STATUSES = {
 
 const STAFF_TYPES = {
   REGULAR: 'regular',
+  STUDENT: 'student',
+  SOLE_PROPRIETOR: 'sole_proprietor',
   SUBCONTRACT: 'subcontract'
 } as const;
 

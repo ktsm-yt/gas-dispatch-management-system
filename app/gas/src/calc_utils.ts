@@ -3,6 +3,14 @@
 
 const DEFAULT_TAX_RATE = 0.10;
 
+/**
+ * legacy numeric `5` と string `'subcontract'` を統一判定するヘルパー。
+ * 旧データで staff_type=5（数値）が残っているケースへの互換ガード。
+ */
+function isSubcontract_(staff: Record<string, any> | null | undefined): boolean {
+  return staff?.staff_type === 'subcontract' || Number(staff?.staff_type) === 5;
+}
+
 const RoundingMode = {
   FLOOR: 'floor',
   CEIL: 'ceil',

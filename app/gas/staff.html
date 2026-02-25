@@ -673,7 +673,7 @@
                 <select id="staff-type" name="staff_type" required>
                   <option value="regular">自社スタッフ</option>
                   <option value="student">学生アルバイト</option>
-                  <option value="sole_proprietor">個人事業主(一人親方)</option>
+                  <option value="sole_proprietor">一人親方</option>
                   <option value="subcontract">外注</option>
                 </select>
               </div>
@@ -1528,7 +1528,7 @@
 
         if (currentStaff) {
           populateForm(currentStaff);
-          const isSubcontract = currentStaff.staff_type === 'subcontract';
+          const isSubcontract = currentStaff.staff_type === 'subcontract' || Number(currentStaff.staff_type) === 5;
           subcontractorGroup.classList.toggle('is-hidden', !isSubcontract);
         }
         document.getElementById('bank-account-toggle').style.display = '';

@@ -509,7 +509,7 @@ const PayoutService = {
       // 人工割用: 外注スタッフを除外してカウント
       const bulkStaff = MasterCache.getStaff();
       const bulkSubcontractIds = new Set(
-        bulkStaff.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+        bulkStaff.filter(s => isSubcontract_(s))
           .map(s => s.staff_id as string)
       );
       const assignmentCountByJob = new Map<string, number>();
@@ -998,7 +998,7 @@ const PayoutService = {
   getUnpaidStaffList: function(endDate: string, options: { staffId?: string } = {}): UnpaidStaffItem[] {
     // 1. 全データを一括取得（外注スタッフは除外 - 外注費管理タブで別途管理）
     let staffList = StaffRepository.search({ is_active: true })
-      .filter(s => s.staff_type !== 'subcontract');
+      .filter(s => !isSubcontract_(s));
 
     // 特定スタッフ指定時はフィルタ
     if (options.staffId) {
@@ -1020,7 +1020,7 @@ const PayoutService = {
     // 人工割用: 外注スタッフIDセットを構築（カウントから除外するため）
     const allStaffForNinku = MasterCache.getStaff();
     const subcontractStaffIds = new Set(
-      allStaffForNinku.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+      allStaffForNinku.filter(s => isSubcontract_(s))
         .map(s => s.staff_id as string)
     );
 
@@ -1443,7 +1443,7 @@ const PayoutService = {
     // 外注スタッフ（staff_type 5）を除外するためスタッフマスタを取得
     const allStaff = MasterCache.getStaff();
     const subcontractStaffIds = new Set(
-      allStaff.filter(s => s.staff_type === 'subcontract' || Number(s.staff_type) === 5)
+      allStaff.filter(s => isSubcontract_(s))
         .map(s => s.staff_id as string)
     );
 
