@@ -329,6 +329,45 @@ function getTransportFeeByArea_(
   return fee ? (fee.default_fee ?? null) : null;
 }
 
+// ============================================
+// 人工割計算（CR-029）
+// ============================================
+
+/**
+ * 人工割係数を計算する。
+ * 係数 = floor(required / actual * 10) / 10（0.1刻み切捨て）
+ *
+ * - required <= 0 or actual <= 0 → 1.0（調整なし）
+ * - required === actual → 1.0（適正配置）
+ * - required > actual → 係数 > 1.0（不足配置 → 割増）
+ * - required < actual → 係数 < 1.0（過剰配置 → 割引）
+ */
+function calculateNinkuCoefficient_(
+  requiredCount: number | null | undefined,
+  actualCount: number | null | undefined
+): number {
+  const required = Number(requiredCount) || 0;
+  const actual = Number(actualCount) || 0;
+
+  if (required <= 0 || actual <= 0) return 1.0;
+  if (required === actual) return 1.0;
+
+  return Math.floor((required / actual) * 10) / 10;
+}
+
+/**
+ * 人工割による支払調整額を計算する。
+ * adjustmentAmount = wage × coefficient - wage（係数適用後の差分）
+ */
+function calculateNinkuAdjustment_(
+  baseWage: number,
+  coefficient: number
+): number {
+  if (coefficient === 1.0) return 0;
+  const adjustedWage = applyRounding_(baseWage * coefficient, RoundingMode.FLOOR);
+  return adjustedWage - baseWage;
+}
+
 function resolveTransportFee_(
   assignment: Record<string, any>,
   transportFees: { area_code?: string; area_name?: string; default_fee?: number }[]

@@ -1101,9 +1101,41 @@ const InvoiceService = {
     let prevDateSite: string | null = null;
     const expenseAddedForJob: Record<string, boolean> = {};
 
+    // 人工割（CR-029）: jobごとの単価グループ数をカウント（複数単価混在判定用）
+    const unitGroupCountByJob: Record<string, number> = {};
+    for (const key of Object.keys(workGroups)) {
+      const jobId = workGroups[key].job.job_id as string;
+      unitGroupCountByJob[jobId] = (unitGroupCountByJob[jobId] || 0) + 1;
+    }
+
     for (const group of workGroupsSorted) {
       const job = group.job;
-      const quantity = group.assignments.length;
+      let quantity = group.assignments.length;
+
+      // 人工割（CR-029）: required_count が設定されている場合、請求数量を調整
+      // - 過剰配置(actual > required): required_count でキャップ
+      // - 不足配置(actual < required): required_count で請求（必要人数分請求）
+      // - 複数単価グループ混在時: 按分してキャップ
+      const requiredCount = Number(job.required_count) || 0;
+      const jobId = job.job_id as string;
+      const unitGroupCount = unitGroupCountByJob[jobId] || 1;
+      if (requiredCount > 0 && requiredCount !== quantity) {
+        if (unitGroupCount <= 1) {
+          // 単一単価グループ: そのまま required_count を使用
+          quantity = requiredCount;
+        } else {
+          // 複数単価グループ: required_count を按分
+          // このグループの実人数が全体に占める割合で按分
+          const totalActual = Object.values(workGroups)
+            .filter(g => (g.job.job_id as string) === jobId)
+            .reduce((sum, g) => sum + g.assignments.length, 0);
+          if (totalActual > 0) {
+            quantity = Math.floor(requiredCount * group.assignments.length / totalActual);
+            if (quantity < 1) quantity = 1; // 最低1人
+          }
+        }
+      }
+
       const unitPrice = group.unitPrice;
       const amount = Math.floor(unitPrice * quantity);
       const itemName = this._getItemName({ invoice_unit: group.invoiceUnit }, job, customer.invoice_format as string);
@@ -1137,7 +1169,13 @@ const InvoiceService = {
 
         const jobExpenseGroups = Object.values(expenseGroups).filter(eg => eg.job.job_id === job.job_id);
         for (const expGroup of jobExpenseGroups) {
-          const expQuantity = expGroup.assignments.length;
+          // 人工割（CR-029）: 過剰配置時は交通費もrequired_count人分までキャップ
+          // 不足配置時は実人数分（実際に来た人の交通費のみ）
+          let expQuantity = expGroup.assignments.length;
+          const expRequiredCount = Number(job.required_count) || 0;
+          if (expRequiredCount > 0 && expQuantity > expRequiredCount) {
+            expQuantity = expRequiredCount;
+          }
           const expAmount = Math.floor(expGroup.unitPrice * expQuantity);
 
           lines.push({
