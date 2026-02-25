@@ -291,6 +291,13 @@ const JobRepository = {
       is_uncollected: record.is_uncollected === true || record.is_uncollected === 'true',
       is_claimed: record.is_claimed === true || record.is_claimed === 'true',
       is_deleted: record.is_deleted === true || record.is_deleted === 'true',
+      // GAS getValues() が Date オブジェクトを返す場合に備え、ISO文字列に正規化
+      updated_at: record.updated_at instanceof Date
+        ? (record.updated_at as Date).toISOString()
+        : String(record.updated_at || ''),
+      created_at: record.created_at instanceof Date
+        ? (record.created_at as Date).toISOString()
+        : String(record.created_at || ''),
     } as JobRecord;
   },
 

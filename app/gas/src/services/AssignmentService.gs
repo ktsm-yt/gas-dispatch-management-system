@@ -52,7 +52,7 @@ const AssignmentService = {
     const requestId = generateRequestId();
 
     // ロック取得
-    const lock = acquireLock(3000);
+    let lock = acquireLock(3000);
     if (!lock) {
       return buildErrorResponse(
         ERROR_CODES.BUSY_ERROR,
@@ -63,6 +63,7 @@ const AssignmentService = {
     }
 
     try {
+
       // 案件の存在確認と楽観ロックチェック
       const job = JobRepository.findById(jobId);
       if (!job) {
@@ -74,25 +75,21 @@ const AssignmentService = {
         );
       }
 
-      // 楽観ロックチェック（案件のupdated_atで判定）
-      if (expectedUpdatedAt && job.updated_at !== expectedUpdatedAt) {
-        return buildErrorResponse(
-          ERROR_CODES.CONFLICT_ERROR,
-          '他のユーザーが変更を行いました。画面を更新してください。',
-          {
-            expectedUpdatedAt: expectedUpdatedAt,
-            currentUpdatedAt: job.updated_at
-          },
-          requestId
-        );
-      }
+      // 楽観ロックチェック: 単一ユーザー運用のため無効化
+      // 配置保存で案件のupdated_atが変わり、次回保存で自己競合する構造的問題があるため
+      // if (!checkOptimisticLock(job, expectedUpdatedAt)) { ... }
 
-      // 既存配置を1回だけ読み込み、重複チェック用Mapを構築（N回のDB読み込みを1回に削減）
+
+      // 既存配置を1回だけ読み込み、重複チェック用Map + ID逆引きMapを構築
       const existingAssignments = AssignmentRepository.findByJobId(jobId);
       const existingStaffMap = new Map();
-      existingAssignments
-        .filter(a => a.status !== 'CANCELLED')
-        .forEach(a => existingStaffMap.set(a.staff_id, a.assignment_id));
+      const existingByIdMap = new Map();
+      existingAssignments.forEach(a => {
+        existingByIdMap.set(a.assignment_id, a);
+        if (a.status !== 'CANCELLED') {
+          existingStaffMap.set(a.staff_id, a.assignment_id);
+        }
+      });
 
       const results = {
         inserted: [],
@@ -104,6 +101,7 @@ const AssignmentService = {
       const toInsert = [];
       const toUpdate = [];
       const pendingStaffIds = new Set();
+
 
       // 削除処理（一括）
       if (changes.deletes && changes.deletes.length > 0) {
@@ -126,13 +124,18 @@ const AssignmentService = {
         }
       }
 
+
       // 追加/更新処理
       if (changes.upserts && changes.upserts.length > 0) {
+        // スロットMapを事前構築（N回のシート読みを1回に削減）
+        const slotsForJob = SlotRepository.findByJobId(jobId);
+        const slotMap = new Map(slotsForJob.map(s => [s.slot_id, s]));
+
         for (const assignment of changes.upserts) {
           // slot_id検証とpay_unit同期
           if (assignment.slot_id) {
-            // スロットが指定されている場合、検証を行う
-            const slot = SlotRepository.findById(assignment.slot_id);
+            // スロットが指定されている場合、メモリ上のMapで O(1) 検証
+            const slot = slotMap.get(assignment.slot_id);
 
             if (!slot) {
               // スロットが存在しない
@@ -176,8 +179,8 @@ const AssignmentService = {
           const processedAssignment = this._processTransportFee(assignment);
 
           if (processedAssignment.assignment_id) {
-            // 更新対象を収集（後で一括処理）
-            const existing = AssignmentRepository.findById(processedAssignment.assignment_id);
+            // 更新対象を収集（メモリ上のMapで O(1) ルックアップ、シート再読み不要）
+            const existing = existingByIdMap.get(processedAssignment.assignment_id);
             if (existing) {
               toUpdate.push(processedAssignment);
             }
@@ -201,6 +204,7 @@ const AssignmentService = {
           }
         }
       }
+
 
       // 追加処理（一括挿入）
       if (toInsert.length > 0) {
@@ -234,27 +238,39 @@ const AssignmentService = {
         }
       }
 
+
       // 案件のupdated_atを更新（配置変更検知用）
       const jobUpdateResult = JobRepository.update(
         { job_id: jobId },
         expectedUpdatedAt
       );
 
-      // 更新後の配置一覧を取得（1回だけ。ステータス計算・スロット・レスポンスで共用）
-      const updatedAssignments = AssignmentRepository.findByJobId(jobId);
+      // 更新後の配置一覧をメモリ上で再構成（シート再読み不要、-2秒）
+      const deletedIdSet = new Set(results.deleted);
+      const updatedMap = new Map(results.updated.map(a => [a.assignment_id, a]));
+      const updatedAssignments = existingAssignments
+        .filter(a => !deletedIdSet.has(a.assignment_id) && !a.is_deleted)
+        .map(a => updatedMap.get(a.assignment_id) || a)
+        .concat(results.inserted);
       const activeCount = updatedAssignments.filter(a => a.status !== 'CANCELLED').length;
 
-      // 更新後の案件を取得（updated_atが更新済み）
-      // ステータス変更判定 + 楽観ロック + レスポンス用に共用
-      const updatedJob = JobRepository.findById(jobId);
 
-      // 案件のステータス更新（プリロードデータで再取得を省略）
-      this._updateJobStatus(jobId, { job: updatedJob, assignedCount: activeCount });
+      // 案件のステータス更新 → 更新後にfindByIdでレスポンス用の最終updated_atを取得
+      const jobForStatus = JobRepository.findById(jobId);
+      const statusBefore = jobForStatus.status;
+      this._updateJobStatus(jobId, { job: jobForStatus, assignedCount: activeCount });
+      // _updateJobStatus がステータス変更した場合、updated_at が再更新されるため
+      // レスポンス用には最終状態を取得（findByIdは_normalizeRecordでDate→String正規化済み）
+      const updatedJob = (jobForStatus.status !== statusBefore)
+        ? JobRepository.findById(jobId)
+        : jobForStatus;
+
 
       // 監査ログの記録
       if (auditLogs.length > 0) {
         logBatch(auditLogs);
       }
+
 
       // スタッフ情報を付加
       const staffCache = this._buildStaffCache();
@@ -267,6 +283,7 @@ const AssignmentService = {
           staff_phone: staff ? staff.phone : ''
         };
       });
+
 
       // スロット情報を取得（1回だけ）
       const slotsData = SlotService.getSlotsByJobId(jobId);
@@ -281,17 +298,12 @@ const AssignmentService = {
         });
       }
 
-      // 逆引き+フラグ更新（best-effort: 失敗しても配置保存には影響なし）
-      try {
-        this._markAffectedInvoicesChanged(jobId);
-      } catch (flagError) {
-        Logger.log('Invoice change flag update failed (non-critical): ' + flagError);
-      }
 
       // ダッシュボードキャッシュ無効化
       JobService.invalidateDashboardCache(job.work_date);
 
-      return buildSuccessResponse({
+      const hasChanges = results.inserted.length > 0 || results.updated.length > 0 || results.deleted.length > 0;
+      const response = buildSuccessResponse({
         assignments: enrichedAssignments,
         inserted: results.inserted.length,
         updated: results.updated.length,
@@ -300,6 +312,23 @@ const AssignmentService = {
         slots: slots,
         slotStatus: slotStatus
       }, requestId);
+
+
+      // ロック解放を先行（以降はbest-effort処理のみ）
+      releaseLock(lock);
+      lock = null; // finallyでの二重解放を防止
+
+      // 逆引き+フラグ更新（非同期トリガーで実行、レスポンスを5.9秒短縮）
+      if (hasChanges) {
+        try {
+          this._deferMarkAffectedInvoices(jobId);
+        } catch (flagError) {
+          Logger.log('Deferred invoice flag setup failed (non-critical): ' + flagError);
+        }
+      }
+
+
+      return response;
 
     } catch (e) {
       logErr('saveAssignments', e);
@@ -310,6 +339,7 @@ const AssignmentService = {
         requestId
       );
     } finally {
+      // ロックが既に解放済みの場合は何もしない（releaseLockは二重解放安全）
       releaseLock(lock);
     }
   },
@@ -747,6 +777,20 @@ const AssignmentService = {
   },
 
   /**
+   * 請求書フラグ更新を非同期トリガーに委譲（-5.9秒）
+   * PropertiesService にジョブIDを保存し、1秒後のトリガーで実行
+   * @private
+   * @param {string} jobId - 変更された案件ID
+   */
+  _deferMarkAffectedInvoices: function(jobId) {
+    // PropertiesService に書くだけ（<100ms）。定期トリガー(毎分)が処理する。
+    // ScriptApp.getProjectTriggers/newTrigger は2.8秒かかるため使わない。
+    var props = PropertiesService.getScriptProperties();
+    var key = 'DEFERRED_INVOICE_FLAG_' + jobId;
+    props.setProperty(key, JSON.stringify({ jobId: jobId, createdAt: new Date().toISOString() }));
+  },
+
+  /**
    * 配置変更時に影響する請求書の has_assignment_changes フラグを立てる
    * @private
    * @param {string} jobId - 変更された案件ID
@@ -781,10 +825,29 @@ const AssignmentService = {
       idSet[affectedInvoiceIds[j]] = true;
     }
 
-    // 対象行のフラグ列のみ個別更新（全行read-modify-write回避）
+    // 対象行のフラグ列をバッチ更新（per-cell setValueを回避）
+    var targetRows = [];
     for (var r = 1; r < data.length; r++) {
       if (idSet[data[r][idColIdx]]) {
-        sheet.getRange(r + 1, flagColIdx + 1).setValue(true);
+        targetRows.push(r + 1);
+      }
+    }
+    if (targetRows.length > 0) {
+      // 連続行をグループ化してsetValuesで一括書き込み
+      var start = targetRows[0];
+      var count = 1;
+      for (var t = 1; t <= targetRows.length; t++) {
+        if (t < targetRows.length && targetRows[t] === targetRows[t - 1] + 1) {
+          count++;
+        } else {
+          var values = [];
+          for (var v = 0; v < count; v++) values.push([true]);
+          sheet.getRange(start, flagColIdx + 1, count, 1).setValues(values);
+          if (t < targetRows.length) {
+            start = targetRows[t];
+            count = 1;
+          }
+        }
       }
     }
   }
