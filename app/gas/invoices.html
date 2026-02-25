@@ -2306,9 +2306,13 @@
       }
 
       if (type === 'ASSIGNMENT_CHANGED') {
-        // ダッシュボードで配置変更 → 一覧リロードでフラグ反映
+        // キャッシュクリアしてバックグラウンド更新（ローディングモーダルなし）
         PageCache.clearByPrefix('invoices_list');
-        loadInvoices(true, '請求書一覧を更新中...');
+        if (invoices.length > 0 && currentInvoiceQuery) {
+          var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+          refreshInvoicesInBackground(cacheKey, currentInvoiceQuery);
+          showToast('配置が変更されました。更新中...', 'info');
+        }
         return;
       }
 
