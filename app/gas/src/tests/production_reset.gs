@@ -19,20 +19,6 @@
  * CacheService・ScriptPropertiesの進捗キーもクリア
  */
 function clearAllForProduction() {
-  // 安全確認ダイアログ
-  const answer = Browser.msgBox(
-    '⚠️ 全データクリア確認',
-    '全15テーブルのデータを削除します。\n' +
-    'スプレッドシートのバックアップは取りましたか？\n\n' +
-    '「はい」で実行、「いいえ」でキャンセル',
-    Browser.Buttons.YES_NO
-  );
-
-  if (answer !== 'yes') {
-    Logger.log('キャンセルされました');
-    return;
-  }
-
   Logger.log('=== 全データクリア開始 ===');
   const startTime = new Date();
 
@@ -132,19 +118,7 @@ function clearAllForProduction() {
  * まず dryRunDriveCleanup() でドライラン確認してから実行推奨
  */
 function cleanupDriveTestFiles() {
-  const answer = Browser.msgBox(
-    '⚠️ Driveファイル削除確認',
-    '顧客フォルダ配下のファイルとフォルダをすべて削除します。\n' +
-    '先に dryRunDriveCleanup() でドライランを実行しましたか？\n\n' +
-    '「はい」で実行',
-    Browser.Buttons.YES_NO
-  );
-
-  if (answer !== 'yes') {
-    Logger.log('キャンセルされました');
-    return;
-  }
-
+  Logger.log('=== Driveテストファイル削除開始 ===');
   _executeDriveCleanup(false);
 }
 

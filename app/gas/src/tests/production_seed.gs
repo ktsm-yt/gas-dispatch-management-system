@@ -105,7 +105,7 @@ function seedCustomerData() {
       unit_price_half: 10000, unit_price_fullday: 18000, unit_price_night: 22000,
       closing_day: 99, payment_day: 31, payment_month_offset: 1,
       invoice_format: 'format1', include_cover_page: false, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'floor', expense_rate: 0, shipper_name: '',
+      tax_rate: 10, tax_rounding_mode: 'floor', expense_rate: 0, shipper_name: '',
       customer_code: 'MR001', invoice_registration_number: '',
     },
     {
@@ -116,7 +116,7 @@ function seedCustomerData() {
       unit_price_half: 11000, unit_price_fullday: 19000, unit_price_night: 23000,
       closing_day: 20, payment_day: 10, payment_month_offset: 2,
       invoice_format: 'format1', include_cover_page: true, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'round', expense_rate: 5, shipper_name: '',
+      tax_rate: 10, tax_rounding_mode: 'round', expense_rate: 5, shipper_name: '',
       customer_code: 'TB002', invoice_registration_number: '',
     },
     {
@@ -127,7 +127,7 @@ function seedCustomerData() {
       unit_price_half: 9500, unit_price_fullday: 17500, unit_price_night: 21500,
       closing_day: 25, payment_day: 15, payment_month_offset: 2,
       invoice_format: 'format2', include_cover_page: false, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'ceil', expense_rate: 10, shipper_name: '港南工業',
+      tax_rate: 10, tax_rounding_mode: 'ceil', expense_rate: 10, shipper_name: '港南工業',
       customer_code: 'KN003', invoice_registration_number: '',
     },
     {
@@ -138,7 +138,7 @@ function seedCustomerData() {
       unit_price_half: 12000, unit_price_fullday: 20000, unit_price_night: 24000,
       closing_day: 99, payment_day: 31, payment_month_offset: 1,
       invoice_format: 'format2', include_cover_page: true, has_transport_fee: false,
-      tax_rate: 0.1, tax_rounding_mode: 'floor', expense_rate: 5, shipper_name: '大和ハウジング',
+      tax_rate: 10, tax_rounding_mode: 'floor', expense_rate: 5, shipper_name: '大和ハウジング',
       customer_code: 'YH004', invoice_registration_number: '',
     },
     {
@@ -149,7 +149,7 @@ function seedCustomerData() {
       unit_price_half: 10500, unit_price_fullday: 18500, unit_price_night: 22500,
       closing_day: 99, payment_day: 31, payment_month_offset: 2,
       invoice_format: 'format3', include_cover_page: false, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'round', expense_rate: 0, shipper_name: '',
+      tax_rate: 10, tax_rounding_mode: 'round', expense_rate: 0, shipper_name: '',
       customer_code: 'SE005', invoice_registration_number: '',
     },
     {
@@ -160,7 +160,7 @@ function seedCustomerData() {
       unit_price_half: 9000, unit_price_fullday: 17000, unit_price_night: 21000,
       closing_day: 20, payment_day: 5, payment_month_offset: 2,
       invoice_format: 'format1', include_cover_page: false, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'floor', expense_rate: 0, shipper_name: '',
+      tax_rate: 10, tax_rounding_mode: 'floor', expense_rate: 0, shipper_name: '',
       customer_code: 'KK006', invoice_registration_number: '',
     },
     {
@@ -171,7 +171,7 @@ function seedCustomerData() {
       unit_price_half: 11500, unit_price_fullday: 19500, unit_price_night: 23500,
       closing_day: 25, payment_day: 20, payment_month_offset: 1,
       invoice_format: 'format2', include_cover_page: false, has_transport_fee: true,
-      tax_rate: 0.1, tax_rounding_mode: 'round', expense_rate: 10, shipper_name: '湾岸開発',
+      tax_rate: 10, tax_rounding_mode: 'round', expense_rate: 10, shipper_name: '湾岸開発',
       customer_code: 'WG007', invoice_registration_number: '',
     },
     {
@@ -182,7 +182,7 @@ function seedCustomerData() {
       unit_price_half: 10000, unit_price_fullday: 18000, unit_price_night: 22000,
       closing_day: 99, payment_day: 25, payment_month_offset: 1,
       invoice_format: 'format3', include_cover_page: true, has_transport_fee: false,
-      tax_rate: 0.1, tax_rounding_mode: 'ceil', expense_rate: 5, shipper_name: '',
+      tax_rate: 10, tax_rounding_mode: 'ceil', expense_rate: 5, shipper_name: '',
       customer_code: 'JN008', invoice_registration_number: '',
     }
   ];
@@ -199,8 +199,8 @@ function seedCustomerData() {
     c.is_deleted = false;
     c.deleted_at = '';
     c.deleted_by = '';
-    insertRecord('M_Customers', c);
   }
+  insertRecords('M_Customers', customers);
 
   Logger.log(`✓ 顧客: ${customers.length}社登録`);
   return customers;
@@ -286,8 +286,8 @@ function seedStaffData() {
     s.is_deleted = false;
     s.deleted_at = '';
     s.deleted_by = '';
-    insertRecord('M_Staff', s);
   }
+  insertRecords('M_Staff', staffList);
 
   Logger.log(`✓ スタッフ: ${staffList.length}名登録`);
   return staffList;
@@ -310,9 +310,7 @@ function seedTransportFeeData() {
     { area_code: 'area_07', area_name: 'その他', default_fee: 2000 }
   ];
 
-  for (const a of areas) {
-    insertRecord('M_TransportFee', a);
-  }
+  insertRecords('M_TransportFee', areas);
 
   Logger.log(`✓ 交通費エリア: ${areas.length}件登録`);
   return areas;
@@ -354,8 +352,8 @@ function seedSubcontractorData() {
     s.is_deleted = false;
     s.deleted_at = '';
     s.deleted_by = '';
-    insertRecord('M_Subcontractors', s);
   }
+  insertRecords('M_Subcontractors', subs);
 
   Logger.log(`✓ 外注先: ${subs.length}社登録`);
   return subs;
@@ -537,10 +535,10 @@ function _generateJobsForMonth(year, month, count) {
       deleted_by: ''
     };
 
-    insertRecord('T_Jobs', job);
     jobs.push(job);
   }
 
+  insertRecords('T_Jobs', jobs);
   Logger.log(`  ${year}/${String(month).padStart(2, '0')}: ${count}件`);
   return jobs;
 }
@@ -578,7 +576,7 @@ function seedAssignmentsData() {
 
   const transportAreas = ['area_01', 'area_02', 'area_03', 'area_04', 'area_05', 'area_06'];
   const now = _seedNow();
-  let totalAssignments = 0;
+  const allAssignmentRecords = [];
 
   for (const job of allJobs) {
     if (job.status === 'pending' || job.status === 'cancelled') continue;
@@ -593,10 +591,8 @@ function seedAssignmentsData() {
 
     for (const staff of shuffled) {
       if (assigned.length >= requiredCount) break;
-      // NG顧客チェック
       const ngList = (staff.ng_customers || '').split(',').map(c => c.trim());
       if (ngList.includes(job.customer_id)) continue;
-      // 同一案件に同一スタッフ重複回避
       if (assigned.some(a => a.staff_id === staff.staff_id)) continue;
       assigned.push(staff);
     }
@@ -610,17 +606,10 @@ function seedAssignmentsData() {
     for (let idx = 0; idx < assigned.length; idx++) {
       const staff = assigned[idx];
       const isSubcontract = staff.staff_type === 'subcontract';
-
       const assignmentId = `asgn_${job.job_id.replace('job_', '')}_${String(idx + 1).padStart(2, '0')}`;
-
-      // pay_unit / invoice_unit
       const payUnit = job.pay_unit || 'daily';
-      const invoiceUnit = payUnit;
-
-      // transport
       const transportArea = _seedPick(transportAreas);
 
-      // ステータス
       let assignStatus;
       if (isFY2024) {
         assignStatus = Math.random() < 0.9 ? 'CONFIRMED' : 'ASSIGNED';
@@ -629,7 +618,7 @@ function seedAssignmentsData() {
         assignStatus = rand < 0.5 ? 'ASSIGNED' : rand < 0.85 ? 'CONFIRMED' : 'CANCELLED';
       }
 
-      const assignment = {
+      allAssignmentRecords.push({
         assignment_id: assignmentId,
         job_id: job.job_id,
         staff_id: staff.staff_id,
@@ -638,7 +627,7 @@ function seedAssignmentsData() {
         slot_id: '',
         display_time_slot: job.time_slot,
         pay_unit: payUnit,
-        invoice_unit: invoiceUnit,
+        invoice_unit: payUnit,
         wage_rate: 1,
         invoice_rate: 1,
         transport_area: transportArea,
@@ -652,7 +641,7 @@ function seedAssignmentsData() {
         entry_date: '',
         safety_training_date: '',
         status: assignStatus,
-        payout_id: '', // FY2024で一部未設定（アーカイブ警告テスト用）
+        payout_id: '',
         notes: '',
         created_at: now,
         created_by: 'system',
@@ -661,21 +650,15 @@ function seedAssignmentsData() {
         is_deleted: false,
         deleted_at: '',
         deleted_by: ''
-      };
-
-      insertRecord('T_JobAssignments', assignment);
-      totalAssignments++;
-    }
-
-    // 5分経過チェック
-    if ((new Date() - startTime) > 5 * 60 * 1000) {
-      Logger.log(`⚠️ 5分経過。ここまで ${totalAssignments} 件投入。`);
-      break;
+      });
     }
   }
 
-  Logger.log(`✓ 配置: ${totalAssignments}件登録 (${((new Date() - startTime) / 1000).toFixed(1)}秒)`);
-  return totalAssignments;
+  // 一括書き込み
+  insertRecords('T_JobAssignments', allAssignmentRecords);
+
+  Logger.log(`✓ 配置: ${allAssignmentRecords.length}件登録 (${((new Date() - startTime) / 1000).toFixed(1)}秒)`);
+  return allAssignmentRecords.length;
 }
 
 // ============================================================
@@ -701,19 +684,38 @@ function seedInvoicesAndPayoutsForArchive() {
   fy2024Months.push({ year: 2025, month: 1 });
   fy2024Months.push({ year: 2025, month: 2 });
 
-  let invoiceCount = 0;
-  let lineCount = 0;
-  let adjustmentCount = 0;
-  let payoutCount = 0;
+  // bulk用配列
+  const allLines = [];
+  const allInvoices = [];
+  const allAdjustments = [];
+  const allPayouts = [];
+
+  // job_id → job のMap（O(1)ルックアップ用）
+  const jobMap = {};
+  for (const j of allJobs) { jobMap[j.job_id] = j; }
+
+  // 配置を月別にプレ分類
+  const assignmentsByJobId = {};
+  for (const a of allAssignments) {
+    if (a.status === 'CANCELLED' || a.is_deleted) continue;
+    if (!assignmentsByJobId[a.job_id]) assignmentsByJobId[a.job_id] = [];
+    assignmentsByJobId[a.job_id].push(a);
+  }
+
+  const regularStaff = staff.filter(s => s.staff_type !== 'subcontract');
+  const subcontractStaff = staff.filter(s => s.staff_type === 'subcontract');
+  const subsByCompany = {};
+  for (const s of subcontractStaff) {
+    if (!subsByCompany[s.subcontractor_id]) subsByCompany[s.subcontractor_id] = [];
+    subsByCompany[s.subcontractor_id].push(s);
+  }
 
   for (const period of fy2024Months) {
-    // この月の案件を取得
     const monthJobs = allJobs.filter(j => {
       const d = new Date(j.work_date);
       return d.getFullYear() === period.year && (d.getMonth() + 1) === period.month;
     });
 
-    // 顧客別にグループ化
     const jobsByCustomer = {};
     for (const j of monthJobs) {
       if (!jobsByCustomer[j.customer_id]) jobsByCustomer[j.customer_id] = [];
@@ -728,53 +730,30 @@ function seedInvoicesAndPayoutsForArchive() {
       const invoiceId = `inv_${period.year}${String(period.month).padStart(2, '0')}_${customer.customer_id}`;
       const invoiceNumber = `INV-${period.year}${String(period.month).padStart(2, '0')}-${customer.customer_code}`;
 
-      // 明細行を計算
       let subtotal = 0;
       let lineNum = 0;
 
       for (const job of custJobs) {
-        const jobAssignments = allAssignments.filter(a =>
-          a.job_id === job.job_id && a.status !== 'CANCELLED' && !a.is_deleted
-        );
-
-        for (const asgn of jobAssignments) {
+        const jobAssigns = assignmentsByJobId[job.job_id] || [];
+        for (const asgn of jobAssigns) {
           lineNum++;
           const unitPrice = asgn.pay_unit === 'half'
             ? (customer['unit_price_half'] || 10000)
             : (customer['unit_price_' + (job.work_category === '鳶' ? 'tobi' : job.work_category === '揚げ' ? 'age' : 'tobiage')] || 18000);
           const amount = unitPrice * (asgn.invoice_rate || 1);
 
-          const line = {
+          allLines.push({
             line_id: `${invoiceId}_line_${String(lineNum).padStart(3, '0')}`,
-            invoice_id: invoiceId,
-            line_number: lineNum,
-            work_date: job.work_date,
-            job_id: job.job_id,
-            assignment_id: asgn.assignment_id,
-            site_name: job.site_name,
-            item_name: job.work_category,
-            time_note: job.time_slot,
-            quantity: 1,
-            unit: asgn.invoice_unit || 'daily',
-            unit_price: unitPrice,
-            amount: amount,
-            order_number: job.order_number || '',
-            branch_office: job.branch_office || '',
-            construction_div: job.construction_div || '',
-            supervisor_name: job.supervisor_name || '',
-            property_code: job.property_code || '',
-            tax_amount: 0,
-            created_at: now,
-            created_by: 'system',
-            updated_at: now,
-            updated_by: 'system',
-            is_deleted: false,
-            deleted_at: '',
-            deleted_by: ''
-          };
-
-          insertRecord('T_InvoiceLines', line);
-          lineCount++;
+            invoice_id: invoiceId, line_number: lineNum,
+            work_date: job.work_date, job_id: job.job_id, assignment_id: asgn.assignment_id,
+            site_name: job.site_name, item_name: job.work_category, time_note: job.time_slot,
+            quantity: 1, unit: asgn.invoice_unit || 'daily', unit_price: unitPrice, amount: amount,
+            order_number: job.order_number || '', branch_office: job.branch_office || '',
+            construction_div: job.construction_div || '', supervisor_name: job.supervisor_name || '',
+            property_code: job.property_code || '', tax_amount: 0,
+            created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
+            is_deleted: false, deleted_at: '', deleted_by: ''
+          });
           subtotal += amount;
         }
       }
@@ -784,93 +763,49 @@ function seedInvoicesAndPayoutsForArchive() {
       const expenseRate = customer.expense_rate || 0;
       const expenseAmount = Math.floor(subtotal * expenseRate / 100);
       const taxableAmount = subtotal + expenseAmount;
-      const taxAmount = _calcTax(taxableAmount, customer.tax_rate || 0.1, customer.tax_rounding_mode || 'floor');
-
-      // ステータス: 大部分 sent/paid、一部 unsent（アーカイブ警告テスト用）
+      const taxAmount = _calcTax(taxableAmount, customer.tax_rate || 10, customer.tax_rounding_mode || 'floor');
       const rand = Math.random();
       const invStatus = rand < 0.4 ? 'paid' : rand < 0.85 ? 'sent' : 'unsent';
 
-      const invoice = {
-        invoice_id: invoiceId,
-        invoice_number: invoiceNumber,
-        customer_id: customer.customer_id,
-        billing_year: period.year,
-        billing_month: period.month,
-        issue_date: _seedDateStr(period.year, period.month, 28),
-        due_date: '',
-        subtotal: subtotal,
-        expense_amount: expenseAmount,
-        tax_amount: taxAmount,
-        total_amount: taxableAmount + taxAmount,
-        adjustment_total: 0,
-        invoice_format: customer.invoice_format,
-        shipper_name: customer.shipper_name || '',
-        pdf_file_id: '',
-        excel_file_id: '',
-        sheet_file_id: '',
-        status: invStatus,
-        has_assignment_changes: false,
-        notes: '',
-        created_at: now,
-        created_by: 'system',
-        updated_at: now,
-        updated_by: 'system',
-        is_deleted: false,
-        deleted_at: '',
-        deleted_by: ''
-      };
+      allInvoices.push({
+        invoice_id: invoiceId, invoice_number: invoiceNumber,
+        customer_id: customer.customer_id, billing_year: period.year, billing_month: period.month,
+        issue_date: _seedDateStr(period.year, period.month, 28), due_date: '',
+        subtotal: subtotal, expense_amount: expenseAmount, tax_amount: taxAmount,
+        total_amount: taxableAmount + taxAmount, adjustment_total: 0,
+        invoice_format: customer.invoice_format, shipper_name: customer.shipper_name || '',
+        pdf_file_id: '', excel_file_id: '', sheet_file_id: '',
+        status: invStatus, has_assignment_changes: false, notes: '',
+        created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
+        is_deleted: false, deleted_at: '', deleted_by: ''
+      });
 
-      insertRecord('T_Invoices', invoice);
-      invoiceCount++;
-
-      // 一部の請求書に調整項目を追加（正負両方を含む）
       if (Math.random() < 0.3) {
-        // 正の調整（追加請求）
-        const adjPlus = {
-          adjustment_id: `adj_${invoiceId}_01`,
-          invoice_id: invoiceId,
+        allAdjustments.push({
+          adjustment_id: `adj_${invoiceId}_01`, invoice_id: invoiceId,
           item_name: _seedPick(['材料費追加', '追加人工', '残材処分費']),
-          amount: _seedPick([5000, 10000, 15000, 20000]),
-          sort_order: 1,
-          notes: '',
-          created_at: now, created_by: 'system',
-          updated_at: now, updated_by: 'system',
+          amount: _seedPick([5000, 10000, 15000, 20000]), sort_order: 1, notes: '',
+          created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
           is_deleted: false, deleted_at: '', deleted_by: ''
-        };
-        insertRecord('T_InvoiceAdjustments', adjPlus);
-        adjustmentCount++;
-
-        // 一部に負の調整（値引き）も追加
+        });
         if (Math.random() < 0.5) {
-          const adjMinus = {
-            adjustment_id: `adj_${invoiceId}_02`,
-            invoice_id: invoiceId,
+          allAdjustments.push({
+            adjustment_id: `adj_${invoiceId}_02`, invoice_id: invoiceId,
             item_name: _seedPick(['早期支払値引', '安全協力会費控除', 'リピート割引']),
-            amount: _seedPick([-3000, -5000, -8000, -10000]),
-            sort_order: 2,
-            notes: '',
-            created_at: now, created_by: 'system',
-            updated_at: now, updated_by: 'system',
+            amount: _seedPick([-3000, -5000, -8000, -10000]), sort_order: 2, notes: '',
+            created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
             is_deleted: false, deleted_at: '', deleted_by: ''
-          };
-          insertRecord('T_InvoiceAdjustments', adjMinus);
-          adjustmentCount++;
+          });
         }
       }
     }
 
-    // スタッフ支払（月次）
-    // STAFF/sole_proprietor スタッフの支払をまとめて生成
-    const regularStaff = staff.filter(s => s.staff_type !== 'subcontract');
-    const subcontractStaff = staff.filter(s => s.staff_type === 'subcontract');
-
+    // スタッフ支払
     for (const s of regularStaff) {
       const staffAssignments = allAssignments.filter(a =>
-        a.staff_id === s.staff_id &&
-        a.status !== 'CANCELLED' &&
-        !a.is_deleted
+        a.staff_id === s.staff_id && a.status !== 'CANCELLED' && !a.is_deleted
       ).filter(a => {
-        const job = allJobs.find(j => j.job_id === a.job_id);
+        const job = jobMap[a.job_id];
         if (!job) return false;
         const d = new Date(job.work_date);
         return d.getFullYear() === period.year && (d.getMonth() + 1) === period.month;
@@ -882,58 +817,30 @@ function seedInvoicesAndPayoutsForArchive() {
         const rate = a.pay_unit === 'half' ? (s.daily_rate_half || 7000) : (s.daily_rate_tobi || s.daily_rate_age || s.daily_rate_tobiage || 13000);
         return sum + rate * (a.wage_rate || 1);
       }, 0);
-
       const transportAmount = staffAssignments.length * _seedPick([500, 800, 1200, 1500]);
 
-      const payoutId = `pay_${period.year}${String(period.month).padStart(2, '0')}_${s.staff_id}`;
-      const payout = {
-        payout_id: payoutId,
-        payout_type: 'staff',
-        staff_id: s.staff_id,
-        subcontractor_id: '',
+      allPayouts.push({
+        payout_id: `pay_${period.year}${String(period.month).padStart(2, '0')}_${s.staff_id}`,
+        payout_type: 'staff', staff_id: s.staff_id, subcontractor_id: '',
         period_start: _seedDateStr(period.year, period.month, 1),
         period_end: _seedDateStr(period.year, period.month, new Date(period.year, period.month, 0).getDate()),
-        assignment_count: staffAssignments.length,
-        base_amount: baseAmount,
-        transport_amount: transportAmount,
-        adjustment_amount: 0,
-        tax_amount: 0,
+        assignment_count: staffAssignments.length, base_amount: baseAmount,
+        transport_amount: transportAmount, adjustment_amount: 0, tax_amount: 0,
         total_amount: baseAmount + transportAmount,
         status: Math.random() < 0.7 ? 'paid' : 'confirmed',
         paid_date: Math.random() < 0.7 ? _seedDateStr(period.year, period.month, 25) : '',
-        notes: '',
-        created_at: now,
-        created_by: 'system',
-        updated_at: now,
-        updated_by: 'system',
-        is_deleted: false,
-        deleted_at: '',
-        deleted_by: ''
-      };
-
-      insertRecord('T_Payouts', payout);
-      payoutCount++;
-
-      // 配置に payout_id を紐付け（一部は未設定のまま残す = アーカイブ警告テスト）
-      // ※ 実際のDB更新は重いので、ここではログのみ
+        notes: '', created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
+        is_deleted: false, deleted_at: '', deleted_by: ''
+      });
     }
 
     // 外注先支払
-    // 外注先スタッフをsubcontractor_idでグループ化
-    const subsByCompany = {};
-    for (const s of subcontractStaff) {
-      if (!subsByCompany[s.subcontractor_id]) subsByCompany[s.subcontractor_id] = [];
-      subsByCompany[s.subcontractor_id].push(s);
-    }
-
     for (const [subId, subStaff] of Object.entries(subsByCompany)) {
       const subStaffIds = subStaff.map(s => s.staff_id);
       const subAssignments = allAssignments.filter(a =>
-        subStaffIds.includes(a.staff_id) &&
-        a.status !== 'CANCELLED' &&
-        !a.is_deleted
+        subStaffIds.includes(a.staff_id) && a.status !== 'CANCELLED' && !a.is_deleted
       ).filter(a => {
-        const job = allJobs.find(j => j.job_id === a.job_id);
+        const job = jobMap[a.job_id];
         if (!job) return false;
         const d = new Date(job.work_date);
         return d.getFullYear() === period.year && (d.getMonth() + 1) === period.month;
@@ -942,52 +849,37 @@ function seedInvoicesAndPayoutsForArchive() {
       if (subAssignments.length === 0) continue;
 
       const baseAmount = subAssignments.length * 15000;
-      const payoutId = `pay_${period.year}${String(period.month).padStart(2, '0')}_${subId}`;
-
-      const payout = {
-        payout_id: payoutId,
-        payout_type: 'subcontractor',
-        staff_id: '',
-        subcontractor_id: subId,
+      allPayouts.push({
+        payout_id: `pay_${period.year}${String(period.month).padStart(2, '0')}_${subId}`,
+        payout_type: 'subcontractor', staff_id: '', subcontractor_id: subId,
         period_start: _seedDateStr(period.year, period.month, 1),
         period_end: _seedDateStr(period.year, period.month, new Date(period.year, period.month, 0).getDate()),
-        assignment_count: subAssignments.length,
-        base_amount: baseAmount,
-        transport_amount: 0,
-        adjustment_amount: 0,
+        assignment_count: subAssignments.length, base_amount: baseAmount,
+        transport_amount: 0, adjustment_amount: 0,
         tax_amount: Math.floor(baseAmount * 0.1),
         total_amount: baseAmount + Math.floor(baseAmount * 0.1),
-        status: 'paid',
-        paid_date: _seedDateStr(period.year, period.month, 28),
-        notes: '',
-        created_at: now,
-        created_by: 'system',
-        updated_at: now,
-        updated_by: 'system',
-        is_deleted: false,
-        deleted_at: '',
-        deleted_by: ''
-      };
-
-      insertRecord('T_Payouts', payout);
-      payoutCount++;
+        status: 'paid', paid_date: _seedDateStr(period.year, period.month, 28),
+        notes: '', created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
+        is_deleted: false, deleted_at: '', deleted_by: ''
+      });
     }
 
-    Logger.log(`  ${period.year}/${String(period.month).padStart(2, '0')}: 請求${Object.keys(jobsByCustomer).length}件, 支払生成`);
-
-    // タイムアウトチェック
-    if ((new Date() - startTime) > 5 * 60 * 1000) {
-      Logger.log(`⚠️ 5分経過。ここまでの結果を確認してください。`);
-      break;
-    }
+    Logger.log(`  ${period.year}/${String(period.month).padStart(2, '0')}: 生成完了`);
   }
 
-  Logger.log(`\n✓ 請求書: ${invoiceCount}件, 明細: ${lineCount}行, 調整: ${adjustmentCount}件, 支払: ${payoutCount}件`);
+  // 一括書き込み
+  Logger.log(`\n書き込み中: 請求${allInvoices.length}件, 明細${allLines.length}行, 調整${allAdjustments.length}件, 支払${allPayouts.length}件`);
+  if (allInvoices.length > 0) insertRecords('T_Invoices', allInvoices);
+  if (allLines.length > 0) insertRecords('T_InvoiceLines', allLines);
+  if (allAdjustments.length > 0) insertRecords('T_InvoiceAdjustments', allAdjustments);
+  if (allPayouts.length > 0) insertRecords('T_Payouts', allPayouts);
+
+  Logger.log(`\n✓ 請求書: ${allInvoices.length}件, 明細: ${allLines.length}行, 調整: ${allAdjustments.length}件, 支払: ${allPayouts.length}件`);
 }
 
 /** 税額計算ヘルパー */
 function _calcTax(amount, rate, roundingMode) {
-  const raw = amount * rate;
+  const raw = amount * rate / 100;
   switch (roundingMode) {
     case 'ceil': return Math.ceil(raw);
     case 'round': return Math.round(raw);
@@ -1005,19 +897,6 @@ function _calcTax(amount, rate, roundingMode) {
  * ⚠️ 6分制限に注意。タイムアウトする場合は個別関数を実行
  */
 function seedAllProductionData() {
-  const answer = Browser.msgBox(
-    '🌱 本番シードデータ投入',
-    '全マスター＋トランザクションデータを投入します。\n' +
-    'verifyEmptyState() で空状態を確認しましたか？\n\n' +
-    '「はい」で実行',
-    Browser.Buttons.YES_NO
-  );
-
-  if (answer !== 'yes') {
-    Logger.log('キャンセルされました');
-    return;
-  }
-
   Logger.log('=== 本番シードデータ一括投入開始 ===');
   const startTime = new Date();
 
@@ -1100,7 +979,8 @@ function verifyMasterData() {
   Logger.log('\n--- 月別案件分布 ---');
   const monthlyCount = {};
   for (const j of allJobs) {
-    const key = j.work_date ? j.work_date.substring(0, 7) : 'unknown';
+    const d = j.work_date instanceof Date ? j.work_date : new Date(j.work_date);
+    const key = d && !isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` : 'unknown';
     monthlyCount[key] = (monthlyCount[key] || 0) + 1;
   }
   const sortedMonths = Object.keys(monthlyCount).sort();
