@@ -38,6 +38,27 @@ function _seedRandInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+/**
+ * シートヘッダーに不足カラムがあれば末尾に追加
+ * objectToRow のサイレントドロップを防止
+ */
+function _ensureHeaders(tableName, requiredColumns) {
+  const sheet = getSheet(tableName);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  let added = 0;
+  for (const col of requiredColumns) {
+    if (!headers.includes(col)) {
+      const nextCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextCol).setValue(col);
+      headers.push(col);
+      added++;
+    }
+  }
+  if (added > 0) {
+    Logger.log(`  ヘッダー補完: ${tableName} に ${added}カラム追加`);
+  }
+}
+
 /** YYYY-MM-DD形式の日付文字列 */
 function _seedDateStr(year, month, day) {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -56,6 +77,31 @@ function _seedWorkDays(year, month) {
   return days;
 }
 
+/** スタッフの銀行口座データを生成（約80%のスタッフに設定） */
+function _seedBankAccount(staffId, staffName) {
+  var empty = { bank_name: '', bank_branch: '', bank_account_type: '', bank_account_number: '', bank_account_name: '' };
+  // 20%は未登録
+  if (Math.random() < 0.2) return empty;
+
+  var banks = [
+    { name: 'みずほ銀行', branches: ['新宿支店', '渋谷支店', '池袋支店', '東京営業部', '上野支店'] },
+    { name: '三菱UFJ銀行', branches: ['新宿中央支店', '品川駅前支店', '東京営業部', '池袋東口支店', '大宮支店'] },
+    { name: '三井住友銀行', branches: ['新宿西口支店', '渋谷駅前支店', '東京中央支店', '横浜支店', '千葉支店'] },
+    { name: 'りそな銀行', branches: ['新宿支店', '池袋支店', '立川支店', '大宮支店', '浦和支店'] },
+    { name: 'ゆうちょ銀行', branches: ['〇一八支店', '〇一九支店', '〇二八支店', '〇三八支店', '〇四八支店'] }
+  ];
+  var bank = _seedPick(banks);
+  var kanaName = staffName.replace(/./g, function() { return ''; }); // placeholder
+  // カタカナ口座名義（名前から簡易変換）
+  return {
+    bank_name: bank.name,
+    bank_branch: _seedPick(bank.branches),
+    bank_account_type: _seedPick(['普通', '普通', '普通', '当座']),
+    bank_account_number: String(_seedRandInt(1000000, 9999999)),
+    bank_account_name: staffName
+  };
+}
+
 // ============================================================
 // 2-1: 自社情報
 // ============================================================
@@ -67,16 +113,16 @@ function seedCompanyData() {
   const record = {
     company_id: 'comp_001',
     company_name: '株式会社サンプル建設',
-    postal_code: '123-4567',
-    address: '東京都足立区千住1-2-3 アドバンビル3F',
-    phone: '03-1234-5678',
-    fax: '03-1234-5679',
-    invoice_registration_number: 'T1234567890123',
+    postal_code: '150-0001',
+    address: '東京都渋谷区神宮前1-2-3 サンプルビル3F',
+    phone: '03-0000-0000',
+    fax: '03-0000-0001',
+    invoice_registration_number: 'T0000000000000',
     bank_name: '三菱UFJ銀行',
-    bank_branch: '北千住支店',
+    bank_branch: '渋谷支店',
     bank_account_type: '普通',
-    bank_account_number: '1234567',
-    bank_account_name: 'カ）サンプル建設',
+    bank_account_number: '0000000',
+    bank_account_name: 'カ）サンプルケンセツ',
     logo_file_id: '',
     stamp_file_id: '',
     fiscal_month_end: '2',
@@ -94,6 +140,9 @@ function seedCompanyData() {
 
 function seedCustomerData() {
   Logger.log('=== 顧客データシード ===');
+
+  // ヘッダーの不足カラムを自動追加
+  _ensureHeaders('M_Customers', ['unit_price_basic', 'unit_price_fullday', 'unit_price_night', 'tax_rounding_mode']);
 
   const now = _seedNow();
   const customers = [
@@ -213,28 +262,31 @@ function seedCustomerData() {
 function seedStaffData() {
   Logger.log('=== スタッフデータシード ===');
 
+  // ヘッダーの不足カラムを自動追加
+  _ensureHeaders('M_Staff', ['daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'payment_frequency', 'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name']);
+
   const now = _seedNow();
   const staffList = [
-    // regular × 5
-    { staff_id: 'stf_001', name: '田中太郎', name_kana: 'タナカタロウ', staff_type: 'regular', skills: '鳶', daily_rate_tobi: 14000, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, has_motorbike: true },
-    { staff_id: 'stf_002', name: '佐藤花子', name_kana: 'サトウハナコ', staff_type: 'regular', skills: '揚げ', daily_rate_tobi: 0, daily_rate_age: 12000, daily_rate_tobiage: 0, daily_rate_half: 7000, has_motorbike: false },
-    { staff_id: 'stf_003', name: '鈴木一郎', name_kana: 'スズキイチロウ', staff_type: 'regular', skills: '鳶揚げ', daily_rate_tobi: 14000, daily_rate_age: 12000, daily_rate_tobiage: 15000, daily_rate_half: 8500, has_motorbike: true },
-    { staff_id: 'stf_004', name: '高橋美咲', name_kana: 'タカハシミサキ', staff_type: 'regular', skills: '鳶', daily_rate_tobi: 13500, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 7500, has_motorbike: false },
-    { staff_id: 'stf_005', name: '渡辺健太', name_kana: 'ワタナベケンタ', staff_type: 'regular', skills: '揚げ,鳶揚げ', daily_rate_tobi: 0, daily_rate_age: 12500, daily_rate_tobiage: 14500, daily_rate_half: 7500, has_motorbike: true },
+    // regular × 5                                                                    basic   tobi    age     tobiage half    fullday night
+    { staff_id: 'stf_001', name: '田中太郎', name_kana: 'タナカタロウ', staff_type: 'regular', skills: '鳶', daily_rate_basic: 14000, daily_rate_tobi: 14000, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, daily_rate_fullday: 14000, daily_rate_night: 17500, has_motorbike: true },
+    { staff_id: 'stf_002', name: '佐藤花子', name_kana: 'サトウハナコ', staff_type: 'regular', skills: 'ボード', daily_rate_basic: 12000, daily_rate_tobi: 0, daily_rate_age: 12000, daily_rate_tobiage: 0, daily_rate_half: 7000, daily_rate_fullday: 12000, daily_rate_night: 15000, has_motorbike: false },
+    { staff_id: 'stf_003', name: '鈴木一郎', name_kana: 'スズキイチロウ', staff_type: 'regular', skills: '鳶,ボード', daily_rate_basic: 15000, daily_rate_tobi: 14000, daily_rate_age: 12000, daily_rate_tobiage: 15000, daily_rate_half: 8500, daily_rate_fullday: 15000, daily_rate_night: 18800, has_motorbike: true },
+    { staff_id: 'stf_004', name: '高橋美咲', name_kana: 'タカハシミサキ', staff_type: 'regular', skills: '鳶', daily_rate_basic: 13500, daily_rate_tobi: 13500, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 7500, daily_rate_fullday: 13500, daily_rate_night: 16900, has_motorbike: false },
+    { staff_id: 'stf_005', name: '渡辺健太', name_kana: 'ワタナベケンタ', staff_type: 'regular', skills: 'ボード,バイク', daily_rate_basic: 14500, daily_rate_tobi: 0, daily_rate_age: 12500, daily_rate_tobiage: 14500, daily_rate_half: 7500, daily_rate_fullday: 14500, daily_rate_night: 18100, has_motorbike: true },
     // student × 2
-    { staff_id: 'stf_006', name: '伊藤翔太', name_kana: 'イトウショウタ', staff_type: 'student', skills: '揚げ', daily_rate_tobi: 0, daily_rate_age: 10000, daily_rate_tobiage: 0, daily_rate_half: 6000, has_motorbike: false },
-    { staff_id: 'stf_007', name: '山本彩乃', name_kana: 'ヤマモトアヤノ', staff_type: 'student', skills: '揚げ', daily_rate_tobi: 0, daily_rate_age: 10000, daily_rate_tobiage: 0, daily_rate_half: 6000, has_motorbike: false },
+    { staff_id: 'stf_006', name: '伊藤翔太', name_kana: 'イトウショウタ', staff_type: 'student', skills: 'ボード', daily_rate_basic: 10000, daily_rate_tobi: 0, daily_rate_age: 10000, daily_rate_tobiage: 0, daily_rate_half: 6000, daily_rate_fullday: 10000, daily_rate_night: 12500, has_motorbike: false },
+    { staff_id: 'stf_007', name: '山本彩乃', name_kana: 'ヤマモトアヤノ', staff_type: 'student', skills: 'ボード', daily_rate_basic: 10000, daily_rate_tobi: 0, daily_rate_age: 10000, daily_rate_tobiage: 0, daily_rate_half: 6000, daily_rate_fullday: 10000, daily_rate_night: 12500, has_motorbike: false },
     // sole_proprietor × 2
-    { staff_id: 'stf_008', name: '中村大輔', name_kana: 'ナカムラダイスケ', staff_type: 'sole_proprietor', skills: '鳶,鳶揚げ', daily_rate_tobi: 16000, daily_rate_age: 0, daily_rate_tobiage: 17000, daily_rate_half: 9000, has_motorbike: true },
-    { staff_id: 'stf_009', name: '小林真一', name_kana: 'コバヤシシンイチ', staff_type: 'sole_proprietor', skills: '鳶揚げ', daily_rate_tobi: 0, daily_rate_age: 0, daily_rate_tobiage: 16500, daily_rate_half: 9000, has_motorbike: false },
+    { staff_id: 'stf_008', name: '中村大輔', name_kana: 'ナカムラダイスケ', staff_type: 'sole_proprietor', skills: '鳶,ボード', daily_rate_basic: 17000, daily_rate_tobi: 16000, daily_rate_age: 0, daily_rate_tobiage: 17000, daily_rate_half: 9000, daily_rate_fullday: 17000, daily_rate_night: 21300, has_motorbike: true },
+    { staff_id: 'stf_009', name: '小林真一', name_kana: 'コバヤシシンイチ', staff_type: 'sole_proprietor', skills: '鳶,ボード', daily_rate_basic: 16500, daily_rate_tobi: 0, daily_rate_age: 0, daily_rate_tobiage: 16500, daily_rate_half: 9000, daily_rate_fullday: 16500, daily_rate_night: 20600, has_motorbike: false },
     // subcontract × 3（外注先に紐付け）
-    { staff_id: 'stf_010', name: '加藤勇気', name_kana: 'カトウユウキ', staff_type: 'subcontract', skills: '鳶', daily_rate_tobi: 15000, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, has_motorbike: false, subcontractor_id: 'sub_001' },
-    { staff_id: 'stf_011', name: '吉田雄大', name_kana: 'ヨシダユウダイ', staff_type: 'subcontract', skills: '揚げ,鳶揚げ', daily_rate_tobi: 0, daily_rate_age: 13000, daily_rate_tobiage: 15500, daily_rate_half: 7500, has_motorbike: true, subcontractor_id: 'sub_001' },
-    { staff_id: 'stf_012', name: '山田拓海', name_kana: 'ヤマダタクミ', staff_type: 'subcontract', skills: '鳶', daily_rate_tobi: 14500, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, has_motorbike: false, subcontractor_id: 'sub_002' },
+    { staff_id: 'stf_010', name: '加藤勇気', name_kana: 'カトウユウキ', staff_type: 'subcontract', skills: '鳶', daily_rate_basic: 15000, daily_rate_tobi: 15000, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, daily_rate_fullday: 15000, daily_rate_night: 18800, has_motorbike: false, subcontractor_id: 'sub_001' },
+    { staff_id: 'stf_011', name: '吉田雄大', name_kana: 'ヨシダユウダイ', staff_type: 'subcontract', skills: 'ボード', daily_rate_basic: 15500, daily_rate_tobi: 0, daily_rate_age: 13000, daily_rate_tobiage: 15500, daily_rate_half: 7500, daily_rate_fullday: 15500, daily_rate_night: 19400, has_motorbike: true, subcontractor_id: 'sub_001' },
+    { staff_id: 'stf_012', name: '山田拓海', name_kana: 'ヤマダタクミ', staff_type: 'subcontract', skills: '鳶', daily_rate_basic: 14500, daily_rate_tobi: 14500, daily_rate_age: 0, daily_rate_tobiage: 0, daily_rate_half: 8000, daily_rate_fullday: 14500, daily_rate_night: 18100, has_motorbike: false, subcontractor_id: 'sub_002' },
     // regular 追加 × 3
-    { staff_id: 'stf_013', name: '松本桃子', name_kana: 'マツモトモモコ', staff_type: 'regular', skills: '揚げ', daily_rate_tobi: 0, daily_rate_age: 12000, daily_rate_tobiage: 0, daily_rate_half: 7000, has_motorbike: false },
-    { staff_id: 'stf_014', name: '井上竜也', name_kana: 'イノウエタツヤ', staff_type: 'regular', skills: '鳶,揚げ', daily_rate_tobi: 13500, daily_rate_age: 11500, daily_rate_tobiage: 0, daily_rate_half: 7500, has_motorbike: true },
-    { staff_id: 'stf_015', name: '木村和也', name_kana: 'キムラカズヤ', staff_type: 'regular', skills: '鳶揚げ', daily_rate_tobi: 0, daily_rate_age: 0, daily_rate_tobiage: 15000, daily_rate_half: 8500, has_motorbike: true }
+    { staff_id: 'stf_013', name: '松本桃子', name_kana: 'マツモトモモコ', staff_type: 'regular', skills: 'ボード', daily_rate_basic: 12000, daily_rate_tobi: 0, daily_rate_age: 12000, daily_rate_tobiage: 0, daily_rate_half: 7000, daily_rate_fullday: 12000, daily_rate_night: 15000, has_motorbike: false },
+    { staff_id: 'stf_014', name: '井上竜也', name_kana: 'イノウエタツヤ', staff_type: 'regular', skills: '鳶,ボード', daily_rate_basic: 13500, daily_rate_tobi: 13500, daily_rate_age: 11500, daily_rate_tobiage: 0, daily_rate_half: 7500, daily_rate_fullday: 13500, daily_rate_night: 16900, has_motorbike: true },
+    { staff_id: 'stf_015', name: '木村和也', name_kana: 'キムラカズヤ', staff_type: 'regular', skills: '鳶,バイク', daily_rate_basic: 15000, daily_rate_tobi: 0, daily_rate_age: 0, daily_rate_tobiage: 15000, daily_rate_half: 8500, daily_rate_fullday: 15000, daily_rate_night: 18800, has_motorbike: true }
   ];
 
   // NG顧客設定（一部スタッフに）
@@ -272,11 +324,13 @@ function seedStaffData() {
     s.hire_date = '';
     s.foreigner_type = '';
     s.payment_frequency = s.staff_type === 'subcontract' ? 'monthly' : '';
-    s.bank_name = '';
-    s.bank_branch = '';
-    s.bank_account_type = '';
-    s.bank_account_number = '';
-    s.bank_account_name = '';
+    // 銀行口座データ（一部スタッフのみ設定）
+    var bankData = _seedBankAccount(s.staff_id, s.name);
+    s.bank_name = bankData.bank_name;
+    s.bank_branch = bankData.bank_branch;
+    s.bank_account_type = bankData.bank_account_type;
+    s.bank_account_number = bankData.bank_account_number;
+    s.bank_account_name = bankData.bank_account_name;
     s.notes = '';
     s.created_at = now;
     s.created_by = 'system';
@@ -378,17 +432,13 @@ function seedJobsData() {
   const allJobs = [];
 
   for (const target of monthlyTargets) {
-    const jobs = _generateJobsForMonth(target.year, target.month, target.count);
+    const jobs = _generateJobsForMonth(target.year, target.month, target.count, true);
     allJobs.push(...jobs);
     totalJobs += jobs.length;
-
-    // 5分経過で中断警告
-    if ((new Date() - startTime) > 5 * 60 * 1000) {
-      Logger.log(`⚠️ 5分経過。ここまで ${totalJobs} 件投入。残りは seedJobsDataByMonth() で個別実行してください。`);
-      break;
-    }
   }
 
+  // 全月分を1回のsetValuesでバルク投入
+  insertRecords('T_Jobs', allJobs);
   Logger.log(`✓ 案件: ${totalJobs}件登録 (${((new Date() - startTime) / 1000).toFixed(1)}秒)`);
   return allJobs;
 }
@@ -439,11 +489,11 @@ function _getMonthlyJobTargets() {
 }
 
 /** 1ヶ月分の案件を生成してDBに投入 */
-function _generateJobsForMonth(year, month, count) {
+function _generateJobsForMonth(year, month, count, skipInsert) {
   const now = _seedNow();
   const customerIds = ['cus_001', 'cus_002', 'cus_003', 'cus_004', 'cus_005', 'cus_006', 'cus_007', 'cus_008'];
   const timeSlots = ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'];
-  const workCategories = ['鳶', '揚げ', '鳶揚げ'];
+  const workCategories = ['鳶', 'ボード', '鳶,ボード'];
   const workDays = _seedWorkDays(year, month);
 
   // FY判定: 3月始まり → year の 3月〜翌年2月
@@ -512,7 +562,7 @@ function _generateJobsForMonth(year, month, count) {
       time_slot: timeSlot,
       start_time: timeSlot === 'yakin' ? '20:00' : timeSlot === 'am' ? '08:00' : timeSlot === 'pm' ? '13:00' : '08:00',
       required_count: _seedRandInt(1, 4),
-      pay_unit: timeSlot === 'am' || timeSlot === 'pm' ? 'half' : 'daily',
+      pay_unit: 'basic',
       work_category: workCategory,
       work_detail: '',
       work_detail_other_text: '',
@@ -538,7 +588,9 @@ function _generateJobsForMonth(year, month, count) {
     jobs.push(job);
   }
 
-  insertRecords('T_Jobs', jobs);
+  if (!skipInsert) {
+    insertRecords('T_Jobs', jobs);
+  }
   Logger.log(`  ${year}/${String(month).padStart(2, '0')}: ${count}件`);
   return jobs;
 }
@@ -564,7 +616,7 @@ function seedAssignmentsData() {
   }
 
   // スタッフをスキル別に分類
-  const staffBySkill = { '鳶': [], '揚げ': [], '鳶揚げ': [] };
+  const staffBySkill = { '鳶': [], 'ボード': [], 'バイク': [] };
   for (const s of allStaff) {
     const skills = (s.skills || '').split(',').map(sk => sk.trim());
     for (const skill of skills) {
@@ -607,8 +659,32 @@ function seedAssignmentsData() {
       const staff = assigned[idx];
       const isSubcontract = staff.staff_type === 'subcontract';
       const assignmentId = `asgn_${job.job_id.replace('job_', '')}_${String(idx + 1).padStart(2, '0')}`;
-      const payUnit = job.pay_unit || 'daily';
+      const payUnit = job.pay_unit || 'basic';
       const transportArea = _seedPick(transportAreas);
+      // 交通費パターン: エリア自動 / 手動フリー入力 / バス利用
+      const areaFeeMap = { area_01: 500, area_02: 800, area_03: 1200, area_04: 1500, area_05: 1500, area_06: 1300 };
+      const baseFee = areaFeeMap[transportArea] || 1000;
+      var transportAmount, transportIsManual, transportStation, transportHasBus;
+      const transportRand = Math.random();
+      if (transportRand < 0.5) {
+        // エリアマスタから自動取得
+        transportAmount = baseFee; transportIsManual = false; transportStation = ''; transportHasBus = false;
+      } else if (transportRand < 0.85) {
+        // 手動フリー入力（バス利用あり）
+        transportAmount = _seedPick([680, 840, 1100, 1360, 1580]);
+        transportIsManual = true;
+        transportStation = _seedPick(['新宿駅', '渋谷駅', '東京駅', '池袋駅', '品川駅', '横浜駅', '大宮駅', '千葉駅', '立川駅']);
+        transportHasBus = true;
+      } else {
+        // 手動フリー入力（電車のみ）
+        transportAmount = _seedPick([350, 480, 650, 820, 1000, 1250]);
+        transportIsManual = true;
+        transportStation = _seedPick(['新宿駅', '渋谷駅', '東京駅', '池袋駅', '品川駅', '横浜駅', '大宮駅', '千葉駅']);
+        transportHasBus = false;
+      }
+
+      // スタッフの日当からwage_rateを事前計算
+      var wageRate = _calcWageRate(staff, payUnit);
 
       let assignStatus;
       if (isFY2024) {
@@ -628,13 +704,13 @@ function seedAssignmentsData() {
         display_time_slot: job.time_slot,
         pay_unit: payUnit,
         invoice_unit: payUnit,
-        wage_rate: 1,
-        invoice_rate: 1,
+        wage_rate: wageRate,
+        invoice_rate: '',
         transport_area: transportArea,
-        transport_amount: '',
-        transport_is_manual: false,
-        transport_station: '',
-        transport_has_bus: false,
+        transport_amount: transportAmount,
+        transport_is_manual: transportIsManual,
+        transport_station: transportStation,
+        transport_has_bus: transportHasBus,
         site_role: '',
         assignment_role: '',
         is_leader: idx === 0 && assigned.length > 1,
@@ -814,10 +890,13 @@ function seedInvoicesAndPayoutsForArchive() {
       if (staffAssignments.length === 0) continue;
 
       const baseAmount = staffAssignments.reduce((sum, a) => {
-        const rate = a.pay_unit === 'half' ? (s.daily_rate_half || 7000) : (s.daily_rate_tobi || s.daily_rate_age || s.daily_rate_tobiage || 13000);
-        return sum + rate * (a.wage_rate || 1);
+        // wage_rateが設定済みならそれが日当額（絶対値）、なければマスタから取得
+        const rate = a.wage_rate
+          ? Number(a.wage_rate)
+          : (a.pay_unit === 'half' ? (s.daily_rate_half || 7000) : (s.daily_rate_tobi || s.daily_rate_age || s.daily_rate_tobiage || 13000));
+        return sum + rate;
       }, 0);
-      const transportAmount = staffAssignments.length * _seedPick([500, 800, 1200, 1500]);
+      const transportAmount = staffAssignments.reduce((sum, a) => sum + (Number(a.transport_amount) || 0), 0);
 
       allPayouts.push({
         payout_id: `pay_${period.year}${String(period.month).padStart(2, '0')}_${s.staff_id}`,
@@ -888,6 +967,30 @@ function _calcTax(amount, rate, roundingMode) {
   }
 }
 
+/**
+ * スタッフの日当をpay_unitに応じて取得（calc_utils.ts のgetDailyRateByJobType_と同等）
+ */
+function _calcWageRate(staff, payUnit) {
+  switch (payUnit) {
+    case 'half':
+    case 'halfday':
+      return staff.daily_rate_half || 0;
+    case 'tobi':
+      return staff.daily_rate_tobi || 0;
+    case 'age':
+      return staff.daily_rate_age || 0;
+    case 'tobiage':
+      return Math.floor((staff.daily_rate_tobi || 0) * 1.5);
+    case 'fullday':
+      return staff.daily_rate_tobi || staff.daily_rate_basic || 0;
+    case 'night':
+      return staff.daily_rate_tobi || staff.daily_rate_basic || 0;
+    case 'basic':
+    default:
+      return staff.daily_rate_basic || staff.daily_rate_tobi || 0;
+  }
+}
+
 // ============================================================
 // 2-8: オーケストレーター
 // ============================================================
@@ -917,6 +1020,10 @@ function seedAllProductionData() {
 
   // 3. FY2024請求・支払（アーカイブ用）
   seedInvoicesAndPayoutsForArchive();
+
+  // 4. MasterCacheクリア（CacheService含む）
+  MasterCache.invalidate();
+  Logger.log('✓ MasterCache: 全キャッシュクリア');
 
   const elapsed = ((new Date() - startTime) / 1000).toFixed(1);
   Logger.log(`\n=== 全データ投入完了 (${elapsed}秒) ===`);
@@ -997,6 +1104,53 @@ function verifyMasterData() {
   }
   for (const c of allCustomers) {
     Logger.log(`  ${c.company_name}: ${custCount[c.customer_id] || 0}件`);
+  }
+
+  // サンプルデータ出力（デバッグ用）
+  Logger.log('\n--- サンプルデータ確認 ---');
+  if (allCustomers.length > 0) {
+    const c = allCustomers[0];
+    Logger.log(`  顧客[0]: id=${c.customer_id}, name=${c.company_name}, is_deleted=${c.is_deleted} (type: ${typeof c.is_deleted}), is_active=${c.is_active} (type: ${typeof c.is_active})`);
+  }
+  if (allStaff.length > 0) {
+    const s = allStaff[0];
+    Logger.log(`  スタッフ[0]: id=${s.staff_id}, name=${s.name}, staff_type=${s.staff_type} (type: ${typeof s.staff_type}), is_deleted=${s.is_deleted} (type: ${typeof s.is_deleted}), is_active=${s.is_active} (type: ${typeof s.is_active})`);
+  }
+  if (allAssignments.length > 0) {
+    const a = allAssignments[0];
+    Logger.log(`  配置[0]: id=${a.assignment_id}, job_id=${a.job_id}, staff_id=${a.staff_id}, status=${a.status}, is_deleted=${a.is_deleted} (type: ${typeof a.is_deleted})`);
+  }
+  if (allJobs.length > 0) {
+    const j = allJobs[0];
+    Logger.log(`  案件[0]: id=${j.job_id}, customer_id=${j.customer_id}, work_date=${j.work_date} (type: ${typeof j.work_date}), is_deleted=${j.is_deleted} (type: ${typeof j.is_deleted})`);
+  }
+
+  // MasterCache経由の確認
+  Logger.log('\n--- MasterCache確認 ---');
+  const cachedStaff = MasterCache.getStaff();
+  Logger.log(`  MasterCache.getStaff(): ${cachedStaff.length}件`);
+  if (cachedStaff.length > 0) {
+    const s = cachedStaff[0];
+    Logger.log(`  cached[0]: id=${s.staff_id}, name=${s.name}, staff_type=${s.staff_type}, is_active=${s.is_active}`);
+  }
+  const cachedCustomers = MasterCache.getCustomers();
+  Logger.log(`  MasterCache.getCustomers(): ${cachedCustomers.length}件`);
+  if (cachedCustomers.length > 0) {
+    const c = cachedCustomers[0];
+    Logger.log(`  cached[0]: id=${c.customer_id}, name=${c.company_name}`);
+  }
+
+  // シートヘッダー確認
+  Logger.log('\n--- シートヘッダー確認 ---');
+  const checkTables = ['M_Staff', 'M_Customers', 'T_Jobs', 'T_JobAssignments'];
+  for (const t of checkTables) {
+    try {
+      const sheet = getSheet(t);
+      const headers = getHeaders(sheet);
+      Logger.log(`  ${t} (${headers.length}列): ${headers.join(', ')}`);
+    } catch (e) {
+      Logger.log(`  ${t}: エラー - ${e.message}`);
+    }
   }
 
   Logger.log('\n✅ 検証完了');
