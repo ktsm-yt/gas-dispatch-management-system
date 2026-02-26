@@ -1281,13 +1281,13 @@ function updateSlotStatusHint() {
     const shortage = status.shortage;
     if (shortage > 0) {
       hintEl.textContent = `この枠はあと${shortage}名不足しています`;
-      hintEl.style.color = 'var(--danger)';
+      hintEl.style.color = 'var(--color-danger)';
     } else if (shortage < 0) {
       hintEl.textContent = `この枠は${Math.abs(shortage)}名超過しています`;
-      hintEl.style.color = 'var(--warning)';
+      hintEl.style.color = 'var(--color-warning)';
     } else {
       hintEl.textContent = 'この枠は充足しています';
-      hintEl.style.color = 'var(--success)';
+      hintEl.style.color = 'var(--color-success)';
     }
   } else {
     hintEl.textContent = '';
