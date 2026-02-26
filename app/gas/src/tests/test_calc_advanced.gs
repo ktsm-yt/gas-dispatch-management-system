@@ -4,7 +4,7 @@
  * 対象: calculateWage_, calculateInvoiceAmount_, getDailyRateByJobType_,
  *       getUnitPriceByJobType_, calculateMonthlyPayout_, calculateExpense_,
  *       calculateInvoiceForAtagami_, normalizeRoundingMode_,
- *       PayoutService._calculateWithholdingTax, InvoiceService._calculateTotals
+ *       lookupDailyWithholdingTax, InvoiceService._calculateTotals
  */
 
 function runCalcAdvancedTests() {
@@ -297,52 +297,30 @@ function testCalculateMonthlyPayout() {
 }
 
 // ============================================
-// PayoutService._calculateWithholdingTax
+// lookupDailyWithholdingTax（日額表 甲欄・扶養0人）
 // ============================================
 
-function testWithholdingTax() {
-  // 源泉徴収対象
-  var staffApplicable = { withholding_tax_applicable: true };
-  assertEqual(
-    PayoutService._calculateWithholdingTax(staffApplicable, 100000),
-    Math.floor(100000 * 0.1021),
-    '100000 × 10.21% = 10210'
-  );
-  assertEqual(
-    PayoutService._calculateWithholdingTax(staffApplicable, 0),
-    0,
-    'baseAmount=0 → 0'
-  );
+function testLookupDailyWithholdingTax() {
+  // お客様実データ検証
+  assertEqual(lookupDailyWithholdingTax(7500), 190, '7500 → 190');
+  assertEqual(lookupDailyWithholdingTax(10000), 280, '10000 → 280');
+  assertEqual(lookupDailyWithholdingTax(8500), 225, '8500 → 225');
+  assertEqual(lookupDailyWithholdingTax(13000), 525, '13000 → 525');
+  assertEqual(lookupDailyWithholdingTax(5250), 105, '5250 → 105');
 
-  // 端数切り捨て確認
-  assertEqual(
-    PayoutService._calculateWithholdingTax(staffApplicable, 15000),
-    Math.floor(15000 * 0.1021),
-    '15000 × 10.21% = 1531 (floor)'
-  );
+  // 境界値テスト
+  assertEqual(lookupDailyWithholdingTax(0), 0, '0 → 0');
+  assertEqual(lookupDailyWithholdingTax(2899), 0, '2899 → 0 (非課税上限)');
+  assertEqual(lookupDailyWithholdingTax(2900), 5, '2900 → 5 (課税開始)');
+  assertEqual(lookupDailyWithholdingTax(23900), 2295, '23900 → 2295 (テーブル最終行)');
 
-  // 源泉徴収非対象
-  var staffNotApplicable = { withholding_tax_applicable: false };
-  assertEqual(
-    PayoutService._calculateWithholdingTax(staffNotApplicable, 100000),
-    0,
-    '非対象 → 0'
-  );
+  // 24,000円超: 累進計算式
+  // 24,000円: baseTax=2305, rate=20.42%
+  assertEqual(lookupDailyWithholdingTax(24000), 2305, '24000 → 2305');
+  assertEqual(lookupDailyWithholdingTax(25000), Math.floor(2305 + 1000 * 0.2042), '25000 → 累進計算');
 
-  // withholding_tax_applicable未設定
-  var staffNoFlag = {};
-  assertEqual(
-    PayoutService._calculateWithholdingTax(staffNoFlag, 100000),
-    0,
-    'フラグ未設定 → 0'
-  );
-
-  // null staff
-  assertEqual(
-    PayoutService._calculateWithholdingTax(null, 100000),
-    0,
-    'null staff → 0'
-  );
+  // 負数
+  assertEqual(lookupDailyWithholdingTax(-100), 0, '負数 → 0');
 }
 
 // ============================================

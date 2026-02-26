@@ -691,58 +691,38 @@ function testDoubleEntryPrevention() {
 }
 
 /**
- * 源泉徴収税計算のテスト
- * withholding_tax_applicable = true の場合のみ 10.21% 控除
+ * 源泉徴収税計算のテスト（日額テーブル版）
+ * lookupDailyWithholdingTax: 日額表（甲欄・扶養0人）でテーブル参照
  */
 function testWithholdingTaxCalculation() {
-  Logger.log('--- testWithholdingTaxCalculation ---');
+  Logger.log('--- testWithholdingTaxCalculation (日額テーブル版) ---');
 
-  const WITHHOLDING_TAX_RATE = 0.1021;
+  // 1. お客様実データ検証（12月度明細書）
+  assertEqual(lookupDailyWithholdingTax(7500), 190, 'daily 7500 → 190');
+  assertEqual(lookupDailyWithholdingTax(10000), 280, 'daily 10000 → 280');
+  assertEqual(lookupDailyWithholdingTax(8500), 225, 'daily 8500 → 225');
+  assertEqual(lookupDailyWithholdingTax(13000), 525, 'daily 13000 → 525');
+  Logger.log('  お客様実データ4件: OK');
 
-  // 1. 源泉徴収対象スタッフのテスト
-  const staffWithTax = {
-    staff_id: 'tax_test_1',
-    name: 'テストスタッフ（源泉徴収あり）',
-    withholding_tax_applicable: true
-  };
+  // 2. 境界値
+  assertEqual(lookupDailyWithholdingTax(0), 0, '0 → 0');
+  assertEqual(lookupDailyWithholdingTax(2899), 0, '2899 → 0 (非課税)');
+  assertEqual(lookupDailyWithholdingTax(2900), 5, '2900 → 5 (課税開始)');
+  Logger.log('  境界値: OK');
 
-  const baseAmount1 = 100000;
+  // 3. 24,000円超（累進計算式）
+  assertEqual(lookupDailyWithholdingTax(24000), 2305, '24000 → 2305');
+  Logger.log('  累進計算: OK');
 
-  const tax1 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount1);
-  assertEqual(tax1, 10210, 'withholding tax for 100000 should be 10210');
-  Logger.log(`  Tax applicable (100,000): ${tax1} (expected 10210): OK`);
+  // 4. _calculateDailyWithholdingTaxTotal: 非対象スタッフ → 0
+  const staffNoTax = { staff_id: 'test', withholding_tax_applicable: false };
+  const tax0 = PayoutService._calculateDailyWithholdingTaxTotal([], staffNoTax, new Map(), new Map());
+  assertEqual(tax0, 0, '非対象スタッフ → 0');
 
-  // 2. 源泉徴収非対象スタッフのテスト
-  const staffWithoutTax = {
-    staff_id: 'tax_test_2',
-    name: 'テストスタッフ（源泉徴収なし）',
-    withholding_tax_applicable: false
-  };
-
-  const tax2 = PayoutService._calculateWithholdingTax(staffWithoutTax, baseAmount1);
-  assertEqual(tax2, 0, 'no tax for non-applicable staff');
-  Logger.log('  Tax not applicable: 0: OK');
-
-  // 3. withholding_tax_applicable 未設定の場合（falsy）
-  const staffNoFlag = {
-    staff_id: 'tax_test_3',
-    name: 'テストスタッフ（フラグなし）'
-  };
-
-  const tax3 = PayoutService._calculateWithholdingTax(staffNoFlag, baseAmount1);
-  assertEqual(tax3, 0, 'no tax when flag is undefined');
-  Logger.log('  Flag undefined: 0: OK');
-
-  // 4. null スタッフの場合
-  const tax4 = PayoutService._calculateWithholdingTax(null, baseAmount1);
-  assertEqual(tax4, 0, 'no tax when staff is null');
-  Logger.log('  Null staff: 0: OK');
-
-  // 5. 計算精度テスト（端数切り捨て確認）
-  const baseAmount2 = 123456;
-  const tax5 = PayoutService._calculateWithholdingTax(staffWithTax, baseAmount2);
-  assertEqual(tax5, 12604, 'withholding tax for 123456 should be 12604 (floor)');
-  Logger.log(`  Floor precision (123,456): ${tax5} (expected 12604): OK`);
+  // 5. _calculateDailyWithholdingTaxTotal: null スタッフ → 0
+  const taxNull = PayoutService._calculateDailyWithholdingTaxTotal([], null, new Map(), new Map());
+  assertEqual(taxNull, 0, 'null staff → 0');
+  Logger.log('  スタッフフラグ: OK');
 
   Logger.log('--- testWithholdingTaxCalculation PASSED ---');
 }

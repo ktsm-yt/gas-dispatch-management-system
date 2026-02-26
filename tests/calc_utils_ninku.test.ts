@@ -153,13 +153,14 @@ describe('統合シナリオ', () => {
     expect(15000 + adj).toBe(19500);
   });
 
-  it('テスト8: 源泉徴収は係数適用後の金額に10.21%', () => {
+  it('テスト8: 源泉徴収は係数適用後の金額に日額テーブル参照', () => {
     const coeff = calculateNinkuCoefficient_(3, 4);
     const wage = 15000;
     const adjustedWage = wage + calculateNinkuAdjustment_(wage, coeff);
-    const tax = Math.floor(adjustedWage * 0.1021);
     expect(adjustedWage).toBe(10500);
-    expect(tax).toBe(1072); // floor(10500 * 0.1021) = floor(1072.05) = 1072
+    // 日額テーブル: 10500~10600 → 320円（旧: 10.21%=1072円）
+    // NOTE: lookupDailyWithholdingTax はGASグローバル関数のため、
+    // このテストでは人工割計算の正確性のみを検証
   });
 
   it('テスト7: 外注混在 2 STAFF + 1 SUBCONTRACT, required=2 → actual=2, coeff=1.0', () => {
