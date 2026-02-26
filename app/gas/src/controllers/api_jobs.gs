@@ -52,10 +52,11 @@ function getDashboard(date) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`getDashboard error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getDashboard error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );
@@ -88,8 +89,9 @@ function getDashboardMeta(date) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`getDashboardMeta error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getDashboardMeta error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -126,8 +128,9 @@ function searchJobs(query) {
     return response;
 
   } catch (error) {
-    Logger.log(`searchJobs error: ${error.message}`);
-    Logger.log(error.stack);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`searchJobs error: ${errMsg}`);
+    Logger.log(error instanceof Error ? error.stack : '');
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
       'システムエラーが発生しました',
@@ -182,10 +185,11 @@ function getJob(jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`getJob error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getJob error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );
@@ -237,10 +241,11 @@ function getJobForEdit(jobId) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    Logger.log(`getJobForEdit error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getJobForEdit error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );
@@ -338,10 +343,11 @@ function saveJob(job, expectedUpdatedAt, slots) {
     }, requestId);
 
   } catch (error) {
-    Logger.log(`saveJob error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`saveJob error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );
@@ -467,10 +473,11 @@ function deleteJob(jobId, expectedUpdatedAt) {
     return buildSuccessResponse({ deleted: true, jobId: jobId }, requestId);
 
   } catch (error) {
-    Logger.log(`deleteJob error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`deleteJob error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );
@@ -552,10 +559,11 @@ function updateJobStatus(jobId, status, expectedUpdatedAt) {
     return buildSuccessResponse({ job: result.job }, requestId);
 
   } catch (error) {
-    Logger.log(`updateJobStatus error: ${error.message}`);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`updateJobStatus error: ${errMsg}`);
     return buildErrorResponse(
       ERROR_CODES.SYSTEM_ERROR,
-      error.message,
+      'システムエラーが発生しました',
       {},
       requestId
     );

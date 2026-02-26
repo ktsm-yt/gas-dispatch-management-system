@@ -79,7 +79,6 @@ function getUnpaidSummary(staffId: string, endDate: string, options: Record<stri
 
   } catch (error: unknown) {
     logErr('getUnpaidSummary', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -115,7 +114,6 @@ function getUnpaidAssignments(staffId: string, endDate: string): unknown {
 
   } catch (error: unknown) {
     logErr('getUnpaidAssignments', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -206,7 +204,6 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
 
   } catch (error: unknown) {
     logErr('getPayoutDetails', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -258,7 +255,6 @@ function getUnpaidStaffList(endDate: string, options: { staffId?: string } = {})
 
   } catch (error: unknown) {
     logErr('getUnpaidStaffList', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -315,7 +311,6 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
 
   } catch (error: unknown) {
     logErr('getUnpaidStaffListDelta', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -370,7 +365,6 @@ function markAsPaid(staffId: string, endDate: string, options: { adjustment_amou
       return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
     }
     logErr('markAsPaid', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   } finally {
     if (lockAcquired) {
@@ -417,7 +411,6 @@ function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_dat
 
   } catch (error: unknown) {
     logErr('bulkMarkAsPaid', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -447,7 +440,6 @@ function searchPayouts(query: PayoutSearchQuery = {}): unknown {
 
   } catch (error: unknown) {
     logErr('searchPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -481,7 +473,6 @@ function getPayout(payoutId: string): unknown {
 
   } catch (error: unknown) {
     logErr('getPayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -516,7 +507,6 @@ function getPayoutHistory(staffId: string, options: { limit?: number } = {}): un
 
   } catch (error: unknown) {
     logErr('getPayoutHistory', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -555,7 +545,6 @@ function undoPayout(payoutId: string, expectedUpdatedAt: string): unknown {
 
   } catch (error: unknown) {
     logErr('undoPayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -613,7 +602,6 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
 
   } catch (error: unknown) {
     logErr('savePayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -665,7 +653,6 @@ function confirmPayout(staffId: string, endDate: string, options: { adjustment_a
       return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
     }
     logErr('confirmPayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   } finally {
     if (lockAcquired) {
@@ -707,7 +694,6 @@ function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adju
 
   } catch (error: unknown) {
     logErr('bulkConfirmPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -765,7 +751,6 @@ function payConfirmedPayout(payoutId: string, options: { paid_date?: string; exp
 
   } catch (error: unknown) {
     logErr('payConfirmedPayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -845,7 +830,6 @@ function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; ex
 
   } catch (error: unknown) {
     logErr('bulkPayConfirmed', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -875,7 +859,6 @@ function getConfirmedPayouts(options: { payout_type?: PayoutType } = {}): unknow
 
   } catch (error: unknown) {
     logErr('getConfirmedPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -977,7 +960,6 @@ function checkPayoutExportFile(fromDate: string, toDate: string): unknown {
 
   } catch (error: unknown) {
     logErr('checkPayoutExportFile', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1032,7 +1014,6 @@ function exportPayouts(fromDate: string, toDate: string, options: { action?: str
 
   } catch (error: unknown) {
     logErr('exportPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1055,7 +1036,6 @@ function getPayoutExportFolderUrl(): unknown {
 
   } catch (error: unknown) {
     logErr('getPayoutExportFolderUrl', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1085,7 +1065,6 @@ function checkPayoutDetailExportFile(payoutId: string): unknown {
 
   } catch (error: unknown) {
     logErr('checkPayoutDetailExportFile', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1122,7 +1101,6 @@ function exportPayoutDetail(payoutId: string, options: { action?: string } = {})
 
   } catch (error: unknown) {
     logErr('exportPayoutDetail', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1155,7 +1133,6 @@ function getSubcontractorsForPayouts(): unknown {
 
   } catch (error: unknown) {
     logErr('getSubcontractorsForPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1193,7 +1170,6 @@ function getUnpaidSummaryForSubcontractor(subcontractorId: string, endDate: stri
 
   } catch (error: unknown) {
     logErr('getUnpaidSummaryForSubcontractor', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1229,7 +1205,6 @@ function getUnpaidSubcontractorList(endDate: string): unknown {
 
   } catch (error: unknown) {
     logErr('getUnpaidSubcontractorList', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1268,7 +1243,6 @@ function confirmSubcontractorPayout(subcontractorId: string, endDate: string, op
 
   } catch (error: unknown) {
     logErr('confirmSubcontractorPayout', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1311,7 +1285,6 @@ function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string,
 
   } catch (error: unknown) {
     logErr('markSubcontractorPayoutAsPaid', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1345,7 +1318,6 @@ function getSubcontractorPayoutHistory(subcontractorId: string, options: { limit
 
   } catch (error: unknown) {
     logErr('getSubcontractorPayoutHistory', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
@@ -1380,7 +1352,6 @@ function searchSubcontractorPayouts(query: PayoutSearchQuery = {}): unknown {
 
   } catch (error: unknown) {
     logErr('searchSubcontractorPayouts', error, requestId);
-    const msg = error instanceof Error ? error.message : String(error);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
