@@ -113,17 +113,29 @@ const PayoutService = {
     );
     Logger.log(`[getUnpaidAssignments] unpaidAssignments after filter: ${unpaidAssignments.length}`);
 
-    // 5. Job情報を付与して返す
+    // 5. Job情報+人工割反映後単価を付与して返す
+    const assignmentCountByJob = this._buildAssignmentCountByJob(jobIdSet);
+
     return unpaidAssignments.map(a => {
       const job = jobMap.get(a.job_id as string);
+      const wageRate = Number(a.wage_rate) || 0;
+
+      // 人工割反映後の単価
+      const requiredCount = job ? Number(job.required_count) || 0 : 0;
+      const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
+      const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+      const adjustedWageRate = coefficient !== 1.0
+        ? applyRounding_(wageRate * coefficient, RoundingMode.FLOOR)
+        : wageRate;
+
       return {
         ...a,
         work_date: job ? job.work_date : '',
         site_name: job ? job.site_name : '',
-        customer_id: job ? job.customer_id : ''
+        customer_id: job ? job.customer_id : '',
+        adjusted_wage_rate: adjustedWageRate
       };
     }).sort((a, b) => {
-      // work_date昇順でソート
       return ((a.work_date as string) || '').localeCompare((b.work_date as string) || '');
     });
   },
@@ -1469,7 +1481,9 @@ const PayoutService = {
     if (!staff) return 0;
 
     // withholding_tax_applicable が true の場合のみ源泉徴収
-    if (!staff.withholding_tax_applicable) return 0;
+    // TODO: regular/studentは日額表乙欄で計算する必要あり（現在の10.21%は報酬向け税率で不正確）
+    const isApplicable = staff.withholding_tax_applicable;
+    if (!isApplicable) return 0;
 
     // 源泉徴収税率 10.21%（復興特別所得税込み）
     const WITHHOLDING_TAX_RATE = 0.1021;

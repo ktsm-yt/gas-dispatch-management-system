@@ -502,6 +502,7 @@ function validateStaff(data) {
  */
 function saveStaff(staff, expectedUpdatedAt) {
   requireManager();
+  // TODO: regular/studentの源泉徴収は日額表乙欄で実装予定（自動設定は保留）
   const result = saveMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
