@@ -281,6 +281,7 @@ const InvoiceRepository = {
 
     const newRow = objectToRow(headers, updatedInvoice);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache(this.TABLE_NAME);
 
     return {
       success: true,
@@ -329,6 +330,7 @@ const InvoiceRepository = {
 
     if (deleted > 0) {
       sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+      invalidateExecutionCache(this.TABLE_NAME);
     }
 
     return { success: true, deleted };
@@ -481,6 +483,7 @@ const InvoiceRepository = {
 
     if (hasChanges) {
       dataRange.setValues(allData);
+      invalidateExecutionCache(this.TABLE_NAME);
     }
 
     return {
@@ -594,6 +597,7 @@ const InvoiceRepository = {
 
     if (updatedIds.length > 0) {
       sheet.getRange(2, 1, allData.length, headers.length).setValues(allData);
+      invalidateExecutionCache(this.TABLE_NAME);
 
       try {
         for (const invoiceId of updatedIds) {

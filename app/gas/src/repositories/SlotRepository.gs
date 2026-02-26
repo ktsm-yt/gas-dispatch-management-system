@@ -182,6 +182,7 @@ const SlotRepository = {
 
     const newRow = objectToRow(headers, updatedSlot);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache(this.TABLE_NAME);
 
     return {
       success: true,
@@ -231,6 +232,7 @@ const SlotRepository = {
 
     const newRow = objectToRow(headers, currentSlot);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache(this.TABLE_NAME);
 
     return { success: true, before: currentSlot };
   },

@@ -231,6 +231,7 @@ const StatsRepository = {
 
     const newRow = objectToRow(headers, updatedStats);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache(this.TABLE_NAME);
 
     return {
       success: true,

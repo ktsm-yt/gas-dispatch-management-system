@@ -125,6 +125,7 @@ const InvoiceAdjustmentRepository = {
 
       if (modified) {
         sheet.getRange(2, 1, lastRow - 1, lastCol).setValues(data);
+        invalidateExecutionCache(this.TABLE_NAME);
       }
     }
 
@@ -171,6 +172,7 @@ const InvoiceAdjustmentRepository = {
 
     if (deleted > 0) {
       sheet.getRange(2, 1, lastRow - 1, lastCol).setValues(data);
+      invalidateExecutionCache(this.TABLE_NAME);
     }
 
     return { success: true, deleted: deleted };
