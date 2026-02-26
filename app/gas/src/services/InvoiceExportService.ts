@@ -810,6 +810,8 @@ const InvoiceExportService = {
       dataSheet.getRange('B4').setValue(totalBeforeTax);  // P2-8: 税抜合計金額
       dataSheet.getRange('B5').setValue(invoice.shipper_name || '');  // 荷主名
       dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
+      dataSheet.getRange('B7').setValue(company.postal_code ? '〒 ' + company.postal_code : '');  // 自社郵便番号
+      dataSheet.getRange('B8').setValue(company.address || '');  // 自社住所
     } else {
       // データシートがない場合は直接書き込み
       sheet.getRange('A2').setValue(customer.company_name || '');
@@ -820,6 +822,8 @@ const InvoiceExportService = {
         sheet.getRange('E2').setValue(company.company_name);
       }
     }
+
+    // 自社郵便番号・住所はデータシートB7/B8経由で売上シートの数式が参照
 
     // === 明細行（A10から開始、視認性のため1行おき）===
     // テンプレート列構成: A=日付, B=案件名, C=(空), D=品目, E=(空), F=時間/備考, G=数量, H=単位, I=単価, J=金額
@@ -965,6 +969,8 @@ const InvoiceExportService = {
     dataSheet.getRange('B6').setValue(company.company_name || '');  // 自社名
     dataSheet.getRange('B7').setValue(company.postal_code ? '〒' + company.postal_code : '');  // 自社郵便番号
     dataSheet.getRange('B8').setValue(company.address || '');  // 自社住所
+
+    // 自社郵便番号・住所はデータシートB7/B8経由で売上シートの数式が参照
 
     // === 明細行を売上シートに直接書き込み ===
     // （A10から開始、同一案件内は連続・案件変更時に空行）

@@ -209,6 +209,8 @@ function calculateWage_(
   staff: Record<string, any>,
   jobType: string
 ): number {
+  // wage_rate は実額（円）。null/undefined/'' の場合はスタッフマスタから取得。
+  // ※ 倍率ではないので掛け算しないこと（過去に rate × wage_rate で巨額バグ発生）
   let baseRate = assignment.wage_rate;
 
   if (baseRate === null || baseRate === undefined || baseRate === '') {

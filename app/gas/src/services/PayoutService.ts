@@ -1663,7 +1663,7 @@ const PayoutService = {
       };
     }
 
-    // 金額計算（外注費は wage_rate を使用、源泉徴収なし）
+    // 金額計算（外注費は wage_rate＝実額(円) をそのまま加算。倍率ではない）
     let baseAmount = 0;
     let transportAmount = 0;
 

@@ -364,6 +364,7 @@ declare global {
   }
 
   interface CalcAssignment {
+    /** 支払単価（実額・円）。倍率ではない。null/空 → スタッフマスタから自動取得 */
     wage_rate?: number | null | string;
     invoice_rate?: number | null | string;
     pay_unit?: string;

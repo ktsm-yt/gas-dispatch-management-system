@@ -19,20 +19,6 @@
  * CacheService・ScriptPropertiesの進捗キーもクリア
  */
 function clearAllForProduction() {
-  // 安全確認ダイアログ
-  const answer = Browser.msgBox(
-    '⚠️ 全データクリア確認',
-    '全15テーブルのデータを削除します。\n' +
-    'スプレッドシートのバックアップは取りましたか？\n\n' +
-    '「はい」で実行、「いいえ」でキャンセル',
-    Browser.Buttons.YES_NO
-  );
-
-  if (answer !== 'yes') {
-    Logger.log('キャンセルされました');
-    return;
-  }
-
   Logger.log('=== 全データクリア開始 ===');
   const startTime = new Date();
 
@@ -69,19 +55,12 @@ function clearAllForProduction() {
     }
   }
 
-  // CacheService クリア（既知のキー）
+  // MasterCache + CacheService クリア
   try {
-    const cache = CacheService.getScriptCache();
-    cache.removeAll([
-      'MasterCache_M_Staff',
-      'MasterCache_M_Customers',
-      'MasterCache_M_Subcontractors',
-      'MasterCache_M_TransportFees',
-      'MasterCache_M_Company'
-    ]);
-    Logger.log('✓ CacheService: マスターキャッシュクリア');
+    MasterCache.invalidate();
+    Logger.log('✓ MasterCache: 全キャッシュクリア（CacheService含む）');
   } catch (e) {
-    Logger.log(`✗ CacheService: ${e.message}`);
+    Logger.log(`✗ MasterCache.invalidate: ${e.message}`);
   }
 
   // ScriptProperties: アーカイブ進捗等の一時キーをクリア
@@ -132,19 +111,7 @@ function clearAllForProduction() {
  * まず dryRunDriveCleanup() でドライラン確認してから実行推奨
  */
 function cleanupDriveTestFiles() {
-  const answer = Browser.msgBox(
-    '⚠️ Driveファイル削除確認',
-    '顧客フォルダ配下のファイルとフォルダをすべて削除します。\n' +
-    '先に dryRunDriveCleanup() でドライランを実行しましたか？\n\n' +
-    '「はい」で実行',
-    Browser.Buttons.YES_NO
-  );
-
-  if (answer !== 'yes') {
-    Logger.log('キャンセルされました');
-    return;
-  }
-
+  Logger.log('=== Driveテストファイル削除開始 ===');
   _executeDriveCleanup(false);
 }
 
@@ -281,7 +248,211 @@ function _executeDriveCleanup(dryRun) {
 }
 
 // ============================================================
-// 1-3: 空状態検証
+// 1-3: シートヘッダー修正
+// ============================================================
+
+/**
+ * シートヘッダーの不整合を修正
+ * - M_Staff: 重複 daily_rate_half → staff_type にリネーム、payment_frequency 追加
+ * - M_Customers: unit_price_basic, unit_price_fullday, unit_price_night, tax_rounding_mode 追加
+ * - T_Jobs: is_damaged, is_uncollected, is_claimed 追加
+ * - T_JobAssignments: notes 追加
+ *
+ * clearAllForProduction() 後、seedAllProductionData() 前に実行
+ */
+function fixSheetHeaders() {
+  Logger.log('=== シートヘッダー修正開始 ===');
+
+  // --- M_Staff: 重複 daily_rate_half → staff_type ---
+  _fixStaffHeaders();
+
+  // --- M_Customers: 欠落列追加 ---
+  _fixCustomerHeaders();
+
+  // --- T_Jobs: 欠落列追加 ---
+  _fixJobHeaders();
+
+  // --- T_JobAssignments: notes 追加 ---
+  _fixAssignmentHeaders();
+
+  Logger.log('\n=== シートヘッダー修正完了 ===');
+  Logger.log('次に seedAllProductionData() を実行してください。');
+}
+
+/** ドライラン: 修正内容を表示するだけ */
+function dryRunFixSheetHeaders() {
+  Logger.log('=== シートヘッダー修正 ドライラン ===');
+
+  const checks = [
+    { table: 'M_Staff', fn: _checkStaffHeaders },
+    { table: 'M_Customers', fn: _checkCustomerHeaders },
+    { table: 'T_Jobs', fn: _checkJobHeaders },
+    { table: 'T_JobAssignments', fn: _checkAssignmentHeaders },
+  ];
+
+  for (const { table, fn } of checks) {
+    try {
+      fn();
+    } catch (e) {
+      Logger.log(`✗ ${table}: ${e.message}`);
+    }
+  }
+}
+
+function _checkStaffHeaders() {
+  const sheet = getSheet('M_Staff');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log(`M_Staff ヘッダー (${headers.length}列): ${headers.join(', ')}`);
+
+  // 重複 daily_rate_half チェック
+  const indices = [];
+  headers.forEach((h, i) => { if (h === 'daily_rate_half') indices.push(i + 1); });
+  if (indices.length > 1) {
+    Logger.log(`  ⚠️ daily_rate_half が ${indices.length}回出現 (列: ${indices.join(', ')})`);
+    Logger.log(`  → 最初の出現 (列${indices[0]}) を staff_type にリネーム予定`);
+  }
+
+  // daily_rate_basic チェック
+  if (!headers.includes('daily_rate_basic')) {
+    Logger.log('  ⚠️ daily_rate_basic 列が欠落 → 追加予定');
+  }
+
+  // payment_frequency チェック
+  if (!headers.includes('payment_frequency')) {
+    Logger.log('  ⚠️ payment_frequency 列が欠落 → 追加予定');
+  }
+}
+
+function _fixStaffHeaders() {
+  const sheet = getSheet('M_Staff');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // 重複 daily_rate_half → 最初のものを staff_type にリネーム
+  let fixed = false;
+  const indices = [];
+  headers.forEach((h, i) => { if (h === 'daily_rate_half') indices.push(i); });
+
+  if (indices.length > 1) {
+    // 最初の daily_rate_half を staff_type に変更
+    sheet.getRange(1, indices[0] + 1).setValue('staff_type');
+    Logger.log(`✓ M_Staff: 列${indices[0] + 1} daily_rate_half → staff_type`);
+    fixed = true;
+  } else if (!headers.includes('staff_type')) {
+    // daily_rate_half 重複はないが staff_type もない場合、末尾に追加
+    const col = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col).setValue('staff_type');
+    Logger.log(`✓ M_Staff: staff_type を列${col}に追加`);
+    fixed = true;
+  }
+
+  // daily_rate_basic 追加（揚げ専門スタッフ等の基本単価に必要）
+  const headersAfterFix = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headersAfterFix.includes('daily_rate_basic')) {
+    const col = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col).setValue('daily_rate_basic');
+    Logger.log(`✓ M_Staff: daily_rate_basic を列${col}に追加`);
+    fixed = true;
+  }
+
+  // payment_frequency 追加
+  if (!headersAfterFix.includes('payment_frequency')) {
+    const col = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col).setValue('payment_frequency');
+    Logger.log(`✓ M_Staff: payment_frequency を列${col}に追加`);
+    fixed = true;
+  }
+
+  if (!fixed) Logger.log('✓ M_Staff: 修正不要');
+}
+
+function _checkCustomerHeaders() {
+  const sheet = getSheet('M_Customers');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log(`M_Customers ヘッダー (${headers.length}列): ${headers.join(', ')}`);
+
+  const missing = ['unit_price_basic', 'unit_price_fullday', 'unit_price_night', 'tax_rounding_mode']
+    .filter(h => !headers.includes(h));
+  if (missing.length > 0) {
+    Logger.log(`  ⚠️ 欠落列: ${missing.join(', ')}`);
+  }
+}
+
+function _fixCustomerHeaders() {
+  const sheet = getSheet('M_Customers');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // unit_price 系は unit_price_half の後に挿入したいが、末尾追加で十分（objectToRow は名前ベース）
+  const toAdd = ['unit_price_basic', 'unit_price_fullday', 'unit_price_night', 'tax_rounding_mode']
+    .filter(h => !headers.includes(h));
+
+  if (toAdd.length > 0) {
+    let col = sheet.getLastColumn() + 1;
+    for (const h of toAdd) {
+      sheet.getRange(1, col).setValue(h);
+      Logger.log(`✓ M_Customers: ${h} を列${col}に追加`);
+      col++;
+    }
+  } else {
+    Logger.log('✓ M_Customers: 修正不要');
+  }
+}
+
+function _checkJobHeaders() {
+  const sheet = getSheet('T_Jobs');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log(`T_Jobs ヘッダー (${headers.length}列): ${headers.join(', ')}`);
+
+  const missing = ['is_damaged', 'is_uncollected', 'is_claimed']
+    .filter(h => !headers.includes(h));
+  if (missing.length > 0) {
+    Logger.log(`  ⚠️ 欠落列: ${missing.join(', ')}`);
+  }
+}
+
+function _fixJobHeaders() {
+  const sheet = getSheet('T_Jobs');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  const toAdd = ['is_damaged', 'is_uncollected', 'is_claimed']
+    .filter(h => !headers.includes(h));
+
+  if (toAdd.length > 0) {
+    let col = sheet.getLastColumn() + 1;
+    for (const h of toAdd) {
+      sheet.getRange(1, col).setValue(h);
+      Logger.log(`✓ T_Jobs: ${h} を列${col}に追加`);
+      col++;
+    }
+  } else {
+    Logger.log('✓ T_Jobs: 修正不要');
+  }
+}
+
+function _checkAssignmentHeaders() {
+  const sheet = getSheet('T_JobAssignments');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  Logger.log(`T_JobAssignments ヘッダー (${headers.length}列): ${headers.join(', ')}`);
+
+  if (!headers.includes('notes')) {
+    Logger.log('  ⚠️ notes 列が欠落');
+  }
+}
+
+function _fixAssignmentHeaders() {
+  const sheet = getSheet('T_JobAssignments');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (!headers.includes('notes')) {
+    const col = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col).setValue('notes');
+    Logger.log(`✓ T_JobAssignments: notes を列${col}に追加`);
+  } else {
+    Logger.log('✓ T_JobAssignments: 修正不要');
+  }
+}
+
+// ============================================================
+// 1-4: 空状態検証
 // ============================================================
 
 /**
