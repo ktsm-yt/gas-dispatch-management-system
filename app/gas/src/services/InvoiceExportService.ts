@@ -1611,8 +1611,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`PDF export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/pdf');
   },
@@ -1645,8 +1651,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`PDF export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/pdf');
   },
@@ -1661,8 +1673,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`Excel export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   },
