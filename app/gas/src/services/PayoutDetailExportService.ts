@@ -56,14 +56,18 @@ const PayoutDetailExportService = {
       throw new Error('確認済みまたは支払済の支払いのみ出力可能です（現在: ' + status + '）');
     }
 
-    // 2. 配置+Job情報取得
-    const assignmentsWithJobs = this._getAssignmentsWithJobInfo(payoutId);
+    // 2. スタッフ情報取得（wage_rate未設定時のフォールバック計算に必要）
+    const staffId = (payout as unknown as Record<string, unknown>).staff_id as string;
+    const staff = staffId ? StaffRepository.findById(staffId) : null;
+
+    // 3. 配置+Job情報取得
+    const assignmentsWithJobs = this._getAssignmentsWithJobInfo(payoutId, staff);
 
     if (assignmentsWithJobs.length > this.MAX_ROWS) {
       throw new Error('配置数が上限(' + this.MAX_ROWS + '件)を超えています: ' + assignmentsWithJobs.length + '件');
     }
 
-    // 3. テンプレートコピー
+    // 4. テンプレートコピー
     const templateId = PropertiesService.getScriptProperties().getProperty(this.TEMPLATE_KEY);
     if (!templateId) {
       throw new Error(
@@ -84,24 +88,25 @@ const PayoutDetailExportService = {
       const ss = SpreadsheetApp.openById(ssId);
       const sheet = ss.getSheets()[0];
 
-      // 4. ヘッダー情報書き込み
+      // 5. ヘッダー情報書き込み
       this._writeHeader(sheet, payout, staffName);
 
-      // 5. 明細行書き込み（Row 5〜）
+      // 6. 明細行書き込み（Row 5〜）
       const dataStartRow = 5; // Row 1: title, Row 2: company, Row 3: blank, Row 4: col headers, Row 5+: data
-      this._writeDetailRows(sheet, assignmentsWithJobs, dataStartRow);
+      const isWithholdingTarget = !!(staff && staff.withholding_tax_applicable);
+      const calculatedTaxTotal = this._writeDetailRows(sheet, assignmentsWithJobs, dataStartRow, isWithholdingTarget);
 
-      // 6. 合計行書き込み
-      this._writeSummaryRow(sheet, payout, assignmentsWithJobs.length, dataStartRow);
+      // 7. 合計行書き込み（日額テーブルで再計算した税額合計を渡す）
+      this._writeSummaryRow(sheet, payout, assignmentsWithJobs.length, dataStartRow, calculatedTaxTotal);
 
-      // 7. 罫線・列幅の書式設定
+      // 8. 罫線・列幅の書式設定
       this._applyTableFormatting(sheet, assignmentsWithJobs.length, dataStartRow);
 
-      // 8. xlsx変換
+      // 9. xlsx変換
       SpreadsheetApp.flush();
       const xlsxBlob = PayoutExportService._exportToXlsx(ssId);
 
-      // 9. Drive保存（支払明細サブフォルダ）
+      // 10. Drive保存（支払明細サブフォルダ）
       const folder = this._getOutputFolder();
       const addTimestamp = options.action === 'rename';
       const fileName = this._generateFileName(staffName, periodYm, { addTimestamp });
@@ -171,7 +176,7 @@ const PayoutDetailExportService = {
   /**
    * 配置+Job情報を結合取得（人工割反映後の単価を含む）
    */
-  _getAssignmentsWithJobInfo: function(payoutId: string): Array<{
+  _getAssignmentsWithJobInfo: function(payoutId: string, staff: Record<string, unknown> | null): Array<{
     work_date: string;
     site_name: string;
     start_time: string;
@@ -196,7 +201,9 @@ const PayoutDetailExportService = {
 
     const results = linkedAssignments.map(function(a) {
       const job = jobMap.get(a.job_id as string) || {} as Record<string, unknown>;
-      const wageRate = Number(a.wage_rate) || 0;
+      // calculateWage_ を使用: wage_rate未設定時にスタッフの日額レートにフォールバック
+      const payUnit = (a.pay_unit as string) || 'basic';
+      const wageRate = calculateWage_(a as any, staff || {} as any, payUnit);
 
       // 人工割係数を計算
       const requiredCount = Number(job.required_count) || 0;
@@ -292,9 +299,29 @@ const PayoutDetailExportService = {
       adjusted_wage_rate: number;
       transport_amount: number;
     }>,
-    dataStartRow: number
-  ): void {
-    if (assignments.length === 0) return;
+    dataStartRow: number,
+    isWithholdingTarget: boolean
+  ): number {
+    if (assignments.length === 0) return 0;
+
+    // 源泉徴収対象スタッフのみ日次税額を計算
+    const dailyTaxMap = new Map<string, number>();
+    let calculatedTaxTotal = 0;
+    if (isWithholdingTarget) {
+      const dailyWageMap = new Map<string, number>();
+      for (const a of assignments) {
+        const wd = a.work_date || '';
+        dailyWageMap.set(wd, (dailyWageMap.get(wd) || 0) + a.adjusted_wage_rate);
+      }
+      for (const [wd, dailyWage] of dailyWageMap) {
+        const tax = lookupDailyWithholdingTax(dailyWage);
+        dailyTaxMap.set(wd, tax);
+        calculatedTaxTotal += tax;
+      }
+    }
+
+    // 同日の最初の行にだけ税額を表示するためのSet
+    const taxShownForDate = new Set<string>();
 
     const rows = assignments.map(function(a) {
       // work_date: "2026-02-15" → "2/15"
@@ -309,6 +336,14 @@ const PayoutDetailExportService = {
       const unitLabel = PAY_UNIT_LABEL_MAP[a.pay_unit] || '式';
       const transport = a.transport_amount ? a.transport_amount : '';
 
+      // 同日最初の行にだけ日次源泉徴収税を表示
+      let taxCell: number | string = '';
+      const wd = a.work_date || '';
+      if (dailyTaxMap.has(wd) && !taxShownForDate.has(wd)) {
+        taxCell = dailyTaxMap.get(wd) || 0;
+        taxShownForDate.add(wd);
+      }
+
       return [
         dateStr,                // 作業日
         a.site_name,            // 案件名
@@ -321,14 +356,14 @@ const PayoutDetailExportService = {
         '',                     // 時間外（Phase 2）
         '',                     // 残業（Phase 2）
         transport,              // 移動
-        ''                      // 源泉徴収税（行レベルは空欄）
+        taxCell                 // 源泉徴収税（日次、同日最初の行のみ）
       ];
     });
 
     sheet.getRange(dataStartRow, 1, rows.length, 12).setValues(rows);
 
-    // 金額列の書式設定: 単価(F), 合計(G), 移動(K)
-    [6, 7, 11].forEach(function(col) {
+    // 金額列の書式設定: 単価(F), 合計(G), 移動(K), 源泉徴収税(L)
+    [6, 7, 11, 12].forEach(function(col) {
       sheet.getRange(dataStartRow, col, rows.length, 1).setNumberFormat('#,##0');
     });
 
@@ -339,6 +374,8 @@ const PayoutDetailExportService = {
         sheet.getRange(row, 6, 1, 2).setFontColor('#D97706').setFontWeight('bold');
       }
     });
+
+    return calculatedTaxTotal;
   },
 
   /**
@@ -348,7 +385,8 @@ const PayoutDetailExportService = {
     sheet: GoogleAppsScript.Spreadsheet.Sheet,
     payout: PayoutRecord,
     rowCount: number,
-    dataStartRow: number
+    dataStartRow: number,
+    calculatedTaxTotal: number
   ): void {
     const summaryRow = dataStartRow + rowCount + 1;
 
@@ -356,12 +394,13 @@ const PayoutDetailExportService = {
     const ninkuAmount = payout.ninku_adjustment_amount || 0;
     const adjustedBaseAmount = (payout.base_amount || 0) + ninkuAmount;
 
+    // 源泉徴収税: 日額テーブルで再計算した合計を使用（行レベル合計と一致させるため）
     const summaryData = [
       '合計', '', '', rowCount, '',
       '', adjustedBaseAmount,
       '', '', '',
       payout.transport_amount || 0,
-      payout.tax_amount || 0
+      calculatedTaxTotal
     ];
 
     sheet.getRange(summaryRow, 1, 1, 12).setValues([summaryData]);
