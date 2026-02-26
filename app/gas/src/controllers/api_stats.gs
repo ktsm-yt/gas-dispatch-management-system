@@ -18,7 +18,7 @@ function getDashboardStats(options = {}) {
   const requestId = generateRequestId();
 
   try {
-    // 認可チェック（viewer以上）
+    // 認可チェック（staff以上）
     const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(
