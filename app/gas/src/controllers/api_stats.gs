@@ -34,8 +34,9 @@ function getDashboardStats(options = {}) {
     return buildSuccessResponse(data, requestId);
 
   } catch (error) {
-    Logger.log(`getDashboardStats error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getDashboardStats error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -87,8 +88,9 @@ function getMonthlyStats(year, month) {
     }, requestId);
 
   } catch (error) {
-    Logger.log(`getMonthlyStats error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getMonthlyStats error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -122,8 +124,9 @@ function getYearlyStatsSummary(fiscalYear) {
     return buildSuccessResponse({ summary }, requestId);
 
   } catch (error) {
-    Logger.log(`getYearlyStatsSummary error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`getYearlyStatsSummary error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -169,7 +172,8 @@ function recalculateMonthlyStats(year, month) {
           requestId
         );
       }
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, result.error, {}, requestId);
+      Logger.log(`recalculateMonthlyStats service error: ${result.error}`);
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
     }
 
     return buildSuccessResponse({
@@ -178,8 +182,9 @@ function recalculateMonthlyStats(year, month) {
     }, requestId);
 
   } catch (error) {
-    Logger.log(`recalculateMonthlyStats error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`recalculateMonthlyStats error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -231,8 +236,9 @@ function finalizeMonthlyStats(year, month) {
     }, requestId);
 
   } catch (error) {
-    Logger.log(`finalizeMonthlyStats error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`finalizeMonthlyStats error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
 
@@ -263,7 +269,8 @@ function listAllStats() {
     }, requestId);
 
   } catch (error) {
-    Logger.log(`listAllStats error: ${error.message}`);
-    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, error.message, {}, requestId);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log(`listAllStats error: ${errMsg}`);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
 }
