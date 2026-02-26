@@ -194,11 +194,6 @@ const InvoiceExportService = {
 
       const { invoice, lines, customer } = this._extractInvoiceData(invoiceData as unknown as Record<string, unknown>);
 
-      // デバッグログ
-      console.log('=== Export Debug ===');
-      console.log('invoice_format:', invoice.invoice_format);
-      console.log('customer.include_cover_page:', (customer as unknown as Record<string, unknown>).include_cover_page);
-      console.log('customer keys:', Object.keys(customer).join(', '));
 
       // テンプレートIDの事前検証
       const templateValidation = this.validateTemplateConfig(String(invoice.invoice_format));
@@ -386,15 +381,10 @@ const InvoiceExportService = {
    */
   exportToExcel: function(invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, options: Record<string, unknown> = {}) {
     try {
-      // デバッグログ
-      console.log('=== exportToExcel Debug ===');
-      console.log('options:', JSON.stringify(options));
-      console.log('options.includeCoverPage:', options.includeCoverPage);
 
       // スプレッドシートを作成（Excel用：ページ分割なし、連続データ）
       // optionsをマージ（includeCoverPage等を保持）
       const mergedOptions = Object.assign({}, options, { forPdf: false });
-      console.log('mergedOptions:', JSON.stringify(mergedOptions));
       const sheetResult = this._createFilledSheet(invoice, lines, customer, company, mergedOptions);
       if (!sheetResult.success) {
         return sheetResult;
@@ -1140,12 +1130,6 @@ const InvoiceExportService = {
    * @param {Object} company - 自社データ
    */
   _populateAtagami: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
-    // === デバッグログ ===
-    console.log('=== _populateAtagami Debug ===');
-    console.log('invoice.issue_date:', invoice.issue_date);
-    console.log('invoice.invoice_number:', invoice.invoice_number);
-    console.log('invoice.due_date:', invoice.due_date);
-    console.log('invoice.total_amount:', invoice.total_amount);
 
     // データシートを取得（「データ」または「頭紙データ」を探す）
     const spreadsheet = sheet.getParent();
@@ -1184,14 +1168,12 @@ const InvoiceExportService = {
       const issueDateFormatted = `${parts[0]}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
       dataSheet.getRange('B2').setValue(invoice.issue_date);
       sheet.getRange('AO2').setValue(issueDateFormatted);  // 原本シートの値セルに直接書き込み
-      console.log('Writing issue_date:', issueDateFormatted);
     }
 
     // No
     if (invoice.invoice_number) {
       dataSheet.getRange('B3').setValue(invoice.invoice_number);
       sheet.getRange('AO3').setValue(invoice.invoice_number);  // 原本シートの値セルに直接書き込み
-      console.log('Writing invoice_number:', invoice.invoice_number);
     }
 
     // 支払期限 年/月/日
@@ -1212,7 +1194,6 @@ const InvoiceExportService = {
       sheet.getRange('H11').setValue(dueYear);
       sheet.getRange('L11').setValue(dueMonth);
       sheet.getRange('O11').setValue(dueDay);
-      console.log('Writing due_date:', dueYear, dueMonth, dueDay);
     }
 
     // 請求金額
@@ -1220,7 +1201,6 @@ const InvoiceExportService = {
     const totalAmountFormatted = totalAmount.toLocaleString();
     dataSheet.getRange('B7').setValue(totalAmount);
     sheet.getRange('I13').setValue(totalAmountFormatted);  // 原本シートの値セルに直接書き込み
-    console.log('Writing total_amount:', totalAmountFormatted);
 
     // === 自社情報（IMPORTRANGEはコピー時に権限問題があるため、GASから直接書き込み） ===
     // セルマッピング: AD12=会社名, AQ13=郵便番号, AF14=住所, AO15=TEL, AO16=FAX, AM17=登録番号
@@ -1328,7 +1308,6 @@ const InvoiceExportService = {
     // 行高さを一括設定
     this._batchSetRowHeights(sourceSheet, targetSheet, sourceStartRow, targetStartRow, sourceRowCount);
 
-    console.log(`バッチコピー完了: ${itemCount}アイテム (${sourceRowCount}行)`);
   },
 
   /**
@@ -1405,7 +1384,6 @@ const InvoiceExportService = {
     const fullRange = sheet.getRange(targetStartRow, 1, targetRowCount, columnsCount);
     fullRange.setBorder(null, null, null, null, null, false);
 
-    console.log(`書式を一括拡張: 行${targetStartRow} から ${targetRowCount}行`);
   },
 
   /**
@@ -1425,8 +1403,6 @@ const InvoiceExportService = {
     // 2. 明細シート: 行9（列ヘッダー）を凍結 + 残りのデータ + 合計行
     // → fzr=true で凍結行が各ページに自動繰り返し
 
-    console.log(`=== FORMAT2 2シート構成（改良版） ===`);
-    console.log(`明細行数: ${lines.length}`);
 
     // 1ページ目に入るデータ行数（控えめに設定）
     const FIRST_PAGE_DATA_ROWS = 27;
@@ -1441,8 +1417,6 @@ const InvoiceExportService = {
     const lastDataRowInSource = dataStartRow + ((lines.length - 1) * 2);
     const totalRowInSource = lastDataRowInSource + 2;
 
-    console.log(`表紙データ行: ${coverDataRows}, 明細データ行: ${detailDataRows}`);
-    console.log(`元シート合計行: ${totalRowInSource}`);
 
     // === 1. 表紙シートを作成 ===
     const coverSheet = spreadsheet.insertSheet('表紙');
@@ -1468,7 +1442,6 @@ const InvoiceExportService = {
     }
     const coverLastRow = 9 + coverDataRows * 2;
 
-    console.log(`表紙シート作成完了（バッチ処理）: ${coverLastRow}行`);
 
     // === 2. 明細シートを作成（残りデータがある場合のみ） ===
     if (detailDataRows > 0) {
@@ -1500,7 +1473,6 @@ const InvoiceExportService = {
       totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
       detailSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
 
-      console.log(`明細シート作成完了（バッチ処理）: ${targetTotalRow}行（合計行含む）`);
     } else {
       // データが1ページに収まる場合は表紙に合計行を追加
       const targetTotalRow = coverLastRow + 1;  // 最終データ行の直下
@@ -1509,13 +1481,11 @@ const InvoiceExportService = {
       totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
       coverSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
 
-      console.log(`明細シート不要（1ページで収まる、合計行含む）`);
     }
 
     // データシートを非表示
     dataSheet.hideSheet();
 
-    console.log(`2シート構成完了`);
   },
 
   /**
@@ -1530,8 +1500,6 @@ const InvoiceExportService = {
    * @param {Object} invoice - 請求書データ（subtotal等を参照）
    */
   _createPrintSheetsForFormat1: function(spreadsheet: GoogleAppsScript.Spreadsheet.Spreadsheet, dataSheet: GoogleAppsScript.Spreadsheet.Sheet, lines: Record<string, unknown>[], invoice: Record<string, unknown>) {
-    console.log(`=== FORMAT1 2シート構成 ===`);
-    console.log(`明細行数: ${lines.length}`);
 
     const FIRST_PAGE_DATA_ROWS = 27;  // 1ページ目に入るデータ行数
     const dataStartRow = 10;
@@ -1543,8 +1511,6 @@ const InvoiceExportService = {
     const lastDataRowInSource = dataStartRow + ((lines.length - 1) * 2);
     const totalRowInSource = lastDataRowInSource + 2;
 
-    console.log(`表紙データ行: ${coverDataRows}, 明細データ行: ${detailDataRows}`);
-    console.log(`元シート合計行: ${totalRowInSource}`);
 
     // === 1. 表紙シートを作成 ===
     const coverSheet = spreadsheet.insertSheet('表紙');
@@ -1570,7 +1536,6 @@ const InvoiceExportService = {
     }
     const coverLastRow = 9 + coverDataRows * 2;
 
-    console.log(`表紙シート作成完了（バッチ処理）: ${coverLastRow}行`);
 
     // === 2. 明細シートを作成（残りデータがある場合のみ）===
     if (detailDataRows > 0) {
@@ -1602,7 +1567,6 @@ const InvoiceExportService = {
       totalRange.copyTo(detailSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
       detailSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
 
-      console.log(`明細シート作成完了: ${targetTotalRow}行（合計行含む）`);
     } else {
       // データが1ページに収まる場合は表紙に合計行を追加
       const targetTotalRow = coverLastRow + 1;  // 最終データ行の直下
@@ -1611,13 +1575,11 @@ const InvoiceExportService = {
       totalRange.copyTo(coverSheet.getRange(targetTotalRow, 1), SpreadsheetApp.CopyPasteType.PASTE_FORMAT, false);
       coverSheet.setRowHeight(targetTotalRow, dataSheet.getRowHeight(totalRowInSource));
 
-      console.log(`表紙シート作成完了: ${targetTotalRow}行（合計行含む）`);
     }
 
     // データシートを非表示
     dataSheet.hideSheet();
 
-    console.log(`FORMAT1 2シート構成完了`);
   },
 
   /**
@@ -1649,8 +1611,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`PDF export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/pdf');
   },
@@ -1683,8 +1651,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`PDF export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/pdf');
   },
@@ -1699,8 +1673,14 @@ const InvoiceExportService = {
 
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error(`Excel export failed: HTTP ${statusCode}`);
+    }
 
     return response.getBlob().setContentType('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   },
