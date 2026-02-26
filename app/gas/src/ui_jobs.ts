@@ -24,10 +24,6 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-function submitJob(formData: Record<string, unknown>): { ok: boolean } {
-  addJob(formData);
-  return { ok: true };
-}
 
 function include(filename: string): string {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();

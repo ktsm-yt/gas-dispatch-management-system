@@ -185,7 +185,7 @@ function testValidateJobStatusTransition() {
     ['problem', 'cancelled']
   ];
 
-  for (var i = 0; i < validTransitions.length; i++) {
+  for (let i = 0; i < validTransitions.length; i++) {
     var t = validTransitions[i];
     assertNoThrow(
       function() { validateJobStatusTransition_(t[0], t[1]); },
@@ -206,7 +206,7 @@ function testValidateJobStatusTransition() {
     ['cancelled', 'hold']
   ];
 
-  for (var j = 0; j < invalidTransitions.length; j++) {
+  for (let j = 0; j < invalidTransitions.length; j++) {
     var inv = invalidTransitions[j];
     assertThrows(
       function() { validateJobStatusTransition_(inv[0], inv[1]); },
@@ -254,7 +254,7 @@ function testValidateInvoiceStatusTransition() {
     ['hold', 'unsent'], ['hold', 'sent'], ['hold', 'unpaid'], ['hold', 'paid']
   ];
 
-  for (var i = 0; i < valid.length; i++) {
+  for (let i = 0; i < valid.length; i++) {
     var v = valid[i];
     assertNoThrow(
       function() { validateInvoiceStatusTransition_(v[0], v[1]); },
