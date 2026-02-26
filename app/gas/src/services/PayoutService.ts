@@ -182,8 +182,8 @@ const PayoutService = {
     // 人工割: 過剰配置時の交通費キャップを適用
     const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
 
-    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用。交通費は対象外）
-    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
+    // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
+    const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, assignmentCountByJob);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -1119,8 +1119,8 @@ const PayoutService = {
       // 人工割計算（CR-029）
       const ninku = this._calculateNinkuAdjustments(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
 
-      // 源泉徴収税を計算（baseAmount + 人工割調整額に対して適用）
-      const taxAmount = this._calculateWithholdingTax(staff, calcResult.baseAmount + ninku.totalAdjustment);
+      // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
+      const taxAmount = this._calculateDailyWithholdingTaxTotal(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
 
       const dates = assignmentsWithJob.map(a => a.work_date as string).filter(d => d);
       const periodStart = dates.length > 0 ? dates[0] : endDate;
@@ -1250,8 +1250,8 @@ const PayoutService = {
     // 人工割: 過剰配置時の交通費キャップを適用
     const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
 
-    // 源泉徴収税を計算（baseAmount + 人工割調整額 に対して適用。交通費は対象外）
-    const taxAmount = this._calculateWithholdingTax(staff, result.baseAmount + ninku.totalAdjustment);
+    // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
+    const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -1472,22 +1472,49 @@ const PayoutService = {
   },
 
   /**
-   * 源泉徴収税を計算
+   * 源泉徴収税を日額テーブル（甲欄・扶養0人）で計算
+   * work_date 単位で日給（人工割調整込み）を合算し、日ごとにテーブル参照して月合計を返す。
+   * @param staffAssignments - 対象スタッフの配置一覧
    * @param staff - スタッフ情報
-   * @param baseAmount - 基本給（人工割調整額を含む）
-   * @returns 源泉徴収税額
+   * @param jobMap - job_id → job のマップ
+   * @param assignmentCountByJob - job_id → 配置人数のマップ
+   * @returns 源泉徴収税額の月合計
    */
-  _calculateWithholdingTax: function(staff: Record<string, unknown> | null, baseAmount: number): number {
+  _calculateDailyWithholdingTaxTotal: function(
+    staffAssignments: Record<string, unknown>[],
+    staff: Record<string, unknown> | null,
+    jobMap: Map<string, any>,
+    assignmentCountByJob: Map<string, number>
+  ): number {
     if (!staff) return 0;
+    if (!staff.withholding_tax_applicable) return 0;
+    if (!staffAssignments || staffAssignments.length === 0) return 0;
 
-    // withholding_tax_applicable が true の場合のみ源泉徴収
-    // TODO: regular/studentは日額表乙欄で計算する必要あり（現在の10.21%は報酬向け税率で不正確）
-    const isApplicable = staff.withholding_tax_applicable;
-    if (!isApplicable) return 0;
+    // Step 1: work_date 単位で (wage + 人工割調整額) を集計
+    const dailyTotals = new Map<string, number>();
+    for (const asg of staffAssignments) {
+      const jobId = asg.job_id as string;
+      const job = jobMap.get(jobId);
+      const workDate = (job?.work_date as string) || (asg.work_date as string) || '';
 
-    // 源泉徴収税率 10.21%（復興特別所得税込み）
-    const WITHHOLDING_TAX_RATE = 0.1021;
-    return Math.floor(baseAmount * WITHHOLDING_TAX_RATE);
+      // 賃金を計算
+      const wage = calculateWage_(asg as any, staff as any, (asg.pay_unit as string) || 'basic');
+
+      // 人工割係数による調整額
+      const requiredCount = Number(job?.required_count) || 0;
+      const actualCount = assignmentCountByJob.get(jobId) || 0;
+      const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+      const adjustment = coefficient !== 1.0 ? calculateNinkuAdjustment_(wage, coefficient) : 0;
+
+      dailyTotals.set(workDate, (dailyTotals.get(workDate) || 0) + wage + adjustment);
+    }
+
+    // Step 2: 日ごとにテーブル参照して税額を合算
+    let total = 0;
+    for (const [, dailyAmount] of dailyTotals) {
+      total += lookupDailyWithholdingTax(dailyAmount);
+    }
+    return total;
   },
 
   /**

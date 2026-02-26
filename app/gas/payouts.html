@@ -318,7 +318,7 @@
     /* 確認モーダルは他モーダルより前面に表示 */
     #confirmModal.active { z-index: 10001; }
     .modal { max-width: 400px; width: 90%; }
-    .modal.modal-lg { max-width: 700px; }
+    .modal.modal-lg { max-width: 850px; }
     .modal-header h2 { font-size: 16px; font-weight: 600; }
     .modal-body p { margin-bottom: var(--spacing-sm); }
 
@@ -1083,6 +1083,7 @@
           transportAmount: payout.transport_amount,
           adjustmentAmount: payout.adjustment_amount || 0,
           ninkuAdjustmentAmount: payout.ninku_adjustment_amount || 0,
+          taxAmount: payout.tax_amount || 0,
           totalAmount: payout.total_amount,
           periodStart: payout.period_start,
           periodEnd: payout.period_end,
@@ -3112,6 +3113,11 @@
                 <div class="label" style="color:#D97706">人工割調整</div>
                 <div class="value amount" style="color:#D97706">${data.ninkuAdjustmentAmount > 0 ? '+' : ''}${formatCurrency(data.ninkuAdjustmentAmount)}</div>
               </div>` : ''}
+              ${(data.taxAmount) ? `
+              <div class="summary-item">
+                <div class="label" style="color:#E53E3E">源泉徴収税</div>
+                <div class="value amount" style="color:#E53E3E">-${formatCurrency(data.taxAmount)}</div>
+              </div>` : ''}
               <div class="summary-item">
                 <div class="label">合計</div>
                 <div class="value amount" id="modalTotalAmount">${totalText}</div>
@@ -3203,10 +3209,14 @@
           '支払済にする',
           'btn-primary',
           () => {
+            const payBtn = document.getElementById('modalPayBtn');
+            payBtn.disabled = true;
+            payBtn.textContent = '処理中...';
             showLoading('支払処理中...');
             google.script.run
               .withSuccessHandler(result => {
                 hideLoading();
+                payBtn.disabled = false;
                 if (result.ok) {
                   showToast('success', '支払済にしました');
                   closePayoutModal();
@@ -3224,6 +3234,8 @@
               })
               .withFailureHandler(err => {
                 hideLoading();
+                payBtn.disabled = false;
+                payBtn.textContent = '支払済にする';
                 showToast('error', err.message);
               })
               .payConfirmedPayout(modalPayoutId, {
@@ -3245,10 +3257,14 @@
         '支払済にする',
         'btn-primary',
         () => {
+          const payBtn = document.getElementById('modalPayBtn');
+          payBtn.disabled = true;
+          payBtn.textContent = '処理中...';
           showLoading('支払処理中...');
           google.script.run
             .withSuccessHandler(result => {
               hideLoading();
+              payBtn.disabled = false;
               if (result.ok) {
                 showToast('success', '支払済にしました');
                 closePayoutModal();
@@ -3266,6 +3282,8 @@
             })
             .withFailureHandler(err => {
               hideLoading();
+              payBtn.disabled = false;
+              payBtn.textContent = '支払済にする';
               showToast('error', err.message);
             })
             .markAsPaid(staffId, endDate, {
@@ -3302,10 +3320,14 @@
         '確認済みにする',
         'btn-primary',
         () => {
+          const payBtn = document.getElementById('modalPayBtn');
+          payBtn.disabled = true;
+          payBtn.textContent = '確認中...';
           showLoading('確認処理中...');
           google.script.run
             .withSuccessHandler(result => {
               hideLoading();
+              payBtn.disabled = false;
               if (result.ok) {
                 showToast('success', '確認済みにしました');
                 closePayoutModal();
@@ -3320,6 +3342,8 @@
             })
             .withFailureHandler(err => {
               hideLoading();
+              payBtn.disabled = false;
+              payBtn.textContent = '確認済みにする';
               showToast('error', err.message);
             })
             .confirmPayout(staffId, endDate, {

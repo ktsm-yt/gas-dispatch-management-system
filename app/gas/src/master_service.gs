@@ -502,7 +502,7 @@ function validateStaff(data) {
  */
 function saveStaff(staff, expectedUpdatedAt) {
   requireManager();
-  // TODO: regular/studentの源泉徴収は日額表乙欄で実装予定（自動設定は保留）
+  // NOTE: regular/studentの源泉徴収は日額表甲欄・扶養0人で実装済み（WithholdingTaxTable.ts）
   const result = saveMasterRecord(
     SHEET_NAMES.STAFF,
     ID_COLUMNS.STAFF,
