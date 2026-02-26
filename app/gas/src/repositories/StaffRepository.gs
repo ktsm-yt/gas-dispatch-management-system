@@ -45,7 +45,7 @@ const StaffRepository = {
    * スタッフを検索
    * @param {Object} query - 検索条件
    * @param {boolean} query.is_active - アクティブのみ（デフォルト: true）
-   * @param {string} query.staff_type - スタッフ種別（'internal', 'subcontract'）
+   * @param {string} query.staff_type - スタッフ種別（'regular', 'student', 'sole_proprietor', 'subcontract'）
    * @param {string} query.subcontractor_id - 外注先ID
    * @param {number} query.limit - 取得件数上限
    * @returns {Object[]} スタッフ配列
