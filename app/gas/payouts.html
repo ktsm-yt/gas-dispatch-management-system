@@ -933,6 +933,9 @@
       PageCache.clearByPrefix('payouts_unpaid');
     }
 
+    // 世代トークン: 連続クリック時に最新のrevalidateのみがclearSessionを実行
+    let revalidateGeneration = 0;
+
     /**
      * キャッシュから日付フィルターを復元（init時に呼び出し）
      * @returns {boolean} 復元できたかどうか
@@ -1565,9 +1568,17 @@
     }
 
     // 未払一覧をバックグラウンドで更新（差分更新対応）
-    function refreshUnpaidListInBackground(endDate) {
+    function refreshUnpaidListInBackground(endDate, options) {
+      options = options || {};
       const cached = loadFromSession(endDate);
       const lastSyncTimestamp = cached?.syncTimestamp;
+
+      // generation完了時のclearSession実行ヘルパー
+      function finalizeClear() {
+        if (options.generation != null && options.generation === revalidateGeneration) {
+          clearSession();
+        }
+      }
 
       // 差分更新を試みる（lastSyncTimestampがある場合）
       if (lastSyncTimestamp) {
@@ -1576,15 +1587,16 @@
           .withSuccessHandler(result => {
             if (!result.ok) {
               console.log('[SWR] Delta update failed, falling back to full refresh');
-              refreshUnpaidListFull(endDate);
+              refreshUnpaidListFull(endDate, options);
               return;
             }
 
             const data = result.data;
 
-            // 差分が空なら何もしない
+            // 差分が空なら何もしない（ただしclearSessionは実行）
             if (data.isDelta && data.changedStaffIds.length === 0 && data.removedStaffIds.length === 0) {
               console.log('[SWR] No changes detected');
+              finalizeClear();
               return;
             }
 
@@ -1606,26 +1618,42 @@
                 });
 
                 renderUnpaidStaffList(mergedData, confirmedData);
-                showToast('info', `データを更新しました（${data.changedStaffIds.length}件変更）`);
+
+                // reason由来のトースト抑制: paid/confirm操作で自分のアクションのみなら表示しない
+                const isSelfAction = ['paid', 'confirm'].includes(options.reason);
+                const changedCount = data.changedStaffIds.length;
+                if (!isSelfAction || changedCount > 1) {
+                  showToast('info', `データを更新しました（${changedCount}件変更）`);
+                }
               } else {
                 // 差分ではない場合（フォールバック）
-                refreshUnpaidListFull(endDate);
+                refreshUnpaidListFull(endDate, options);
+                return; // finalizeClearはfullRefresh側で実行
               }
             }
+            finalizeClear();
           })
           .withFailureHandler(() => {
             console.log('[SWR] Delta API not available, falling back to full refresh');
-            refreshUnpaidListFull(endDate);
+            refreshUnpaidListFull(endDate, options);
           })
           .getUnpaidStaffListDelta(endDate, lastSyncTimestamp);
       } else {
         // lastSyncTimestampがない場合は全件取得
-        refreshUnpaidListFull(endDate);
+        refreshUnpaidListFull(endDate, options);
       }
     }
 
     // 未払一覧を全件取得（フォールバック用）
-    function refreshUnpaidListFull(endDate) {
+    function refreshUnpaidListFull(endDate, options) {
+      options = options || {};
+
+      function finalizeClear() {
+        if (options.generation != null && options.generation === revalidateGeneration) {
+          clearSession();
+        }
+      }
+
       google.script.run
         .withSuccessHandler(result => {
           if (currentUnpaidQuery && currentUnpaidQuery.endDate === endDate && !currentUnpaidQuery.staffId) {
@@ -1651,12 +1679,20 @@
               // 差分があればUIを更新
               if (hasChanged) {
                 renderUnpaidStaffList(unpaidData, confirmedData);
-                showToast('info', 'データを更新しました');
+                // reason由来のトースト抑制
+                const isSelfAction = ['paid', 'confirm'].includes(options.reason);
+                if (!isSelfAction) {
+                  showToast('info', 'データを更新しました');
+                }
               }
             }
           }
+          finalizeClear();
         })
-        .withFailureHandler(() => { /* バックグラウンドなのでエラーは無視 */ })
+        .withFailureHandler(() => {
+          // 失敗時もclearSessionを実行（staleキャッシュ防止）
+          finalizeClear();
+        })
         .getUnpaidStaffList(endDate);
     }
 
@@ -3528,9 +3564,10 @@
       }
 
       if (currentUnpaidQuery && currentUnpaidQuery.endDate === currentEndDate && !currentUnpaidQuery.staffId) {
-        console.log(`[SWR] Status changed (${reason}) - scheduling background revalidate`);
-        clearSession();
-        setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
+        const gen = ++revalidateGeneration;
+        console.log(`[SWR] Status changed (${reason}) - scheduling background revalidate (gen=${gen})`);
+        // clearSession()を呼ばない → 旧キャッシュを維持してモーダル等で利用可能にする
+        setTimeout(() => refreshUnpaidListInBackground(currentEndDate, { reason, generation: gen }), 500);
         return;
       }
 
