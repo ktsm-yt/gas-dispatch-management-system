@@ -12,11 +12,11 @@
  * - T_Invoices（請求）
  * - T_InvoiceLines（請求明細）
  * - T_Payouts（支払）
+ * - T_AuditLog（監査証跡）
  *
  * アーカイブ対象外（永続保持）:
  * - マスターテーブル（M_*）
  * - T_MonthlyStats（売上分析用）
- * - T_AuditLog（監査証跡）
  */
 
 const ArchiveService = {
@@ -28,7 +28,8 @@ const ArchiveService = {
     { name: 'T_JobAssignments', foreignKey: 'job_id', parentTable: 'T_Jobs' },
     { name: 'T_Invoices', dateColumn: 'issue_date', fiscalYearColumn: 'billing_year', fiscalMonthColumn: 'billing_month' },
     { name: 'T_InvoiceLines', dateColumn: 'work_date' },
-    { name: 'T_Payouts', dateColumn: 'period_start' }
+    { name: 'T_Payouts', dateColumn: 'period_start' },
+    { name: 'T_AuditLog', dateColumn: 'timestamp' }
   ],
 
   // アーカイブステップ定義
@@ -41,6 +42,7 @@ const ArchiveService = {
     'archive_T_Invoices',
     'archive_T_InvoiceLines',
     'archive_T_Payouts',
+    'archive_T_AuditLog',
     'send_notification',
     'cleanup'
   ],
@@ -145,6 +147,7 @@ const ArchiveService = {
       case 'archive_T_Invoices':
       case 'archive_T_InvoiceLines':
       case 'archive_T_Payouts':
+      case 'archive_T_AuditLog':
         // テーブルアーカイブ
         const tableName = stepName.replace('archive_', '');
         const tableConfig = this.ARCHIVE_TABLES.find(t => t.name === tableName);
