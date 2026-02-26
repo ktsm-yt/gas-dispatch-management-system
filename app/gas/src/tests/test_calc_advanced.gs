@@ -19,8 +19,12 @@ function runCalcAdvancedTests() {
     testCalculateExpense,
     testCalculateInvoiceForAtagami,
     testCalculateMonthlyPayout,
-    testWithholdingTax,
-    testInvoiceCalculateTotals
+    testLookupDailyWithholdingTax,
+    testInvoiceCalculateTotals,
+    testCalculateTaxEdgeCases,
+    testNormalizeTaxRate,
+    testGetSubcontractorRateByUnit,
+    testNinkuCoefficientAndAdjustment
   ];
 
   var passed = 0;
@@ -85,7 +89,7 @@ function testGetDailyRateByJobType() {
   var cases = [
     { jobType: 'tobi', expected: 15000, label: '鳶' },
     { jobType: 'age', expected: 12000, label: '揚げ' },
-    { jobType: 'tobiage', expected: Math.floor(15000 * 1.5), label: '鳶揚げ (tobi×1.5)' },
+    { jobType: 'tobiage', expected: 22500, label: '鳶揚げ (tobi×1.5=22500)' },
     { jobType: 'half', expected: 8000, label: 'half' },
     { jobType: 'halfday', expected: 8000, label: 'halfday' },
     { jobType: 'basic', expected: 14000, label: 'basic' },
@@ -114,6 +118,18 @@ function testGetDailyRateByJobType() {
   // tobiage: tobi未設定 → 0
   var staffNoTobi = { daily_rate_age: 12000 };
   assertEqual(getDailyRateByJobType_(staffNoTobi, 'tobiage'), 0, 'tobiage but tobi=0 → 0');
+
+  // tobiage奇数端数: tobi=15001 → floor(15001*1.5)=floor(22501.5)=22501
+  var staffOddTobi = { daily_rate_tobi: 15001, daily_rate_basic: 14000 };
+  assertEqual(getDailyRateByJobType_(staffOddTobi, 'tobiage'), 22501, 'tobiage奇数端数: floor(22501.5)=22501');
+
+  // tobiage最小: tobi=1 → floor(1*1.5)=floor(1.5)=1
+  var staffMinTobi = { daily_rate_tobi: 1, daily_rate_basic: 14000 };
+  assertEqual(getDailyRateByJobType_(staffMinTobi, 'tobiage'), 1, 'tobiage最小: floor(1.5)=1');
+
+  // am/pm → getDailyRateByJobTypeではbasic fallback（halfではない）
+  assertEqual(getDailyRateByJobType_(staff, 'am'), 14000, 'am → basic fallback');
+  assertEqual(getDailyRateByJobType_(staff, 'pm'), 14000, 'pm → basic fallback');
 }
 
 // ============================================
@@ -179,7 +195,12 @@ function testCalculateWage() {
     // half unit → multiplier 0.5
     { asg: { wage_rate: null, pay_unit: 'half' }, expected: 0, label: 'half (rate_half未設定) → 0' },
     { asg: { wage_rate: 20000, pay_unit: 'half' }, expected: 10000, label: 'half + 手動単価 → 半額' },
-    { asg: { wage_rate: 20000, pay_unit: 'halfday' }, expected: 10000, label: 'halfday + 手動単価 → 半額' }
+    { asg: { wage_rate: 20000, pay_unit: 'halfday' }, expected: 10000, label: 'halfday + 手動単価 → 半額' },
+    // am/pm: wage_rate=null → getDailyRateByJobType_('am')→basic fallback=14000, ×0.5=7000
+    { asg: { wage_rate: null, pay_unit: 'am' }, expected: 7000, label: 'am + null wage → basic×0.5=7000' },
+    { asg: { wage_rate: null, pay_unit: 'pm' }, expected: 7000, label: 'pm + null wage → basic×0.5=7000' },
+    // am/pm: wage_rate指定あり → override × 0.5
+    { asg: { wage_rate: 20000, pay_unit: 'am' }, expected: 10000, label: 'am + 手動単価 → 20000×0.5=10000' }
   ];
 
   for (var i = 0; i < cases.length; i++) {
@@ -372,4 +393,175 @@ function testInvoiceCalculateTotals() {
   var result5 = InvoiceService._calculateTotals(lines5, 0.10, 0, 'format1', 'ceil');
   // tax = ceil(10001 * 0.10) = ceil(1000.1) = 1001
   assertEqual(result5.taxAmount, 1001, 'ceil: 税額切り上げ');
+
+  // round rounding mode
+  var lines6 = [{ amount: 10001, item_name: '工事' }];
+  var result6 = InvoiceService._calculateTotals(lines6, 0.10, 0, 'format1', 'round');
+  // tax = round(10001 * 0.10) = round(1000.1) = 1000
+  assertEqual(result6.taxAmount, 1000, 'round: 税額四捨五入');
+}
+
+// ============================================
+// calculateTaxIncluded_ / calculateTaxExcluded_ エッジケース
+// ============================================
+
+function testCalculateTaxEdgeCases() {
+  // --- calculateTaxIncluded_ ---
+  // null/NaN/zero
+  assertEqual(calculateTaxIncluded_(null, 0.10), 0, 'taxIncl: null → 0');
+  assertEqual(calculateTaxIncluded_(NaN, 0.10), 0, 'taxIncl: NaN → 0');
+  assertEqual(calculateTaxIncluded_(0, 0.10), 0, 'taxIncl: 0 → 0');
+
+  // 文字列rate → normalizeTaxRate_ で正規化
+  assertEqual(calculateTaxIncluded_(10000, '10'), 11000, 'taxIncl: 文字列rate "10" → 10%');
+
+  // null rate → デフォルト10%
+  assertEqual(calculateTaxIncluded_(10000, null), 11000, 'taxIncl: null rate → 10%');
+
+  // round mode
+  assertEqual(calculateTaxIncluded_(10001, 0.10, 'round'), 11001, 'taxIncl: round(11001.1)=11001');
+
+  // 負数: floor(-11000)=-11000
+  assertEqual(calculateTaxIncluded_(-10000, 0.10), -11000, 'taxIncl: 負数 -10000 → floor(-11000)=-11000');
+
+  // 負数の罠: floor(-11001.1)=-11002
+  assertEqual(calculateTaxIncluded_(-10001, 0.10), -11002, 'taxIncl: 負数罠 floor(-11001.1)=-11002');
+
+  // --- calculateTaxExcluded_ ---
+  // null/zero
+  assertEqual(calculateTaxExcluded_(null, 0.10), 0, 'taxExcl: null → 0');
+  assertEqual(calculateTaxExcluded_(0, 0.10), 0, 'taxExcl: 0 → 0');
+
+  // 浮動小数点: 1/1.1=0.909... → floor=0
+  assertEqual(calculateTaxExcluded_(1, 0.10, 'floor'), 0, 'taxExcl: 1/1.1 → floor=0');
+
+  // round mode: 11001/1.1=10000.909... → round=10001
+  assertEqual(calculateTaxExcluded_(11001, 0.10, 'round'), 10001, 'taxExcl: round(10000.909)=10001');
+
+  // 負数逆算: -11000/1.1=-10000 → floor=-10000
+  assertEqual(calculateTaxExcluded_(-11000, 0.10), -10000, 'taxExcl: 負数逆算=-10000');
+
+  // NaN → 0 (calculateTaxIncluded_と対称)
+  assertEqual(calculateTaxExcluded_(NaN, 0.10), 0, 'taxExcl: NaN → 0');
+}
+
+// ============================================
+// normalizeTaxRate_
+// ============================================
+
+function testNormalizeTaxRate() {
+  var cases = [
+    { input: 0.10, expected: 0.10, label: '0.10 → そのまま' },
+    { input: 10, expected: 0.10, label: '10 → 0.10 (>=1 → /100)' },
+    { input: 1, expected: 0.01, label: '1 → 0.01 (1>=1 なので1%扱い)' },
+    { input: 0.99, expected: 0.99, label: '0.99 → そのまま (<1)' },
+    { input: 100, expected: 1.0, label: '100 → 1.0 (100%)' },
+    { input: '', expected: 0.10, label: '空文字 → デフォルト' },
+    { input: null, expected: 0.10, label: 'null → デフォルト' },
+    { input: 'abc', expected: 0.10, label: "'abc' → NaN → デフォルト" },
+    { input: '10', expected: 0.10, label: "'10' → 文字列数値 → 0.10" }
+  ];
+
+  for (var i = 0; i < cases.length; i++) {
+    var c = cases[i];
+    var result = normalizeTaxRate_(c.input);
+    // 浮動小数点比較: 差が1e-10未満ならOK
+    if (Math.abs(result - c.expected) > 1e-10) {
+      throw new Error(c.label + ': expected ' + c.expected + ' but got ' + result);
+    }
+  }
+}
+
+// ============================================
+// getSubcontractorRateByUnit_
+// ============================================
+
+function testGetSubcontractorRateByUnit() {
+  var sub = { basic_rate: 15000, half_day_rate: 8000, full_day_rate: 18000 };
+
+  var cases = [
+    { unit: 'half', expected: 8000, label: 'half → half_day_rate' },
+    { unit: 'halfday', expected: 8000, label: 'halfday → half_day_rate' },
+    { unit: 'am', expected: 8000, label: 'am → half_day_rate' },
+    { unit: 'pm', expected: 8000, label: 'pm → half_day_rate' },
+    { unit: 'full', expected: 18000, label: 'full → full_day_rate' },
+    { unit: 'fullday', expected: 18000, label: 'fullday → full_day_rate' },
+    { unit: '', expected: 15000, label: '空文字 → basic_rate' },
+    { unit: 'tobi', expected: 15000, label: 'unknown(tobi) → basic_rate' }
+  ];
+
+  for (var i = 0; i < cases.length; i++) {
+    var c = cases[i];
+    assertEqual(getSubcontractorRateByUnit_(sub, c.unit), c.expected, c.label);
+  }
+
+  // fallback: half未設定 → basic_rate
+  var subNoHalf = { basic_rate: 15000 };
+  assertEqual(getSubcontractorRateByUnit_(subNoHalf, 'half'), 15000, 'half未設定 → basic fallback');
+  assertEqual(getSubcontractorRateByUnit_(subNoHalf, 'full'), 15000, 'full未設定 → basic fallback');
+
+  // fallback: basic未設定 → full_day_rate
+  var subNoBasic = { full_day_rate: 18000 };
+  assertEqual(getSubcontractorRateByUnit_(subNoBasic, ''), 18000, 'basic未設定 → full_day_rate fallback');
+
+  // 全未定義 → 0
+  assertEqual(getSubcontractorRateByUnit_({}, 'half'), 0, '全未定義 → 0');
+
+  // null subcontractor → TypeErrorまたは0（実装のガード確認）
+  try {
+    var nullResult = getSubcontractorRateByUnit_(null, 'half');
+    // ガードがある場合: 0を期待
+    assertEqual(nullResult, 0, 'null subcontractor → 0');
+  } catch (e) {
+    // ガードがない場合: TypeErrorが発生することを確認
+    if (!(e instanceof TypeError)) {
+      throw new Error('null subcontractor: TypeError以外のエラー: ' + e.message);
+    }
+    // TypeError は期待通り — null入力でクラッシュすることを文書化
+  }
+}
+
+// ============================================
+// calculateNinkuCoefficient_ / calculateNinkuAdjustment_
+// ============================================
+
+function testNinkuCoefficientAndAdjustment() {
+  // --- 係数テスト ---
+  var coeffCases = [
+    { req: 3, act: 2, expected: 1.5, label: '不足配置 3/2=1.5' },
+    { req: 3, act: 4, expected: 0.7, label: '過剰配置 floor(3/4*10)/10=0.7' },
+    { req: 3, act: 3, expected: 1.0, label: '適正配置 → 1.0' },
+    { req: 3, act: 7, expected: 0.4, label: 'floor(3/7*10)/10=0.4' },
+    { req: 1, act: 3, expected: 0.3, label: 'floor(1/3*10)/10=0.3' },
+    { req: 2, act: 3, expected: 0.6, label: 'floor(2/3*10)/10=0.6' },
+    { req: 0, act: 0, expected: 1.0, label: 'ゼロガード 0/0 → 1.0' },
+    { req: 5, act: 0, expected: 1.0, label: 'actual=0ガード → 1.0' },
+    { req: 0, act: 5, expected: 1.0, label: 'required=0ガード → 1.0' },
+    { req: 10, act: 1, expected: 10.0, label: '極端な不足 10/1=10.0' },
+    { req: null, act: 3, expected: 1.0, label: 'null required → 0 → ガード → 1.0' },
+    { req: 3, act: null, expected: 1.0, label: 'null actual → 0 → ガード → 1.0' },
+    { req: 3, act: undefined, expected: 1.0, label: 'undefined actual → 0 → ガード → 1.0' }
+  ];
+
+  for (var i = 0; i < coeffCases.length; i++) {
+    var c = coeffCases[i];
+    var result = calculateNinkuCoefficient_(c.req, c.act);
+    if (Math.abs(result - c.expected) > 1e-10) {
+      throw new Error(c.label + ': expected ' + c.expected + ' but got ' + result);
+    }
+  }
+
+  // --- 調整額テスト ---
+  var adjCases = [
+    { wage: 15000, coeff: 0.6, expected: -6000, label: 'floor(9000)-15000=-6000' },
+    { wage: 15000, coeff: 1.5, expected: 7500, label: 'floor(22500)-15000=7500' },
+    { wage: 15001, coeff: 1.5, expected: 7500, label: 'floor(22501.5)=22501, 22501-15001=7500' },
+    { wage: 15000, coeff: 1.0, expected: 0, label: '係数1.0 → 調整なし' },
+    { wage: 0, coeff: 0.6, expected: 0, label: 'floor(0)-0=0' }
+  ];
+
+  for (var i = 0; i < adjCases.length; i++) {
+    var c = adjCases[i];
+    assertEqual(calculateNinkuAdjustment_(c.wage, c.coeff), c.expected, c.label);
+  }
 }
