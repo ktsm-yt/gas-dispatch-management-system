@@ -152,6 +152,9 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
       baseAmount: payout.base_amount,
       transportAmount: payout.transport_amount,
       adjustmentAmount: payout.adjustment_amount || 0,
+      ninkuAdjustmentAmount: payout.ninku_adjustment_amount || 0,
+      ninkuCoefficient: payout.ninku_coefficient || 0,
+      taxAmount: payout.tax_amount || 0,
       totalAmount: payout.total_amount,
       periodStart: payout.period_start,
       periodEnd: payout.period_end,
@@ -172,15 +175,29 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
       const jobs = jobIds.length > 0 ? JobRepository.search({ job_ids: jobIds }) : [];
       const jobMap = new Map(jobs.map(function(j) { return [j.job_id as string, j]; }));
 
+      // 人工割係数算出用: job_idごとのASSIGNED配置数
+      const assignmentCountByJob = PayoutService._buildAssignmentCountByJob(new Set(jobIds));
+
       result.assignments = linkedAssignments.map(function(a) {
         const job = jobMap.get(a.job_id as string) || {};
+        const wageRate = Number(a.wage_rate) || 0;
+
+        // 人工割反映後の単価を計算
+        const requiredCount = Number((job as Record<string, unknown>).required_count) || 0;
+        const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
+        const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+        const adjustedWageRate = coefficient !== 1.0
+          ? applyRounding_(wageRate * coefficient, RoundingMode.FLOOR)
+          : wageRate;
+
         return {
           assignment_id: a.assignment_id as string,
           work_date: (job as Record<string, unknown>).work_date,
           site_name: ((job as Record<string, unknown>).site_name as string) || '(現場名なし)',
           pay_unit: a.pay_unit,
           invoice_unit: a.invoice_unit,
-          wage_rate: a.wage_rate
+          wage_rate: a.wage_rate,
+          adjusted_wage_rate: adjustedWageRate
         };
       });
     }

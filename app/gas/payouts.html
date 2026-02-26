@@ -2911,8 +2911,11 @@
         const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
         const siteName = a.site_name || '(現場名なし)';
         const unitLabel = UNIT_LABEL_MAP[a.invoice_unit || a.pay_unit || 'basic'] || '';
-        const wageRate = a.wage_rate ? `¥${Number(a.wage_rate).toLocaleString()}` : '-';
-        return `<tr><td>${dateStr}</td><td>${siteName}</td><td>${unitLabel}</td><td style="text-align:right">${wageRate}</td></tr>`;
+        const rate = a.adjusted_wage_rate || a.wage_rate;
+        const wageRate = rate ? `¥${Number(rate).toLocaleString()}` : '-';
+        const isAdjusted = (a.adjusted_wage_rate != null) && (Number(a.adjusted_wage_rate) !== Number(a.wage_rate));
+        const amtStyle = isAdjusted ? 'text-align:right;color:#D97706;font-weight:bold' : 'text-align:right';
+        return `<tr><td>${dateStr}</td><td>${siteName}</td><td>${unitLabel}</td><td style="${amtStyle}">${wageRate}</td></tr>`;
       }).join('');
       return `
         <table class="assignment-list-table">
