@@ -815,7 +815,7 @@ function seedInvoicesAndPayoutsForArchive() {
           lineNum++;
           const unitPrice = asgn.pay_unit === 'half'
             ? (customer['unit_price_half'] || 10000)
-            : (customer['unit_price_' + (job.work_category === '鳶' ? 'tobi' : job.work_category === '揚げ' ? 'age' : 'tobiage')] || 18000);
+            : (customer['unit_price_' + (job.work_category === '鳶' ? 'tobi' : job.work_category === 'ボード' ? 'age' : 'tobiage')] || 18000);
           const amount = unitPrice * (asgn.invoice_rate || 1);
 
           allLines.push({
