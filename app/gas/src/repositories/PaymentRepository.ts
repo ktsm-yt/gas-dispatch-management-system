@@ -138,6 +138,7 @@ const PaymentRepository = {
 
     const newRow = objectToRow(headers, updatedPayment);
     sheet.getRange(rowNum, 1, 1, headers.length).setValues([newRow]);
+    invalidateExecutionCache(this.TABLE_NAME);
 
     return {
       success: true,

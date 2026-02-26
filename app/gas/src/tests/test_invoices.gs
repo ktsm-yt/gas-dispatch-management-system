@@ -15,7 +15,8 @@ function runInvoiceTests() {
     testInvoiceRepository,
     testInvoiceLineRepository,
     testInvoiceService,
-    testInvoiceCalculations
+    testInvoiceCalculations,
+    testInvoiceCalculateTotalsEdgeCases
   ];
 
   let passed = 0;
@@ -258,6 +259,90 @@ function testInvoiceCalculations() {
   assertEqual(floorTotals.taxAmount, 1000, 'floor tax should be 1000');
   assertEqual(ceilTotals.taxAmount, 1001, 'ceil tax should be 1001');
   Logger.log('  Customer tax rounding mode: OK');
+}
+
+/**
+ * InvoiceService._calculateTotals エッジケーステスト
+ * 複合ケース・負の調整・roundモードを検証
+ */
+function testInvoiceCalculateTotalsEdgeCases() {
+  Logger.log('--- testInvoiceCalculateTotalsEdgeCases ---');
+
+  // 1. 複合ケース: 3作業行 + 1諸経費行 + 2調整(正/負)
+  const lines1 = [
+    { amount: 30000, item_name: '鳶工事' },
+    { amount: 20000, item_name: '揚げ工事' },
+    { amount: 10000, item_name: '荷揚げ' },
+    { amount: 5000, item_name: '諸経費' }
+  ];
+  const adjustments1 = [
+    { amount: 3000 },   // 正の調整
+    { amount: -8000 }   // 負の調整
+  ];
+  // workAmount=60000, expenseAmount=5000, adjustmentTotal=-5000
+  // taxable=60000+5000+(-5000)=60000, tax=floor(60000×0.10)=6000
+  // total=60000+6000=66000
+  const result1 = InvoiceService._calculateTotals(lines1, adjustments1, 0.10, 0, 'format1');
+  assertEqual(result1.subtotal, 60000, '複合: subtotal=workAmount=60000');
+  assertEqual(result1.expenseAmount, 5000, '複合: expenseAmount=5000');
+  assertEqual(result1.adjustmentTotal, -5000, '複合: adjustmentTotal=3000+(-8000)=-5000');
+  assertEqual(result1.taxAmount, 6000, '複合: tax=floor(60000×0.10)=6000');
+  assertEqual(result1.totalAmount, 66000, '複合: total=60000+6000=66000');
+  Logger.log('  複合ケース: OK');
+
+  // 2. 負の調整で合計がマイナス寄り: 調整合計 > 作業金額
+  const lines2 = [{ amount: 10000, item_name: '工事' }];
+  const adjustments2 = [{ amount: -15000 }];
+  // workAmount=10000, adjustmentTotal=-15000
+  // taxable=10000+0+(-15000)=-5000, tax=floor(-5000×0.10)=floor(-500)=-500
+  // total=-5000+(-500)=floor(-5500)=-5500
+  const result2 = InvoiceService._calculateTotals(lines2, adjustments2, 0.10, 0, 'format1');
+  assertEqual(result2.subtotal, 10000, 'マイナス寄り: subtotal=10000');
+  assertEqual(result2.adjustmentTotal, -15000, 'マイナス寄り: adjustmentTotal=-15000');
+  assertEqual(result2.taxAmount, -500, 'マイナス寄り: tax=floor(-500)=-500');
+  assertEqual(result2.totalAmount, -5500, 'マイナス寄り: total=-5500');
+  Logger.log('  マイナス寄り調整: OK');
+
+  // 3. roundモード
+  const lines3 = [{ amount: 10001, item_name: '工事' }];
+  // tax = round(10001 * 0.10) = round(1000.1) = 1000
+  const result3 = InvoiceService._calculateTotals(lines3, 0.10, 0, 'format1', 'round');
+  assertEqual(result3.taxAmount, 1000, 'roundモード: round(1000.1)=1000');
+  assertEqual(result3.totalAmount, 11001, 'roundモード: total=10001+1000=11001');
+  Logger.log('  roundモード: OK');
+
+  // 4. atamagami + 自動経費計算 + round
+  const lines4 = [{ amount: 100001, item_name: '工事' }];
+  // expenseAmount = calculateExpense_(100001, 10) = floor(100001*10/100) = floor(10000.1) = 10000
+  // taxable = 100001 + 10000 = 110001
+  // tax = round(110001 * 0.10) = round(11000.1) = 11000
+  // total = floor(110001 + 11000) = 121001
+  const result4 = InvoiceService._calculateTotals(lines4, 0.10, 10, 'atamagami', 'round');
+  assertEqual(result4.subtotal, 100001, 'atamagami+round: subtotal=100001');
+  assertEqual(result4.expenseAmount, 10000, 'atamagami+round: expense=floor(10000.1)=10000');
+  assertEqual(result4.taxAmount, 11000, 'atamagami+round: tax=round(11000.1)=11000');
+  assertEqual(result4.totalAmount, 121001, 'atamagami+round: total=121001');
+  Logger.log('  atamagami+round: OK');
+
+  // 5. 空行配列 → 全て0
+  const resultEmpty = InvoiceService._calculateTotals([], 0.10, 0, 'format1');
+  assertEqual(resultEmpty.subtotal, 0, '空行: subtotal=0');
+  assertEqual(resultEmpty.taxAmount, 0, '空行: tax=0');
+  assertEqual(resultEmpty.totalAmount, 0, '空行: total=0');
+  Logger.log('  空行配列: OK');
+
+  // 6. '諸経費（交通費）' は完全一致しない → workAmountに加算される
+  const lines5 = [
+    { amount: 10000, item_name: '工事' },
+    { amount: 5000, item_name: '諸経費（交通費）' }
+  ];
+  const result5 = InvoiceService._calculateTotals(lines5, 0.10, 0, 'format1');
+  // '諸経費（交通費）' !== '諸経費' → workAmountに加算
+  assertEqual(result5.subtotal, 15000, '諸経費部分一致: workAmountに含まれる');
+  assertEqual(result5.expenseAmount, 0, '諸経費部分一致: expense=0 (完全一致のみ)');
+  Logger.log('  諸経費部分一致: OK');
+
+  Logger.log('--- testInvoiceCalculateTotalsEdgeCases PASSED ---');
 }
 
 // assert関数はtest_helpers.gsで統一定義

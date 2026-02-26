@@ -18,7 +18,9 @@ function runPayoutTests() {
     testConfirmedWorkflow,
     testDoubleEntryPrevention,
     testWithholdingTaxCalculation,
-    testPaidDateValidation
+    testPaidDateValidation,
+    testProgressiveWithholdingBrackets,
+    testDailyWithholdingTaxIntegration
   ];
 
   let passed = 0;
@@ -309,10 +311,12 @@ function testPayoutCalculations() {
   // 3. getDailyRateByJobType_ テスト（実装に存在するケースのみ）
   assertEqual(getDailyRateByJobType_(testStaff, 'tobi'), 15000, 'tobi rate');
   // tobiageはtobi * TOBIAGE_MULTIPLIER（1.5）で計算される
-  assertEqual(getDailyRateByJobType_(testStaff, 'tobiage'), Math.floor(15000 * 1.5), 'tobiage rate');
+  assertEqual(getDailyRateByJobType_(testStaff, 'tobiage'), 22500, 'tobiage rate (15000×1.5=22500)');
   assertEqual(getDailyRateByJobType_(testStaff, 'half'), 7500, 'half rate');
-  // 存在しないジョブタイプは0を返す
-  assertEqual(getDailyRateByJobType_(testStaff, 'unknown'), 0, 'unknown type returns 0');
+  // 存在しないジョブタイプ → basic fallback → tobi fallback = 15000
+  assertEqual(getDailyRateByJobType_(testStaff, 'unknown'), 15000, 'unknown → tobi fallback');
+  // 全rate未設定 → 0
+  assertEqual(getDailyRateByJobType_({}, 'unknown'), 0, 'unknown + 全未設定 → 0');
   Logger.log('  DailyRateByJobType: OK');
 
   Logger.log('--- testPayoutCalculations PASSED ---');
@@ -794,4 +798,187 @@ function testPaidDateValidation() {
   PayoutRepository.softDelete(testPayout2.payout_id, testPayout2.updated_at);
 
   Logger.log('--- testPaidDateValidation PASSED ---');
+}
+
+/**
+ * 累進源泉徴収ブラケット全境界テスト
+ * 8ブラケット × base + top + off-by-one を網羅
+ * 全expected値はNode.jsで事前検算済み
+ */
+function testProgressiveWithholdingBrackets() {
+  Logger.log('--- testProgressiveWithholdingBrackets ---');
+
+  // brackets: [threshold, baseTax, rate]
+  // [24000,2305,0.2042], [26000,2715,0.23483], [32000,4125,0.33693],
+  // [57000,12550,0.4084], [72500,19060,0.4084], [73500,19655,0.4084],
+  // [75000,20450,0.4084], [116500,37400,0.45945]
+
+  const cases = [
+    // Bracket 1: 24000-25999
+    { amount: 24000, expected: 2305, label: 'bracket1 base' },
+    { amount: 25999, expected: 2713, label: 'bracket1 top: floor(2305+1999×0.2042)=2713' },
+    // Bracket 2: 26000-31999
+    { amount: 26000, expected: 2715, label: 'bracket2 base' },
+    { amount: 31999, expected: 4123, label: 'bracket2 top: floor(2715+5999×0.23483)=4123' },
+    // Bracket 3: 32000-56999
+    { amount: 32000, expected: 4125, label: 'bracket3 base' },
+    { amount: 56999, expected: 12547, label: 'bracket3 top: floor(4125+24999×0.33693)=12547' },
+    // Bracket 4: 57000-72499
+    { amount: 57000, expected: 12550, label: 'bracket4 base' },
+    { amount: 72499, expected: 18879, label: 'bracket4 top (off-by-one)' },
+    // Bracket 5: 72500-73499
+    { amount: 72500, expected: 19060, label: 'bracket5 base (ジャンプ)' },
+    { amount: 73499, expected: 19467, label: 'bracket5 top (off-by-one)' },
+    // Bracket 6: 73500-74999
+    { amount: 73500, expected: 19655, label: 'bracket6 base' },
+    { amount: 74999, expected: 20267, label: 'bracket6 top (off-by-one)' },
+    // Bracket 7: 75000-116499
+    { amount: 75000, expected: 20450, label: 'bracket7 base' },
+    { amount: 116499, expected: 37398, label: 'bracket7 top (off-by-one)' },
+    // Bracket 8: 116500+
+    { amount: 116500, expected: 37400, label: 'bracket8 base' },
+    { amount: 200000, expected: 75764, label: 'bracket8: floor(37400+83500×0.45945)=75764' }
+  ];
+
+  for (const c of cases) {
+    assertEqual(lookupDailyWithholdingTax(c.amount), c.expected, c.label);
+  }
+
+  Logger.log('  全16ブラケット境界: OK');
+  Logger.log('--- testProgressiveWithholdingBrackets PASSED ---');
+}
+
+/**
+ * _calculateDailyWithholdingTaxTotal 統合テスト ★最重要
+ * 同日グルーピング・人工割・非対象スタッフを検証
+ */
+function testDailyWithholdingTaxIntegration() {
+  Logger.log('--- testDailyWithholdingTaxIntegration ---');
+
+  // === Case A: 単一日・単一配置 ===
+  // daily=15000 → lookup=725
+  {
+    const staff = { staff_id: 'test_a', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [{ job_id: 'j1', wage_rate: 15000, pay_unit: 'basic', work_date: '2025-01-10' }];
+    const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
+    const countMap = new Map([['j1', 1]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 725, 'Case A: 単一日15000 → 725');
+  }
+  Logger.log('  Case A (単一配置): OK');
+
+  // === Case B: 同日グルーピング (am+pm) ★ ===
+  // 同日wage=8000+7000=15000 → lookup(15000)=725
+  // グルーピングなしだと: lookup(8000)+lookup(7000)=210+175=385 (間違い)
+  {
+    const staff = { staff_id: 'test_b', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 8000, pay_unit: 'basic', work_date: '2025-01-10' },
+      { job_id: 'j2', wage_rate: 7000, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([
+      ['j1', { work_date: '2025-01-10', required_count: 1 }],
+      ['j2', { work_date: '2025-01-10', required_count: 1 }]
+    ]);
+    const countMap = new Map([['j1', 1], ['j2', 1]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 725, 'Case B: 同日グルーピング 8000+7000=15000 → 725 (NOT 385)');
+  }
+  Logger.log('  Case B (同日グルーピング): OK');
+
+  // === Case C: 異なる日 ===
+  // j1=10000(1/10), j2=13000(1/11) → lookup(10000)+lookup(13000)=280+525=805
+  {
+    const staff = { staff_id: 'test_c', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 10000, pay_unit: 'basic', work_date: '2025-01-10' },
+      { job_id: 'j2', wage_rate: 13000, pay_unit: 'basic', work_date: '2025-01-11' }
+    ];
+    const jobMap = new Map([
+      ['j1', { work_date: '2025-01-10', required_count: 1 }],
+      ['j2', { work_date: '2025-01-11', required_count: 1 }]
+    ]);
+    const countMap = new Map([['j1', 1], ['j2', 1]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 805, 'Case C: 異なる日 10000+13000 → 280+525=805');
+  }
+  Logger.log('  Case C (異なる日): OK');
+
+  // === Case D: am pay_unit + wage_rate=null ===
+  // getDailyRateByJobType_('am') → basic=15000, multiplier('am')=0.5 → wage=7500
+  // lookup(7500)=190
+  {
+    const staff = { staff_id: 'test_d', withholding_tax_applicable: true, daily_rate_basic: 15000, daily_rate_tobi: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: null, pay_unit: 'am', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
+    const countMap = new Map([['j1', 1]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 190, 'Case D: am + null wage → basic×0.5=7500 → 190');
+  }
+  Logger.log('  Case D (am + null wage): OK');
+
+  // === Case E: 人工割で日額変動 ===
+  // wage=15000, required=2, actual=3 → coeff=floor(2/3*10)/10=0.6
+  // adjustment = floor(15000×0.6)-15000 = 9000-15000 = -6000
+  // daily = 15000 + (-6000) = 9000
+  // lookup(9000)=245
+  {
+    const staff = { staff_id: 'test_e', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 15000, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 2 }]]);
+    const countMap = new Map([['j1', 3]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 245, 'Case E: 人工割 15000×0.6=9000 → 245');
+  }
+  Logger.log('  Case E (人工割): OK');
+
+  // === Case F: 非対象スタッフ ===
+  {
+    const staff = { staff_id: 'test_f', withholding_tax_applicable: false, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 15000, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
+    const countMap = new Map([['j1', 1]]);
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 0, 'Case F: 非対象スタッフ → 0');
+  }
+  Logger.log('  Case F (非対象): OK');
+
+  // === Case G: 空 assignments + 対象スタッフ → 早期return 0 ===
+  {
+    const staff = { staff_id: 'test_g', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const result = PayoutService._calculateDailyWithholdingTaxTotal([], staff, new Map(), new Map());
+    assertEqual(result, 0, 'Case G: 空assignments + 対象スタッフ → 0');
+  }
+  Logger.log('  Case G (空assignments): OK');
+
+  // === Case H: jobMap にない job_id → asg.work_date フォールバック ===
+  // job_id='missing' は jobMap に存在しない → job=undefined → workDate は asg.work_date を使用
+  {
+    const staff = { staff_id: 'test_h', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'missing', wage_rate: 10000, pay_unit: 'basic', work_date: '2025-01-12' }
+    ];
+    const jobMap = new Map(); // job_id 'missing' は未登録
+    const countMap = new Map();
+    // job=undefined → required_count=0 → coeff=1.0 (ガード) → adjustment=0
+    // wage=10000, daily=10000 → lookup(10000)=280
+
+    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 280, 'Case H: jobMapミスヒット → asg.work_dateフォールバック, lookup(10000)=280');
+  }
+  Logger.log('  Case H (jobMapミスヒット): OK');
+
+  Logger.log('--- testDailyWithholdingTaxIntegration PASSED ---');
 }
