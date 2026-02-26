@@ -169,7 +169,7 @@ const PayoutDetailExportService = {
   },
 
   /**
-   * 配置+Job情報を結合取得
+   * 配置+Job情報を結合取得（人工割反映後の単価を含む）
    */
   _getAssignmentsWithJobInfo: function(payoutId: string): Array<{
     work_date: string;
@@ -177,6 +177,7 @@ const PayoutDetailExportService = {
     start_time: string;
     pay_unit: string;
     wage_rate: number;
+    adjusted_wage_rate: number;
     transport_amount: number;
   }> {
     const linkedAssignments = AssignmentRepository.search({ payout_id: payoutId })
@@ -186,17 +187,32 @@ const PayoutDetailExportService = {
 
     // Job情報をbulk取得（N+1回避）
     const jobIds = [...new Set(linkedAssignments.map(function(a) { return a.job_id as string; }))];
+    const jobIdSet = new Set(jobIds);
     const jobs = JobRepository.search({ job_ids: jobIds });
     const jobMap = new Map(jobs.map(function(j) { return [j.job_id as string, j]; }));
 
+    // 人工割係数算出用: job_idごとのASSIGNED配置数を取得
+    const assignmentCountByJob = PayoutService._buildAssignmentCountByJob(jobIdSet);
+
     const results = linkedAssignments.map(function(a) {
       const job = jobMap.get(a.job_id as string) || {} as Record<string, unknown>;
+      const wageRate = Number(a.wage_rate) || 0;
+
+      // 人工割係数を計算
+      const requiredCount = Number(job.required_count) || 0;
+      const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
+      const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
+      const adjustedWageRate = coefficient !== 1.0
+        ? applyRounding_(wageRate * coefficient, RoundingMode.FLOOR)
+        : wageRate;
+
       return {
         work_date: (job.work_date as string) || '',
         site_name: (job.site_name as string) || '(現場名なし)',
         start_time: (job.start_time as string) || '',
         pay_unit: (a.pay_unit as string) || 'basic',
-        wage_rate: Number(a.wage_rate) || 0,
+        wage_rate: wageRate,
+        adjusted_wage_rate: adjustedWageRate,
         transport_amount: Number(a.transport_amount) || 0
       };
     });
@@ -273,6 +289,7 @@ const PayoutDetailExportService = {
       start_time: string;
       pay_unit: string;
       wage_rate: number;
+      adjusted_wage_rate: number;
       transport_amount: number;
     }>,
     dataStartRow: number
@@ -293,18 +310,18 @@ const PayoutDetailExportService = {
       const transport = a.transport_amount ? a.transport_amount : '';
 
       return [
-        dateStr,           // 作業日
-        a.site_name,       // 案件名
-        a.start_time,      // 開始時間
-        1,                 // 数量（固定）
-        unitLabel,         // 単位
-        a.wage_rate,       // 単価
-        a.wage_rate,       // 合計（数量1なので同値）
-        '',                // 延長（Phase 2）
-        '',                // 時間外（Phase 2）
-        '',                // 残業（Phase 2）
-        transport,         // 移動
-        ''                 // 源泉徴収税（行レベルは空欄）
+        dateStr,                // 作業日
+        a.site_name,            // 案件名
+        a.start_time,           // 開始時間
+        1,                      // 数量（固定）
+        unitLabel,              // 単位
+        a.adjusted_wage_rate,   // 単価（人工割反映後）
+        a.adjusted_wage_rate,   // 合計（数量1なので同値）
+        '',                     // 延長（Phase 2）
+        '',                     // 時間外（Phase 2）
+        '',                     // 残業（Phase 2）
+        transport,              // 移動
+        ''                      // 源泉徴収税（行レベルは空欄）
       ];
     });
 
@@ -313,6 +330,14 @@ const PayoutDetailExportService = {
     // 金額列の書式設定: 単価(F), 合計(G), 移動(K)
     [6, 7, 11].forEach(function(col) {
       sheet.getRange(dataStartRow, col, rows.length, 1).setNumberFormat('#,##0');
+    });
+
+    // 人工割適用行の単価(F)・合計(G)をオレンジ色で強調
+    assignments.forEach(function(a, i) {
+      if (a.adjusted_wage_rate !== a.wage_rate) {
+        const row = dataStartRow + i;
+        sheet.getRange(row, 6, 1, 2).setFontColor('#D97706').setFontWeight('bold');
+      }
     });
   },
 
@@ -327,9 +352,13 @@ const PayoutDetailExportService = {
   ): void {
     const summaryRow = dataStartRow + rowCount + 1;
 
+    // 合計行: 人工割反映後の合計（base_amount + ninku_adjustment_amount）
+    const ninkuAmount = payout.ninku_adjustment_amount || 0;
+    const adjustedBaseAmount = (payout.base_amount || 0) + ninkuAmount;
+
     const summaryData = [
       '合計', '', '', rowCount, '',
-      '', payout.base_amount || 0,
+      '', adjustedBaseAmount,
       '', '', '',
       payout.transport_amount || 0,
       payout.tax_amount || 0
@@ -346,20 +375,25 @@ const PayoutDetailExportService = {
     [7, 11, 12].forEach(function(col) {
       sheet.getRange(summaryRow, col, 1, 1).setNumberFormat('¥#,##0');
     });
-    sheet.getRange(summaryRow, 7, 1, 1).setFontSize(12); // 合計金額を強調
+    sheet.getRange(summaryRow, 7, 1, 1).setFontSize(12);
 
-    // 人工割調整額行（CR-029）
-    const ninkuAmount = (payout as any).ninku_adjustment_amount || 0;
-    if (ninkuAmount !== 0) {
-      const ninkuRow = summaryRow + 1;
-      sheet.getRange(ninkuRow, 1).setValue('人工割調整額');
-      sheet.getRange(ninkuRow, 1).setFontWeight('bold').setFontColor('#D97706');
-      sheet.getRange(ninkuRow, 7).setValue(ninkuAmount);
-      sheet.getRange(ninkuRow, 7).setNumberFormat('¥#,##0').setFontWeight('bold').setFontColor('#D97706');
+    // 調整額行（adjustment_amount が0以外のとき表示）
+    const adjustmentAmount = payout.adjustment_amount || 0;
+    let nextRow = summaryRow + 1;
+    if (adjustmentAmount !== 0) {
+      sheet.getRange(nextRow, 1).setValue('調整額');
+      sheet.getRange(nextRow, 1).setFontWeight('bold').setFontColor('#2563EB');
+      if (payout.notes) {
+        sheet.getRange(nextRow, 2).setValue(payout.notes);
+        sheet.getRange(nextRow, 2).setFontColor('#2563EB').setFontSize(10);
+      }
+      sheet.getRange(nextRow, 7).setValue(adjustmentAmount);
+      sheet.getRange(nextRow, 7).setNumberFormat('¥#,##0').setFontWeight('bold').setFontColor('#2563EB');
+      nextRow++;
     }
 
-    // お支払金額行（人工割調整額行の有無に応じてオフセット）
-    const netRow = summaryRow + (ninkuAmount !== 0 ? 3 : 2);
+    // お支払金額行（調整額行の有無に応じてオフセット）
+    const netRow = nextRow + 1; // 空行1行分
     const netAmount = (payout.total_amount || 0);
 
     // ラベル（E-F結合で切れ防止）
@@ -373,7 +407,6 @@ const PayoutDetailExportService = {
     sheet.getRange(netRow, 7).setValue(netAmount);
     sheet.getRange(netRow, 7).setNumberFormat('¥#,##0')
       .setFontSize(16).setFontWeight('bold').setHorizontalAlignment('center');
-    // merge済みG-H全体に太枠（1,2で結合範囲を指定）
     sheet.getRange(netRow, 7, 1, 2).setBorder(
       true, true, true, true,
       null, null,
@@ -431,7 +464,7 @@ const PayoutDetailExportService = {
 
     // データ行の数値列を右寄せ
     if (rowCount > 0) {
-      [4, 6, 7, 11].forEach(function(col) {
+      [4, 5, 6, 7, 11].forEach(function(col) {
         sheet.getRange(dataStartRow, col, rowCount, 1).setHorizontalAlignment('right');
       });
     }
