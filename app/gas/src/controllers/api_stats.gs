@@ -19,7 +19,7 @@ function getDashboardStats(options = {}) {
 
   try {
     // 認可チェック（viewer以上）
-    const authResult = checkPermission(ROLES.VIEWER);
+    const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(
         ERROR_CODES.PERMISSION_DENIED,
@@ -50,7 +50,7 @@ function getMonthlyStats(year, month) {
 
   try {
     // 認可チェック
-    const authResult = checkPermission(ROLES.VIEWER);
+    const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(
         ERROR_CODES.PERMISSION_DENIED,
@@ -102,7 +102,7 @@ function getYearlyStatsSummary(fiscalYear) {
 
   try {
     // 認可チェック
-    const authResult = checkPermission(ROLES.VIEWER);
+    const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(
         ERROR_CODES.PERMISSION_DENIED,
@@ -245,7 +245,7 @@ function listAllStats() {
 
   try {
     // 認可チェック
-    const authResult = checkPermission(ROLES.VIEWER);
+    const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(
         ERROR_CODES.PERMISSION_DENIED,
