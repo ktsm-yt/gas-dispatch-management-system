@@ -263,7 +263,7 @@ function seedStaffData() {
   Logger.log('=== スタッフデータシード ===');
 
   // ヘッダーの不足カラムを自動追加
-  _ensureHeaders('M_Staff', ['daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'payment_frequency', 'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name']);
+  _ensureHeaders('M_Staff', ['daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'payment_frequency', 'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name', 'withholding_tax_applicable']);
 
   const now = _seedNow();
   const staffList = [
