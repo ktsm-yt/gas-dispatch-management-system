@@ -107,7 +107,7 @@ erDiagram
         number daily_rate_fullday "日給(終日)"
         number daily_rate_night "日給(夜間)"
         number daily_rate_tobi "日給(鳶) ※鳶揚げ=鳶×1.5"
-        string staff_type "種別 (regular/subcontract) [必須]"
+        string staff_type "種別 (regular/student/sole_proprietor/subcontract) [必須]"
         string subcontractor_id FK "外注先ID"
         string ccus_id "技能者ID (CCUS)"
         date birth_date "生年月日"

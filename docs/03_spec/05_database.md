@@ -143,7 +143,7 @@ WebUI 請求書一覧
 | daily_rate_tobi | NUMBER | - | 日給（鳶）※鳶揚げは鳶×1.5で計算 |
 | staff_type | STRING | ○ | 種別（regular/student/sole_proprietor/subcontract） |
 | employment_type | STRING | - | 雇用形態（employee/sole_proprietor）※2025/12/19追加 |
-| withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（employee=true、sole_proprietor=false）※2025/12/19追加 |
+| withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（true=源泉徴収する）。未設定時はstaff_typeに応じて自動補完（regular/student→true、sole_proprietor/subcontract→false）※2025/12/19追加 |
 | subcontractor_id | STRING | - | 外注先ID（外注の場合） |
 | notes | STRING | - | 備考 |
 | created_at | DATETIME | ○ | 作成日時 |
