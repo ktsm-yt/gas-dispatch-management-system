@@ -312,7 +312,7 @@ function seedStaffData() {
     s.emergency_contact_address = '';
     s.emergency_contact_phone = '';
     s.job_title = '';
-    s.health_insurance_type = '';
+    s.health_insurance_number = '';
     s.pension_type = '';
     s.pension_number = '';
     s.employment_insurance_no = '';

@@ -13,14 +13,23 @@ const TABLE_DEFINITIONS = {
   M_Customers: {
     sheetName: 'Customers',
     headers: [
-      'customer_id', 'company_name', 'branch_name', 'department_name',
-      'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax',
-      'email', 'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
+      // Identity (5)
+      'customer_id', 'customer_code', 'company_name', 'branch_name', 'department_name',
+      // Contact (7)
+      'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax', 'email',
+      // Pricing (7)
+      'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
       'unit_price_half', 'unit_price_fullday', 'unit_price_night',
+      // Billing Terms (3)
       'closing_day', 'payment_day', 'payment_month_offset',
-      'invoice_format', 'include_cover_page', 'has_transport_fee',  // P2-8: 諸経費請求フラグ
-      'tax_rate', 'tax_rounding_mode', 'expense_rate', 'shipper_name',
-      'customer_code', 'invoice_registration_number', 'folder_id', 'notes',
+      // Tax (3)
+      'tax_rate', 'tax_rounding_mode', 'expense_rate',
+      // Invoice Config (5)
+      'invoice_format', 'include_cover_page', 'has_transport_fee',
+      'shipper_name', 'invoice_registration_number',
+      // System (2)
+      'folder_id', 'notes',
+      // Audit (8)
       'created_at', 'created_by', 'updated_at', 'updated_by', 'is_active', 'is_deleted',
       'deleted_at', 'deleted_by'
     ]
@@ -28,18 +37,29 @@ const TABLE_DEFINITIONS = {
   M_Staff: {
     sheetName: 'Staff',
     headers: [
-      'staff_id', 'name', 'name_kana', 'nickname', 'phone', 'line_id', 'postal_code',
-      'address', 'has_motorbike', 'skills', 'ng_customers',
-      'daily_rate_basic', 'daily_rate_tobi',  // daily_rate_basic: 基本日当
-      'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'daily_rate_fullday', 'daily_rate_night',  // daily_rate_fullday: 終日日当, daily_rate_night: 夜勤日当
-      'staff_type', 'withholding_tax_applicable',  // 源泉徴収対象フラグ
-      'subcontractor_id', 'ccus_id', 'birth_date', 'gender', 'blood_type',
-      'emergency_contact_name', 'emergency_contact_address', 'emergency_contact_phone',  // 緊急連絡先3分割
-      'job_title', 'health_insurance_type', 'pension_type', 'pension_number',  // 厚生年金番号追加
-      'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
-      'special_training', 'skill_training', 'licenses', 'hire_date', 'foreigner_type',
-      'payment_frequency',  // P2-3: 支払いサイクル (daily/weekly/biweekly/monthly)
+      // Identity (4)
+      'staff_id', 'name', 'name_kana', 'nickname',
+      // Contact (4)
+      'phone', 'line_id', 'postal_code', 'address',
+      // Employment (5)
+      'staff_type', 'subcontractor_id', 'job_title', 'hire_date', 'foreigner_type',
+      // Personal (3)
+      'birth_date', 'gender', 'blood_type',
+      // Emergency Contact (3)
+      'emergency_contact_name', 'emergency_contact_address', 'emergency_contact_phone',
+      // Skills & Qualifications (7)
+      'has_motorbike', 'skills', 'ng_customers',
+      'ccus_id', 'special_training', 'skill_training', 'licenses',
+      // Compensation (9)
+      'daily_rate_basic', 'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage',
+      'daily_rate_half', 'daily_rate_fullday', 'daily_rate_night',
+      'payment_frequency', 'withholding_tax_applicable',
+      // Banking (5)
       'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name',
+      // Insurance & Benefits (6)
+      'health_insurance_number', 'pension_type', 'pension_number',
+      'employment_insurance_no', 'kensetsu_kyosai', 'chusho_kyosai',
+      // Audit (9)
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -72,11 +92,17 @@ const TABLE_DEFINITIONS = {
   T_Jobs: {
     sheetName: 'Jobs',
     headers: [
-      'job_id', 'customer_id', 'site_name', 'site_address', 'work_date',
-      'time_slot', 'start_time', 'required_count',
-      'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
+      // Identity (2)
+      'job_id', 'customer_id',
+      // Work Location & Schedule (6)
+      'site_name', 'site_address', 'work_date', 'time_slot', 'start_time', 'required_count',
+      // Work Content (4)
+      'work_category', 'work_detail', 'work_detail_other_text', 'pay_unit',
+      // Order / Admin (5)
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+      // Status (4)
       'status', 'is_damaged', 'is_uncollected', 'is_claimed',
+      // Audit (8)
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted',
       'deleted_at', 'deleted_by'
     ]
@@ -93,15 +119,21 @@ const TABLE_DEFINITIONS = {
   T_JobAssignments: {
     sheetName: 'Assignments',
     headers: [
-      'assignment_id', 'job_id', 'staff_id', 'worker_type', 'subcontractor_id',
-      'slot_id',  // 枠システム: 配置が紐づく枠のID（NULL許可）
-      'display_time_slot', 'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
-      'transport_area', 'transport_amount', 'transport_is_manual',
-      'transport_station', 'transport_has_bus',  // P2-8: 諸経費請求用（駅名フリー入力、バス利用フラグ）
-      'site_role',
-      'assignment_role', 'is_leader',
-      'entry_date', 'safety_training_date', 'status',
-      'payout_id',  // P2-3: 二重計上防止のためのPayoutへの参照
+      // Identity / FK (7)
+      'assignment_id', 'job_id', 'staff_id', 'subcontractor_id', 'slot_id', 'worker_type', 'payout_id',
+      // Schedule (1)
+      'display_time_slot',
+      // Pricing (4)
+      'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
+      // Transport (5)
+      'transport_area', 'transport_amount', 'transport_is_manual', 'transport_station', 'transport_has_bus',
+      // Role (3)
+      'site_role', 'assignment_role', 'is_leader',
+      // Compliance (2)
+      'entry_date', 'safety_training_date',
+      // Status (1)
+      'status',
+      // Audit (8)
       'notes', 'created_at', 'created_by',
       'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -132,6 +164,7 @@ const TABLE_DEFINITIONS = {
       'payout_id', 'payout_type', 'staff_id', 'subcontractor_id',
       'period_start', 'period_end', 'assignment_count',  // P2-3: 差分支払い方式
       'base_amount', 'transport_amount', 'adjustment_amount',
+      'ninku_coefficient', 'ninku_adjustment_amount',  // migrate_ninku_columns.gs から正式定義に昇格
       'tax_amount', 'total_amount', 'status', 'paid_date', 'notes', 'created_at',
       'created_by', 'updated_at', 'updated_by', 'is_deleted', 'deleted_at', 'deleted_by'
     ]

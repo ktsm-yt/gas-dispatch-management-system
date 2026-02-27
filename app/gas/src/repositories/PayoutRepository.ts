@@ -296,8 +296,8 @@ const PayoutRepository = {
       base_amount: payout.base_amount || 0,
       transport_amount: payout.transport_amount || 0,
       adjustment_amount: payout.adjustment_amount || 0,
-      ninku_coefficient: (payout as any).ninku_coefficient || 0,
-      ninku_adjustment_amount: (payout as any).ninku_adjustment_amount || 0,
+      ninku_coefficient: payout.ninku_coefficient || 0,
+      ninku_adjustment_amount: payout.ninku_adjustment_amount || 0,
       tax_amount: payout.tax_amount || 0,
       total_amount: payout.total_amount || 0,
       status: payout.status || 'draft',
@@ -338,8 +338,8 @@ const PayoutRepository = {
       base_amount: payout.base_amount || 0,
       transport_amount: payout.transport_amount || 0,
       adjustment_amount: payout.adjustment_amount || 0,
-      ninku_coefficient: (payout as any).ninku_coefficient || 0,
-      ninku_adjustment_amount: (payout as any).ninku_adjustment_amount || 0,
+      ninku_coefficient: payout.ninku_coefficient || 0,
+      ninku_adjustment_amount: payout.ninku_adjustment_amount || 0,
       tax_amount: payout.tax_amount || 0,
       total_amount: payout.total_amount || 0,
       status: payout.status || 'draft',
@@ -403,6 +403,7 @@ const PayoutRepository = {
     const updatableFields = [
       'period_start', 'period_end', 'assignment_count',
       'base_amount', 'transport_amount', 'adjustment_amount',
+      'ninku_coefficient', 'ninku_adjustment_amount',
       'tax_amount', 'total_amount',
       'status', 'paid_date', 'notes', 'is_deleted'
     ] as const;

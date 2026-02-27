@@ -393,7 +393,7 @@ const WorkerRosterService = {
     // col 27-33: スキップ
     row[33] = staff.blood_type || '';                  // col 34: 血液型
     // col 35-38: スキップ
-    row[38] = staff.health_insurance_type || '';       // col 39: 健康保険
+    row[38] = staff.health_insurance_number || '';      // col 39: 健康保険番号
     // col 40-45: スキップ
     row[45] = staff.kensetsu_kyosai || '';             // col 46: 建退共
     return row;

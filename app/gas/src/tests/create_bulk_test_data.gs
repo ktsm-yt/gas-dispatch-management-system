@@ -335,7 +335,6 @@ function createBulkStaff() {
   const skills = ['鳶', '揚げ', '鳶,揚げ', '鳶,揚げ,鳶揚げ'];
   const bloodTypes = ['A', 'B', 'O', 'AB'];
   const jobTitles = ['とび工', '荷揚工', 'とび工・荷揚工'];
-  const healthInsuranceTypes = ['健保組合', '協会けんぽ', '建設国保', '国保'];
   const pensionTypes = ['厚生年金', '国民年金'];
 
   // NG顧客用のテスト顧客ID（一部のスタッフにNG設定）
@@ -398,7 +397,7 @@ function createBulkStaff() {
       emergency_contact_address: i % 5 === 0 ? `東京都新宿区西新宿${i}-${i + 1}` : '',
       emergency_contact_phone: i % 5 === 0 ? `03-0000-${String(i).padStart(4, '0')}` : '',
       job_title: i % 5 === 0 ? randomPick(jobTitles) : '',
-      health_insurance_type: i % 5 === 0 ? randomPick(healthInsuranceTypes) : '',
+      health_insurance_number: '',  // 保険証番号はテストデータでは空
       pension_type: i % 5 === 0 ? randomPick(pensionTypes) : '',
       pension_number: i % 5 === 0 ? `${String(1000 + i).padStart(4, '0')}-${String(100000 + i * 7).padStart(6, '0')}` : '',
       is_active: true,

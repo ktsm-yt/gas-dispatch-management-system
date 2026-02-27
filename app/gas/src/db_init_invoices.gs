@@ -12,7 +12,7 @@
 function initInvoiceSheets() {
   const db = getDb();
 
-  // T_Invoices (請求)
+  // T_Invoices (請求) — TABLE_DEFINITIONS と同期済み
   const invoicesHeaders = [
     'invoice_id',
     'invoice_number',
@@ -25,6 +25,7 @@ function initInvoiceSheets() {
     'expense_amount',
     'tax_amount',
     'total_amount',
+    'adjustment_total',
     'invoice_format',
     'shipper_name',
     'pdf_file_id',
@@ -34,12 +35,15 @@ function initInvoiceSheets() {
     'has_assignment_changes',
     'notes',
     'created_at',
-    'updated_at',
     'created_by',
-    'is_deleted'
+    'updated_at',
+    'updated_by',
+    'is_deleted',
+    'deleted_at',
+    'deleted_by'
   ];
 
-  // T_InvoiceLines (請求明細)
+  // T_InvoiceLines (請求明細) — TABLE_DEFINITIONS と同期済み
   const invoiceLinesHeaders = [
     'line_id',
     'invoice_id',
@@ -61,8 +65,12 @@ function initInvoiceSheets() {
     'property_code',
     'tax_amount',
     'created_at',
+    'created_by',
     'updated_at',
-    'is_deleted'
+    'updated_by',
+    'is_deleted',
+    'deleted_at',
+    'deleted_by'
   ];
 
   // シート作成
