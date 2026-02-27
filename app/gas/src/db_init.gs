@@ -1,7 +1,7 @@
 /**
  * Database Initialization Script
  *
- * 11個のテーブル（シート）を自動作成し、ヘッダー行を設定します。
+ * 15個のテーブル（シート）を自動作成し、ヘッダー行を設定します。
  * 開発・本番環境で分けて実行可能です。
  */
 
@@ -29,8 +29,10 @@ const TABLE_DEFINITIONS = {
     sheetName: 'Staff',
     headers: [
       'staff_id', 'name', 'name_kana', 'nickname', 'phone', 'line_id', 'postal_code',
-      'address', 'has_motorbike', 'skills', 'ng_customers', 'daily_rate_tobi',
-      'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'staff_type',
+      'address', 'has_motorbike', 'skills', 'ng_customers',
+      'daily_rate_basic', 'daily_rate_tobi',  // daily_rate_basic: 基本日当
+      'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half', 'daily_rate_fullday', 'daily_rate_night',  // daily_rate_fullday: 終日日当, daily_rate_night: 夜勤日当
+      'staff_type', 'withholding_tax_applicable',  // 源泉徴収対象フラグ
       'subcontractor_id', 'ccus_id', 'birth_date', 'gender', 'blood_type',
       'emergency_contact_name', 'emergency_contact_address', 'emergency_contact_phone',  // 緊急連絡先3分割
       'job_title', 'health_insurance_type', 'pension_type', 'pension_number',  // 厚生年金番号追加
@@ -443,6 +445,39 @@ function migrateAddFiscalMonthEndColumn() {
 
   Logger.log('✓ fiscal_month_end カラムを列 ' + insertIndex + ' に追加しました');
   Logger.log('決算月を設定するには、会社情報画面から変更してください（デフォルト: 2月決算）');
+}
+
+/**
+ * M_Staffシートに daily_rate_fullday カラムを追加（マイグレーション）
+ * GASエディタから実行: migrateAddDailyRateFulldayColumn()
+ */
+function migrateAddDailyRateFulldayColumn() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const sheet = ss.getSheetByName('Staff');
+
+  if (!sheet) {
+    Logger.log('✗ Staffシートが見つかりません');
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('daily_rate_fullday')) {
+    Logger.log('✓ daily_rate_fullday カラムは既に存在します');
+    return;
+  }
+
+  const halfIndex = headers.indexOf('daily_rate_half');
+  if (halfIndex === -1) {
+    Logger.log('✗ daily_rate_half カラムが見つかりません');
+    return;
+  }
+
+  const insertIndex = halfIndex + 2; // 1-based, daily_rate_half の次
+  sheet.insertColumnAfter(halfIndex + 1);
+  sheet.getRange(1, insertIndex).setValue('daily_rate_fullday');
+
+  Logger.log('✓ daily_rate_fullday カラムを列 ' + insertIndex + ' に追加しました');
 }
 
 /**

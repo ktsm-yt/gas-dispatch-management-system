@@ -273,6 +273,100 @@ function createAllTemplates() {
 }
 
 // ============================================================
+// 本番環境テンプレート配置
+// ============================================================
+
+/**
+ * 開発環境のテンプレートを本番環境にコピー・配置
+ * 前提: 開発環境のテンプレートが本番アカウントに共有済み
+ */
+function copyTemplatesToProduction() {
+  const prop = PropertiesService.getScriptProperties();
+  const rootFolderId = prop.getProperty('DRIVE_ROOT_FOLDER_ID');
+  if (!rootFolderId) {
+    throw new Error('DRIVE_ROOT_FOLDER_ID が未設定です。initDriveFolders() を先に実行してください。');
+  }
+
+  const rootFolder = DriveApp.getFolderById(rootFolderId);
+  const templateFolder = findFolderByName('テンプレート', rootFolder);
+  if (!templateFolder) {
+    throw new Error('テンプレートフォルダが見つかりません');
+  }
+
+  // 開発環境のテンプレートID → コピー先フォルダ名 + Script Property キー
+  const templates = [
+    {
+      sourceId: '{{TEMPLATE_ID_FORMAT1}}',
+      name: 'format1',
+      subFolder: '様式1',
+      propertyKey: 'TEMPLATE_FORMAT1_ID',
+    },
+    {
+      sourceId: '{{TEMPLATE_ID_FORMAT2_SEPARATED}}',
+      name: 'format2',
+      subFolder: '様式2',
+      propertyKey: 'TEMPLATE_FORMAT2_ID',
+    },
+    {
+      sourceId: '{{TEMPLATE_ID_FORMAT3}}',
+      name: 'format3',
+      subFolder: '様式3',
+      propertyKey: 'TEMPLATE_FORMAT3_ID',
+    },
+    {
+      sourceId: '{{TEMPLATE_ID_ATAMAGAMI}}',
+      name: 'atamagami',
+      subFolder: '頭紙',
+      propertyKey: 'TEMPLATE_ATAMAGAMI_ID',
+    },
+    {
+      sourceId: '{{TEMPLATE_ID_EXTRA1}}',
+      name: 'payment_statement',
+      subFolder: null,  // テンプレートフォルダ直下
+      propertyKey: 'PAYOUT_DETAIL_TEMPLATE_ID',
+    },
+    {
+      sourceId: '{{TEMPLATE_ID_WORKER_ROSTER}}',
+      name: 'template_workers',
+      subFolder: null,  // テンプレートフォルダ直下
+      propertyKey: 'TEMPLATE_WORKER_ROSTER_ID',
+    },
+  ];
+
+  Logger.log('=== テンプレート本番配置 ===\n');
+
+  for (const tmpl of templates) {
+    try {
+      const sourceFile = DriveApp.getFileById(tmpl.sourceId);
+      const copiedFile = sourceFile.makeCopy(tmpl.name);
+
+      // 配置先フォルダを決定
+      let targetFolder = templateFolder;
+      if (tmpl.subFolder) {
+        const sub = findFolderByName(tmpl.subFolder, templateFolder);
+        if (sub) {
+          targetFolder = sub;
+        }
+      }
+      copiedFile.moveTo(targetFolder);
+
+      // Script Properties に登録
+      prop.setProperty(tmpl.propertyKey, copiedFile.getId());
+
+      Logger.log(`✓ ${tmpl.name}: ${copiedFile.getId()}`);
+    } catch (e) {
+      Logger.log(`✗ ${tmpl.name}: ${e.message}`);
+    }
+  }
+
+  Logger.log('\n=== テンプレート配置完了 ===');
+  Logger.log('\n現在のテンプレート設定:');
+  for (const tmpl of templates) {
+    Logger.log(`  ${tmpl.propertyKey}: ${prop.getProperty(tmpl.propertyKey) || '(未設定)'}`);
+  }
+}
+
+// ============================================================
 // A4縦 印刷対応 列幅調整関数
 // ============================================================
 
