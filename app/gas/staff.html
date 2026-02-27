@@ -824,14 +824,8 @@
             </div>
             <div class="form-row-4">
               <div class="form-group">
-                <label for="health-insurance-type">健康保険</label>
-                <select id="health-insurance-type" name="health_insurance_type">
-                  <option value="">選択してください</option>
-                  <option value="国民健康保険">国民健康保険</option>
-                  <option value="協会けんぽ">協会けんぽ</option>
-                  <option value="建設国保">建設国保</option>
-                  <option value="その他">その他</option>
-                </select>
+                <label for="health-insurance-number">健康保険番号</label>
+                <input type="text" id="health-insurance-number" name="health_insurance_number" placeholder="記号-番号">
               </div>
               <div class="form-group">
                 <label for="pension-type">年金</label>
@@ -1584,7 +1578,7 @@
       document.getElementById('job-title').value = staff.job_title || '';
       document.getElementById('ccus-id').value = staff.ccus_id || '';
       document.getElementById('employment-insurance-no').value = staff.employment_insurance_no || '';
-      document.getElementById('health-insurance-type').value = staff.health_insurance_type || '';
+      document.getElementById('health-insurance-number').value = staff.health_insurance_number || '';
       document.getElementById('pension-type').value = staff.pension_type || '';
       document.getElementById('pension-number').value = staff.pension_number || '';
       document.getElementById('kensetsu-kyosai').value = staff.kensetsu_kyosai || '';
