@@ -36,19 +36,15 @@ function getSpreadsheetId(): string {
   return id;
 }
 
-/** 本番デプロイID（CLAUDE.md記載の固定URL用） */
-const PRODUCTION_DEPLOYMENT_ID = 'AKfycbxB1N5JCiaetebl4I4ynRI5xOI6d6OmyI9-x2OA2pTXbeusOrG8lH5QgMPlqT6dS1PI7Q';
-
 /**
  * 現在のデプロイが本番環境かどうかを判定
- * ScriptApp.getService().getUrl() から現在のデプロイIDを取得し比較
+ * ENV Script Property で判定（デプロイIDをコードに含めない）
  */
 function isProductionDeployment(): boolean {
   try {
-    const url = ScriptApp.getService().getUrl();
-    return url.includes(PRODUCTION_DEPLOYMENT_ID);
+    const env = PropertiesService.getScriptProperties().getProperty('ENV');
+    return env === 'prod';
   } catch (_e) {
-    // スクリプトエディタからの実行など、URL取得不可の場合は開発環境と推定
     return false;
   }
 }

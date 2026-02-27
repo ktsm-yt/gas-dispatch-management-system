@@ -6,14 +6,15 @@
  * フォルダ構成:
  * /gas-dispatch-system/
  *   ├── /テンプレート/           (テンプレート Excel/スプレッドシート)
+ *   │   ├── /様式1/ /様式2/ /様式3/ /頭紙/
  *   ├── /出力/
- *   │   ├── /請求書/             (生成された請求書 PDF)
- *   │   └── /給与明細/           (給与明細 PDF)
- *   ├── /アーカイブ/
- *   │   ├── /2025年度/
- *   │   └── /2026年度/           (年度別アーカイブ)
+ *   │   ├── /請求書/             (生成された請求書 PDF)  → INVOICE_EXPORT_FOLDER_ID
+ *   │   ├── /支払明細/           (支払明細 PDF/Excel)    → PAYOUT_EXPORT_FOLDER_ID
+ *   │   └── /作業員名簿/         (作業員名簿 PDF/Excel)  → WORKER_ROSTER_FOLDER_ID
+ *   ├── /顧客/                   (顧客別フォルダ)        → CUSTOMER_FOLDERS_PARENT_ID
+ *   ├── /アーカイブ/             (年度アーカイブ)        → ARCHIVE_FOLDER_ID
  *   └── /ドキュメント/
- *       └── /仕様書/            (システム仕様書等)
+ *       └── /仕様書/
  */
 
 const FOLDER_STRUCTURE = {
@@ -26,7 +27,8 @@ const FOLDER_STRUCTURE = {
     'テンプレート/頭紙',
     '出力',
     '出力/請求書',
-    '出力/給与明細',
+    '出力/支払明細',
+    '出力/作業員名簿',
     '顧客',  // 顧客専用フォルダの親（会社別フォルダはここに作成）
     'アーカイブ',
     'ドキュメント',
@@ -62,11 +64,21 @@ function initDriveFolders() {
     const prop = PropertiesService.getScriptProperties();
     prop.setProperty('DRIVE_ROOT_FOLDER_ID', rootFolderId);
 
-    // 顧客フォルダ親のIDを保存
-    const customerFolder = findFolderByName('顧客', rootFolder);
-    if (customerFolder) {
-      prop.setProperty('CUSTOMER_FOLDERS_PARENT_ID', customerFolder.getId());
-      Logger.log(`✓ 顧客フォルダ親を設定: ${customerFolder.getId()}`);
+    // 各フォルダの Script Properties を登録
+    const folderPropertyMap = {
+      '顧客': 'CUSTOMER_FOLDERS_PARENT_ID',
+      '出力/請求書': 'INVOICE_EXPORT_FOLDER_ID',
+      '出力/支払明細': 'PAYOUT_EXPORT_FOLDER_ID',
+      '出力/作業員名簿': 'WORKER_ROSTER_FOLDER_ID',
+      'アーカイブ': 'ARCHIVE_FOLDER_ID',
+    };
+
+    for (const [folderPath, propertyKey] of Object.entries(folderPropertyMap)) {
+      const folder = createFolderStructure(rootFolder, folderPath);
+      if (folder) {
+        prop.setProperty(propertyKey, folder.getId());
+        Logger.log(`✓ ${propertyKey} を設定: ${folder.getId()}`);
+      }
     }
 
     Logger.log('\n=== Drive フォルダ初期化完了 ===');
