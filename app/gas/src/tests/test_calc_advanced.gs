@@ -115,7 +115,11 @@ function testGetDailyRateByJobType() {
   // null staff → 0
   assertEqual(getDailyRateByJobType_(null, 'tobi'), 0, 'null staff → 0');
 
-  // tobiage: tobi未設定 → 0
+  // tobiage: マスタ値優先テスト（daily_rate_tobiageが設定されている場合）
+  var staffWithTobiage = { daily_rate_tobi: 15000, daily_rate_tobiage: 25000, daily_rate_basic: 14000 };
+  assertEqual(getDailyRateByJobType_(staffWithTobiage, 'tobiage'), 25000, 'tobiage マスタ値優先');
+
+  // tobiage: tobi未設定 → 0（fallback計算も0）
   var staffNoTobi = { daily_rate_age: 12000 };
   assertEqual(getDailyRateByJobType_(staffNoTobi, 'tobiage'), 0, 'tobiage but tobi=0 → 0');
 
@@ -171,6 +175,14 @@ function testGetUnitPriceByJobType() {
   assertEqual(getUnitPriceByJobType_(custNoBasic, 'fullday'), 20000, 'fullday未設定 → tobi fallback');
   assertEqual(getUnitPriceByJobType_(custNoBasic, 'night'), 20000, 'night未設定 → tobi fallback');
   assertEqual(getUnitPriceByJobType_(custNoBasic, 'unknown'), 20000, 'unknown + basic未設定 → tobi fallback');
+
+  // tobiage: マスタ未設定 → tobi×1.5 fallback
+  var custNoTobiage = { unit_price_tobi: 20000, unit_price_basic: 19000 };
+  assertEqual(getUnitPriceByJobType_(custNoTobiage, 'tobiage'), 30000, 'tobiage未設定 → tobi×1.5 fallback (30000)');
+
+  // tobiage: tobi未設定 → 0
+  var custNoTobi = { unit_price_age: 18000 };
+  assertEqual(getUnitPriceByJobType_(custNoTobi, 'tobiage'), 0, 'tobiage + tobi未設定 → 0');
 
   // null customer → 0
   assertEqual(getUnitPriceByJobType_(null, 'tobi'), 0, 'null customer → 0');
