@@ -13,7 +13,8 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
     company: { file: 'company', title: '自社情報' },
     invoices: { file: 'invoices', title: '請求管理' },
     payouts: { file: 'payouts', title: '支払管理' },
-    sales_analytics: { file: 'sales_analytics', title: '売上分析' }
+    sales_analytics: { file: 'sales_analytics', title: '売上分析' },
+    manual: { file: 'manual', title: 'マニュアル' }
   };
 
   const config = pages[page] || pages.dashboard;
