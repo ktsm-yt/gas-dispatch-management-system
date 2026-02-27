@@ -164,7 +164,7 @@ WebUI 請求書一覧
 | blood_type | STRING | - | 血液型（緊急連絡用） |
 | emergency_contact | STRING | - | 緊急連絡先 |
 | job_title | STRING | - | 職種（とび工/荷揚工 等） |
-| health_insurance_type | STRING | - | 健康保険（健保組合/協会けんぽ/建設国保/国保/適用除外） |
+| health_insurance_number | STRING | - | 健康保険（健保組合/協会けんぽ/建設国保/国保/適用除外） |
 | pension_type | STRING | - | 年金保険（厚生年金/国民年金/受給者） |
 | employment_insurance_no | STRING | - | 雇用保険番号（下4桁） |
 | kensetsu_kyosai | STRING | - | 建退共（有/無） |

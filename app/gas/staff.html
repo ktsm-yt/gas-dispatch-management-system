@@ -671,6 +671,7 @@
               <div class="form-group">
                 <label for="staff-type">種別<span class="required">*</span></label>
                 <select id="staff-type" name="staff_type" required>
+                  <option value="">選択してください</option>
                   <option value="regular">自社スタッフ</option>
                   <option value="student">学生アルバイト</option>
                   <option value="sole_proprietor">一人親方</option>
@@ -712,6 +713,16 @@
             </div>
             <div class="form-row">
               <div class="form-group">
+                <label for="postal-code">郵便番号</label>
+                <input type="text" id="postal-code" name="postal_code" placeholder="123-4567">
+              </div>
+              <div class="form-group">
+                <label for="address">住所</label>
+                <input type="text" id="address" name="address" placeholder="東京都〇〇区...">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
                 <label for="emergency-contact-name">緊急連絡先氏名</label>
                 <input type="text" id="emergency-contact-name" name="emergency_contact_name" placeholder="山田花子">
               </div>
@@ -722,16 +733,6 @@
               <div class="form-group">
                 <label for="emergency-contact-phone">緊急連絡先電話番号</label>
                 <input type="tel" id="emergency-contact-phone" name="emergency_contact_phone" placeholder="03-1234-5678">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="postal-code">郵便番号</label>
-                <input type="text" id="postal-code" name="postal_code" placeholder="123-4567">
-              </div>
-              <div class="form-group">
-                <label for="address">住所</label>
-                <input type="text" id="address" name="address" placeholder="東京都〇〇区...">
               </div>
             </div>
           </div>
@@ -825,7 +826,7 @@
             <div class="form-row-4">
               <div class="form-group">
                 <label for="health-insurance-number">健康保険番号</label>
-                <input type="text" id="health-insurance-number" name="health_insurance_number" placeholder="記号-番号">
+                <input type="text" id="health-insurance-number" name="health_insurance_number" placeholder="保険番号">
               </div>
               <div class="form-group">
                 <label for="pension-type">年金</label>
@@ -1550,13 +1551,18 @@
       modal.style.display = 'flex';
     }
 
+    function normalizeDate(val) {
+      if (!val) return '';
+      return String(val).substring(0, 10);
+    }
+
     function populateForm(staff) {
       document.getElementById('staff-id').value = staff.staff_id || '';
       document.getElementById('staff-updated-at').value = staff.updated_at || '';
       document.getElementById('name').value = staff.name || '';
       document.getElementById('name-kana').value = staff.name_kana || '';
       document.getElementById('nickname').value = staff.nickname || '';
-      document.getElementById('staff-type').value = staff.staff_type || 'regular';
+      document.getElementById('staff-type').value = staff.staff_type || '';
       document.getElementById('subcontractor-id').value = staff.subcontractor_id || '';
       document.getElementById('phone').value = staff.phone || '';
       document.getElementById('line-id').value = staff.line_id || '';
@@ -1570,11 +1576,11 @@
       document.getElementById('daily-rate-fullday').value = staff.daily_rate_fullday || '';
       document.getElementById('daily-rate-night').value = staff.daily_rate_night || '';
       document.getElementById('daily-rate-tobi').value = staff.daily_rate_tobi || '';
-      document.getElementById('birth-date').value = staff.birth_date || '';
+      document.getElementById('birth-date').value = normalizeDate(staff.birth_date);
       document.getElementById('gender').value = staff.gender || '';
       document.getElementById('blood-type').value = staff.blood_type || '';
       document.getElementById('has-motorbike').value = staff.has_motorbike ? 'true' : 'false';
-      document.getElementById('hire-date').value = staff.hire_date || '';
+      document.getElementById('hire-date').value = normalizeDate(staff.hire_date);
       document.getElementById('job-title').value = staff.job_title || '';
       document.getElementById('ccus-id').value = staff.ccus_id || '';
       document.getElementById('employment-insurance-no').value = staff.employment_insurance_no || '';
@@ -1736,7 +1742,7 @@
 
       // 口座フィールドは空値も明示的に送信（空に戻す操作を許可）
       // bank_account_number は reveal/未reveal で分離制御
-      var bankFieldsAlways = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_name'];
+      var bankFieldsAlways = ['bank_name', 'bank_branch', 'bank_account_type', 'bank_account_name', 'health_insurance_number'];
       bankFieldsAlways.forEach(function(field) {
         if (!(field in staff)) {
           staff[field] = '';
