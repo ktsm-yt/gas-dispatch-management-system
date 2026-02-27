@@ -115,7 +115,7 @@ erDiagram
         string blood_type "血液型"
         string emergency_contact "緊急連絡先"
         string job_title "職種"
-        string health_insurance_type "健康保険種別"
+        string health_insurance_number "健康保険種別"
         string pension_type "年金保険種別"
         string employment_insurance_no "雇用保険番号(下4桁)"
         string kensetsu_kyosai "建退共 (有/無)"
