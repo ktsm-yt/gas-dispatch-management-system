@@ -31,6 +31,7 @@ const PAY_UNITS = {
   FULLDAY: 'fullday',
   NIGHT: 'night',
   TOBI: 'tobi',
+  AGE: 'age',
   TOBIAGE: 'tobiage'
 } as const;
 

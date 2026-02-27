@@ -124,7 +124,7 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
     case 'age':
       return customer.unit_price_age || 0;
     case 'tobiage':
-      return customer.unit_price_tobiage || 0;
+      return customer.unit_price_tobiage ?? Math.floor((customer.unit_price_tobi || 0) * TOBIAGE_MULTIPLIER);
     case 'basic':
       return customer.unit_price_basic || customer.unit_price_tobi || 0;
     case 'half':
@@ -159,7 +159,7 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
     case 'age':
       return staff.daily_rate_age || 0;
     case 'tobiage':
-      return Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
+      return staff.daily_rate_tobiage ?? Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     default:
       return staff.daily_rate_basic || staff.daily_rate_tobi || 0;
   }

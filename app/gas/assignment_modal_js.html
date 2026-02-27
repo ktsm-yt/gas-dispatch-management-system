@@ -1211,8 +1211,9 @@ function updateSlotSelect() {
     'halfday': 'ハーフ',
     'fullday': '終日',
     'night': '夜勤',
-    'tobi': '鳶',
-    'tobiage': '鳶揚げ'
+    'tobi': '上棟鳶',
+    'age': '上棟荷揚げ',
+    'tobiage': '上棟鳶揚げ'
   };
 
   slots.forEach(slot => {
@@ -2126,8 +2127,9 @@ function generateLineTemplate() {
     'halfday': 'ハーフ', 'HALFDAY': 'ハーフ',
     'fullday': '終日', 'FULLDAY': '終日',
     'night': '夜間', 'NIGHT': '夜間',
-    'tobi': '鳶', 'TOBI': '鳶',
-    'tobiage': '鳶揚げ', 'TOBIAGE': '鳶揚げ'
+    'tobi': '上棟鳶', 'TOBI': '上棟鳶',
+    'age': '上棟荷揚げ', 'AGE': '上棟荷揚げ',
+    'tobiage': '上棟鳶揚げ', 'TOBIAGE': '上棟鳶揚げ'
   };
   const payUnitLabel = unitTypes.length === 1
     ? (unitLabels[unitTypes[0]] || '-')

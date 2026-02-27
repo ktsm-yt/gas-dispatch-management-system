@@ -1210,8 +1210,8 @@ const InvoiceService = {
 
     const itemNameMap: Record<string, string> = {
       'tobi': '作業員（上棟鳶）',
-      'age': '作業員（荷揚げ）',
-      'tobiage': '作業員（上棟荷揚げ）',
+      'age': '作業員（上棟荷揚げ）',
+      'tobiage': '作業員（上棟鳶揚げ）',
       'basic': '作業員',
       'half': '作業員（ハーフ）',
       'halfday': '作業員（ハーフ）',
