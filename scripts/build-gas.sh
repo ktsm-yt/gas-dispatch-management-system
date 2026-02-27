@@ -34,8 +34,17 @@ find src -name "*.js" | while IFS= read -r f; do
   fi
 done
 
-# 4. HTMLファイルをコピー
-find . -maxdepth 1 -name "*.html" -exec cp {} dist/ \;
+# 4. HTMLファイルをコピー（.envプレースホルダー置換付き）
+ENV_FILE="$(cd ../.. && pwd)/.env"
+if [ -f "$ENV_FILE" ]; then
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+fi
+find . -maxdepth 1 -name "*.html" | while IFS= read -r f; do
+  sed -e "s|{{COMPANY_NAME_SHORT}}|${COMPANY_NAME_SHORT:-SampleCorp}|g" \
+      -e "s|{{COMPANY_DOMAIN}}|${WORKSPACE_DOMAIN:-example.com}|g" \
+      "$f" > "dist/$(basename "$f")"
+done
 
 # 5. appsscript.jsonをコピー
 cp appsscript.json dist/
