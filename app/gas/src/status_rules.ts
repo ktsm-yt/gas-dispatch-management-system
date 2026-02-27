@@ -138,9 +138,9 @@ function getTimeSlotLabel_(timeSlot: string): string {
 
 function getJobTypeLabel_(jobType: string): string {
   const labels: Record<string, string> = {
-    tobi: '鳶',
-    age: '揚げ',
-    tobiage: '鳶揚げ'
+    tobi: '上棟鳶',
+    age: '上棟荷揚げ',
+    tobiage: '上棟鳶揚げ'
   };
   return labels[jobType] || jobType;
 }
