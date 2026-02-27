@@ -2,6 +2,12 @@
 <header class="header">
   <div class="header-title">配置管理システム <span class="breadcrumb-separator">&gt;</span> <span id="page-title" class="page-name"></span></div>
   <nav class="header-nav">
+    <a href="#" id="nav-manual" class="nav-icon" title="操作マニュアル" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;padding:0 0.4rem;opacity:0.7;transition:opacity .2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </svg>
+    </a>
     <a href="#" id="nav-dashboard">ダッシュボード</a>
     <a href="#" id="nav-invoices">請求</a>
     <a href="#" id="nav-payouts">支払</a>
@@ -123,7 +129,8 @@ function setNavHrefs(baseUrl) {
     'nav-staff': 'staff',
     'nav-subcontractors': 'subcontractors',
     'nav-transport': 'transportFees',
-    'nav-company': 'company'
+    'nav-company': 'company',
+    'nav-manual': 'manual'
   };
 
   for (const [id, page] of Object.entries(links)) {

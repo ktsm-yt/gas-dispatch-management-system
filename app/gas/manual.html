@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>配置管理システム 操作マニュアル v2.2 | {{COMPANY_NAME_SHORT}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;font-size:15px}
+body{font-family:'Noto Sans JP',sans-serif;color:var(--body-color);background:var(--body-bg);line-height:1.8;transition:background .3s,color .3s}
+:root{--primary:#1e40af;--primary-light:#3b82f6;--primary-bg:#eff6ff;--success:#059669;--warning:#d97706;--danger:#dc2626;--g50:#f8fafc;--g100:#f1f5f9;--g200:#e2e8f0;--g300:#cbd5e1;--g400:#94a3b8;--g600:#475569;--g700:#334155;--g800:#1e293b;--sw:280px;--body-bg:#f1f5f9;--body-color:#1e293b;--card-bg:#fff;--cover-from:#1e40af;--cover-to:#1e3a8a;--th-bg:#1e40af;--th-color:#fff;--td-stripe:#f8fafc;--td-hover:#eff6ff;--sidebar-bg:#0f172a;--sidebar-border:#1e293b;--callout-info-bg:#eff6ff;--callout-tip-bg:#ecfdf5;--callout-warn-bg:#fffbeb;--callout-danger-bg:#fef2f2;--folder-bg:#0f172a;--folder-color:#e2e8f0;--border-color:#e2e8f0}
+[data-theme="dark"]{--primary:#60a5fa;--primary-light:#93c5fd;--primary-bg:#1e293b;--success:#34d399;--warning:#fbbf24;--danger:#f87171;--g50:#1e293b;--g100:#0f172a;--g200:#334155;--g300:#475569;--g400:#94a3b8;--g600:#cbd5e1;--g700:#e2e8f0;--g800:#f1f5f9;--body-bg:#0c1322;--body-color:#e2e8f0;--card-bg:#1e293b;--cover-from:#1e3a5f;--cover-to:#0f172a;--th-bg:#1e3a5f;--th-color:#e2e8f0;--td-stripe:#162032;--td-hover:#1e293b;--sidebar-bg:#060d1b;--sidebar-border:#1e293b;--callout-info-bg:#172554;--callout-tip-bg:#052e16;--callout-warn-bg:#422006;--callout-danger-bg:#450a0a;--folder-bg:#060d1b;--folder-color:#cbd5e1;--border-color:#334155}
+.layout{display:flex;min-height:100vh}
+/* Sidebar */
+.sidebar{position:fixed;top:0;left:0;width:var(--sw);height:100vh;background:var(--sidebar-bg);color:#e2e8f0;overflow-y:auto;z-index:100;display:flex;flex-direction:column}
+.sidebar-header{padding:1.5rem 1.25rem 1rem;border-bottom:1px solid var(--sidebar-border)}
+.sidebar-header h1{font-size:1rem;font-weight:700;color:#fff;line-height:1.4}
+.sidebar-header .version{font-size:.75rem;color:var(--g400);margin-top:.25rem}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--sidebar-border)}
+.sidebar-tab{flex:1;padding:.6rem .5rem;text-align:center;font-size:.75rem;font-weight:500;color:var(--g400);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.sidebar-tab:hover{color:#fff}
+.sidebar-tab.active{color:var(--primary-light);border-bottom-color:var(--primary-light)}
+.sidebar-nav{flex:1;padding:.75rem 0;overflow-y:auto}
+.sidebar-nav a{display:block;padding:.4rem 1.25rem;color:var(--g400);text-decoration:none;font-size:.8rem;transition:all .15s;border-left:3px solid transparent}
+.sidebar-nav a:hover{color:#fff;background:rgba(255,255,255,.05)}
+.sidebar-nav a.active{color:var(--primary-light);border-left-color:var(--primary-light);background:rgba(59,130,246,.08)}
+.sidebar-nav a.sub{padding-left:2rem;font-size:.75rem}
+.sidebar-footer{padding:.75rem 1.25rem;border-top:1px solid var(--sidebar-border);font-size:.7rem;color:var(--g400)}
+/* Main */
+.main{margin-left:var(--sw);flex:1;padding:2rem 2.5rem 4rem;max-width:920px}
+/* Cover */
+.cover{background:linear-gradient(135deg,var(--cover-from) 0%,var(--cover-to) 100%);color:#fff;padding:3rem 2.5rem;border-radius:12px;margin-bottom:2.5rem}
+.cover h1{font-size:1.75rem;font-weight:700;margin-bottom:.5rem}
+.cover .subtitle{font-size:1.1rem;opacity:.85;margin-bottom:1.5rem}
+.cover-meta{display:flex;gap:2rem;font-size:.85rem;opacity:.8}
+/* Tab */
+.tab-content{display:none}.tab-content.active{display:block}
+/* Headings */
+h2{font-size:1.5rem;font-weight:700;color:var(--primary);padding-bottom:.5rem;border-bottom:3px solid var(--primary);margin:3rem 0 1.25rem}
+h2:first-child{margin-top:0}
+h3{font-size:1.15rem;font-weight:700;color:var(--g800);margin:2rem 0 .75rem;padding-left:.75rem;border-left:4px solid var(--primary-light)}
+h4{font-size:1rem;font-weight:600;color:var(--g700);margin:1.5rem 0 .5rem}
+/* Text */
+p{margin-bottom:.75rem}
+ul,ol{margin:.5rem 0 1rem 1.5rem}
+li{margin-bottom:.35rem}
+li::marker{color:var(--primary-light)}
+/* Table */
+table{width:100%;border-collapse:collapse;margin:1rem 0 1.5rem;font-size:.9rem}
+th{background:var(--th-bg);color:var(--th-color);font-weight:500;padding:.6rem .75rem;text-align:left}
+td{padding:.55rem .75rem;border-bottom:1px solid var(--border-color)}
+tr:nth-child(even) td{background:var(--td-stripe)}
+tr:hover td{background:var(--td-hover)}
+/* Callout */
+.callout{padding:1rem 1.25rem;border-radius:8px;margin:1rem 0 1.25rem;font-size:.9rem;border-left:4px solid}
+.callout-title{font-weight:700;font-size:.85rem;margin-bottom:.3rem;display:flex;align-items:center;gap:.4rem}
+.callout.info{background:var(--callout-info-bg);border-color:var(--primary-light);color:var(--primary)}
+.callout.tip{background:var(--callout-tip-bg);border-color:var(--success);color:var(--success)}
+.callout.warning{background:var(--callout-warn-bg);border-color:var(--warning);color:var(--warning)}
+.callout.danger{background:var(--callout-danger-bg);border-color:var(--danger);color:var(--danger)}
+.callout ul{margin:.3rem 0 0 1.2rem}
+/* Flow */
+.flow{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin:1rem 0 1.5rem}
+.flow-step{background:var(--primary-bg);color:var(--primary);padding:.5rem 1rem;border-radius:8px;font-size:.85rem;font-weight:500;border:1px solid #bfdbfe}
+.flow-arrow{color:var(--g400);font-size:1.2rem}
+.flow-note{width:100%;text-align:center;font-size:.8rem;color:var(--g600);margin-top:-.25rem}
+/* Steps */
+.steps{counter-reset:step;list-style:none;margin-left:0}
+.steps li{counter-increment:step;padding:.5rem 0 .5rem 2.5rem;position:relative}
+.steps li::before{content:counter(step);position:absolute;left:0;top:.4rem;width:1.75rem;height:1.75rem;background:var(--primary);color:#fff;border-radius:50%;text-align:center;line-height:1.75rem;font-size:.8rem;font-weight:700}
+/* Folder */
+.folder-tree{background:var(--folder-bg);color:var(--folder-color);padding:1.25rem 1.5rem;border-radius:8px;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.6;margin:1rem 0 1.5rem;overflow-x:auto}
+/* FAQ */
+.faq-item{margin-bottom:1.25rem}
+.faq-q{font-weight:700;color:var(--primary);margin-bottom:.25rem}
+.faq-q::before{content:'Q. '}
+.faq-a{padding-left:1.5rem}
+.faq-a::before{content:'A. ';font-weight:700;color:var(--success);margin-left:-1.5rem}
+/* Badge */
+.badge{display:inline-block;padding:.15rem .5rem;border-radius:9999px;font-size:.75rem;font-weight:500}
+.badge-blue{background:#dbeafe;color:#1e40af}
+.badge-green{background:#d1fae5;color:#065f46}
+.badge-orange{background:#fef3c7;color:#92400e}
+.badge-red{background:#fee2e2;color:#991b1b}
+.badge-gray{background:#e2e8f0;color:#475569}
+.badge-purple{background:#ede9fe;color:#5b21b6}
+/* Screenshot placeholder */
+.screenshot{background:var(--g100);border:2px dashed var(--g300);border-radius:8px;padding:2rem;text-align:center;color:var(--g400);font-size:.85rem;margin:1rem 0 1.5rem}
+.screenshot img{max-width:100%;border-radius:6px;border:1px solid var(--g200)}
+.screenshot .caption{margin-top:.5rem;font-size:.8rem;color:var(--g600)}
+/* Grid diagram */
+.grid-demo{display:grid;grid-template-columns:repeat(6,1fr);gap:.5rem;margin:1rem 0 1.5rem}
+.grid-col{background:var(--primary-bg);border:1px solid #bfdbfe;border-radius:8px;padding:.5rem;text-align:center;font-size:.8rem}
+.grid-col .col-title{font-weight:700;color:var(--primary);margin-bottom:.25rem}
+.grid-col .col-meta{font-size:.7rem;color:var(--g600)}
+/* Theme toggle */
+.theme-toggle{display:flex;align-items:center;gap:.5rem;padding:.5rem 1.25rem;cursor:pointer;font-size:.8rem;color:var(--g400);transition:color .2s}
+.theme-toggle:hover{color:#fff}
+.theme-toggle-track{width:36px;height:20px;background:#334155;border-radius:10px;position:relative;transition:background .3s}
+.theme-toggle-thumb{width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:2px;left:2px;transition:transform .3s}
+[data-theme="dark"] .theme-toggle-track{background:var(--primary-light)}
+[data-theme="dark"] .theme-toggle-thumb{transform:translateX(16px)}
+/* Responsive */
+@media(max-width:768px){.sidebar{display:none}.main{margin-left:0;padding:1rem}.cover{padding:2rem 1.5rem}.cover-meta{flex-direction:column;gap:.5rem}.grid-demo{grid-template-columns:repeat(3,1fr)}}
+/* Print */
+@media print{.sidebar{display:none!important}.main{margin-left:0!important;padding:0!important;max-width:100%!important}.cover{break-after:page}h2{break-before:page;break-after:avoid}h3{break-after:avoid}table{break-inside:avoid}.callout{break-inside:avoid}body{font-size:11pt;background:#fff}.tab-content{display:block!important}.tab-content::before{content:attr(data-print-title);display:block;font-size:18pt;font-weight:700;color:var(--primary);margin:1rem 0;border-bottom:3px solid var(--primary);padding-bottom:.5rem;break-before:page}}
+</style>
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h1>配置管理システム<br>操作マニュアル</h1>
+    <div class="version">v2.2 — {{COMPANY_NAME_SHORT}}</div>
+  </div>
+  <div class="sidebar-tabs">
+    <div class="sidebar-tab active" data-tab="tab1">案件・配置</div>
+    <div class="sidebar-tab" data-tab="tab2">請求・支払</div>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav"></nav>
+  <div class="theme-toggle" id="themeToggle" title="ダークモード切替">
+    <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
+    <span id="themeLabel">ダークモード</span>
+  </div>
+  <div class="sidebar-footer">&copy; 株式会社{{COMPANY_NAME_SHORT}}<br>最終更新: 2026-02-27</div>
+</aside>
+
+<div class="layout">
+<main class="main">
+
+<div class="cover">
+  <h1>配置管理システム 操作マニュアル</h1>
+  <div class="subtitle">株式会社{{COMPANY_NAME_SHORT}} 業務支援システム</div>
+  <div class="cover-meta">
+    <span>Version 2.2</span>
+    <span>最終更新: 2026-02-27</span>
+    <span>対象: 管理者・現場担当者</span>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!--  TAB 1: 案件・配置マニュアル                                    -->
+<!-- ============================================================ -->
+<div class="tab-content active" id="tab1" data-print-title="第1部: 案件・配置マニュアル">
+
+<!-- ===== 1. はじめに ===== -->
+<h2 id="t1-1">1. はじめに</h2>
+
+<h3 id="t1-1-1">1.1 システム概要</h3>
+<p>配置管理システムは、日々の案件に対してスタッフを配置し、連絡用のLINEテンプレートを作成するためのWebアプリケーションです。</p>
+
+<h3 id="t1-1-2">1.2 本マニュアルの範囲</h3>
+<ul>
+  <li>ダッシュボード（案件カード表示）</li>
+  <li>案件の登録・編集</li>
+  <li>スタッフの配置</li>
+  <li>LINEテンプレート</li>
+  <li>設定（顧客・スタッフ・外注先・交通費・自社情報）</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 請求・支払について</div>
+  請求・支払に関する操作は「請求・支払マニュアル」（本ドキュメントのタブ2）を参照してください。
+</div>
+
+<h3 id="t1-1-3">1.3 推奨ブラウザ</h3>
+<p>Google Chrome（最新版）</p>
+
+<h3 id="t1-1-4">1.4 画面構成（ナビゲーション）</h3>
+<p>画面上部のナビゲーションバーから各画面に移動できます。</p>
+<table>
+  <tr><th>メニュー</th><th>説明</th></tr>
+  <tr><td><strong>ダッシュボード</strong></td><td>日別案件の一覧（カード表示）</td></tr>
+  <tr><td><strong>請求</strong></td><td>請求管理画面（タブ2で詳しく説明）</td></tr>
+  <tr><td><strong>支払</strong></td><td>支払管理画面（タブ2で詳しく説明）</td></tr>
+  <tr><td><strong>売上分析</strong></td><td>売上・粗利益の分析ダッシュボード</td></tr>
+  <tr><td><strong>設定</strong></td><td>顧客・スタッフ・外注先・交通費・自社情報（ドロップダウンメニュー）</td></tr>
+</table>
+<div class="callout tip">
+  <div class="callout-title">💡 別タブで開く</div>
+  ナビゲーションリンクを右クリック → 「新しいタブで開く」で、複数画面を同時に操作できます。
+</div>
+
+<h3 id="t1-1-5">1.5 用語</h3>
+<table>
+  <tr><th>用語</th><th>説明</th></tr>
+  <tr><td><span class="badge badge-blue">案件</span></td><td>顧客からの作業依頼（現場単位）</td></tr>
+  <tr><td><span class="badge badge-blue">配置</span></td><td>案件にスタッフを割り当てること</td></tr>
+  <tr><td><span class="badge badge-blue">枠（詳細モード）</span></td><td>1案件の中に複数の時間区分・単価区分を持たせる単位</td></tr>
+  <tr><td><span class="badge badge-blue">時間区分</span></td><td>上棟／終日／AM／PM／夜勤／未定</td></tr>
+  <tr><td><span class="badge badge-blue">ステータス</span></td><td>未配置／配置済／保留／キャンセル／問題あり</td></tr>
+</table>
+
+<!-- ===== 2. クイックスタート ===== -->
+<h2 id="t1-2">2. クイックスタート</h2>
+<p>5分でわかる基本操作です。</p>
+
+<h3>案件を登録してスタッフを配置する</h3>
+<ol class="steps">
+  <li>ダッシュボードを開く</li>
+  <li>右下の「<strong>＋</strong>」ボタンをクリック → 案件情報を入力 → 「<strong>保存</strong>」</li>
+  <li>作成されたカードをクリック → 配置モーダルが開く</li>
+  <li>左のスタッフ一覧から配置したいスタッフを選択</li>
+  <li>「<strong>変更を登録</strong>」をクリック</li>
+</ol>
+
+<h3>配置済みの案件を確認する</h3>
+<ol class="steps">
+  <li>ダッシュボードで日付を選択</li>
+  <li>ステータスフィルタで「配置済」を選択</li>
+  <li>カードで配置状況を確認</li>
+</ol>
+
+<!-- ===== 3. ダッシュボード ===== -->
+<h2 id="t1-3">3. ダッシュボード</h2>
+<p>ダッシュボードは本システムのメイン画面です。選択した日付の案件を<strong>時間区分別の6列グリッド</strong>でカード表示します。</p>
+
+<h3 id="t1-3-1">3.1 画面構成</h3>
+<ul>
+  <li><strong>日付ナビゲーション:</strong> <code>&lt;</code>（前日）/ <code>&gt;</code>（翌日）/ 「今日」ボタン / 日付クリックでカレンダー選択</li>
+  <li><strong>ステータスフィルタ:</strong>
+    <span class="badge badge-gray">すべて</span>
+    <span class="badge badge-red">未配置</span>
+    <span class="badge badge-green">配置済</span>
+    <span class="badge badge-orange">保留</span>
+    <span class="badge badge-gray">キャンセル</span>
+    <span class="badge badge-red">問題あり</span>
+  </li>
+  <li><strong>統計表示（右側）:</strong> 総件数 / 配置済 / 未配置</li>
+</ul>
+
+<h3 id="t1-3-2">3.2 6列グリッドレイアウト</h3>
+<p>案件は時間区分ごとに6つの列に分類されて表示されます。</p>
+
+<div class="grid-demo">
+  <div class="grid-col"><div class="col-title">上棟</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+  <div class="grid-col"><div class="col-title">終日</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+  <div class="grid-col"><div class="col-title">AM</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+  <div class="grid-col"><div class="col-title">PM</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+  <div class="grid-col"><div class="col-title">夜勤</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+  <div class="grid-col"><div class="col-title">未定</div><div class="col-meta">件数 / 名数 / 過不足</div></div>
+</div>
+
+<p>各列のヘッダーには以下が表示されます：</p>
+<table>
+  <tr><th>表示</th><th>意味</th><th>例</th></tr>
+  <tr><td><strong>件数</strong></td><td>その時間区分の案件数</td><td>3件</td></tr>
+  <tr><td><strong>名数</strong></td><td>配置済/必要人数</td><td>3/5名</td></tr>
+  <tr><td><strong>過不足</strong></td><td>人員の過不足</td><td><span class="badge badge-red">2名不足</span> / <span class="badge badge-green">+1名余裕</span> / <span class="badge badge-gray">過不足なし</span></td></tr>
+</table>
+
+<h3 id="t1-3-3">3.3 案件カード（表示内容）</h3>
+<p>各カードには以下の情報が表示されます。</p>
+<ul>
+  <li>作業カテゴリタグ（<span class="badge badge-orange">上棟</span> <span class="badge badge-green">軽作業</span> <span class="badge badge-purple">荷揚げ</span>）</li>
+  <li>ステータスバッジ（保留時のみ表示）</li>
+  <li>顧客名</li>
+  <li>配置人数（配置済/必要人数）— 不足時は赤色で表示</li>
+  <li>鉛筆アイコン（マウスホバー時に表示）</li>
+  <li>現場名・現場住所</li>
+  <li>開始時間（設定されている場合）</li>
+  <li>配置済みスタッフの名前チップ（最大4文字で表示）</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 人数不足の強調</div>
+  人数不足の案件カードには赤い左ボーダーが付き、一目で人員不足がわかるようになっています。
+</div>
+
+<h3 id="t1-3-4">3.4 案件カード（操作）</h3>
+<ul>
+  <li><strong>カードをクリック:</strong> 配置モーダルを開く</li>
+  <li><strong>鉛筆アイコンをクリック:</strong> 案件編集モーダルを開く</li>
+</ul>
+
+<h3 id="t1-3-5">3.5 その他の機能</h3>
+<ul>
+  <li><strong>フローティング「＋」ボタン:</strong> 画面右下に固定表示。クリックで新規案件の登録</li>
+  <li><strong>自動更新:</strong> 30秒ごとに最新データを自動取得。別タブでの変更もリアルタイムに反映されます</li>
+  <li><strong>印刷対応:</strong> ブラウザの印刷機能でダッシュボードの内容を印刷できます</li>
+</ul>
+
+<!-- ===== 4. 案件の登録・編集 ===== -->
+<h2 id="t1-4">4. 案件の登録・編集</h2>
+
+<h3 id="t1-4-1">4.1 新規案件の登録</h3>
+<ol class="steps">
+  <li>画面右下の「<strong>＋</strong>」ボタンをクリック</li>
+  <li>案件情報を入力</li>
+  <li>「<strong>保存</strong>」または「<strong>保存して次へ</strong>」をクリック</li>
+</ol>
+
+<h3 id="t1-4-2">4.2 入力項目</h3>
+<table>
+  <tr><th>項目</th><th>必須</th><th>説明</th></tr>
+  <tr><td>顧客</td><td>○</td><td>顧客名を入力すると候補が表示されます（オートコンプリート）</td></tr>
+  <tr><td>作業日</td><td>○</td><td>作業日</td></tr>
+  <tr><td>現場名</td><td>○</td><td>現場名</td></tr>
+  <tr><td>現場住所</td><td>-</td><td>現場の住所</td></tr>
+  <tr><td>時間区分</td><td>○</td><td>上棟／終日／AM／PM／夜勤／未定</td></tr>
+  <tr><td>開始時間</td><td>-</td><td>開始時間（任意）</td></tr>
+  <tr><td>作業カテゴリ</td><td>-</td><td>上棟／軽作業／荷揚げ</td></tr>
+  <tr><td>作業詳細</td><td>-</td><td>ボード／建具／キッチン／ユニットバス／フローリング／幅木／クロス／プレハブ材／足場材／資材一般／SK／トイレ／家具／家電／鳶／鳶補助／荷揚げ／鳶揚げ／搬出／手元／解体／清掃／その他</td></tr>
+  <tr><td>ステータス</td><td>-</td><td>未配置／配置済／保留／キャンセル／問題あり</td></tr>
+  <tr><td>担当監督名</td><td>-</td><td>現場監督名</td></tr>
+  <tr><td>備考</td><td>-</td><td>特記事項（テキストエリア）</td></tr>
+</table>
+
+<h3 id="t1-4-3">4.3 人員枠設定（シンプルモード）</h3>
+<p>デフォルトのモードです。必要人数と単価区分を1つだけ設定します。</p>
+<table>
+  <tr><th>項目</th><th>説明</th></tr>
+  <tr><td>必要人数</td><td>この案件に必要な人数</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+</table>
+
+<h3 id="t1-4-4">4.4 人員枠設定（詳細モード）</h3>
+<p>1案件の中に複数の「枠」を設定できます。スタッフごとの稼働時間が異なる場合に活用してください。</p>
+<table>
+  <tr><th>項目</th><th>説明</th></tr>
+  <tr><td>時間区分</td><td>上棟／終日／AM／PM／夜勤／未定</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>人数</td><td>枠ごとの必要人数</td></tr>
+  <tr><td>備考</td><td>枠ごとの注意事項</td></tr>
+</table>
+<ul>
+  <li>「<strong>+ 枠を追加</strong>」ボタンで枠を追加できます</li>
+  <li>追加した枠の合計人数が画面に表示されます</li>
+</ul>
+
+<h3 id="t1-4-5">4.5 請求書用項目</h3>
+<p>折りたたみセクション内にあります。必要な場合のみ入力してください。</p>
+<ul>
+  <li>発注ナンバー</li>
+  <li>営業所</li>
+  <li>物件コード</li>
+  <li>担当工事課</li>
+</ul>
+
+<h3 id="t1-4-6">4.6 連続登録（保存して次へ）</h3>
+<p>新規作成時のみ表示されます。複数案件を続けて登録する場合は「<strong>保存して次へ</strong>」をクリックすると、フォームがリセットされます。</p>
+
+<h3 id="t1-4-7">4.7 編集・削除</h3>
+<ul>
+  <li><strong>編集:</strong> カードの鉛筆アイコンをクリック → 編集モーダルで内容を変更</li>
+  <li><strong>削除:</strong> 編集モーダル内の「削除」ボタン</li>
+</ul>
+<div class="callout danger">
+  <div class="callout-title">⚠️ 削除に関する注意</div>
+  削除した案件は復元できません。削除前に内容を確認してください。
+</div>
+<div class="callout warning">
+  <div class="callout-title">⚠️ アーカイブデータの編集</div>
+  過去年度のデータを編集する場合、画面上部に警告バナーが表示されます。編集は可能ですが、請求書の再生成が必要になる場合があります。
+</div>
+
+<!-- ===== 5. スタッフの配置 ===== -->
+<h2 id="t1-5">5. スタッフの配置</h2>
+
+<h3 id="t1-5-1">5.1 配置モーダルを開く</h3>
+<p>ダッシュボードのカードをクリックすると、配置モーダルが開きます。</p>
+
+<h3 id="t1-5-2">5.2 ヘッダー情報</h3>
+<p>モーダル上部に案件の概要が表示されます。</p>
+<ul>
+  <li>顧客名・現場名・現場住所</li>
+  <li>作業カテゴリタグ・作業内容</li>
+  <li>作業日・時間区分・開始時間</li>
+  <li>統計: 必要人数 / 配置人数 / 不足人数</li>
+</ul>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 請求集計済み</div>
+  この案件の請求書が集計済みの場合、警告バナーが表示されます。配置を変更すると請求書の再集計が必要になります。
+</div>
+
+<h3 id="t1-5-3">5.3 左パネル（スタッフ一覧）</h3>
+<ul>
+  <li><strong>名前検索:</strong> テキスト入力でスタッフを絞り込み</li>
+  <li><strong>スキルフィルタ:</strong> 鳶／ボード／揚げ など（スタッフマスタで設定したスキル）</li>
+  <li><strong>種別フィルタ:</strong> 全タイプ／自社／学生／一人親方／外注</li>
+  <li>配置済みスタッフは上部に表示（背景色で区別）</li>
+</ul>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 重複配置の警告</div>
+  同日の別案件に既に配置されているスタッフには警告マークが表示されます。配置は可能ですが、確認してください。
+</div>
+
+<h3 id="t1-5-4">5.4 右パネル（一括配置設定）</h3>
+<table>
+  <tr><th>項目</th><th>説明</th></tr>
+  <tr><td>配置枠</td><td>詳細モード案件のみ表示。選択した枠に応じて単価区分が自動反映されます</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜間／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>交通費エリア</td><td>ドロップダウンから選択（交通費マスタで設定したエリア）</td></tr>
+  <tr><td>交通費（円）</td><td>金額を直接入力（エリア選択で自動入力も可）</td></tr>
+  <tr><td>諸経費備考（駅名）</td><td>最寄り駅などの補足情報</td></tr>
+  <tr><td>バス利用</td><td>チェックボックス</td></tr>
+  <tr><td>役割</td><td>鳶／鳶補助／荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>リーダー</td><td>チェックボックス（リーダー指定）</td></tr>
+</table>
+
+<h3 id="t1-5-5">5.5 配置の手順</h3>
+<ol class="steps">
+  <li>スタッフ一覧から対象スタッフを選択（複数可）</li>
+  <li>右パネルで条件を設定</li>
+  <li>「<strong>変更を登録</strong>」をクリック</li>
+</ol>
+
+<h3 id="t1-5-6">5.6 配置の解除</h3>
+<ol class="steps">
+  <li>配置済みスタッフの「<strong>×</strong>」をクリック</li>
+  <li>「<strong>変更を登録</strong>」をクリック</li>
+</ol>
+
+<!-- ===== 6. LINEテンプレート ===== -->
+<h2 id="t1-6">6. LINEテンプレート</h2>
+
+<h3 id="t1-6-1">6.1 テンプレートの生成</h3>
+<p>配置モーダルのフッターにある「<strong>LINEテンプレ</strong>」ボタンをクリックすると、テンプレート編集画面が開きます。</p>
+
+<h3 id="t1-6-2">6.2 編集とコピー</h3>
+<ul>
+  <li>生成された内容をテキストエリアで自由に編集できます</li>
+  <li>「<strong>コピー</strong>」ボタンでクリップボードへコピー</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 自動送信なし</div>
+  LINEへの自動送信機能はありません。テンプレートをコピーし、LINEアプリに貼り付けて手動で送信してください。
+</div>
+
+<!-- ===== 7. 設定メニュー ===== -->
+<h2 id="t1-7">7. 設定メニュー（マスタ管理）</h2>
+<p>ナビゲーションの「設定」ドロップダウンから各マスタ画面に移動します。</p>
+
+<h3 id="t1-7-1">7.1 顧客マスタ</h3>
+<h4>検索・フィルタ</h4>
+<ul>
+  <li>テキスト検索（会社名・担当者名）</li>
+  <li>「無効な顧客も表示」チェックボックス</li>
+  <li>統計: 全◯件 / 有効◯件</li>
+</ul>
+<h4>一覧の列</h4>
+<p>会社名 / 支店・部署 / 担当者 / 電話番号 / 住所 / 締め日 / 状態</p>
+
+<h4>編集項目</h4>
+<table>
+  <tr><th>セクション</th><th>項目</th></tr>
+  <tr><td><strong>基本情報</strong></td><td>会社名 / 支店・営業所名 / 部署名 / 担当者名 / 敬称（様/御中/殿/なし）</td></tr>
+  <tr><td><strong>連絡先</strong></td><td>郵便番号 / 住所 / 電話番号 / FAX / メール</td></tr>
+  <tr><td><strong>単価設定（税抜）</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ（各請求単価）</td></tr>
+  <tr><td><strong>請求設定</strong></td><td>締め日 / 支払月 / 支払日 / 請求書書式 / 消費税率 / 税端数処理 / 交通費請求 / 荷主名 / 顧客コード / インボイス番号</td></tr>
+  <tr><td><strong>その他</strong></td><td>状態（有効/無効）/ Driveフォルダ / 備考</td></tr>
+</table>
+
+<h4>請求設定の詳細</h4>
+<table>
+  <tr><th>項目</th><th>意味</th><th>例</th></tr>
+  <tr><td><strong>締め日</strong></td><td>いつまでの作業を1枚の請求書にまとめるか</td><td>末日 or 特定日（例: 25日）</td></tr>
+  <tr><td><strong>支払月</strong></td><td>締めた月から何ヶ月後に支払か</td><td>当月 / 翌月 / 翌々月</td></tr>
+  <tr><td><strong>支払日</strong></td><td>支払月の何日が期限か</td><td>末日 or 特定日（例: 15日）</td></tr>
+  <tr><td><strong>請求書書式</strong></td><td>帳票のレイアウト形式</td><td>様式1 / 様式2（発注No・営業所）/ 様式3（ポラテック）</td></tr>
+</table>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 請求書への反映</div>
+  <ul>
+    <li><strong>締め日</strong> → 請求書に含まれる作業の対象期間が決まる</li>
+    <li><strong>支払月 + 支払日</strong> → 請求書に印字される「支払期限」の日付が決まる</li>
+  </ul>
+</div>
+
+<h3 id="t1-7-2">7.2 スタッフマスタ</h3>
+<h4>検索・フィルタ</h4>
+<ul>
+  <li>テキスト検索（氏名・電話番号・住所）</li>
+  <li>種別フィルタ: 全種別 / 自社スタッフ / 学生アルバイト / 一人親方 / 外注</li>
+  <li>「無効も表示」チェックボックス</li>
+  <li>統計: 全◯名 / 有効◯名</li>
+</ul>
+<h4>一覧の列</h4>
+<p>氏名 / 種別 / 電話番号 / 住所 / スキル / 状態</p>
+
+<h4>選択モード（名簿生成）</h4>
+<p>「<strong>選択モード</strong>」ボタンをクリックすると、スタッフを最大10名選択して作業員名簿を生成できます。</p>
+
+<h4>編集項目</h4>
+<table>
+  <tr><th>セクション</th><th>項目</th></tr>
+  <tr><td><strong>基本情報</strong></td><td>氏名 / 氏名カナ / 通称 / 種別 / 外注先（外注選択時）/ スキル（タグ入力＋プリセット）</td></tr>
+  <tr><td><strong>連絡先</strong></td><td>電話番号 / LINE ID / 郵便番号 / 住所 / 緊急連絡先（氏名/住所/電話）</td></tr>
+  <tr><td><strong>日給設定</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ（各単価）</td></tr>
+  <tr><td><strong>個人情報</strong></td><td>生年月日 / 性別 / 血液型 / バイク保有 / 雇入日 / 職種</td></tr>
+  <tr><td><strong>資格・保険</strong></td><td>技能者ID(CCUS) / 雇用保険番号 / 健康保険番号 / 年金 / 建退共 / 中退共</td></tr>
+  <tr><td><strong>口座情報</strong></td><td>銀行名 / 支店名 / 口座種別 / 口座番号（マスク表示）/ 口座名義</td></tr>
+  <tr><td><strong>その他</strong></td><td>状態 / 外国人区分 / NG顧客 / 備考</td></tr>
+</table>
+
+<h3 id="t1-7-3">7.3 外注先マスタ</h3>
+<h4>一覧の列</h4>
+<p>会社名 / 担当者名 / 電話番号 / 備考 / 状態</p>
+<h4>編集項目</h4>
+<p>会社名 / 担当者名 / 電話番号 / 備考 / 基本単価 / ハーフ単価 / 終日単価 / 状態（有効/無効）</p>
+
+<h3 id="t1-7-4">7.4 交通費マスタ</h3>
+<h4>一覧の列</h4>
+<p>エリアコード / エリア名 / 金額</p>
+<h4>編集項目</h4>
+<p>エリアコード（新規作成後は変更不可）/ エリア名 / 金額（円）</p>
+
+<h3 id="t1-7-5">7.5 自社情報</h3>
+<table>
+  <tr><th>セクション</th><th>項目</th></tr>
+  <tr><td><strong>基本情報</strong></td><td>会社名 / 郵便番号 / 電話番号 / 住所 / FAX / インボイス登録番号 / 決算月</td></tr>
+  <tr><td><strong>口座情報</strong></td><td>銀行名 / 支店名 / 口座種別 / 口座番号 / 口座名義</td></tr>
+  <tr><td><strong>帳票用</strong></td><td>ロゴ画像 / 印鑑画像</td></tr>
+</table>
+
+<h3 id="t1-7-6">7.6 共通の操作</h3>
+<ul>
+  <li>「<strong>＋</strong>」ボタンで新規登録</li>
+  <li>一覧行クリックで編集モーダルを開く</li>
+  <li>不要なデータは「削除」または状態を「無効」に設定</li>
+</ul>
+
+<!-- ===== 8. FAQ ===== -->
+<h2 id="t1-8">8. よくある質問（FAQ）</h2>
+
+<h3>配置について</h3>
+
+<div class="faq-item">
+  <p class="faq-q">配置を間違えた場合は？</p>
+  <p class="faq-a">配置モーダルで「×」をクリックして解除し、正しいスタッフを選択して再配置してください。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">同じスタッフを複数の案件に配置できますか？</p>
+  <p class="faq-a">可能ですが、同日の別案件に配置済みの場合は警告マークが表示されます。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">詳細モードの「枠」とは何ですか？</p>
+  <p class="faq-a">1つの案件内で異なる時間区分・単価区分のスタッフを管理するための区分です。例えば、午前と午後で異なる単価を設定したい場合に使用します。</p>
+</div>
+
+<h3>案件について</h3>
+
+<div class="faq-item">
+  <p class="faq-q">過去の案件を編集できますか？</p>
+  <p class="faq-a">ダッシュボードで日付を過去に移動して編集できます。ただし、請求書が生成済みの場合は請求書の再生成が必要です。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">案件を誤って削除してしまった場合は？</p>
+  <p class="faq-a">削除した案件は復元できません。再度登録してください。</p>
+</div>
+
+<!-- ===== 9. 運用メモ ===== -->
+<h2 id="t1-9">9. 運用メモ・注意点</h2>
+<ul>
+  <li>案件の詳細変更（配置内容・単価など）は、請求書側の再集計が必要になる場合があります（請求側マニュアル参照）。</li>
+  <li>詳細モードで作成した案件は、配置時に「配置枠」を必ず選択してください。</li>
+  <li>人数不足の案件は赤いボーダーで強調表示されます。優先的に対応してください。</li>
+  <li>ダッシュボードは30秒ごとに自動更新されます。手動でリロードする必要はありません。</li>
+</ul>
+
+<!-- ===== 10. お問い合わせ ===== -->
+<h2 id="t1-10">10. お問い合わせ・変更依頼</h2>
+<ul>
+  <li>変更要求は担当者へご連絡いただくか、所定のシートにご記入ください。</li>
+  <li>システムに関するご質問は担当者までご連絡ください。</li>
+  <li>このマニュアルに関するご不明点は、担当者までお問い合わせください。</li>
+</ul>
+
+</div><!-- /tab1 -->
+
+<!-- ============================================================ -->
+<!--  TAB 2: 請求・支払マニュアル                                    -->
+<!-- ============================================================ -->
+<div class="tab-content" id="tab2" data-print-title="第2部: 請求・支払マニュアル">
+
+<!-- ===== 1. はじめに ===== -->
+<h2 id="t2-1">1. はじめに</h2>
+
+<h3 id="t2-1-1">1.1 システム概要</h3>
+<p>案件・配置管理に加え、顧客への請求とスタッフ／外注先への支払を管理するWebアプリケーションです。</p>
+
+<h3 id="t2-1-2">1.2 本マニュアルの範囲</h3>
+<ul>
+  <li>請求管理（請求書の集計／編集／帳票出力）</li>
+  <li>請求書の一括出力・URL共有</li>
+  <li>請求データの集計エクスポート</li>
+  <li>支払管理（スタッフ向け）</li>
+  <li>外注費管理</li>
+  <li>売上分析</li>
+</ul>
+
+<h3 id="t2-1-3">1.3 推奨ブラウザ</h3>
+<p>Google Chrome（最新版）</p>
+
+<h3 id="t2-1-4">1.4 用語の区別（重要）</h3>
+<table>
+  <tr><th>用語</th><th>説明</th></tr>
+  <tr><td><span class="badge badge-blue">請求書（帳票）</span></td><td>PDF / Excel形式の請求書レイアウト</td></tr>
+  <tr><td><span class="badge badge-green">請求データ（集計）</span></td><td>請求管理画面から出力する集計データ（Excel）</td></tr>
+  <tr><td><span class="badge badge-orange">URL共有</span></td><td>共有リンクで誰でも閲覧できる設定</td></tr>
+</table>
+
+<h3 id="t2-1-5">1.5 効率的な使い方（Tips）</h3>
+<p>本システムはブラウザの複数タブで同時に開いて作業できます。</p>
+<ul>
+  <li>PDF生成など時間のかかる処理を開始したら、そのタブはそのままにして、別タブで次の作業を進められます</li>
+  <li>同じデータを同時に編集しなければ、並行して操作しても問題ありません</li>
+  <li>処理中のタブは閉じずにそのままお待ちください</li>
+</ul>
+
+<!-- ===== 2. クイックスタート ===== -->
+<h2 id="t2-2">2. クイックスタート</h2>
+<p>請求書作成から送付までの基本フローです。</p>
+<div class="flow">
+  <span class="flow-step">配置データ</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">請求書集計</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">確認・編集</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">帳票出力</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">送付</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">入金記録</span>
+  <span class="flow-note">↑ 変更が必要な場合は配置データを修正して再集計</span>
+</div>
+<h3>請求書を作成して送付する（基本手順）</h3>
+<ol class="steps">
+  <li>「<strong>請求</strong>」画面を開く（ナビゲーションから）</li>
+  <li>「<strong>+ 請求集計</strong>」→ 顧客・年月を選択 → 「<strong>集計</strong>」</li>
+  <li>一覧に追加された請求書の「<strong>確認</strong>」をクリック</li>
+  <li>発行日・支払期限を入力 → 「<strong>PDF</strong>」で出力</li>
+  <li>出力されたPDFを顧客に送付</li>
+</ol>
+
+<!-- ===== 3. 請求管理 ===== -->
+<h2 id="t2-3">3. 請求管理（顧客向け）</h2>
+
+<h3 id="t2-3-1">3.1 この章でできること</h3>
+<ul>
+  <li>請求書を検索・確認する</li>
+  <li>請求書を集計する（個別 / 一括）</li>
+  <li>請求書を編集・出力する</li>
+  <li>入金を記録する</li>
+</ul>
+
+<h3 id="t2-3-2">3.2 画面構成</h3>
+<h4>上部アクション（左側）</h4>
+<ul>
+  <li><strong>+ 請求集計:</strong> 個別の請求書集計モーダル</li>
+  <li><strong>一括集計:</strong> 全顧客の一括集計モーダル</li>
+</ul>
+<h4>上部アクション（右側）</h4>
+<ul>
+  <li><strong>集計エクスポート:</strong> 集計データをExcel形式で出力</li>
+  <li><strong>📁 出力先:</strong> エクスポートフォルダを開く</li>
+</ul>
+<h4>検索フィルタ</h4>
+<table>
+  <tr><th>項目</th><th>説明</th></tr>
+  <tr><td>年</td><td>対象の年</td></tr>
+  <tr><td>月</td><td>対象の月</td></tr>
+  <tr><td>顧客</td><td>オートコンプリート検索</td></tr>
+  <tr><td>締め日</td><td>顧客マスターの締め日で絞り込み</td></tr>
+  <tr><td>ステータス</td><td><span class="badge badge-gray">未送付</span> <span class="badge badge-orange">保留</span> <span class="badge badge-blue">送付済</span> <span class="badge badge-red">未回収</span> <span class="badge badge-green">入金済</span></td></tr>
+</table>
+
+<h3 id="t2-3-3">3.3 検索の手順</h3>
+<ol class="steps">
+  <li>年月・顧客・ステータスなどの条件を選びます。</li>
+  <li>「<strong>検索</strong>」ボタンをクリックします。</li>
+</ol>
+
+<h3 id="t2-3-4">3.4 一覧の見方（主な列）</h3>
+<table>
+  <tr><th>列</th><th>説明</th></tr>
+  <tr><td>チェックボックス</td><td>一括操作の対象選択</td></tr>
+  <tr><td>⚠️</td><td>配置変更の検知アイコン</td></tr>
+  <tr><td>請求番号</td><td>請求書の番号</td></tr>
+  <tr><td>顧客名</td><td>請求先の会社名</td></tr>
+  <tr><td>請求年月</td><td>対象の年月</td></tr>
+  <tr><td>発行日</td><td>請求書の発行日</td></tr>
+  <tr><td>支払期限</td><td>支払いの期限日</td></tr>
+  <tr><td>合計金額</td><td>請求金額の合計</td></tr>
+  <tr><td>ステータス</td><td>クリックでソート切替</td></tr>
+  <tr><td>入金状況</td><td>完済／残額の表示</td></tr>
+  <tr><td>帳票出力</td><td>確認 or 編集ボタン</td></tr>
+  <tr><td>顧客フォルダ</td><td>Drive上のフォルダリンク</td></tr>
+</table>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 滞留日数</div>
+  ステータスを「未回収」で検索すると「滞留日数」列が追加表示されます。
+</div>
+
+<h3 id="t2-3-5">3.5 行の選択（チェック）</h3>
+<ul>
+  <li>行をクリックするとチェックが付きます。もう一度クリックで解除。</li>
+  <li>先頭のチェックボックスで全選択できます。</li>
+</ul>
+
+<h3 id="t2-3-6">3.6 配置変更の警告（⚠️）</h3>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 配置変更マーク</div>
+  請求書に紐づく配置が変更された場合、一覧に ⚠️ が表示されます。クリックすると再生成の案内が表示されます。
+</div>
+
+<h3 id="t2-3-7">3.7 顧客フォルダ</h3>
+<ul>
+  <li>顧客フォルダが未作成の場合: 「<strong>作成</strong>」ボタンが表示されます</li>
+  <li>作成済みの場合: 「<strong>フォルダ</strong>」リンクが表示されます（クリックでGoogle Driveを開く）</li>
+</ul>
+
+<h3 id="t2-3-8">3.8 請求書の集計</h3>
+<h4>個別集計</h4>
+<ol class="steps">
+  <li>「<strong>+ 請求集計</strong>」をクリック</li>
+  <li>顧客（オートコンプリート）・対象年月を選択</li>
+  <li>「<strong>集計</strong>」をクリック</li>
+</ol>
+<div class="callout tip">
+  <div class="callout-title">💡 確認方法</div>
+  一覧に新しい請求書が表示され、ステータスが「未送付」になっていれば成功です。
+</div>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 既存の請求書がある場合</div>
+  同じ顧客・年月の請求書が既にある場合は、「上書き集計」の確認が表示されます。
+</div>
+
+<h4>一括集計</h4>
+<ol class="steps">
+  <li>「<strong>一括集計</strong>」をクリック</li>
+  <li>対象年月を選択</li>
+  <li>既存請求書の扱い（スキップ／上書き）を選択</li>
+  <li>必要に応じて「自動で続ける」にチェック（最後まで連続実行）</li>
+  <li>「<strong>開始</strong>」をクリック</li>
+</ol>
+<p>プログレスバーと経過時間が表示されます。大量の顧客がある場合は「次の50社」ボタンで段階的に実行することもできます。</p>
+
+<h4>締め日と請求対象期間</h4>
+<p>請求書は顧客マスタの「締め日」設定に基づいて対象期間を自動計算します。</p>
+<table>
+  <tr><th>締め日の設定</th><th>2026年1月分を集計した場合の対象期間</th></tr>
+  <tr><td>月末締め（28日以降）</td><td>2026-01-01 〜 2026-01-31</td></tr>
+  <tr><td>20日締め</td><td>2025-12-21 〜 2026-01-20</td></tr>
+  <tr><td>15日締め</td><td>2025-12-16 〜 2026-01-15</td></tr>
+  <tr><td>10日締め</td><td>2025-12-11 〜 2026-01-10</td></tr>
+</table>
+<div class="callout tip">
+  <div class="callout-title">💡 ポイント</div>
+  月末締め以外の顧客は、前月の締め日翌日〜当月の締め日が対象期間になります。「1月分」を集計しても前月の作業が含まれる場合があります。
+</div>
+
+<h3 id="t2-3-9">3.9 請求書の編集／帳票出力</h3>
+<ol class="steps">
+  <li>一覧の「<strong>確認</strong>」（未送付）または「<strong>帳票出力</strong>」ボタンをクリック</li>
+  <li>請求書編集モーダルが開きます</li>
+  <li>必要に応じて以下を入力：発行日 / 支払期限 / 社内メモ</li>
+  <li>帳票を出力：「<strong>PDF</strong>」「<strong>PDF+頭紙</strong>」「<strong>Excel</strong>」「<strong>頭紙のみ</strong>」</li>
+</ol>
+
+<h4>編集モーダルの構成</h4>
+<table>
+  <tr><th>セクション</th><th>内容</th></tr>
+  <tr><td><strong>ヘッダー情報</strong></td><td>発行日・支払期限（編集可）、社内メモ</td></tr>
+  <tr><td><strong>明細テーブル</strong></td><td>日付 / 現場名 / 品目名 / 時間備考 / 数量 / 金額</td></tr>
+  <tr><td><strong>調整項目</strong></td><td>材料費・値引きなどの自由追加（説明テキスト＋金額）</td></tr>
+  <tr><td><strong>合計プレビュー</strong></td><td>作業費 / 諸経費 / 調整合計 / 消費税 / 税込合計</td></tr>
+</table>
+
+<div class="callout tip">
+  <div class="callout-title">💡 ヒント</div>
+  「確認」ボタンからモーダルを開くと、PDFを生成せずに内容を事前確認できます。内容に問題がないことを確認してから出力すると、やり直しの手間を減らせます。
+</div>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 編集制限</div>
+  金額・数量・単価は直接編集できません。変更が必要な場合は配置データを修正して請求書を再生成してください。ただし、<strong>調整項目</strong>（材料費・値引きなど）は自由に追加・編集できます。
+</div>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 送付済の編集</div>
+  送付済・未回収・入金済の請求書を編集したい場合は、先にステータスを「未送付」に変更してください。
+</div>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 補足（様式3 / ポラテック向け）</div>
+  様式3の「PDF+頭紙」は横印刷専用です。縦印刷の頭紙が必要な場合は「頭紙のみ」で個別に出力してください。
+</div>
+
+<h3 id="t2-3-10">3.10 入金記録</h3>
+<ol class="steps">
+  <li>一覧の「<strong>入金</strong>」ボタンをクリック</li>
+  <li>入金日・入金額・入金方法（銀行振込/現金/その他）を入力</li>
+  <li>必要に応じて詳細オプション（銀行参照番号・備考）を入力</li>
+  <li>「<strong>入金を記録</strong>」をクリック</li>
+</ol>
+<p>入金履歴はモーダル内のテーブルで確認できます。誤った入金記録は「<strong>取消</strong>」ボタンで取り消せます。</p>
+
+<h3 id="t2-3-11">3.11 ステータス変更（一括操作）</h3>
+<ol class="steps">
+  <li>一覧で請求書にチェックを入れます</li>
+  <li>画面下部のスティッキー一括操作バーでステータスを選択（未送付/保留/送付済/未回収）</li>
+  <li>「<strong>適用</strong>」をクリック</li>
+</ol>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 大量操作時</div>
+  100件を超える場合は自動的に分割送信されます。進捗表示（例：更新中... (1/3)）が表示されるので、完了までお待ちください。
+</div>
+
+<!-- ===== 4. 帳票一括出力 ===== -->
+<h2 id="t2-4">4. 帳票一括出力とURL共有</h2>
+
+<h3 id="t2-4-1">4.1 この章でできること</h3>
+<ul>
+  <li>複数の請求書をまとめて出力する</li>
+  <li>URL共有の設定を理解する</li>
+  <li>送信用CSVを取得する</li>
+</ul>
+
+<h3 id="t2-4-2">4.2 帳票一括出力</h3>
+<ol class="steps">
+  <li>一覧で請求書にチェックを入れます</li>
+  <li>一括操作バーの「<strong>帳票一括出力</strong>」ボタンをクリック</li>
+  <li>出力形式を選択: <strong>PDF</strong> / <strong>PDF+頭紙</strong>（送付状付き）/ <strong>Excel</strong>（編集可能）</li>
+  <li>必要に応じてURL共有のチェックを確認</li>
+  <li>「<strong>出力開始</strong>」をクリック</li>
+</ol>
+
+<h4>出力ファイルの保存先</h4>
+<p>一括生成された帳票は、Google Drive上のそれぞれの顧客専用フォルダに保存されます。既存ファイルがある場合は上書きされます。</p>
+
+<h4>PDF生成の所要時間（目安）</h4>
+<table>
+  <tr><th>件数</th><th>所要時間</th></tr>
+  <tr><td>1件</td><td>約30秒〜</td></tr>
+  <tr><td>10件</td><td>約5分〜</td></tr>
+  <tr><td>100件</td><td>約40分〜</td></tr>
+</table>
+<div class="callout tip">
+  <div class="callout-title">💡 ヒント</div>
+  PDF生成中はプログレスバーと経過時間が表示されます。タブをそのままにして、別タブで他の作業を進めると効率的です。
+</div>
+
+<h3 id="t2-4-3">4.3 顧客への共有方法（おすすめ）</h3>
+<div class="callout tip">
+  <div class="callout-title">💡 推奨</div>
+  印刷郵送以外の場合は、ファイルそのものを添付するより、URL共有をおすすめします。
+</div>
+
+<h3 id="t2-4-4">4.4 URL共有オプション</h3>
+<h4>URL共有のメリット</h4>
+<ul>
+  <li>メール添付サイズの制限を気にしなくて良い</li>
+  <li>最新版を常に参照できる</li>
+  <li>送信後の誤りに気付いた場合も差し替えが可能</li>
+</ul>
+<p>初期状態ではURL共有がONです。リンクを知っている人は誰でもPDFを閲覧できます。</p>
+<div class="callout tip">
+  <div class="callout-title">💡 使い方のヒント</div>
+  <ul>
+    <li>メールでリンクを送信する際は、宛先アドレスを確認してから送信してください</li>
+    <li>送信後にファイルを更新すると、同じリンクから最新版が閲覧できます</li>
+    <li>URL共有が不要な場合は、チェックを外してから出力してください</li>
+  </ul>
+</div>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 注意</div>
+  ファイル添付と同様に、送信先には注意してご利用ください。
+</div>
+
+<h3 id="t2-4-5">4.5 出力結果と送信</h3>
+<h4>結果一覧テーブル</h4>
+<p>出力完了後、以下の情報が一覧表示されます：</p>
+<table>
+  <tr><th>列</th><th>説明</th></tr>
+  <tr><td>顧客名</td><td>請求先の会社名</td></tr>
+  <tr><td>請求書番号</td><td>生成された請求書番号</td></tr>
+  <tr><td>金額</td><td>請求金額（税込）</td></tr>
+  <tr><td>メール</td><td>顧客のメールアドレス（クリックでGmail作成画面へ）</td></tr>
+  <tr><td>共有</td><td>PDFリンクをコピーするボタン</td></tr>
+  <tr><td>PDF</td><td>PDFを新しいタブで開くリンク</td></tr>
+</table>
+
+<h4>便利な機能</h4>
+<ul>
+  <li><strong>個別リンクコピー:</strong> 各行の「コピー」ボタンでPDFリンクをクリップボードにコピー</li>
+  <li><strong>メール作成:</strong> メールアドレスをクリックするとGmailの新規作成画面が開きます</li>
+  <li><strong>送信用一覧CSV:</strong> ダウンロードボタンで送信先一覧のCSVを取得</li>
+  <li><strong>前回の結果:</strong> 「<strong>前回の結果</strong>」ボタンで直近の出力結果を再表示</li>
+</ul>
+
+<!-- ===== 5. 支払管理 ===== -->
+<h2 id="t2-5">5. 支払管理（スタッフ向け）</h2>
+
+<h3 id="t2-5-1">5.1 この章でできること</h3>
+<ul>
+  <li>スタッフの未払を集計する</li>
+  <li>支払履歴を確認する</li>
+  <li>確認済・支払済の処理を行う</li>
+  <li>振込集計を出力する</li>
+</ul>
+
+<h3 id="t2-5-2">5.2 画面構成</h3>
+<p>支払画面は2つのタブで構成されます。</p>
+<ul>
+  <li><strong>スタッフ支払</strong>タブ（本章で説明）</li>
+  <li><strong>外注費管理</strong>タブ（次章で説明）</li>
+</ul>
+<p>各タブの上部に「集計エクスポート」「📁 出力先」ボタンがあります。</p>
+
+<h4>ビュー切替</h4>
+<p>スタッフ支払タブでは2つのビューを切り替えられます：</p>
+<ul>
+  <li><strong>未払い集計ビュー:</strong> スタッフごとの未払い金額を集計表示</li>
+  <li><strong>支払履歴ビュー:</strong> 過去の支払記録を期間検索で表示</li>
+</ul>
+
+<h3 id="t2-5-3">5.3 未払集計の手順</h3>
+<ol class="steps">
+  <li>「<strong>スタッフ</strong>」から対象スタッフを選択（全スタッフ or 個別）</li>
+  <li>「<strong>締日</strong>」を入力</li>
+  <li>「<strong>集計</strong>」をクリック</li>
+</ol>
+<div class="callout tip">
+  <div class="callout-title">💡 確認方法</div>
+  未払サマリーカードに合計が表示されれば成功です。サマリーは「▼」で開閉できます。
+</div>
+
+<h3 id="t2-5-4">5.4 ステータス変更（一括操作）</h3>
+<p>一括操作バーから以下を選択可能です。行単位の操作／一括操作の両方に対応しています。</p>
+<p>
+  <span class="badge badge-blue">確認済みにする</span>
+  <span class="badge badge-green">支払済にする</span>
+  <span class="badge badge-gray">未払に戻す</span>
+</p>
+
+<h3 id="t2-5-5">5.5 未払詳細</h3>
+<ol class="steps">
+  <li>一覧のスタッフ行をクリック</li>
+  <li>未払詳細モーダルが開き、出勤現場一覧が表示されます</li>
+  <li>必要なら「<strong>支払済にする</strong>」をクリック</li>
+</ol>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 単価区分の表示</div>
+  単価区分が未設定の場合は「基本」と表示されます。
+</div>
+<p>詳細モーダルからは「<strong>明細出力</strong>」ボタンで個別の明細を出力することもできます。</p>
+
+<h4>人工割調整について</h4>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 人工割調整</div>
+  過剰配置（必要人数を超える配置）がある場合、支払額が按分調整されます。未払詳細にはオレンジ色の「人工割調整」行が表示され、調整額が確認できます。この調整額は支払エクスポートにも反映されます。
+</div>
+
+<h3 id="t2-5-6">5.6 支払履歴ビュー</h3>
+<p>ビュー切替で「支払履歴」を選択し、期間（開始日〜終了日）を指定して検索します。過去の支払記録を一覧で確認できます。</p>
+
+<h3 id="t2-5-7">5.7 振込集計エクスポート</h3>
+<ol class="steps">
+  <li>「<strong>集計エクスポート</strong>」をクリック</li>
+  <li>期間（開始日／終了日）を指定</li>
+  <li>「<strong>エクスポート</strong>」をクリック</li>
+</ol>
+<p>同名ファイルが存在する場合は「<strong>上書き</strong>」または「<strong>別名保存</strong>」を選択できます。</p>
+
+<!-- ===== 6. 外注費管理 ===== -->
+<h2 id="t2-6">6. 外注費管理</h2>
+
+<h3 id="t2-6-1">6.1 この章でできること</h3>
+<ul>
+  <li>外注先ごとの未払を集計する</li>
+  <li>支払履歴を確認する</li>
+  <li>末締集計を行う</li>
+  <li>支払済の処理を行う</li>
+</ul>
+
+<h3 id="t2-6-2">6.2 画面構成</h3>
+<p>支払画面の「<strong>外注費管理</strong>」タブで操作します。スタッフ支払と同様に「未払い集計ビュー」と「支払履歴ビュー」の切替が可能です。</p>
+<ul>
+  <li>外注先選択</li>
+  <li>締日（日付入力）</li>
+  <li>「集計」ボタン</li>
+  <li>「<strong>末締集計</strong>」ボタン</li>
+</ul>
+
+<h3 id="t2-6-3">6.3 未払集計・支払処理</h3>
+<ol class="steps">
+  <li>外注先を選択</li>
+  <li>締日を指定</li>
+  <li>「<strong>集計</strong>」をクリック</li>
+  <li>必要に応じて「<strong>支払済にする</strong>」を実行</li>
+</ol>
+<div class="callout tip">
+  <div class="callout-title">💡 末締集計</div>
+  「<strong>末締集計</strong>」ボタンで当月末日での一括集計ができます。
+</div>
+
+<!-- ===== 7. 売上分析 ===== -->
+<h2 id="t2-7">7. 売上分析ダッシュボード</h2>
+
+<h3 id="t2-7-1">7.1 この章でできること</h3>
+<ul>
+  <li>月次の売上・支払・粗利益を確認する</li>
+  <li>期間を切り替えて比較する</li>
+  <li>顧客別の売上を確認する</li>
+  <li>グラフで推移を視覚的に把握する</li>
+</ul>
+
+<h3 id="t2-7-2">7.2 フィルタ</h3>
+<h4>期間フィルタ</h4>
+<p>
+  <span class="badge badge-blue">今月</span>
+  <span class="badge badge-blue">先月</span>
+  <span class="badge badge-blue">今年度（4月〜当月）</span>
+  <span class="badge badge-blue">前年度（前年4月〜前年3月）</span>
+  <span class="badge badge-gray">カスタム（開始月〜終了月を自由指定）</span>
+</p>
+<h4>顧客フィルタ</h4>
+<p>特定の顧客を選択すると、その顧客の売上のみが表示されます。支払・粗利益のKPIカードは非表示になります。</p>
+
+<h3 id="t2-7-3">7.3 KPIカード</h3>
+<table>
+  <tr><th>指標</th><th>内容</th><th>補助情報</th></tr>
+  <tr><td><strong>売上（税込）</strong></td><td>請求書の合計金額</td><td>案件数</td></tr>
+  <tr><td><strong>支払総額</strong></td><td>スタッフ・外注への支払合計</td><td>配置数</td></tr>
+  <tr><td><strong>粗利益</strong></td><td>売上 − 支払総額</td><td>粗利率</td></tr>
+  <tr><td><strong>交通費</strong></td><td>交通費の合計</td><td>—</td></tr>
+</table>
+
+<h3 id="t2-7-4">7.4 グラフ</h3>
+<p>棒グラフと折れ線グラフの複合チャートで月別推移を表示します。</p>
+<ul>
+  <li><span class="badge badge-blue">売上</span>（棒グラフ・青）</li>
+  <li><span class="badge badge-red">支払</span>（棒グラフ・赤）</li>
+  <li><span class="badge badge-green">粗利益</span>（折れ線グラフ・緑、面塗り）</li>
+</ul>
+
+<h3 id="t2-7-5">7.5 月別詳細テーブル</h3>
+<p>年月 / 案件数 / 配置数 / 売上（税込）/ 支払 / 交通費 / 粗利益 / 粗利率 / 状態（<span class="badge badge-green">確定</span> or <span class="badge badge-gray">暫定</span>）</p>
+
+<h3 id="t2-7-6">7.6 アクション</h3>
+<ul>
+  <li><strong>当月を再計算:</strong> 当月のデータを最新の配置データで再計算</li>
+  <li><strong>更新:</strong> 画面全体を再読み込み</li>
+</ul>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 確定済みの月</div>
+  「確定」済みの月は再計算できません。修正が必要な場合は管理者にお問い合わせください。
+</div>
+
+<!-- ===== 8. FAQ ===== -->
+<h2 id="t2-8">8. よくある質問（FAQ）</h2>
+
+<h3>請求書について</h3>
+<div class="faq-item">
+  <p class="faq-q">送付済の請求書を編集したい場合は？</p>
+  <p class="faq-a">ステータスを「未送付」に変更してから編集してください。編集後、再度「送付済」に変更してください。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">請求書の金額を変更したい場合は？</p>
+  <p class="faq-a">金額は配置データから計算されるため、直接編集できません。配置データを修正してから請求書を再生成してください。ただし、材料費・値引きなどの調整項目は編集モーダルから追加できます。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">請求書が集計されない場合は？</p>
+  <p class="faq-a">対象月に配置データがない可能性があります。ダッシュボードで該当月の配置状況を確認してください。</p>
+</div>
+
+<h3>帳票出力について</h3>
+<div class="faq-item">
+  <p class="faq-q">PDF+頭紙を縦印刷したいのですが？</p>
+  <p class="faq-a">様式3（ポラテック向け）は横印刷専用です。縦印刷の頭紙が必要な場合は「頭紙のみ」で個別に出力してください。</p>
+</div>
+<div class="faq-item">
+  <p class="faq-q">一括出力したファイルはどこに保存されますか？</p>
+  <p class="faq-a">Google Drive上の各顧客の専用フォルダ（「請求書」フォルダ）に保存されます。</p>
+</div>
+
+<h3>URL共有について</h3>
+<div class="faq-item">
+  <p class="faq-q">URL共有を後から無効にできますか？</p>
+  <p class="faq-a">Google Driveの共有設定から無効にできます。顧客フォルダを開き、対象ファイルの共有設定を変更してください。</p>
+</div>
+
+<!-- ===== 9. トラブルシューティング ===== -->
+<h2 id="t2-9">9. トラブルシューティング</h2>
+<table>
+  <tr><th>症状</th><th>原因</th><th>対処法</th></tr>
+  <tr><td>請求書が集計されない</td><td>対象月に配置データがない</td><td>ダッシュボードで配置状況を確認</td></tr>
+  <tr><td>⚠️マークが消えない</td><td>配置変更後に再集計が必要</td><td>請求書を再集計</td></tr>
+  <tr><td>エクスポートできない</td><td>出力先フォルダが未設定</td><td>管理者に連絡</td></tr>
+  <tr><td>「確認」ボタンがない</td><td>既に送付済ステータス</td><td>ステータスを未送付に変更</td></tr>
+  <tr><td>入金ボタンが押せない</td><td>未送付ステータスのため</td><td>送付済に変更してから入金記録</td></tr>
+</table>
+
+<!-- ===== 10. 付録 ===== -->
+<h2 id="t2-10">10. 付録：出力先フォルダ</h2>
+<p>請求書や集計データは、Google Drive上の以下のフォルダ構成で管理されます。</p>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 補足</div>
+  実際の保存先は環境設定により異なる場合があります。管理者に確認してください。
+</div>
+<div class="folder-tree">Google Drive/
+├── テンプレート/          … 請求書テンプレート
+├── 出力/
+│   ├── 請求書/            … 一括出力時の一時保存先
+│   ├── 給与明細/
+│   └── 作業員名簿/
+├── 顧客/
+│   └── 〇〇株式会社/
+│       └── 請求書/        … PDF・Excel・頭紙
+├── アーカイブ/            … 過去年度データ
+└── ドキュメント/</div>
+
+<!-- ===== 11. 運用メモ ===== -->
+<h2 id="t2-11">11. 運用メモ・注意点</h2>
+<h4>請求書編集について</h4>
+<ul>
+  <li>明細の金額・数量・単価を変更したい場合は、配置データを修正して再集計してください。</li>
+  <li>材料費・値引きなどの調整は、編集モーダルの「調整項目」から追加できます。</li>
+  <li>送付済の請求書を編集する場合は、ステータスを「未送付」に変更してから編集してください。</li>
+</ul>
+<h4>URL共有について</h4>
+<ul>
+  <li>URL共有は誤送信リスクがあるため、運用ルールを明確にしてください。</li>
+  <li>印刷郵送以外の場合は、ファイル添付よりURL共有を推奨します。</li>
+</ul>
+<h4>様式3（ポラテック）について</h4>
+<ul>
+  <li>様式3の「PDF+頭紙」出力は横印刷です。縦印刷の頭紙には対応していません。</li>
+  <li>縦印刷が必要な場合は「頭紙のみ」で個別出力してください。</li>
+</ul>
+<h4>その他</h4>
+<ul>
+  <li>出力フォルダ未設定の場合、エクスポートは実行できません。</li>
+</ul>
+
+<!-- ===== 12. お問い合わせ ===== -->
+<h2 id="t2-12">12. お問い合わせ・変更依頼</h2>
+<ul>
+  <li>変更要求は担当者へご連絡いただくか、所定のシートにご記入ください。</li>
+  <li>システムに関するご質問は担当者までご連絡ください。</li>
+  <li>このマニュアルに関するご不明点は、担当者までお問い合わせください。</li>
+</ul>
+
+</div><!-- /tab2 -->
+
+</main>
+</div>
+
+<script>
+(function(){
+  const tabs=document.querySelectorAll('.sidebar-tab'),contents=document.querySelectorAll('.tab-content'),navEl=document.getElementById('sidebarNav');
+  function buildNav(tabId){
+    const c=document.getElementById(tabId);if(!c)return;
+    const hs=c.querySelectorAll('h2[id],h3[id]');let html='';
+    hs.forEach(h=>{const cls=h.tagName==='H3'?' class="sub"':'';html+='<a href="#'+h.id+'"'+cls+'>'+h.textContent+'</a>'});
+    navEl.innerHTML=html;
+  }
+  function switchTab(tabId){
+    tabs.forEach(t=>t.classList.toggle('active',t.dataset.tab===tabId));
+    contents.forEach(c=>c.classList.toggle('active',c.id===tabId));
+    buildNav(tabId);window.scrollTo({top:0,behavior:'smooth'});
+  }
+  tabs.forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+  buildNav('tab1');
+  const obs=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){const id=e.target.id;navEl.querySelectorAll('a').forEach(a=>{a.classList.toggle('active',a.getAttribute('href')==='#'+id)})}})},{rootMargin:'-20% 0px -70% 0px'});
+  document.querySelectorAll('h2[id],h3[id]').forEach(h=>obs.observe(h));
+  // Theme toggle
+  const toggle=document.getElementById('themeToggle'),label=document.getElementById('themeLabel');
+  const saved=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+  if(saved==='dark')document.documentElement.setAttribute('data-theme','dark');
+  function updateLabel(){label.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'ライトモード':'ダークモード'}
+  updateLabel();
+  toggle.addEventListener('click',()=>{const isDark=document.documentElement.getAttribute('data-theme')==='dark';document.documentElement.setAttribute('data-theme',isDark?'':'dark');localStorage.setItem('theme',isDark?'light':'dark');updateLabel()});
+})();
+</script>
+</body>
+</html>
