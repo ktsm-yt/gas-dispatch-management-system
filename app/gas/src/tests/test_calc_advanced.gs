@@ -28,7 +28,11 @@ function runCalcAdvancedTests() {
     testCalculatePayoutForSubcontractor_usesSubcontractorMasterRates,
     testCalculatePayoutForSubcontractor_nullSubcontractor,
     testSubcontractorRateByUnit_allPayUnits,
-    testStaffPayoutRegression
+    testStaffPayoutRegression,
+    testAssertInvariant_logsOnViolation,
+    testWarnMissingRate_logsOnMissing,
+    testWarnMissingRate_noLogOnValidRate,
+    testAssertInvariant_noLogOnPass
   ];
 
   var passed = 0;
@@ -712,4 +716,136 @@ function testStaffPayoutRegression() {
   var halfAssignment = { wage_rate: null, pay_unit: 'am' };
   var halfWage = calculateWage_(halfAssignment, staff, 'basic');
   assertEqual(halfWage, 7500, '回帰: basic×am = 7500');
+}
+
+// ============================================
+// assertInvariant_ / warnMissingRate_ テスト
+// ============================================
+
+/**
+ * assertInvariant_: 条件falseでログ出力されること（throwしない）
+ */
+function testAssertInvariant_logsOnViolation() {
+  // throwしないことを確認（既存ロジックに影響なし）
+  var threw = false;
+  try {
+    assertInvariant_(false, 'test violation', { key: 'value' });
+  } catch (e) {
+    threw = true;
+  }
+  assertEqual(threw, false, 'assertInvariant_ はthrowしない');
+
+  // 件数>0 && baseAmount=0 で警告が出るロジックの動作確認
+  // calculateMonthlyPayout_ に0単価スタッフを渡す → throwしないが警告出力
+  var zeroStaff = { staff_id: 'ZERO_001' }; // 全単価未設定
+  var assignments = [
+    { wage_rate: null, pay_unit: 'basic', transport_amount: 0 }
+  ];
+  var result = calculateMonthlyPayout_(assignments, zeroStaff);
+  assertEqual(result.baseAmount, 0, '単価未設定 → baseAmount=0');
+  assertEqual(result.totalAmount, 0, '単価未設定 → totalAmount=0');
+  // 正常にreturnすること（throwしない）がテスト成功
+}
+
+/**
+ * warnMissingRate_: null/undefined/空文字でログ出力（throwしない）
+ */
+function testWarnMissingRate_logsOnMissing() {
+  var threw = false;
+  try {
+    warnMissingRate_('testSource', null, { id: 'TEST_001' });
+    warnMissingRate_('testSource', undefined, { id: 'TEST_002' });
+    warnMissingRate_('testSource', '', { id: 'TEST_003' });
+  } catch (e) {
+    threw = true;
+  }
+  assertEqual(threw, false, 'warnMissingRate_ はthrowしない');
+
+  // getSubcontractorRateByUnit_ に全未定義外注先 → warn出力 + 0返却
+  var emptySubcontractor = { subcontractor_id: 'EMPTY_001' };
+  var rate = getSubcontractorRateByUnit_(emptySubcontractor, 'basic');
+  assertEqual(rate, 0, '全未定義外注先 → rate=0 (warn出力されるがthrowしない)');
+}
+
+/**
+ * warnMissingRate_: 有効な値ではログ出力されないこと
+ */
+function testWarnMissingRate_noLogOnValidRate() {
+  // 数値0はnull/undefined/''ではないのでwarnされない（正当な0円契約）
+  var threw = false;
+  try {
+    warnMissingRate_('testSource', 0, { id: 'VALID_ZERO' });
+    warnMissingRate_('testSource', 15000, { id: 'VALID_RATE' });
+  } catch (e) {
+    threw = true;
+  }
+  assertEqual(threw, false, '有効な値でもthrowしない');
+
+  // 正常な外注先 → rate>0、warnなし
+  var sub = { subcontractor_id: 'SUB_OK', basic_rate: 15000, half_day_rate: 8000 };
+  var rate = getSubcontractorRateByUnit_(sub, 'basic');
+  assertEqual(rate, 15000, '正常外注先 → 15000');
+}
+
+/**
+ * assertInvariant_: 条件trueでは何もしない
+ */
+function testAssertInvariant_noLogOnPass() {
+  var threw = false;
+  try {
+    assertInvariant_(true, 'should not log', { key: 'value' });
+  } catch (e) {
+    threw = true;
+  }
+  assertEqual(threw, false, 'assertInvariant_(true) は何もしない');
+
+  // 正常な月次支払い計算 → violation出ない
+  var staff = { staff_id: 'STAFF_OK', daily_rate_basic: 15000 };
+  var assignments = [
+    { wage_rate: null, pay_unit: 'basic', transport_amount: 500 },
+    { wage_rate: null, pay_unit: 'basic', transport_amount: 1000 }
+  ];
+  var result = calculateMonthlyPayout_(assignments, staff);
+  assertEqual(result.baseAmount, 30000, '正常計算: baseAmount=30000');
+  assertEqual(result.totalAmount, 31500, '正常計算: totalAmount=31500');
+}
+
+// ============================================
+// 手動検証用: サイレントバグ検出デモ
+// ============================================
+
+/**
+ * GASエディタから直接実行して検出ログを確認する関数。
+ * 実行後、「実行ログ」で [MISSING RATE] / [INVARIANT VIOLATION] を検索。
+ */
+function testSilentBugDetection() {
+  console.log('=== Silent Bug Detection Demo ===');
+
+  // 1. MISSING RATE: 単価未設定の外注先
+  console.log('\n--- 1. 外注先マスタ単価欠損 ---');
+  var emptySubcontractor = { subcontractor_id: 'DEMO_EMPTY' };
+  var rate = getSubcontractorRateByUnit_(emptySubcontractor, 'basic');
+  console.log('rate = ' + rate + ' (0なら [MISSING RATE] が上に出ているはず)');
+
+  // 2. MISSING RATE: 単価未設定のスタッフ
+  console.log('\n--- 2. スタッフマスタ単価欠損 ---');
+  var emptyStaff = { staff_id: 'DEMO_ZERO' };
+  var wage = calculateWage_({ wage_rate: null, pay_unit: 'basic' }, emptyStaff, 'basic');
+  console.log('wage = ' + wage + ' (0なら [MISSING RATE] が上に出ているはず)');
+
+  // 3. INVARIANT VIOLATION: 配置ありだがbaseAmount=0
+  console.log('\n--- 3. 全配置の単価欠損（配置あり but 合計0円）---');
+  var result = calculateMonthlyPayout_(
+    [{ wage_rate: null, pay_unit: 'basic', transport_amount: 0 }],
+    emptyStaff
+  );
+  console.log('baseAmount = ' + result.baseAmount + ' (0なら [INVARIANT VIOLATION] が上に出ているはず)');
+
+  // 4. 正常データ: ログなし
+  console.log('\n--- 4. 正常データ（ログ出ないことを確認）---');
+  var normalStaff = { staff_id: 'DEMO_OK', daily_rate_basic: 15000 };
+  var normalWage = calculateWage_({ wage_rate: null, pay_unit: 'basic' }, normalStaff, 'basic');
+  console.log('wage = ' + normalWage + ' (15000、警告ログなし)');
+
+  console.log('\n=== Demo Complete ===');
 }

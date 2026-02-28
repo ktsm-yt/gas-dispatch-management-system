@@ -17,6 +17,12 @@ else
   echo "No .ts files found, skipping TypeScript build"
 fi
 
+# 1.5. Dead function check (warning only)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "$SCRIPT_DIR/check-dead-functions.sh" ]; then
+  bash "$SCRIPT_DIR/check-dead-functions.sh" "$GAS_DIR/src" || true
+fi
+
 # 2. .gsファイルをコピー（ディレクトリ構造を維持）
 cd "$GAS_DIR"
 find src -name "*.gs" | while IFS= read -r f; do
