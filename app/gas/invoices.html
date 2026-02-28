@@ -2517,6 +2517,7 @@
         const cached = PageCache.get(cacheKey);
         if (cached) {
           invoices = cached.data;
+          lastInvoiceFetchTime = Date.now() - cached.age;
           renderInvoices();
           fetchChangeFlagsInBackground();
 
