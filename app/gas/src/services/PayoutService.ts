@@ -1704,12 +1704,19 @@ const PayoutService = {
       };
     }
 
-    // 金額計算（外注費は wage_rate＝実額(円) をそのまま加算。倍率ではない）
+    // 外注先マスタから単価を取得
+    const sub = SubcontractorRepository.findById(subcontractorId);
+    if (!sub) {
+      throw new Error(`外注先が見つかりません: ${subcontractorId}`);
+    }
+
+    // 金額計算（外注先マスタの単価を pay_unit に応じて取得）
     let baseAmount = 0;
     let transportAmount = 0;
 
     for (const asg of assignments) {
-      const rate = (asg.wage_rate as number) || 0;
+      const rate = getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
+      asg.wage_rate = rate;
       baseAmount += rate;
       transportAmount += (asg.transport_amount as number) || 0;
     }
@@ -1955,12 +1962,12 @@ const PayoutService = {
 
       if (subAssignments.length === 0) continue;
 
-      // 金額計算
+      // 金額計算（外注先マスタの単価を参照）
       let baseAmount = 0;
       let transportAmount = 0;
       let minDate = endDate;
       for (const { assignment: asg, job } of subAssignments) {
-        baseAmount += (asg.wage_rate as number) || 0;
+        baseAmount += getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
         transportAmount += (asg.transport_amount as number) || 0;
         if (job.work_date && (job.work_date as string) < minDate) {
           minDate = job.work_date as string;
