@@ -839,6 +839,14 @@ const InvoiceExportService = {
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
 
+    // Reconciliation: lines合計 vs invoice.subtotal 突合
+    const linesSum = lines.reduce((s: number, l: Record<string, unknown>) => s + (Number(l.amount) || 0), 0);
+    assertInvariant_(
+      Math.abs(linesSum - Number(invoice.subtotal || 0)) <= 1,
+      'Invoice reconciliation (format1): lines合計 vs subtotal不一致',
+      { invoice_id: String(invoice.id || invoice.invoice_id || ''), lines_sum: linesSum, db_subtotal: Number(invoice.subtotal || 0) }
+    );
+
     // P2-8: 明細データを2D配列として構築（バルク処理）
     // 案件間の空行と日付+現場の重複表示抑制を維持
     let prevDateSite = null;
@@ -985,6 +993,14 @@ const InvoiceExportService = {
       const rowsToExtend = lastNeededRow - lastTemplateRow + 1;
       this._batchExtendFormat(sheet, templateFormatRow, lastTemplateRow + 1, rowsToExtend, 10);
     }
+
+    // Reconciliation: lines合計 vs invoice.subtotal 突合
+    const linesSum = lines.reduce((s: number, l: Record<string, unknown>) => s + (Number(l.amount) || 0), 0);
+    assertInvariant_(
+      Math.abs(linesSum - Number(invoice.subtotal || 0)) <= 1,
+      'Invoice reconciliation (format2): lines合計 vs subtotal不一致',
+      { invoice_id: String(invoice.id || invoice.invoice_id || ''), lines_sum: linesSum, db_subtotal: Number(invoice.subtotal || 0) }
+    );
 
     // P2-8: 明細データを2D配列として構築（バルク処理）
     // 案件間の空行と日付+現場の重複表示抑制を維持
