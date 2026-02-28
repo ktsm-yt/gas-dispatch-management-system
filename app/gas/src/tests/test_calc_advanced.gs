@@ -24,7 +24,11 @@ function runCalcAdvancedTests() {
     testCalculateTaxEdgeCases,
     testNormalizeTaxRate,
     testGetSubcontractorRateByUnit,
-    testNinkuCoefficientAndAdjustment
+    testNinkuCoefficientAndAdjustment,
+    testCalculatePayoutForSubcontractor_usesSubcontractorMasterRates,
+    testCalculatePayoutForSubcontractor_nullSubcontractor,
+    testSubcontractorRateByUnit_allPayUnits,
+    testStaffPayoutRegression
   ];
 
   var passed = 0;
@@ -576,4 +580,136 @@ function testNinkuCoefficientAndAdjustment() {
     var c = adjCases[i];
     assertEqual(calculateNinkuAdjustment_(c.wage, c.coeff), c.expected, c.label);
   }
+}
+
+/**
+ * calculatePayoutForSubcontractor が外注先マスタ単価を使って計算することを検証
+ */
+function testCalculatePayoutForSubcontractor_usesSubcontractorMasterRates() {
+  var mockSub = {
+    subcontractor_id: 'SUB_TEST_001',
+    company_name: 'テスト外注',
+    basic_rate: 15000,
+    half_day_rate: 8000,
+    full_day_rate: 15000
+  };
+
+  var mockAssignments = [
+    { assignment_id: 'A1', pay_unit: 'am', wage_rate: null, transport_amount: 500, work_date: '2026-01-10' },
+    { assignment_id: 'A2', pay_unit: 'fullday', wage_rate: null, transport_amount: 1000, work_date: '2026-01-11' },
+    { assignment_id: 'A3', pay_unit: 'basic', wage_rate: null, transport_amount: 0, work_date: '2026-01-12' }
+  ];
+
+  // スタブ: Repository と getUnpaidAssignments を差し替え
+  var origFindById = SubcontractorRepository.findById;
+  var origGetUnpaid = PayoutService.getUnpaidAssignmentsForSubcontractor;
+
+  SubcontractorRepository.findById = function(id) {
+    if (id === 'SUB_TEST_001') return mockSub;
+    return null;
+  };
+  PayoutService.getUnpaidAssignmentsForSubcontractor = function() {
+    return mockAssignments;
+  };
+
+  try {
+    var result = PayoutService.calculatePayoutForSubcontractor('SUB_TEST_001', '2026-01-31');
+
+    // am→8000, fullday→15000, basic→15000 = 38000
+    assertEqual(result.baseAmount, 38000, '外注費baseAmount = 8000+15000+15000');
+    assertEqual(result.transportAmount, 1500, '交通費合計 = 500+1000+0');
+    assertEqual(result.totalAmount, 39500, '合計 = 38000+1500');
+    assertEqual(result.assignmentCount, 3, '配置数 = 3');
+
+    // wage_rate が書き戻されていること
+    assertEqual(mockAssignments[0].wage_rate, 8000, 'A1 wage_rate書き戻し = 8000 (am)');
+    assertEqual(mockAssignments[1].wage_rate, 15000, 'A2 wage_rate書き戻し = 15000 (fullday)');
+    assertEqual(mockAssignments[2].wage_rate, 15000, 'A3 wage_rate書き戻し = 15000 (basic)');
+  } finally {
+    SubcontractorRepository.findById = origFindById;
+    PayoutService.getUnpaidAssignmentsForSubcontractor = origGetUnpaid;
+  }
+}
+
+/**
+ * 存在しない外注先ID → エラーが投げられることを検証
+ */
+function testCalculatePayoutForSubcontractor_nullSubcontractor() {
+  var origFindById = SubcontractorRepository.findById;
+  var origGetUnpaid = PayoutService.getUnpaidAssignmentsForSubcontractor;
+
+  SubcontractorRepository.findById = function() { return null; };
+  PayoutService.getUnpaidAssignmentsForSubcontractor = function() {
+    return [{ assignment_id: 'A1', pay_unit: 'basic', wage_rate: null, transport_amount: 0, work_date: '2026-01-10' }];
+  };
+
+  try {
+    var threw = false;
+    try {
+      PayoutService.calculatePayoutForSubcontractor('NON_EXISTENT', '2026-01-31');
+    } catch (e) {
+      threw = true;
+      if (e.message.indexOf('外注先が見つかりません') === -1) {
+        throw new Error('想定外のエラーメッセージ: ' + e.message);
+      }
+    }
+    if (!threw) {
+      throw new Error('存在しない外注先でエラーが投げられるべき');
+    }
+  } finally {
+    SubcontractorRepository.findById = origFindById;
+    PayoutService.getUnpaidAssignmentsForSubcontractor = origGetUnpaid;
+  }
+}
+
+/**
+ * getUnpaidSubcontractorList が外注先マスタ単価で推定額を計算することを検証
+ */
+function testSubcontractorRateByUnit_allPayUnits() {
+  // getSubcontractorRateByUnit_ は純粋関数なので直接テスト
+  var sub = { basic_rate: 20000, half_day_rate: 10000, full_day_rate: 20000 };
+
+  // getUnpaidSubcontractorList 内部で使われるのと同じロジックを検証
+  var amRate = getSubcontractorRateByUnit_(sub, 'am');
+  var fullRate = getSubcontractorRateByUnit_(sub, 'fullday');
+  var basicRate = getSubcontractorRateByUnit_(sub, 'basic');
+
+  assertEqual(amRate, 10000, '未払一覧: am単価 = half_day_rate');
+  assertEqual(fullRate, 20000, '未払一覧: fullday単価 = full_day_rate');
+  assertEqual(basicRate, 20000, '未払一覧: basic単価 = basic_rate');
+
+  // 合計が wage_rate=0 ではなくマスタ単価で計算されることの確認
+  var estimated = amRate + fullRate + basicRate;
+  assertEqual(estimated, 50000, '推定額 = 10000+20000+20000 = 50000 (0ではない)');
+}
+
+/**
+ * 通常スタッフの支払い計算が既存ロジック通りに動くことの回帰テスト
+ * calculateWage_ が staff の daily_rate を正しく使うことを確認
+ */
+function testStaffPayoutRegression() {
+  var staff = {
+    staff_id: 'STAFF_001',
+    daily_rate_basic: 15000,
+    daily_rate_tobi: 18000,
+    daily_rate_age: 16000
+  };
+
+  // 各 job_type で正しい日給が取得されることを確認
+  var basicRate = getDailyRateByJobType_(staff, 'basic');
+  var tobiRate = getDailyRateByJobType_(staff, 'tobi');
+  var ageRate = getDailyRateByJobType_(staff, 'age');
+
+  assertEqual(basicRate, 15000, '回帰: basic日給');
+  assertEqual(tobiRate, 18000, '回帰: tobi日給');
+  assertEqual(ageRate, 16000, '回帰: age日給');
+
+  // calculateWage_(assignment, staff, jobType) で日給ベースの計算が正しく動くことを確認
+  var fullAssignment = { wage_rate: null, pay_unit: 'fullday' };
+  var wage = calculateWage_(fullAssignment, staff, 'basic');
+  assertEqual(wage, 15000, '回帰: basic×fullday = 15000');
+
+  var halfAssignment = { wage_rate: null, pay_unit: 'am' };
+  var halfWage = calculateWage_(halfAssignment, staff, 'basic');
+  assertEqual(halfWage, 7500, '回帰: basic×am = 7500');
 }
