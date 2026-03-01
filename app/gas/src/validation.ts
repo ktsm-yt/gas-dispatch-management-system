@@ -213,10 +213,11 @@ function validateDateFormat_(value: string | null | undefined, fieldName: string
 function validateTimeFormat_(value: string | null | undefined, fieldName: string): void {
   if (value === null || value === undefined || value === '') return;
 
-  const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  // 30時間制: 00:00〜29:59 を許容（夜勤〜早朝の当日扱い）
+  const timeRegex = /^([01]\d|2[0-9]):([0-5]\d)$/;
   if (!timeRegex.test(value)) {
     throw new ValidationError(
-      `${fieldName}はHH:MM形式で入力してください`,
+      `${fieldName}はHH:MM形式（00:00〜29:59）で入力してください`,
       { field: fieldName, actualValue: value }    );
   }
 }

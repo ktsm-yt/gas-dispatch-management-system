@@ -103,14 +103,19 @@ function testValidateDateFormat() {
 }
 
 function testValidateTimeFormat() {
-  // 正常系
+  // 正常系（24時間制）
   assertNoThrow(() => validateTimeFormat_('08:00', 'test'), 'valid time should not throw');
   assertNoThrow(() => validateTimeFormat_('23:59', 'test'), 'valid time should not throw');
+  // 正常系（30時間制: 24:00〜29:59）
+  assertNoThrow(() => validateTimeFormat_('24:00', 'test'), '24:00 should be valid in 30h system');
+  assertNoThrow(() => validateTimeFormat_('25:00', 'test'), '25:00 should be valid in 30h system');
+  assertNoThrow(() => validateTimeFormat_('29:59', 'test'), '29:59 should be valid in 30h system');
 
   // 異常系
   assertThrows(() => validateTimeFormat_('8:00', 'test'), 'missing leading zero should throw');
-  assertThrows(() => validateTimeFormat_('25:00', 'test'), 'invalid hour should throw');
+  assertThrows(() => validateTimeFormat_('30:00', 'test'), '30:00 should be invalid');
   assertThrows(() => validateTimeFormat_('08:60', 'test'), 'invalid minute should throw');
+  assertThrows(() => validateTimeFormat_('99:00', 'test'), '99:00 should be invalid');
 }
 
 function testValidateEnum() {
