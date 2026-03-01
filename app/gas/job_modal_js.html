@@ -945,8 +945,10 @@ function hideArchiveWarningBanner() {
  */
 function formatTimeInput(input) {
   const cursorPos = input.selectionStart;
+  // 全角→半角変換（全角数字・全角コロン対応）
+  let value = window.normalizeInput ? window.normalizeInput(input.value) : input.value;
   // 数字とコロン以外を除去
-  let value = input.value.replace(/[^\d:]/g, '');
+  value = value.replace(/[^\d:]/g, '');
 
   // コロンを除いた数字部分
   const digits = value.replace(/:/g, '');
