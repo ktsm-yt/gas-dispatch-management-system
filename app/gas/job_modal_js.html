@@ -126,6 +126,11 @@ function openJobModal(jobId = null, options = {}) {
   if (deleteBtn) {
     deleteBtn.style.display = jobId ? 'inline-block' : 'none';
   }
+  // Copy button - only show in edit mode
+  const copyBtn = document.getElementById('job-copy-btn');
+  if (copyBtn) {
+    copyBtn.style.display = jobId ? 'inline-block' : 'none';
+  }
 
   // Default values
   if (options.defaultDate) {
@@ -434,6 +439,38 @@ function resetJobFormForNext(date, customerId, customerName) {
   resetSlotsUI();
   toggleWorkDetailOtherText('');
   document.getElementById('job-modal-title').textContent = '案件登録';
+}
+
+/**
+ * 現在の案件をコピーして新規作成モードに切り替え
+ * フォーム値はそのまま残し、job_id・work_date・updated_atをクリア
+ */
+function copyJobAsNew() {
+  // Clear identity fields
+  document.getElementById('job-id').value = '';
+  document.getElementById('job-updated-at').value = '';
+  document.getElementById('work-date').value = '';
+
+  // Update state
+  jobModalState.jobId = null;
+  jobModalState.jobUpdatedAt = null;
+
+  // Update UI to new mode
+  document.getElementById('job-modal-title').textContent = '案件登録（コピー）';
+  const deleteBtn = document.getElementById('job-delete-btn');
+  if (deleteBtn) deleteBtn.style.display = 'none';
+  const copyBtn = document.getElementById('job-copy-btn');
+  if (copyBtn) copyBtn.style.display = 'none';
+
+  // Reset status to pending for new job
+  document.getElementById('status').value = 'pending';
+
+  // Clear slots identity (slot_id) so they get created as new
+  const slotRows = document.querySelectorAll('#slots-table-body tr');
+  slotRows.forEach(row => { row.dataset.slotId = ''; });
+
+  showToast('案件情報をコピーしました。作業日を入力して保存してください。', 'info');
+  document.getElementById('work-date').focus();
 }
 
 /**
@@ -902,6 +939,38 @@ function hideArchiveWarningBanner() {
 
 // ========== Utility Functions ==========
 
+/**
+ * 時間入力フィールドの自動フォーマット（30時間制対応）
+ * 数字のみ入力 → 自動でHH:MM形式にフォーマット
+ */
+function formatTimeInput(input) {
+  const cursorPos = input.selectionStart;
+  // 全角→半角変換（全角数字・全角コロン対応）
+  let value = window.normalizeInput ? window.normalizeInput(input.value) : input.value;
+  // 数字とコロン以外を除去
+  value = value.replace(/[^\d:]/g, '');
+
+  // コロンを除いた数字部分
+  const digits = value.replace(/:/g, '');
+
+  // 2桁以上でコロンが未入力なら自動挿入
+  if (digits.length >= 2 && !value.includes(':')) {
+    value = digits.slice(0, 2) + ':' + digits.slice(2, 4);
+  }
+
+  // 最大5文字（HH:MM）
+  if (value.length > 5) {
+    value = value.slice(0, 5);
+  }
+
+  if (input.value !== value) {
+    input.value = value;
+    // カーソル位置を調整（コロン自動挿入時に1つ進める）
+    const newPos = value.includes(':') && cursorPos === 2 ? 3 : Math.min(cursorPos, value.length);
+    input.setSelectionRange(newPos, newPos);
+  }
+}
+
 function formatStartTimeForModal(startTime) {
   if (!startTime) return '';
   // 1899年のDateや長いISO文字列は無効とみなす
@@ -931,13 +1000,13 @@ function validateTimeSlotStartTime() {
   // HH:MM形式から時間を取得
   const [hours] = startTime.split(':').map(Number);
 
-  // 時間帯ごとの範囲
+  // 時間帯ごとの範囲（30時間制対応: 24〜29は前日深夜扱い）
   const ranges = {
     jotou:    { min: 7, max: 18, label: '上棟' },
     shuujitsu:{ min: 7, max: 18, label: '終日' },
     am:       { min: 7, max: 12, label: 'AM' },
     pm:       { min: 12, max: 18, label: 'PM' },
-    yakin:    { min: 18, max: 7, label: '夜間', isNight: true },
+    yakin:    { min: 18, max: 30, label: '夜間', isNight: true },
     mitei:    null  // 未定は任意
   };
 
@@ -951,10 +1020,10 @@ function validateTimeSlotStartTime() {
 
   let isValid;
   if (range.isNight) {
-    // 夜間: 18時以降 または 7時未満
+    // 夜間: 18時以降〜29時台、または0〜6時台
     isValid = hours >= 18 || hours < 7;
   } else {
-    // 日中帯: min <= hours < max
+    // 日中帯: min <= hours < max（24時超は日中帯には該当しない）
     isValid = hours >= range.min && hours < range.max;
   }
 
@@ -1012,7 +1081,10 @@ function setupJobModalEventListeners() {
   }
   if (startTimeInput) {
     startTimeInput.addEventListener('change', validateTimeSlotStartTime);
-    startTimeInput.addEventListener('input', validateTimeSlotStartTime);
+    startTimeInput.addEventListener('input', (e) => {
+      formatTimeInput(e.target);
+      validateTimeSlotStartTime();
+    });
   }
 }
 

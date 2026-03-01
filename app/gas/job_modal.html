@@ -60,7 +60,7 @@
           </div>
           <div class="form-group">
             <label for="start-time">開始時間</label>
-            <input type="time" id="start-time" name="start_time">
+            <input type="text" id="start-time" name="start_time" placeholder="HH:MM" maxlength="5" pattern="[0-2][0-9]:[0-5][0-9]" inputmode="numeric">
             <small class="time-slot-hint" id="start-time-hint" style="display: none;"></small>
           </div>
         </div>
@@ -230,8 +230,9 @@
       </div>
       <div class="modal-footer-right">
         <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
+        <button type="button" class="btn btn-outline" id="job-copy-btn" onclick="copyJobAsNew()" style="display: none;">コピーして作成</button>
+        <button type="button" class="btn btn-outline" id="job-save-next-btn" onclick="submitJobModal(true)" style="display: none;">保存して次へ</button>
         <button type="button" class="btn btn-primary" id="job-save-btn" onclick="submitJobModal()">保存</button>
-        <button type="button" class="btn btn-primary" id="job-save-next-btn" onclick="submitJobModal(true)" style="display: none;">保存して次へ</button>
       </div>
     </div>
   </div>
