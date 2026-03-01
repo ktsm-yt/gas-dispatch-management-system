@@ -6,7 +6,10 @@
 set -euo pipefail
 
 SRC_DIR="${1:-app/gas/src}"
+# HTML files may call GAS functions via google.script.run
+HTML_DIR="${2:-app/gas/src}"
 YELLOW='\033[0;33m'
+GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
 if ! command -v rg &> /dev/null; then
@@ -16,11 +19,13 @@ fi
 
 echo "=== Dead Function Check ==="
 
-# Find all function definitions with _ suffix (internal functions)
-# Patterns: function funcName_( or funcName_: function( or funcName_ = function(
 dead_count=0
 
-# Extract function names ending with _
+# Directories/prefixes to exclude from dead-code analysis
+# These contain intentionally standalone functions (migrations, test helpers, seeds)
+EXCLUDE_PATTERNS="tests/|migrate_|create_bulk_|create_test_|create_ninku_|create_stats_|production_reset|production_seed"
+
+# Extract function definitions: "file:funcName"
 # Note: .gs files are not a standard rg type, so use glob patterns
 definitions=$(rg -o 'function\s+(\w+_)\s*\(' --replace '$1' "$SRC_DIR" -g '*.ts' -g '*.js' -g '*.gs' 2>/dev/null | sort -u -t: -k2,2 || true)
 
@@ -32,13 +37,26 @@ fi
 while IFS=: read -r file func; do
   [ -z "$func" ] && continue
 
-  # Count call sites (excluding the definition itself and test files)
-  call_count=$( (rg -l "$func" "$SRC_DIR" -g '*.ts' -g '*.js' -g '*.gs' -g '!tests/*' 2>/dev/null || true) | wc -l | tr -d ' ')
-  test_count=$( (rg -l "$func" "$SRC_DIR" -g 'tests/*' 2>/dev/null || true) | wc -l | tr -d ' ')
+  # Skip functions in excluded directories/files
+  if echo "$file" | grep -qE "$EXCLUDE_PATTERNS"; then
+    continue
+  fi
 
-  # If only found in 1 file (the definition) and no test references, it's potentially dead
-  if [ "$call_count" -le 1 ] && [ "$test_count" -eq 0 ]; then
-    echo -e "${YELLOW}[DEAD?]${NC} ${func} (defined in ${file}, calls=${call_count}, tests=${test_count})"
+  # Count occurrences in source files (not just file count)
+  # A function defined once + called once in the same file = count >= 2
+  src_occurrences=$( (rg -c "$func" "$SRC_DIR" -g '*.ts' -g '*.js' -g '*.gs' -g '!tests/*' 2>/dev/null || true) | awk -F: '{sum += $NF} END {print sum+0}')
+
+  # Check HTML files for google.script.run references
+  html_occurrences=$( (rg -c "$func" "$SRC_DIR" -g '*.html' 2>/dev/null || true) | awk -F: '{sum += $NF} END {print sum+0}')
+
+  # Check test files separately
+  test_occurrences=$( (rg -c "$func" "$SRC_DIR" -g 'tests/*' 2>/dev/null || true) | awk -F: '{sum += $NF} END {print sum+0}')
+
+  total=$((src_occurrences + html_occurrences))
+
+  # Definition = 1 occurrence. If total <= 1, only the definition exists → dead
+  if [ "$total" -le 1 ] && [ "$test_occurrences" -eq 0 ]; then
+    echo -e "${YELLOW}[DEAD?]${NC} ${func} ${GRAY}(${file}, src=${src_occurrences}, html=${html_occurrences}, tests=${test_occurrences})${NC}"
     dead_count=$((dead_count + 1))
   fi
 done <<< "$definitions"
