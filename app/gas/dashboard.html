@@ -356,14 +356,6 @@
       min-width: 0;
     }
 
-    .site-address {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-    }
-
     .start-time {
       flex-shrink: 0;
     }
@@ -657,6 +649,7 @@
 
   <?!= include('assignment_modal_js'); ?>
   <?!= include('cache_utils'); ?>
+  <?!= include('normalize_utils'); ?>
 
   <script>
     <?!= include('confirmation_modal_js'); ?>
@@ -1052,6 +1045,16 @@
     }
 
     function renderCards(slot, jobs) {
+      // 開始時間順にソート（空は末尾）
+      jobs.sort((a, b) => {
+        const ta = a.start_time || '';
+        const tb = b.start_time || '';
+        if (!ta && !tb) return 0;
+        if (!ta) return 1;
+        if (!tb) return -1;
+        return ta < tb ? -1 : ta > tb ? 1 : 0;
+      });
+
       const container = document.getElementById(`col-cards-${slot}`);
 
       if (jobs.length === 0) {
@@ -1067,7 +1070,6 @@
         const safeJobId = escapeHtml(job.job_id || '');
         const safeCustomerName = escapeHtml(job.customer_name || '-');
         const safeSiteName = escapeHtml(job.site_name || '');
-        const safeSiteAddress = escapeHtml(job.site_address || '');
         const safeStartTime = escapeHtml(job.start_time || '');
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
@@ -1092,7 +1094,6 @@
             </div>
             <div class="job-card-footer">
               <span class="site-name">${safeSiteName}</span>
-              <span class="site-address">${safeSiteAddress}</span>
               <span class="start-time">${safeStartTime}</span>
             </div>
             ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}

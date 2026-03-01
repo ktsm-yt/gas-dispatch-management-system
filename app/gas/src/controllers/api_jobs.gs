@@ -296,6 +296,13 @@ function saveJob(job, expectedUpdatedAt, slots) {
       );
     }
 
+    // テキストフィールド正規化（全角→半角等）
+    ['site_name', 'site_address', 'notes', 'supervisor_name'].forEach(function(field) {
+      if (job[field] && typeof job[field] === 'string') {
+        job[field] = normalizeInput(job[field]);
+      }
+    });
+
     // アーカイブフラグ補完（UIからは_archivedが送られないため、DBから取得して付与）
     if (job.job_id && !job._archived) {
       const current = JobRepository.findById(job.job_id);

@@ -1,0 +1,84 @@
+<!-- Usage: <?!= include('normalize_utils'); ?> in <script> block -->
+<!-- フロントエンド用 入力値正規化ユーティリティ -->
+
+<script>
+(function() {
+  // 半角カタカナ → 全角カタカナ マッピング
+  var HANKAKU_KANA_MAP = {
+    'ｶﾞ': 'ガ', 'ｷﾞ': 'ギ', 'ｸﾞ': 'グ', 'ｹﾞ': 'ゲ', 'ｺﾞ': 'ゴ',
+    'ｻﾞ': 'ザ', 'ｼﾞ': 'ジ', 'ｽﾞ': 'ズ', 'ｾﾞ': 'ゼ', 'ｿﾞ': 'ゾ',
+    'ﾀﾞ': 'ダ', 'ﾁﾞ': 'ヂ', 'ﾂﾞ': 'ヅ', 'ﾃﾞ': 'デ', 'ﾄﾞ': 'ド',
+    'ﾊﾞ': 'バ', 'ﾋﾞ': 'ビ', 'ﾌﾞ': 'ブ', 'ﾍﾞ': 'ベ', 'ﾎﾞ': 'ボ',
+    'ﾊﾟ': 'パ', 'ﾋﾟ': 'ピ', 'ﾌﾟ': 'プ', 'ﾍﾟ': 'ペ', 'ﾎﾟ': 'ポ',
+    'ｳﾞ': 'ヴ',
+    'ｱ': 'ア', 'ｲ': 'イ', 'ｳ': 'ウ', 'ｴ': 'エ', 'ｵ': 'オ',
+    'ｶ': 'カ', 'ｷ': 'キ', 'ｸ': 'ク', 'ｹ': 'ケ', 'ｺ': 'コ',
+    'ｻ': 'サ', 'ｼ': 'シ', 'ｽ': 'ス', 'ｾ': 'セ', 'ｿ': 'ソ',
+    'ﾀ': 'タ', 'ﾁ': 'チ', 'ﾂ': 'ツ', 'ﾃ': 'テ', 'ﾄ': 'ト',
+    'ﾅ': 'ナ', 'ﾆ': 'ニ', 'ﾇ': 'ヌ', 'ﾈ': 'ネ', 'ﾉ': 'ノ',
+    'ﾊ': 'ハ', 'ﾋ': 'ヒ', 'ﾌ': 'フ', 'ﾍ': 'ヘ', 'ﾎ': 'ホ',
+    'ﾏ': 'マ', 'ﾐ': 'ミ', 'ﾑ': 'ム', 'ﾒ': 'メ', 'ﾓ': 'モ',
+    'ﾔ': 'ヤ', 'ﾕ': 'ユ', 'ﾖ': 'ヨ',
+    'ﾗ': 'ラ', 'ﾘ': 'リ', 'ﾙ': 'ル', 'ﾚ': 'レ', 'ﾛ': 'ロ',
+    'ﾜ': 'ワ', 'ｦ': 'ヲ', 'ﾝ': 'ン',
+    'ｧ': 'ァ', 'ｨ': 'ィ', 'ｩ': 'ゥ', 'ｪ': 'ェ', 'ｫ': 'ォ',
+    'ｯ': 'ッ', 'ｬ': 'ャ', 'ｭ': 'ュ', 'ｮ': 'ョ',
+    'ｰ': 'ー', '｡': '。', '｢': '「', '｣': '」', '､': '、', '･': '・'
+  };
+
+  var kanaKeys = Object.keys(HANKAKU_KANA_MAP).sort(function(a, b) { return b.length - a.length; });
+  var kanaPattern = new RegExp('(' + kanaKeys.map(function(k) {
+    return k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }).join('|') + ')', 'g');
+
+  var SYMBOL_MAP = {
+    '（': '(', '）': ')', '－': '-', '＠': '@', '．': '.', '／': '/',
+    '＃': '#', '＆': '&', '＋': '+', '＊': '*', '＝': '=',
+    '！': '!', '？': '?', '：': ':', '；': ';', '＿': '_',
+    '〜': '~', '｛': '{', '｝': '}', '［': '[', '］': ']'
+  };
+
+  window.normalizeInput = function(value) {
+    if (!value || typeof value !== 'string') return value;
+    var result = value;
+    // 全角数字 → 半角
+    result = result.replace(/[０-９]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); });
+    // 全角英字 → 半角
+    result = result.replace(/[Ａ-Ｚａ-ｚ]/g, function(ch) { return String.fromCharCode(ch.charCodeAt(0) - 0xFEE0); });
+    // 全角記号 → 半角
+    result = result.replace(/[（）－＠．／＃＆＋＊＝！？：；＿〜｛｝［］]/g, function(ch) { return SYMBOL_MAP[ch] || ch; });
+    // 半角カタカナ → 全角カタカナ
+    result = result.replace(kanaPattern, function(m) { return HANKAKU_KANA_MAP[m] || m; });
+    // 全角スペース → 半角スペース
+    result = result.replace(/\u3000/g, ' ');
+    return result;
+  };
+
+  // onblur用ヘルパー: input/textareaのvalueを正規化
+  window.normalizeOnBlur = function(el) {
+    if (el && el.value) {
+      el.value = window.normalizeInput(el.value);
+    }
+  };
+
+  // 全テキスト入力にonblur正規化を自動バインド
+  // type=text, tel, email, textarea が対象（number, date, time, hidden は除外）
+  document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('blur', function(e) {
+      var el = e.target;
+      if (!el || !el.tagName) return;
+      var tag = el.tagName.toLowerCase();
+      if (tag === 'textarea') {
+        window.normalizeOnBlur(el);
+        return;
+      }
+      if (tag === 'input') {
+        var type = (el.type || '').toLowerCase();
+        if (type === 'text' || type === 'tel' || type === 'email' || type === 'search') {
+          window.normalizeOnBlur(el);
+        }
+      }
+    }, true);  // capture phase でモーダル内の要素も捕捉
+  });
+})();
+</script>
