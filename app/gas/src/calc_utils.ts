@@ -3,6 +3,33 @@
 
 const DEFAULT_TAX_RATE = 0.10;
 
+// ============================================
+// ランタイムアサーション（warn-only）
+// ============================================
+
+/** ランタイムアサーション（warn-only、throwしない） */
+function assertInvariant_(
+  condition: boolean,
+  message: string,
+  context?: Record<string, string | number | boolean>
+): void {
+  if (!condition) {
+    const ctxStr = context ? ' | ' + JSON.stringify(context) : '';
+    Logger.log('[INVARIANT VIOLATION] ' + message + ctxStr);
+  }
+}
+
+/** 単価参照元の欠損を検知（金額0かどうかではなく、sourceが見つからない場合に警告） */
+function warnMissingRate_(
+  source: string,
+  rateValue: number | string | null | undefined,
+  context: Record<string, string | number>
+): void {
+  if (rateValue === null || rateValue === undefined || rateValue === '') {
+    Logger.log('[MISSING RATE] ' + source + ' | ' + JSON.stringify(context));
+  }
+}
+
 /**
  * legacy numeric `5` と string `'subcontract'` を統一判定するヘルパー。
  * 旧データで staff_type=5（数値）が残っているケースへの互換ガード。
@@ -175,18 +202,31 @@ function getSubcontractorRateByUnit_(
 ): number {
   const normalizedUnit = normalizeUnit_(unit);
 
+  let rate: number;
   switch (normalizedUnit) {
     case 'half':
     case 'halfday':
     case 'am':
     case 'pm':
-      return subcontractor.half_day_rate ?? subcontractor.basic_rate ?? 0;
+      rate = subcontractor.half_day_rate ?? subcontractor.basic_rate ?? 0;
+      break;
     case 'full':
     case 'fullday':
-      return subcontractor.full_day_rate ?? subcontractor.basic_rate ?? 0;
+      rate = subcontractor.full_day_rate ?? subcontractor.basic_rate ?? 0;
+      break;
     default:
-      return subcontractor.basic_rate ?? subcontractor.full_day_rate ?? 0;
+      rate = subcontractor.basic_rate ?? subcontractor.full_day_rate ?? 0;
+      break;
   }
+
+  if (rate === 0) {
+    warnMissingRate_('getSubcontractorRateByUnit_', null, {
+      subcontractor_id: String(subcontractor?.subcontractor_id || subcontractor?.id || 'unknown'),
+      unit: unit || 'default'
+    });
+  }
+
+  return rate;
 }
 
 /** @deprecated 将来的に廃止予定。直接マスター値を使用すること。 */
@@ -215,6 +255,12 @@ function calculateWage_(
 
   if (baseRate === null || baseRate === undefined || baseRate === '') {
     baseRate = getDailyRateByJobType_(staff, jobType);
+    if (baseRate === 0) {
+      warnMissingRate_('getDailyRateByJobType_', null, {
+        staff_id: String(staff?.staff_id || staff?.id || 'unknown'),
+        jobType: jobType
+      });
+    }
   }
 
   const multiplier = getUnitMultiplier_(assignment.pay_unit);
@@ -231,6 +277,12 @@ function calculateInvoiceAmount_(
 
   if (baseRate === null || baseRate === undefined || baseRate === '') {
     baseRate = getUnitPriceByJobType_(customer, jobType);
+    if (baseRate === 0) {
+      warnMissingRate_('getUnitPriceByJobType_', null, {
+        customer_id: String(customer?.customer_id || customer?.id || 'unknown'),
+        jobType: jobType
+      });
+    }
   }
 
   const multiplier = getUnitMultiplier_(assignment.invoice_unit);
@@ -298,6 +350,12 @@ function calculateMonthlyPayout_(
       transportAmount += Number(asg.transport_amount) || 0;
     }
   });
+
+  assertInvariant_(
+    assignments.length === 0 || baseAmount > 0,
+    'calculateMonthlyPayout_: 配置あり but baseAmount=0（全配置の単価欠損の可能性）',
+    { staff_id: String(staff?.staff_id || staff?.id || 'unknown'), assignment_count: assignments.length, baseAmount: baseAmount }
+  );
 
   return {
     baseAmount: baseAmount,

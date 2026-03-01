@@ -394,6 +394,13 @@ const PayoutDetailExportService = {
     const ninkuAmount = payout.ninku_adjustment_amount || 0;
     const adjustedBaseAmount = (payout.base_amount || 0) + ninkuAmount;
 
+    // Reconciliation: 配置数>0 && adjustedBaseAmount=0 は単価欠損の可能性
+    assertInvariant_(
+      rowCount === 0 || adjustedBaseAmount > 0,
+      'Payout reconciliation: 配置あり but adjustedBaseAmount=0',
+      { payout_id: String(payout.payout_id || ''), rowCount: rowCount, adjustedBaseAmount: adjustedBaseAmount }
+    );
+
     // 源泉徴収税: 日額テーブルで再計算した合計を使用（行レベル合計と一致させるため）
     const summaryData = [
       '合計', '', '', rowCount, '',

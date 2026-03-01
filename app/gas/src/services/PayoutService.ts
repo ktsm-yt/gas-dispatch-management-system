@@ -1723,6 +1723,12 @@ const PayoutService = {
 
     const totalAmount = baseAmount + transportAmount;
 
+    assertInvariant_(
+      assignments.length === 0 || baseAmount > 0,
+      'calculatePayoutForSubcontractor: 配置あり but baseAmount=0（外注先マスタ単価欠損の可能性）',
+      { subcontractor_id: subcontractorId, assignment_count: assignments.length, baseAmount: baseAmount }
+    );
+
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
     const periodStart = dates.length > 0 ? dates[0] : endDate;
