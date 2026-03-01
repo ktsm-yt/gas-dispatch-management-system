@@ -303,6 +303,11 @@ function listMasterRecords(sheetName, options = {}) {
  * 顧客バリデーション
  */
 function validateCustomer(data) {
+  // テキストフィールド正規化
+  ['company_name', 'contact_person', 'phone', 'email', 'address', 'notes'].forEach(function(f) {
+    if (data[f] && typeof data[f] === 'string') data[f] = normalizeInput(data[f]);
+  });
+
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
@@ -470,6 +475,12 @@ function deleteCustomer(customerId, expectedUpdatedAt) {
  * スタッフバリデーション
  */
 function validateStaff(data) {
+  // テキストフィールド正規化
+  ['name', 'nickname', 'name_kana', 'phone', 'email', 'address', 'notes',
+   'bank_name', 'bank_branch_name', 'bank_account_holder'].forEach(function(f) {
+    if (data[f] && typeof data[f] === 'string') data[f] = normalizeInput(data[f]);
+  });
+
   if (!data.name || data.name.trim() === '') {
     return { valid: false, message: '名前は必須です', details: { field: 'name' } };
   }
@@ -611,6 +622,11 @@ function getWorkerRosterConfigStatus() {
  * 外注先バリデーション
  */
 function validateSubcontractor(data) {
+  // テキストフィールド正規化
+  ['company_name', 'contact_person', 'phone', 'email', 'address', 'notes'].forEach(function(f) {
+    if (data[f] && typeof data[f] === 'string') data[f] = normalizeInput(data[f]);
+  });
+
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
@@ -846,6 +862,12 @@ function deleteTransportFee(areaCode) {
  * 自社情報バリデーション
  */
 function validateCompany(data) {
+  // テキストフィールド正規化
+  ['company_name', 'representative', 'phone', 'email', 'address', 'notes',
+   'bank_name', 'bank_branch_name', 'bank_account_holder'].forEach(function(f) {
+    if (data[f] && typeof data[f] === 'string') data[f] = normalizeInput(data[f]);
+  });
+
   if (!data.company_name || data.company_name.trim() === '') {
     return { valid: false, message: '会社名は必須です', details: { field: 'company_name' } };
   }
