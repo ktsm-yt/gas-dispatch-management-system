@@ -230,8 +230,9 @@
       </div>
       <div class="modal-footer-right">
         <button type="button" class="btn btn-secondary" onclick="closeJobModal()">キャンセル</button>
+        <button type="button" class="btn btn-outline" id="job-copy-btn" onclick="copyJobAsNew()" style="display: none;">コピーして作成</button>
+        <button type="button" class="btn btn-outline" id="job-save-next-btn" onclick="submitJobModal(true)" style="display: none;">保存して次へ</button>
         <button type="button" class="btn btn-primary" id="job-save-btn" onclick="submitJobModal()">保存</button>
-        <button type="button" class="btn btn-primary" id="job-save-next-btn" onclick="submitJobModal(true)" style="display: none;">保存して次へ</button>
       </div>
     </div>
   </div>

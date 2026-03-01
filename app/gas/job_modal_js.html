@@ -126,6 +126,11 @@ function openJobModal(jobId = null, options = {}) {
   if (deleteBtn) {
     deleteBtn.style.display = jobId ? 'inline-block' : 'none';
   }
+  // Copy button - only show in edit mode
+  const copyBtn = document.getElementById('job-copy-btn');
+  if (copyBtn) {
+    copyBtn.style.display = jobId ? 'inline-block' : 'none';
+  }
 
   // Default values
   if (options.defaultDate) {
@@ -434,6 +439,38 @@ function resetJobFormForNext(date, customerId, customerName) {
   resetSlotsUI();
   toggleWorkDetailOtherText('');
   document.getElementById('job-modal-title').textContent = '案件登録';
+}
+
+/**
+ * 現在の案件をコピーして新規作成モードに切り替え
+ * フォーム値はそのまま残し、job_id・work_date・updated_atをクリア
+ */
+function copyJobAsNew() {
+  // Clear identity fields
+  document.getElementById('job-id').value = '';
+  document.getElementById('job-updated-at').value = '';
+  document.getElementById('work-date').value = '';
+
+  // Update state
+  jobModalState.jobId = null;
+  jobModalState.jobUpdatedAt = null;
+
+  // Update UI to new mode
+  document.getElementById('job-modal-title').textContent = '案件登録（コピー）';
+  const deleteBtn = document.getElementById('job-delete-btn');
+  if (deleteBtn) deleteBtn.style.display = 'none';
+  const copyBtn = document.getElementById('job-copy-btn');
+  if (copyBtn) copyBtn.style.display = 'none';
+
+  // Reset status to pending for new job
+  document.getElementById('status').value = 'pending';
+
+  // Clear slots identity (slot_id) so they get created as new
+  const slotRows = document.querySelectorAll('#slots-table-body tr');
+  slotRows.forEach(row => { row.dataset.slotId = ''; });
+
+  showToast('案件情報をコピーしました。作業日を入力して保存してください。', 'info');
+  document.getElementById('work-date').focus();
 }
 
 /**
