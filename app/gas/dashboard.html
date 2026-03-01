@@ -255,11 +255,12 @@
     .job-card {
       background: white;
       border-radius: 3px;
-      padding: 5px 6px;
+      padding: 5px 24px 5px 6px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
       cursor: pointer;
       transition: background 0.1s;
       border-left: 3px solid transparent;
+      position: relative;
     }
 
     .job-card:hover {
@@ -319,25 +320,29 @@
     }
 
     .card-edit-btn {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: 24px;
       background: none;
       border: none;
-      padding: 2px;
+      border-radius: 0 3px 3px 0;
+      padding: 0;
       cursor: pointer;
       color: var(--text-muted);
-      opacity: 0;
-      transition: opacity 0.1s;
-      flex-shrink: 0;
+      opacity: 0.5;
+      transition: opacity 0.15s, background 0.15s;
       display: flex;
       align-items: center;
       justify-content: center;
     }
 
-    .job-card:hover .card-edit-btn {
+    .card-edit-btn:hover,
+    .card-edit-btn:focus-visible {
       opacity: 1;
-    }
-
-    .card-edit-btn:hover {
       color: var(--color-primary);
+      background: rgba(0, 0, 0, 0.04);
     }
 
     .job-card-footer {
@@ -522,7 +527,8 @@
       /* Hide non-essential elements */
       nav, .nav-bar, .add-btn,
       .date-btn, .date-picker-input,
-      .modal-overlay, .toast {
+      .modal-overlay, .toast,
+      .card-edit-btn {
         display: none !important;
       }
 
@@ -1085,13 +1091,13 @@
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${safeCustomerName}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
-              <button class="card-edit-btn" data-job-id="${safeJobId}" onclick="event.stopPropagation(); openJobModalForDashboard(this.dataset.jobId)" title="案件編集">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
             </div>
+            <button class="card-edit-btn" data-job-id="${safeJobId}" onclick="event.stopPropagation(); openJobModalForDashboard(this.dataset.jobId)" title="案件編集">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
             <div class="job-card-footer">
               <span class="site-name">${safeSiteName}</span>
               <span class="start-time">${safeStartTime}</span>
