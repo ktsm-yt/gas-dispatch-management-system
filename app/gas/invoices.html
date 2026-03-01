@@ -2392,7 +2392,8 @@
 
     function refreshInvoicesOnVisible() {
       // キャッシュクリアせずバックグラウンド更新のみ（ローディングモーダルを出さない）
-      if (invoices.length > 0 && currentInvoiceQuery) {
+      // Note: invoices.length チェックを除去 — 検索結果0件の月でもスロットルを効かせる
+      if (currentInvoiceQuery) {
         // 5分以内に取得済みならスキップ（単一ユーザー運用のため頻繁な再取得不要）
         if (Date.now() - lastInvoiceFetchTime < 300000) return;
         var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
