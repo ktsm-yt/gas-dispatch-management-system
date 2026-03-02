@@ -459,7 +459,7 @@ function inferUnitFromTimeSlot(timeSlot) {
     case 'am': case 'pm': case 'mitei': return 'halfday';
     case 'shuujitsu': return 'fullday';
     case 'yakin': return 'night';
-    case 'jotou': return 'tobi';
+    case 'jotou': return '';  // 上棟はtobi/age/tobiageの3種、time_slotだけでは判別不可
     default: return 'basic';
   }
 }

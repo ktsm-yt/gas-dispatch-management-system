@@ -78,7 +78,9 @@ function inferUnitFromTimeSlot_(timeSlot: string | null | undefined): string {
     case 'yakin':
       return 'night';
     case 'jotou':
-      return 'tobi';
+      // 上棟はtobi/age/tobiageの3種があり、time_slotだけでは判別不可
+      // job.pay_unitに依存する（呼び出し元で設定済みのはず）
+      return '';
     default:
       return 'basic';
   }
@@ -101,7 +103,8 @@ function resolveEffectiveUnit_(
     }
     // 2. job.pay_unit も未設定なら time_slot から推論
     if (job.time_slot) {
-      return inferUnitFromTimeSlot_(job.time_slot as string);
+      const inferred = inferUnitFromTimeSlot_(job.time_slot as string);
+      if (inferred) return inferred;
     }
   }
   return unit;
