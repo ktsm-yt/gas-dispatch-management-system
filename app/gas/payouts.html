@@ -671,7 +671,7 @@
   </div>
 
   <!-- Payout Detail Modal -->
-  <div class="modal-overlay" id="payoutDetailModal" onclick="handlePayoutModalOverlayClick(event)">
+  <div class="modal-overlay" id="payoutDetailModal">
     <div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="payoutModalTitle" tabindex="-1">
       <div class="modal-header">
         <h2 id="payoutModalTitle">未払詳細 - <span id="modalStaffName"></span></h2>
@@ -695,7 +695,7 @@
   </div>
 
   <!-- Export Modal -->
-  <div class="modal-overlay" id="exportModal" onclick="handleExportModalOverlayClick(event)">
+  <div class="modal-overlay" id="exportModal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle" tabindex="-1">
       <div class="modal-header">
         <h2 id="exportModalTitle">振込集計エクスポート</h2>
@@ -722,7 +722,7 @@
   </div>
 
   <!-- File Overwrite Confirm Modal -->
-  <div class="modal-overlay" id="fileOverwriteModal" onclick="handleFileOverwriteModalOverlayClick(event)">
+  <div class="modal-overlay" id="fileOverwriteModal">
     <div class="modal" style="max-width: 450px;">
       <div class="modal-header">
         <h2>同名ファイルが存在します</h2>
@@ -2312,13 +2312,6 @@
       }
     }
 
-    // ESCキーでモーダルを閉じる
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        closeConfirmModal();
-        closePayoutModal();
-      }
-    });
 
     // ========== Payout Actions ==========
 
@@ -3498,11 +3491,6 @@
         .exportPayoutDetail(modalPayoutId, options);
     }
 
-    function handlePayoutModalOverlayClick(event) {
-      if (event.target.id === 'payoutDetailModal') {
-        closePayoutModal();
-      }
-    }
 
     function toggleSign(staffId) {
       const btn = document.querySelector(`.btn-sign[data-staff-id="${staffId}"]`);
@@ -4009,13 +3997,6 @@
       document.getElementById('exportModal').classList.remove('active');
     }
 
-    function handleExportModalOverlayClick(event) {
-      if (event.target.id === 'exportModal') closeExportModal();
-    }
-
-    function handleFileOverwriteModalOverlayClick(event) {
-      if (event.target.id === 'fileOverwriteModal') closeFileOverwriteModal();
-    }
 
     // エクスポート待機状態を保持
     let pendingPayoutExport = null;

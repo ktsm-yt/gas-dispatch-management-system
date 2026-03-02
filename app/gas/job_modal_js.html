@@ -1055,23 +1055,6 @@ function toggleWorkDetailOtherText(workDetail, text) {
 }
 
 function setupJobModalEventListeners() {
-  // Close modal on overlay click
-  const modal = document.getElementById('job-modal');
-  if (modal) {
-    modal.addEventListener('click', (e) => {
-      if (e.target.id === 'job-modal') {
-        closeJobModal();
-      }
-    });
-  }
-
-  // Close on Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && document.getElementById('job-modal').style.display !== 'none') {
-      closeJobModal();
-    }
-  });
-
   // Setup customer autocomplete
   setupCustomerAutocomplete();
 

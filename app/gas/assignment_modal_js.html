@@ -1364,7 +1364,8 @@ function filterStaffList(resetScroll = false) {
     if (searchQuery) {
       const name = (s.name || '').toLowerCase();
       const kana = (s.name_kana || '').toLowerCase();
-      if (!name.includes(searchQuery) && !kana.includes(searchQuery)) return false;
+      const nick = (s.nickname || '').toLowerCase();
+      if (!name.includes(searchQuery) && !kana.includes(searchQuery) && !nick.includes(searchQuery)) return false;
     }
 
     // Skill filter
@@ -1461,7 +1462,7 @@ function renderStaffRowHtml(staff, ctx) {
     <div class="${itemClasses}" onclick="toggleStaffSelection('${s.staff_id}')">
       <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
       <div class="staff-list-info">
-        <span class="staff-list-name">${escapeHtml(s.name)}${s.nickname ? ' (' + escapeHtml(s.nickname) + ')' : ''}${leaderBadge}${conflictBadge}</span>
+        <span class="staff-list-name">${s.nickname ? escapeHtml(s.nickname) + ' (' + escapeHtml(s.name) + ')' : escapeHtml(s.name)}${leaderBadge}${conflictBadge}</span>
         <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
         ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
         ${skillBadges}
@@ -2356,20 +2357,6 @@ function updateWorkContent(workDetail, otherText) {
 
 // ========== Event Listeners Setup ==========
 function setupAssignmentModalEventListeners() {
-  // Close modal on overlay click
-  document.getElementById('assignment-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'assignment-modal') {
-      closeAssignmentModal();
-    }
-  });
-
-  // Close LINE template modal on overlay click
-  document.getElementById('line-template-modal').addEventListener('click', (e) => {
-    if (e.target.id === 'line-template-modal') {
-      closeLineTemplateModal();
-    }
-  });
-
   // Auto-save LINE template on input (debounced)
   const templateTextarea = document.getElementById('line-template-textarea');
   if (templateTextarea) {
@@ -2385,17 +2372,6 @@ function setupAssignmentModalEventListeners() {
   if (staffListContainer) {
     staffListContainer.addEventListener('scroll', onStaffListScroll, { passive: true });
   }
-
-  // Close modals on Escape key
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (document.getElementById('line-template-modal').style.display !== 'none') {
-        closeLineTemplateModal();
-      } else if (document.getElementById('assignment-modal').style.display !== 'none') {
-        closeAssignmentModal();
-      }
-    }
-  });
 }
 
 // Auto-setup when DOM is ready
