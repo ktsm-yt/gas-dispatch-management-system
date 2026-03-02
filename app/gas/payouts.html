@@ -1359,7 +1359,9 @@
 
       if (type === 'STAFF_CHANGED') {
         PageCache.clear('payouts_staff');
+        PageCache.clearByPrefix('payouts_unpaid');
         loadStaffList();
+        loadUnpaidList(true);
       }
       if (type === 'SUBCONTRACTORS_CHANGED') {
         PageCache.clear('payouts_sub_list');
@@ -2948,9 +2950,10 @@
         const dateStr = a.work_date ? formatDateShort(a.work_date) : '-';
         const siteName = a.site_name || '(現場名なし)';
         const unitLabel = UNIT_LABEL_MAP[a.invoice_unit || a.pay_unit || 'basic'] || '';
-        const rate = a.adjusted_wage_rate || a.wage_rate;
-        const wageRate = rate ? `¥${Number(rate).toLocaleString()}` : '-';
-        const isAdjusted = (a.adjusted_wage_rate != null) && (Number(a.adjusted_wage_rate) !== Number(a.wage_rate));
+        const wage = a.calculated_wage != null ? Number(a.calculated_wage) : null;
+        const wageRate = wage != null ? `¥${wage.toLocaleString()}` : '-';
+        const rawWage = a.wage_rate != null ? Number(a.wage_rate) : 0;
+        const isAdjusted = wage != null && rawWage > 0 && wage !== rawWage;
         const amtStyle = isAdjusted ? 'text-align:right;color:#D97706;font-weight:bold' : 'text-align:right';
         return `<tr><td>${dateStr}</td><td>${siteName}</td><td>${unitLabel}</td><td style="${amtStyle}">${wageRate}</td></tr>`;
       }).join('');
