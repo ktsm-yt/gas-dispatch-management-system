@@ -19,6 +19,7 @@
  * CacheService・ScriptPropertiesの進捗キーもクリア
  */
 function clearAllForProduction() {
+  assertDevEnv('clearAllForProduction');
   Logger.log('=== 全データクリア開始 ===');
   const startTime = new Date();
 

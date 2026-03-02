@@ -1,6 +1,10 @@
 <!-- Shared Navigation Bar -->
 <header class="header">
   <div class="header-title">配置管理システム <span class="breadcrumb-separator">&gt;</span> <span id="page-title" class="page-name"></span></div>
+  <div id="env-switcher" class="env-switcher" style="display:none">
+    <span id="env-badge" class="env-badge">---</span>
+    <button id="env-toggle-btn" class="env-toggle-btn" title="DB切り替え">⇄</button>
+  </div>
   <nav class="header-nav">
     <a href="#" id="nav-manual" class="nav-icon" title="操作マニュアル" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;padding:0 0.4rem;opacity:0.7;transition:opacity .2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.7'">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -116,6 +120,9 @@ function initNavBar(currentPage, pageTitle) {
       })
       .getScriptUrl();
   }
+
+  // ENV切り替えUI初期化（開発環境のみ）
+  initEnvSwitcher();
 }
 
 // 各ナビリンクにhref属性を設定（右クリック・Cmd+クリック対応）
@@ -137,6 +144,45 @@ function setNavHrefs(baseUrl) {
     const el = document.getElementById(id);
     if (el) el.href = baseUrl + '?page=' + page;
   }
+}
+
+// ENV切り替え（開発環境のみ表示）
+function initEnvSwitcher() {
+  var switcher = document.getElementById('env-switcher');
+  var badge = document.getElementById('env-badge');
+  var btn = document.getElementById('env-toggle-btn');
+  if (!switcher || !badge || !btn) return;
+
+  // 1回のRPCでENV取得（本番デプロイなら非表示のまま）
+  google.script.run
+    .withSuccessHandler(function(env) {
+      if (env === 'prod-deployment') return; // 本番デプロイでは表示しない
+      switcher.style.display = '';
+      badge.dataset.env = env;
+      badge.textContent = env === 'prod' ? 'PROD' : 'DEV';
+      badge.className = 'env-badge env-badge--' + env;
+    })
+    .getEnvForSwitcher();
+
+  btn.addEventListener('click', function() {
+    var current = badge.dataset.env;
+    var next = current === 'prod' ? 'Dev' : 'Prod';
+    if (!confirm(next + ' DBに切り替えますか？')) return;
+
+    btn.disabled = true;
+    var runner = google.script.run
+      .withSuccessHandler(function() { location.reload(); })
+      .withFailureHandler(function(err) {
+        alert('切り替えエラー: ' + err.message);
+        btn.disabled = false;
+      });
+
+    if (current === 'prod') {
+      runner.switchToDevDb();
+    } else {
+      runner.switchToProdDb();
+    }
+  });
 }
 
 function navigateTo(page) {

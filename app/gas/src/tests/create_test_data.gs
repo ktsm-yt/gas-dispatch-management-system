@@ -8,6 +8,7 @@
  * テストデータを作成
  */
 function createTestData() {
+  assertDevEnv('createTestData');
   console.log('=== テストデータ作成開始 ===');
 
   // 1. 顧客マスターにテストデータを追加
@@ -351,6 +352,7 @@ function createTestJobs() {
  * テストデータを削除
  */
 function deleteTestData() {
+  assertDevEnv('deleteTestData');
   console.log('=== テストデータ削除開始 ===');
 
   // 案件を削除（テスト顧客の案件）
@@ -623,6 +625,7 @@ function clearAllTestData() {
  * マスターを含む全データを削除（注意: 復元不可）
  */
 function clearEverything() {
+  assertDevEnv('clearEverything');
   console.log('⚠️ 全データ削除を実行します');
   return clearTestData({ jobs: true, assignments: true, customers: true, staff: true });
 }
