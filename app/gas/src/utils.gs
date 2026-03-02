@@ -326,6 +326,7 @@ const MasterCache = {
         staff_id: s.staff_id,
         name: s.name,
         name_kana: s.name_kana,
+        nickname: s.nickname,
         phone: s.phone,
         staff_type: s.staff_type,
         skills: s.skills,

@@ -224,8 +224,6 @@
     function setupEventListeners() {
       document.getElementById('search-input').addEventListener('input', filterData);
       document.getElementById('add-btn').onclick = () => openModal(null);
-      document.getElementById('modal').onclick = (e) => { if (e.target.id === 'modal') closeModal(); };
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
     }
 
     function loadData() {

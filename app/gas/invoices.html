@@ -1322,7 +1322,7 @@
   </div>
 
   <!-- Payment Modal -->
-  <div class="modal-overlay" id="paymentModal" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle" onclick="handleModalOverlayClick(event, 'paymentModal')">
+  <div class="modal-overlay" id="paymentModal" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
     <div class="modal" style="max-width: 500px;">
       <div class="modal-header">
         <h2 id="paymentModalTitle">入金記録</h2>
@@ -1389,7 +1389,7 @@
   </div>
 
   <!-- Invoice Edit Modal -->
-  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle" onclick="handleModalOverlayClick(event, 'editModal')">
+  <div class="modal-overlay" id="editModal" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
     <div class="modal" style="max-width: 1200px;">
       <div class="modal-header">
         <h2 id="editModalTitle">請求書編集</h2>
@@ -1484,7 +1484,7 @@
   </div>
 
   <!-- Generate Invoice Modal -->
-  <div class="modal-overlay" id="generateModal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle" onclick="handleModalOverlayClick(event, 'generateModal')">
+  <div class="modal-overlay" id="generateModal" role="dialog" aria-modal="true" aria-labelledby="generateModalTitle">
     <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
         <h2 id="generateModalTitle">請求集計</h2>
@@ -1538,7 +1538,7 @@
   </div>
 
   <!-- Bulk Generate Invoice Modal -->
-  <div class="modal-overlay" id="bulkGenerateModal" onclick="handleModalOverlayClick(event, 'bulkGenerateModal')">
+  <div class="modal-overlay" id="bulkGenerateModal">
     <div class="modal" style="max-width: 420px;">
       <div class="modal-header">
         <h2>請求一括集計</h2>
@@ -1598,7 +1598,7 @@
   </div>
 
   <!-- Billing Export Modal -->
-  <div class="modal-overlay" id="billingExportModal" onclick="handleModalOverlayClick(event, 'billingExportModal')">
+  <div class="modal-overlay" id="billingExportModal">
     <div class="modal" style="max-width: 400px;">
       <div class="modal-header">
         <h2>集計エクスポート</h2>
@@ -1626,7 +1626,7 @@
   </div>
 
   <!-- File Overwrite Confirm Modal -->
-  <div class="modal-overlay" id="fileOverwriteModal" onclick="handleModalOverlayClick(event, 'fileOverwriteModal')">
+  <div class="modal-overlay" id="fileOverwriteModal">
     <div class="modal" style="max-width: 450px;">
       <div class="modal-header">
         <h2>同名ファイルが存在します</h2>
@@ -1645,7 +1645,7 @@
 
   <!-- Regenerate Confirm Modal -->
   <div class="modal-overlay" id="regenerateConfirmModal"
-    onclick="handleModalOverlayClick(event, 'regenerateConfirmModal')">
+>
     <div class="modal" style="max-width: 400px;">
       <div class="modal-header">
         <h2>請求書の再集計</h2>
@@ -1844,7 +1844,6 @@
       initCustomerLazyLoad();
       initCustomersFromCache();
       initClosingDayFreshness();
-      initModalHandlers();
       loadBillingFolderLink();
       loadLastExportFromStorage();  // 前回の出力結果を復元
       initInvoiceSync();
@@ -2099,41 +2098,6 @@
     function initCustomerLazyLoad() {
       // autocomplete のfocusイベントで遅延ロード済み
       // 追加のトリガーは不要
-    }
-
-    function initModalHandlers() {
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-          const generateModal = document.getElementById('generateModal');
-          const bulkModal = document.getElementById('bulkGenerateModal');
-          const billingModal = document.getElementById('billingExportModal');
-          const fileOverwriteModal = document.getElementById('fileOverwriteModal');
-          if (generateModal.classList.contains('active')) {
-            closeGenerateModal();
-          } else if (bulkModal.classList.contains('active')) {
-            closeBulkGenerateModal();
-          } else if (billingModal.classList.contains('active')) {
-            closeBillingExportModal();
-          } else if (fileOverwriteModal.classList.contains('active')) {
-            closeFileOverwriteModal();
-          }
-        }
-      });
-    }
-
-    function handleModalOverlayClick(event, modalId) {
-      // Close only if clicked on overlay itself, not the modal content
-      if (event.target.id === modalId) {
-        if (modalId === 'generateModal') {
-          closeGenerateModal();
-        } else if (modalId === 'bulkGenerateModal') {
-          closeBulkGenerateModal();
-        } else if (modalId === 'billingExportModal') {
-          closeBillingExportModal();
-        } else if (modalId === 'fileOverwriteModal') {
-          closeFileOverwriteModal();
-        }
-      }
     }
 
     function initFilters() {

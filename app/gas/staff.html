@@ -1034,20 +1034,6 @@
         }
       });
 
-      // Modal close on overlay click
-      document.getElementById('staff-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'staff-modal') {
-          closeModal();
-        }
-      });
-
-      // Modal close on Escape key
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closeModal();
-        }
-      });
-
       // Skill tag input
       document.getElementById('skill-input').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {

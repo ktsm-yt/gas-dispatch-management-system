@@ -27,6 +27,7 @@ const TABLE_SHEET_MAP = {
 
 // リクエスト内キャッシュ（同一実行内でのopenById/getSheetByName重複を削減）
 let REQUEST_DB_CACHE = null;
+let REQUEST_DB_ID_CACHE = null;
 const REQUEST_SHEET_CACHE = {};
 
 // getAllRecords用の実行内キャッシュ（同一リクエスト内でのシートフルスキャン重複を削減）
@@ -35,13 +36,21 @@ var REQUEST_RECORDS_CACHE = {};
 /**
  * DB Spreadsheetを取得
  * ID取得は config.ts::getSpreadsheetId() に委譲
+ * ENV切り替え時のキャッシュ不整合を防止するためID検証付き
  * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} Spreadsheetオブジェクト
  */
 function getDb() {
-  if (REQUEST_DB_CACHE) {
+  const expectedId = REQUEST_DB_ID_CACHE || getSpreadsheetId();
+  if (REQUEST_DB_CACHE && REQUEST_DB_ID_CACHE === expectedId) {
     return REQUEST_DB_CACHE;
   }
-  REQUEST_DB_CACHE = SpreadsheetApp.openById(getSpreadsheetId());
+  // ENV切り替え後やインスタンス再利用時にDB参照がずれるのを防止
+  if (REQUEST_DB_CACHE) {
+    Object.keys(REQUEST_SHEET_CACHE).forEach(k => delete REQUEST_SHEET_CACHE[k]);
+    REQUEST_RECORDS_CACHE = {};
+  }
+  REQUEST_DB_ID_CACHE = expectedId;
+  REQUEST_DB_CACHE = SpreadsheetApp.openById(expectedId);
   return REQUEST_DB_CACHE;
 }
 

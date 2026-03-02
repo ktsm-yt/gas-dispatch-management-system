@@ -631,20 +631,6 @@
 
       // Add button
       document.getElementById('add-customer-btn').addEventListener('click', () => openModal(null));
-
-      // Modal close on overlay click
-      document.getElementById('customer-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'customer-modal') {
-          closeModal();
-        }
-      });
-
-      // Modal close on Escape key
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-          closeModal();
-        }
-      });
     }
 
     function debounce(func, wait) {
