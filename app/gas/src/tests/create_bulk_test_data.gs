@@ -46,6 +46,7 @@ const BULK_TEST_CONFIG = {
  * 大量テストデータを作成
  */
 function createBulkTestData() {
+  assertDevEnv('createBulkTestData');
   const startTime = Date.now();
   console.log('=== 大量テストデータ作成開始 ===');
   console.log(`設定: 顧客${BULK_TEST_CONFIG.CUSTOMER_COUNT}件, スタッフ${BULK_TEST_CONFIG.STAFF_COUNT}名, 案件${BULK_TEST_CONFIG.DAYS_TO_GENERATE * BULK_TEST_CONFIG.JOBS_PER_DAY}件`);
@@ -89,6 +90,7 @@ function createBulkTestData() {
  * 大量テストデータを削除
  */
 function deleteBulkTestData() {
+  assertDevEnv('deleteBulkTestData');
   const startTime = Date.now();
   console.log('=== 大量テストデータ削除開始 ===');
 

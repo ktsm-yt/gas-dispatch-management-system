@@ -1000,6 +1000,7 @@ function _calcWageRate(staff, payUnit) {
  * ⚠️ 6分制限に注意。タイムアウトする場合は個別関数を実行
  */
 function seedAllProductionData() {
+  assertDevEnv('seedAllProductionData');
   Logger.log('=== 本番シードデータ一括投入開始 ===');
   const startTime = new Date();
 
