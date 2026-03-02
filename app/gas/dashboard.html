@@ -365,6 +365,15 @@
       flex-shrink: 0;
     }
 
+    .site-address-line {
+      font-size: 9px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.8;
+    }
+
     .staff-list {
       display: none; /* 非表示にしてコンパクト化 */
     }
@@ -727,6 +736,16 @@
 
     const TIME_SLOT_ORDER = ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'];
 
+    /**
+     * 住所を市区町村レベルに切り詰める
+     */
+    function truncateAddress(address) {
+      if (!address) return '';
+      const match = address.match(/.+?[都道府県].+?[市区町村郡]/);
+      if (match) return match[0];
+      return address.length > 10 ? address.slice(0, 10) + '…' : address;
+    }
+
     // Work category to tag class
     const WORK_CATEGORY_TAG = {
       'jotou': 'tag-jotou',
@@ -1077,6 +1096,7 @@
         const safeCustomerName = escapeHtml(job.customer_name || '-');
         const safeSiteName = escapeHtml(job.site_name || '');
         const safeStartTime = escapeHtml(job.start_time || '');
+        const safeSiteAddress = truncateAddress(job.site_address || '');
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
           .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
@@ -1102,6 +1122,7 @@
               <span class="site-name">${safeSiteName}</span>
               <span class="start-time">${safeStartTime}</span>
             </div>
+            ${safeSiteAddress ? `<div class="site-address-line">${escapeHtml(safeSiteAddress)}</div>` : ''}
             ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}
           </div>
         `;
