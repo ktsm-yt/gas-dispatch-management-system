@@ -297,6 +297,13 @@
     .tag-jotou { background: var(--tag-jotou); }
     .tag-keisagyo { background: var(--tag-keisagyo); }
     .tag-niage { background: var(--tag-niage); }
+    .tag-pay-basic { background: #78909C; }
+    .tag-pay-halfday { background: #4DB6AC; }
+    .tag-pay-fullday { background: #7986CB; }
+    .tag-pay-night { background: #5C6BC0; }
+    .tag-pay-tobi { background: var(--tag-tobi); }
+    .tag-pay-age { background: var(--tag-age); }
+    .tag-pay-tobiage { background: var(--tag-tobiage); }
 
     .customer-name {
       flex: 1;
@@ -363,6 +370,15 @@
 
     .start-time {
       flex-shrink: 0;
+    }
+
+    .site-address-line {
+      font-size: 9px;
+      color: var(--text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      opacity: 0.8;
     }
 
     .staff-list {
@@ -727,6 +743,16 @@
 
     const TIME_SLOT_ORDER = ['jotou', 'shuujitsu', 'am', 'pm', 'yakin', 'mitei'];
 
+    /**
+     * 住所を市区町村レベルに切り詰める
+     */
+    function truncateAddress(address) {
+      if (!address) return '';
+      const match = address.match(/.+?[都道府県].+?[市区町村郡]/);
+      if (match) return match[0];
+      return address.length > 10 ? address.slice(0, 10) + '…' : address;
+    }
+
     // Work category to tag class
     const WORK_CATEGORY_TAG = {
       'jotou': 'tag-jotou',
@@ -738,7 +764,18 @@
     const WORK_CATEGORY_LABEL = {
       'jotou': '上棟',
       'keisagyo': '軽作業',
-      'niage': '荷揚げ'
+      'niage': '搬入'
+    };
+
+    // Pay unit labels and tag classes
+    const PAY_UNIT_TAG = {
+      'basic': { label: '基本', cls: 'tag-pay-basic' },
+      'halfday': { label: 'ハーフ', cls: 'tag-pay-halfday' },
+      'fullday': { label: '終日', cls: 'tag-pay-fullday' },
+      'night': { label: '夜勤', cls: 'tag-pay-night' },
+      'tobi': { label: '上棟鳶', cls: 'tag-pay-tobi' },
+      'age': { label: '上棟荷揚げ', cls: 'tag-pay-age' },
+      'tobiage': { label: '上棟鳶揚げ', cls: 'tag-pay-tobiage' }
     };
 
     // BroadcastChannel for cross-tab sync
@@ -1077,6 +1114,17 @@
         const safeCustomerName = escapeHtml(job.customer_name || '-');
         const safeSiteName = escapeHtml(job.site_name || '');
         const safeStartTime = escapeHtml(job.start_time || '');
+        const safeSiteAddress = truncateAddress(job.site_address || '');
+        // 単価バッジ: シンプルモードはpay_unit、詳細モード(slots)は種類数で判定
+        let payUnitInfo;
+        if (job.pay_unit) {
+          payUnitInfo = PAY_UNIT_TAG[job.pay_unit];
+        } else if (job.slots && job.slots.length > 0) {
+          const uniqueUnits = [...new Set(job.slots.map(s => s.slot_pay_unit))];
+          payUnitInfo = uniqueUnits.length === 1
+            ? PAY_UNIT_TAG[uniqueUnits[0]]
+            : { label: '複数', cls: 'tag-pay-basic' };
+        }
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
           .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
@@ -1088,6 +1136,7 @@
           <div class="${cardClass}" data-job-id="${safeJobId}" onclick="openJobAssignmentsForDashboard(this.dataset.jobId)">
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
+              ${payUnitInfo ? `<span class="tag ${payUnitInfo.cls}">${payUnitInfo.label}</span>` : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${safeCustomerName}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
@@ -1102,6 +1151,7 @@
               <span class="site-name">${safeSiteName}</span>
               <span class="start-time">${safeStartTime}</span>
             </div>
+            ${safeSiteAddress ? `<div class="site-address-line">${escapeHtml(safeSiteAddress)}</div>` : ''}
             ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}
           </div>
         `;

@@ -121,6 +121,7 @@ const JobRepository = {
       branch_office: job.branch_office || '',
       property_code: job.property_code || '',
       construction_div: job.construction_div || '',
+      client_contact: job.client_contact || '',
       status: job.status || 'pending',
       is_damaged: job.is_damaged || false,
       is_uncollected: job.is_uncollected || false,
@@ -178,7 +179,7 @@ const JobRepository = {
       'start_time', 'required_count',
       'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
-      'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
+      'client_contact', 'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
     ];
 
     const updatedJob: Record<string, unknown> = { ...currentJob };
@@ -423,7 +424,7 @@ const JobRepository = {
         'start_time', 'required_count',
         'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
         'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
-        'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
+        'client_contact', 'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
       ];
 
       const updatedJob: Record<string, unknown> = { ...currentRecord };
