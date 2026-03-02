@@ -201,6 +201,7 @@ function getJobFromDashboardCache(jobId) {
       work_category: job.work_category,
       work_detail: job.work_detail || '',
       required_count: job.required_count,
+      pay_unit: job.pay_unit || '',
       status: job.status,
       supervisor_name: job.supervisor_name || '',
       supervisor_phone: job.supervisor_phone || '',
@@ -459,7 +460,7 @@ function inferUnitFromTimeSlot(timeSlot) {
     case 'am': case 'pm': case 'mitei': return 'halfday';
     case 'shuujitsu': return 'fullday';
     case 'yakin': return 'night';
-    case 'jotou': return '';  // 上棟はtobi/age/tobiageの3種、time_slotだけでは判別不可
+    case 'jotou': return 'tobi';
     default: return 'basic';
   }
 }
