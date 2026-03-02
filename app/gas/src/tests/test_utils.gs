@@ -400,7 +400,6 @@ function runCalcUtilsTests() {
     testCalculateTaxIncluded,
     testCalculateTaxExcluded,
     testCalculateTaxAmount,
-    testGetUnitMultiplier,
     testCalculateInvoiceTotals,
     testFormatCurrency
   ];
@@ -458,19 +457,6 @@ function testCalculateTaxAmount() {
   // 端数処理（10001 * 0.10 = 1000.1 → floor → 1000）
   assertEqual(calculateTaxAmount_(10001, 0.10), 1000, 'floor applied');
   assertEqual(calculateTaxAmount_(10001, 0.10, 'ceil'), 1001, 'ceil applied');
-}
-
-function testGetUnitMultiplier() {
-  // 全日
-  assertEqual(getUnitMultiplier_('shuujitsu'), 1.0, 'shuujitsu = 1.0');
-  assertEqual(getUnitMultiplier_('jotou'), 1.0, 'jotou = 1.0');
-
-  // 半日
-  assertEqual(getUnitMultiplier_('am'), 0.5, 'am = 0.5');
-  assertEqual(getUnitMultiplier_('pm'), 0.5, 'pm = 0.5');
-
-  // 夜勤（特殊）
-  assertTrue(getUnitMultiplier_('yakin') >= 1.0, 'yakin >= 1.0');
 }
 
 function testCalculateInvoiceTotals() {
@@ -714,25 +700,6 @@ function testCalculateTaxIncluded_withNormalization() {
 }
 
 /**
- * 単位係数テスト（大文字入力対応）
- */
-function testGetUnitMultiplier_withNormalization() {
-  console.log('=== testGetUnitMultiplier_withNormalization ===');
-
-  // 大文字でも正しく係数取得
-  assertEqual(getUnitMultiplier_('FULLDAY'), 1.0, 'FULLDAY → 1.0');
-  assertEqual(getUnitMultiplier_('HALFDAY'), 0.5, 'HALFDAY → 0.5');
-  assertEqual(getUnitMultiplier_('AM'), 0.5, 'AM → 0.5');
-  assertEqual(getUnitMultiplier_('PM'), 0.5, 'PM → 0.5');
-
-  // 小文字でも正しく係数取得
-  assertEqual(getUnitMultiplier_('fullday'), 1.0, 'fullday → 1.0');
-  assertEqual(getUnitMultiplier_('halfday'), 0.5, 'halfday → 0.5');
-
-  console.log('testGetUnitMultiplier_withNormalization: PASSED');
-}
-
-/**
  * 正規化関数のテストを一括実行
  */
 function runNormalizationTests() {
@@ -745,7 +712,6 @@ function runNormalizationTests() {
     testNormalizeUnit();
     testCalculateTaxAmount_withNormalization();
     testCalculateTaxIncluded_withNormalization();
-    testGetUnitMultiplier_withNormalization();
 
     console.log('======================================');
     console.log('All Normalization Tests PASSED!');

@@ -156,10 +156,13 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
       return customer.unit_price_basic || customer.unit_price_tobi || 0;
     case 'half':
     case 'halfday':
+    case 'am':
+    case 'pm':
       return customer.unit_price_half || 0;
     case 'fullday':
       return customer.unit_price_fullday || customer.unit_price_tobi || 0;
     case 'night':
+    case 'yakin':
       return customer.unit_price_night || customer.unit_price_tobi || 0;
     default:
       return customer.unit_price_basic || customer.unit_price_tobi || 0;
@@ -174,12 +177,15 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
   switch (normalizedType) {
     case 'half':
     case 'halfday':
+    case 'am':
+    case 'pm':
       return staff.daily_rate_half || 0;
     case 'basic':
       return staff.daily_rate_basic || staff.daily_rate_tobi || 0;
     case 'fullday':
       return staff.daily_rate_fullday || staff.daily_rate_tobi || 0;
     case 'night':
+    case 'yakin':
       return staff.daily_rate_night || staff.daily_rate_tobi || 0;
     case 'tobi':
       return staff.daily_rate_tobi || 0;
@@ -229,28 +235,13 @@ function getSubcontractorRateByUnit_(
   return rate;
 }
 
-/** @deprecated 将来的に廃止予定。直接マスター値を使用すること。 */
-function getUnitMultiplier_(unit: string): number {
-  const normalizedUnit = normalizeUnit_(unit);
-
-  switch (normalizedUnit) {
-    case 'half':
-    case 'halfday':
-    case 'am':
-    case 'pm':
-      return 0.5;
-    default:
-      return 1.0;
-  }
-}
-
 function calculateWage_(
   assignment: Record<string, any>,
   staff: Record<string, any>,
   jobType: string
 ): number {
   // wage_rate は実額（円）。null/undefined/'' の場合はスタッフマスタから取得。
-  // ※ 倍率ではないので掛け算しないこと（過去に rate × wage_rate で巨額バグ発生）
+  // 単価は全てマスタの固定値。乗算計算は行わない。
   let baseRate = assignment.wage_rate;
 
   if (baseRate === null || baseRate === undefined || baseRate === '') {
@@ -263,9 +254,7 @@ function calculateWage_(
     }
   }
 
-  const multiplier = getUnitMultiplier_(assignment.pay_unit);
-
-  return applyRounding_(baseRate * multiplier, RoundingMode.FLOOR);
+  return applyRounding_(Number(baseRate) || 0, RoundingMode.FLOOR);
 }
 
 function calculateInvoiceAmount_(
@@ -285,9 +274,7 @@ function calculateInvoiceAmount_(
     }
   }
 
-  const multiplier = getUnitMultiplier_(assignment.invoice_unit);
-
-  return applyRounding_(baseRate * multiplier, RoundingMode.FLOOR);
+  return applyRounding_(Number(baseRate) || 0, RoundingMode.FLOOR);
 }
 
 // ============================================

@@ -282,33 +282,24 @@ function testPayoutCalculations() {
 
   const testAssignments = [
     { pay_unit: 'fullday', wage_rate: 15000, transport_amount: 1000 },  // 15000 * 1.0 + 1000
-    { pay_unit: 'halfday', wage_rate: 15000, transport_amount: 500 },   // 15000 * 0.5 + 500
-    { pay_unit: 'am', wage_rate: 15000, transport_amount: 500 },        // 15000 * 0.5 + 500
+    { pay_unit: 'halfday', wage_rate: 15000, transport_amount: 500 },   // 15000 * 1.0 + 500
+    { pay_unit: 'am', wage_rate: 15000, transport_amount: 500 },        // 15000 * 1.0 + 500
     { pay_unit: 'fullday', wage_rate: 20000, transport_amount: 1500 }   // 20000 * 1.0 + 1500
   ];
 
   const calcResult = calculateMonthlyPayout_(testAssignments, testStaff);
 
   // Expected:
-  // baseAmount = 15000 + 7500 + 7500 + 20000 = 50000
+  // baseAmount = 15000 + 15000 + 15000 + 20000 = 65000
   // transportAmount = 1000 + 500 + 500 + 1500 = 3500
-  // totalAmount = 53500
+  // totalAmount = 68500
 
-  assertEqual(calcResult.baseAmount, 50000, 'baseAmount should be 50000');
+  assertEqual(calcResult.baseAmount, 65000, 'baseAmount should be 65000');
   assertEqual(calcResult.transportAmount, 3500, 'transportAmount should be 3500');
-  assertEqual(calcResult.totalAmount, 53500, 'totalAmount should be 53500');
+  assertEqual(calcResult.totalAmount, 68500, 'totalAmount should be 68500');
   Logger.log('  CalculateMonthlyPayout: OK');
 
-  // 2. getUnitMultiplier_ テスト
-  assertEqual(getUnitMultiplier_('fullday'), 1.0, 'fullday multiplier');
-  assertEqual(getUnitMultiplier_('halfday'), 0.5, 'halfday multiplier');
-  assertEqual(getUnitMultiplier_('am'), 0.5, 'am multiplier');
-  assertEqual(getUnitMultiplier_('pm'), 0.5, 'pm multiplier');
-  assertEqual(getUnitMultiplier_('jotou'), 1.0, 'jotou multiplier');
-  assertEqual(getUnitMultiplier_('yakin'), 1.0, 'yakin multiplier');
-  Logger.log('  UnitMultiplier: OK');
-
-  // 3. getDailyRateByJobType_ テスト（実装に存在するケースのみ）
+  // 2. getDailyRateByJobType_ テスト（実装に存在するケースのみ）
   assertEqual(getDailyRateByJobType_(testStaff, 'tobi'), 15000, 'tobi rate');
   // tobiageはtobi * TOBIAGE_MULTIPLIER（1.5）で計算される
   assertEqual(getDailyRateByJobType_(testStaff, 'tobiage'), 22500, 'tobiage rate (15000×1.5=22500)');

@@ -212,15 +212,15 @@ function testCalculateWage() {
     { asg: { wage_rate: null, pay_unit: 'tobi' }, expected: 15000, label: 'null → master(tobi)' },
     { asg: { wage_rate: undefined, pay_unit: 'basic' }, expected: 14000, label: 'undefined → master(basic)' },
     { asg: { wage_rate: '', pay_unit: 'tobi' }, expected: 15000, label: '空文字 → master(tobi)' },
-    // half unit → multiplier 0.5
+    // half unit → マスタのhalf用単価をそのまま使用（乗算なし）
     { asg: { wage_rate: null, pay_unit: 'half' }, expected: 0, label: 'half (rate_half未設定) → 0' },
-    { asg: { wage_rate: 20000, pay_unit: 'half' }, expected: 10000, label: 'half + 手動単価 → 半額' },
-    { asg: { wage_rate: 20000, pay_unit: 'halfday' }, expected: 10000, label: 'halfday + 手動単価 → 半額' },
-    // am/pm: wage_rate=null → getDailyRateByJobType_('am')→basic fallback=14000, ×0.5=7000
-    { asg: { wage_rate: null, pay_unit: 'am' }, expected: 7000, label: 'am + null wage → basic×0.5=7000' },
-    { asg: { wage_rate: null, pay_unit: 'pm' }, expected: 7000, label: 'pm + null wage → basic×0.5=7000' },
-    // am/pm: wage_rate指定あり → override × 0.5
-    { asg: { wage_rate: 20000, pay_unit: 'am' }, expected: 10000, label: 'am + 手動単価 → 20000×0.5=10000' }
+    { asg: { wage_rate: 20000, pay_unit: 'half' }, expected: 20000, label: 'half + 手動単価 → そのまま' },
+    { asg: { wage_rate: 20000, pay_unit: 'halfday' }, expected: 20000, label: 'halfday + 手動単価 → そのまま' },
+    // am/pm: wage_rate=null → getDailyRateByJobType_('am') → half rate fallback
+    { asg: { wage_rate: null, pay_unit: 'am' }, expected: 14000, label: 'am + null wage → basic rate=14000' },
+    { asg: { wage_rate: null, pay_unit: 'pm' }, expected: 14000, label: 'pm + null wage → basic rate=14000' },
+    // am/pm: wage_rate指定あり → そのまま使用
+    { asg: { wage_rate: 20000, pay_unit: 'am' }, expected: 20000, label: 'am + 手動単価 → 20000そのまま' }
   ];
 
   for (var i = 0; i < cases.length; i++) {
@@ -329,12 +329,12 @@ function testCalculateMonthlyPayout() {
   assertEqual(empty.transportAmount, 0, '空配列 → transport=0');
   assertEqual(empty.totalAmount, 0, '空配列 → total=0');
 
-  // half unit → multiplier 0.5
+  // half unit → マスタ単価をそのまま使用（乗算なし）
   var halfAssignments = [
     { wage_rate: 20000, pay_unit: 'half', transport_amount: 500 }
   ];
   var halfResult = calculateMonthlyPayout_(halfAssignments, staff);
-  assertEqual(halfResult.baseAmount, 10000, 'half → 0.5倍');
+  assertEqual(halfResult.baseAmount, 20000, 'half → 単価そのまま（乗算なし）');
 }
 
 // ============================================

@@ -176,17 +176,24 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
       // 人工割係数算出用: job_idごとのASSIGNED配置数
       const assignmentCountByJob = PayoutService._buildAssignmentCountByJob(new Set(jobIds));
 
+      // スタッフ情報を取得（calculateWage_に必要）
+      const allStaff = MasterCache.getStaff();
+      const staffData = allStaff.find(function(s) { return s.staff_id === payout.staff_id; }) || {};
+
       result.assignments = linkedAssignments.map(function(a) {
         const job = jobMap.get(a.job_id as string) || {};
-        const wageRate = Number(a.wage_rate) || 0;
+        const payUnit = (a.pay_unit as string) || 'basic';
+
+        // calculateWage_で正確な賃金を計算（マスタ解決含む）
+        const calculatedWage = calculateWage_(a as any, staffData as any, payUnit);
 
         // 人工割反映後の単価を計算
         const requiredCount = Number((job as Record<string, unknown>).required_count) || 0;
         const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
         const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
-        const adjustedWageRate = coefficient !== 1.0
-          ? applyRounding_(wageRate * coefficient, RoundingMode.FLOOR)
-          : wageRate;
+        const adjustedWage = coefficient !== 1.0
+          ? applyRounding_(calculatedWage * coefficient, RoundingMode.FLOOR)
+          : calculatedWage;
 
         return {
           assignment_id: a.assignment_id as string,
@@ -195,7 +202,7 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
           pay_unit: a.pay_unit,
           invoice_unit: a.invoice_unit,
           wage_rate: a.wage_rate,
-          adjusted_wage_rate: adjustedWageRate
+          calculated_wage: adjustedWage
         };
       });
     }
