@@ -514,10 +514,8 @@ function validateStaff(data) {
 function saveStaff(staff, expectedUpdatedAt) {
   requireManager();
   // NOTE: 源泉徴収はwithholding_tax_applicable=trueのスタッフに適用（日額表甲欄・扶養0人、WithholdingTaxTable.ts）
-  // デフォルト補完: 新規作成時に未設定の場合、staff_typeに応じて自動設定
-  // 更新時は既存値を維持するため、補完しない（部分更新でstaff_typeが欠落するケースへの防御）
-  const isNewStaff = !staff.staff_id;
-  if (isNewStaff && (staff.withholding_tax_applicable === undefined || staff.withholding_tax_applicable === null || staff.withholding_tax_applicable === '') && staff.staff_type) {
+  // staff_typeから常に再計算（派生値として扱い、手動設定との矛盾を防止）
+  if (staff.staff_type) {
     staff.withholding_tax_applicable = (staff.staff_type === 'regular' || staff.staff_type === 'student');
   }
   const result = saveMasterRecord(

@@ -46,9 +46,11 @@ if [ -f "$ENV_FILE" ]; then
   # shellcheck disable=SC1090
   source "$ENV_FILE"
 fi
+BUILD_VERSION=$(date +%Y%m%d%H%M%S)
 find . -maxdepth 1 -name "*.html" | while IFS= read -r f; do
   sed -e "s|{{COMPANY_NAME_SHORT}}|${COMPANY_NAME_SHORT:-SampleCorp}|g" \
       -e "s|{{COMPANY_DOMAIN}}|${WORKSPACE_DOMAIN:-example.com}|g" \
+      -e "s|{{BUILD_VERSION}}|${BUILD_VERSION}|g" \
       "$f" > "dist/$(basename "$f")"
 done
 

@@ -1804,6 +1804,8 @@
             }
             // キャッシュ更新
             PageCache.set(STAFF_CACHE_KEY, staffList);
+            // スタッフ変更で支払い計算結果が変わるため、支払いキャッシュもクリア
+            PageCache.clearByPrefix('payouts_unpaid');
             updateStats();
             filterStaff();
             showToast('保存しました', 'success');

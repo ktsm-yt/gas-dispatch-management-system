@@ -113,27 +113,34 @@ const PayoutService = {
     );
     Logger.log(`[getUnpaidAssignments] unpaidAssignments after filter: ${unpaidAssignments.length}`);
 
-    // 5. Job情報+人工割反映後単価を付与して返す
+    // 5. Job情報+計算済み賃金+人工割反映後単価を付与して返す
     const assignmentCountByJob = this._buildAssignmentCountByJob(jobIdSet);
+
+    // スタッフ情報を取得（calculateWage_に必要）
+    const allStaff = MasterCache.getStaff();
+    const staff = allStaff.find(s => s.staff_id === staffId) || {};
 
     return unpaidAssignments.map(a => {
       const job = jobMap.get(a.job_id as string);
-      const wageRate = Number(a.wage_rate) || 0;
+      const payUnit = (a.pay_unit as string) || 'basic';
+
+      // calculateWage_で正確な賃金を計算（マスタ解決含む）
+      const calculatedWage = calculateWage_(a as any, staff as any, payUnit);
 
       // 人工割反映後の単価
       const requiredCount = job ? Number(job.required_count) || 0 : 0;
       const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
       const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
-      const adjustedWageRate = coefficient !== 1.0
-        ? applyRounding_(wageRate * coefficient, RoundingMode.FLOOR)
-        : wageRate;
+      const adjustedWage = coefficient !== 1.0
+        ? applyRounding_(calculatedWage * coefficient, RoundingMode.FLOOR)
+        : calculatedWage;
 
       return {
         ...a,
         work_date: job ? job.work_date : '',
         site_name: job ? job.site_name : '',
         customer_id: job ? job.customer_id : '',
-        adjusted_wage_rate: adjustedWageRate
+        calculated_wage: adjustedWage
       };
     }).sort((a, b) => {
       return ((a.work_date as string) || '').localeCompare((b.work_date as string) || '');
@@ -518,15 +525,9 @@ const PayoutService = {
       const allAssignmentsRaw = AssignmentRepository.search({ status: 'ASSIGNED' })
         .filter(a => !a.is_deleted);
 
-      // 人工割用: 外注スタッフを除外してカウント
-      const bulkStaff = MasterCache.getStaff();
-      const bulkSubcontractIds = new Set(
-        bulkStaff.filter(s => isSubcontract_(s))
-          .map(s => s.staff_id as string)
-      );
+      // 人工割用: job_idごとの全ASSIGNED配置数（外注も含めてカウント）
       const assignmentCountByJob = new Map<string, number>();
       for (const a of allAssignmentsRaw) {
-        if (bulkSubcontractIds.has(a.staff_id as string)) continue;
         const jid = a.job_id as string;
         if (jid && jobIdSet.has(jid)) {
           assignmentCountByJob.set(jid, (assignmentCountByJob.get(jid) || 0) + 1);
@@ -1029,18 +1030,10 @@ const PayoutService = {
     // 3. 全Assignmentsを一括取得
     const allAssignmentsRaw = AssignmentRepository.search({ status: 'ASSIGNED' });
 
-    // 人工割用: 外注スタッフIDセットを構築（カウントから除外するため）
-    const allStaffForNinku = MasterCache.getStaff();
-    const subcontractStaffIds = new Set(
-      allStaffForNinku.filter(s => isSubcontract_(s))
-        .map(s => s.staff_id as string)
-    );
-
-    // 人工割用: job_idごとの全ASSIGNED配置数（payout_id有無問わず、外注除外）
+    // 人工割用: job_idごとの全ASSIGNED配置数（外注も含めてカウント）
     const assignmentCountByJob = new Map<string, number>();
     for (const a of allAssignmentsRaw) {
       if (a.is_deleted) continue;
-      if (subcontractStaffIds.has(a.staff_id as string)) continue;
       const jid = a.job_id as string;
       if (jid && jobIds.has(jid)) {
         assignmentCountByJob.set(jid, (assignmentCountByJob.get(jid) || 0) + 1);
@@ -1452,20 +1445,12 @@ const PayoutService = {
   _buildAssignmentCountByJob: function(jobIds: Set<string>): Map<string, number> {
     const allAssignments = AssignmentRepository.search({ status: 'ASSIGNED' });
 
-    // 外注スタッフ（staff_type 5）を除外するためスタッフマスタを取得
-    const allStaff = MasterCache.getStaff();
-    const subcontractStaffIds = new Set(
-      allStaff.filter(s => isSubcontract_(s))
-        .map(s => s.staff_id as string)
-    );
-
     const countMap = new Map<string, number>();
     for (const a of allAssignments) {
       if (a.is_deleted) continue;
       const jobId = a.job_id as string;
       if (!jobIds.has(jobId)) continue;
-      // 外注スタッフは人工割カウントから除外
-      if (subcontractStaffIds.has(a.staff_id as string)) continue;
+      // 外注スタッフも現場の実人数としてカウント（人工割係数の算出に必要）
       countMap.set(jobId, (countMap.get(jobId) || 0) + 1);
     }
     return countMap;
@@ -1487,7 +1472,7 @@ const PayoutService = {
     assignmentCountByJob: Map<string, number>
   ): number {
     if (!staff) return 0;
-    if (!staff.withholding_tax_applicable) return 0;
+    if (!staff.withholding_tax_applicable || String(staff.withholding_tax_applicable).toUpperCase() === 'FALSE') return 0;
     if (!staffAssignments || staffAssignments.length === 0) return 0;
 
     // Step 1: work_date 単位で (wage + 人工割調整額) を集計

@@ -8,7 +8,24 @@
  * Stale-While-Revalidate パターン:
  * - キャッシュがあれば常に即座に表示（TTL関係なく）
  * - TTL超過ならバックグラウンドで更新
+ *
+ * デプロイ検知: BUILD_VERSIONが変わるとキャッシュを全クリア
  */
+(function() {
+  var BUILD_VERSION = '{{BUILD_VERSION}}';
+  var storedVersion = sessionStorage.getItem('cache_build_version');
+  if (storedVersion !== BUILD_VERSION) {
+    // デプロイ後の初回アクセス → 古いキャッシュを全クリア
+    var keysToRemove = [];
+    for (var i = 0; i < sessionStorage.length; i++) {
+      var key = sessionStorage.key(i);
+      if (key && key.startsWith('cache_') && key !== 'cache_build_version') keysToRemove.push(key);
+    }
+    keysToRemove.forEach(function(k) { sessionStorage.removeItem(k); });
+    sessionStorage.setItem('cache_build_version', BUILD_VERSION);
+    console.log('[PageCache] Build version changed: ' + storedVersion + ' -> ' + BUILD_VERSION + ', cleared ' + keysToRemove.length + ' cache entries');
+  }
+})();
 const PageCache = {
   // デフォルトTTL（ミリ秒）- バックグラウンド更新のトリガー
   DEFAULT_TTL: 2 * 60 * 60 * 1000,  // 2時間（日付ベース・マスター共通）

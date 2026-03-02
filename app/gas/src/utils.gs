@@ -335,6 +335,9 @@ const MasterCache = {
         daily_rate_age: s.daily_rate_age,
         daily_rate_tobiage: s.daily_rate_tobiage,
         daily_rate_half: s.daily_rate_half,
+        daily_rate_fullday: s.daily_rate_fullday,
+        daily_rate_night: s.daily_rate_night,
+        withholding_tax_applicable: s.withholding_tax_applicable,
         is_active: s.is_active
       }));
       cache.put(this.CACHE_KEY_STAFF, JSON.stringify(lightStaff), this.CACHE_TTL);
