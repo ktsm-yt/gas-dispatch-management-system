@@ -1115,7 +1115,16 @@
         const safeSiteName = escapeHtml(job.site_name || '');
         const safeStartTime = escapeHtml(job.start_time || '');
         const safeSiteAddress = truncateAddress(job.site_address || '');
-        const payUnitInfo = PAY_UNIT_TAG[job.pay_unit];
+        // 単価バッジ: シンプルモードはpay_unit、詳細モード(slots)は種類数で判定
+        let payUnitInfo;
+        if (job.pay_unit) {
+          payUnitInfo = PAY_UNIT_TAG[job.pay_unit];
+        } else if (job.slots && job.slots.length > 0) {
+          const uniqueUnits = [...new Set(job.slots.map(s => s.slot_pay_unit))];
+          payUnitInfo = uniqueUnits.length === 1
+            ? PAY_UNIT_TAG[uniqueUnits[0]]
+            : { label: '複数', cls: 'tag-pay-basic' };
+        }
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
           .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
