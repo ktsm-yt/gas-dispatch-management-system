@@ -93,18 +93,23 @@ function resolveEffectiveUnit_(
   unitFromAssignment: string | null | undefined,
   job: { pay_unit?: unknown; time_slot?: unknown } | null | undefined
 ): string {
-  const unit = normalizeUnit_(unitFromAssignment) || 'basic';
-  if (unit === 'basic' && job) {
-    // 1. job.pay_unit があればそれを使う
-    if (job.pay_unit && job.pay_unit !== 'basic') {
-      return job.pay_unit as string;
+  const normalized = normalizeUnit_(unitFromAssignment);
+
+  // 明示的に設定されている場合はそのまま返す（basicも有効な値）
+  if (normalized) {
+    return normalized;
+  }
+
+  // 未設定（null/undefined/空文字）の場合のみ推論
+  if (job) {
+    if (job.pay_unit) {
+      return normalizeUnit_(job.pay_unit as string) || 'basic';
     }
-    // 2. job.pay_unit も未設定なら time_slot から推論
     if (job.time_slot) {
       return inferUnitFromTimeSlot_(job.time_slot as string);
     }
   }
-  return unit;
+  return 'basic';
 }
 
 function normalizeRoundingMode_(mode: string | null | undefined): string {
@@ -284,21 +289,17 @@ function calculateWage_(
   staff: Record<string, any>,
   jobType: string
 ): number {
-  // wage_rate は実額（円）。null/undefined/'' の場合はスタッフマスタから取得。
-  // 単価は全てマスタの固定値。乗算計算は行わない。
-  let baseRate = assignment.wage_rate;
-
-  if (baseRate === null || baseRate === undefined || baseRate === '') {
-    baseRate = getDailyRateByJobType_(staff, jobType);
-    if (baseRate === 0) {
-      warnMissingRate_('getDailyRateByJobType_', null, {
-        staff_id: String(staff?.staff_id || staff?.id || 'unknown'),
-        jobType: jobType
-      });
-    }
+  // 常にスタッフマスタから単価を取得する。
+  // assignment.wage_rate は参照しない（古いデータに焼き付いた値がマスタ変更を隠すため）。
+  const baseRate = getDailyRateByJobType_(staff, jobType);
+  if (baseRate === 0) {
+    warnMissingRate_('getDailyRateByJobType_', null, {
+      staff_id: String(staff?.staff_id || staff?.id || 'unknown'),
+      jobType: jobType
+    });
   }
 
-  return applyRounding_(Number(baseRate) || 0, RoundingMode.FLOOR);
+  return applyRounding_(baseRate, RoundingMode.FLOOR);
 }
 
 function calculateInvoiceAmount_(
@@ -306,19 +307,17 @@ function calculateInvoiceAmount_(
   customer: Record<string, any>,
   jobType: string
 ): number {
-  let baseRate = assignment.invoice_rate;
-
-  if (baseRate === null || baseRate === undefined || baseRate === '') {
-    baseRate = getUnitPriceByJobType_(customer, jobType);
-    if (baseRate === 0) {
-      warnMissingRate_('getUnitPriceByJobType_', null, {
-        customer_id: String(customer?.customer_id || customer?.id || 'unknown'),
-        jobType: jobType
-      });
-    }
+  // 常に顧客マスタから単価を取得する。
+  // assignment.invoice_rate は参照しない（古いデータに焼き付いた値がマスタ変更を隠すため）。
+  const baseRate = getUnitPriceByJobType_(customer, jobType);
+  if (baseRate === 0) {
+    warnMissingRate_('getUnitPriceByJobType_', null, {
+      customer_id: String(customer?.customer_id || customer?.id || 'unknown'),
+      jobType: jobType
+    });
   }
 
-  return applyRounding_(Number(baseRate) || 0, RoundingMode.FLOOR);
+  return applyRounding_(baseRate, RoundingMode.FLOOR);
 }
 
 // ============================================
