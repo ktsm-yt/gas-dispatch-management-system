@@ -93,7 +93,7 @@ const PayoutDetailExportService = {
 
       // 6. 明細行書き込み（Row 5〜）
       const dataStartRow = 5; // Row 1: title, Row 2: company, Row 3: blank, Row 4: col headers, Row 5+: data
-      const isWithholdingTarget = !!(staff && staff.withholding_tax_applicable);
+      const isWithholdingTarget = !!(staff && staff.withholding_tax_applicable && String(staff.withholding_tax_applicable).toUpperCase() !== 'FALSE');
       const calculatedTaxTotal = this._writeDetailRows(sheet, assignmentsWithJobs, dataStartRow, isWithholdingTarget);
 
       // 7. 合計行書き込み（日額テーブルで再計算した税額合計を渡す）
