@@ -130,6 +130,8 @@ const AssignmentService = {
         // スロットMapを事前構築（N回のシート読みを1回に削減）
         const slotsForJob = SlotRepository.findByJobId(jobId);
         const slotMap = new Map(slotsForJob.map(s => [s.slot_id, s]));
+        // スロットなし案件のpay_unit補正用（ループ外で1回だけ取得）
+        const jobForUnit = slotsForJob.length === 0 ? JobRepository.findById(jobId) : null;
 
         for (const assignment of changes.upserts) {
           // slot_id検証とpay_unit同期
@@ -157,6 +159,12 @@ const AssignmentService = {
             // invoice_unit を小文字に正規化（UI互換性のため）
             if (assignment.invoice_unit) {
               assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
+            }
+
+            // スロットなし + invoice_unit未指定またはbasicの場合、job.pay_unitから自動設定
+            if ((!assignment.invoice_unit || assignment.invoice_unit === 'basic') &&
+                jobForUnit && jobForUnit.pay_unit && jobForUnit.pay_unit !== 'basic') {
+              assignment.invoice_unit = jobForUnit.pay_unit;
             }
 
             // pay_unit = invoice_unit で強制同期（搾取防止）

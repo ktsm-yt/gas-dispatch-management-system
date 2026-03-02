@@ -1044,13 +1044,13 @@ const InvoiceService = {
 
     for (const asg of assignments) {
       const job = asg.job as Record<string, unknown>;
-      const invoiceUnit = (asg.invoice_unit || job.pay_unit || 'basic') as string;
+      const invoiceUnit = resolveEffectiveUnit_(asg.invoice_unit as string, job);
 
       let unitPrice = asg.invoice_rate as number | undefined;
       if (!unitPrice && unitPrice !== 0) {
         unitPrice = getUnitPriceByJobType_(customer, invoiceUnit);
       }
-      unitPrice = unitPrice || 0;
+      unitPrice = unitPrice ?? 0;
 
       const workKey = `${job.job_id}_${invoiceUnit}_${unitPrice}`;
       if (!workGroups[workKey]) {
@@ -1206,7 +1206,7 @@ const InvoiceService = {
    * 品目名を生成
    */
   _getItemName: function(_assignment: Record<string, unknown>, job: Record<string, unknown>, _format: string): string {
-    const invoiceUnit = (_assignment.invoice_unit || job.pay_unit || 'basic') as string;
+    const invoiceUnit = resolveEffectiveUnit_(_assignment.invoice_unit as string, job);
 
     const itemNameMap: Record<string, string> = {
       'tobi': '作業員（上棟鳶）',

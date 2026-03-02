@@ -122,7 +122,7 @@ const PayoutService = {
 
     return unpaidAssignments.map(a => {
       const job = jobMap.get(a.job_id as string);
-      const payUnit = (a.pay_unit as string) || 'basic';
+      const payUnit = resolveEffectiveUnit_(a.pay_unit as string, job);
 
       // calculateWage_で正確な賃金を計算（マスタ解決含む）
       const calculatedWage = calculateWage_(a as any, staff as any, payUnit);

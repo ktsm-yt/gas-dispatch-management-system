@@ -201,6 +201,7 @@ function getJobFromDashboardCache(jobId) {
       work_category: job.work_category,
       work_detail: job.work_detail || '',
       required_count: job.required_count,
+      pay_unit: job.pay_unit || '',
       status: job.status,
       supervisor_name: job.supervisor_name || '',
       supervisor_phone: job.supervisor_phone || '',
@@ -451,6 +452,31 @@ function getWorkDetailLabel(workDetail, otherText) {
  * モーダルのUI要素を全てリセット（ローディング状態に）
  * 新しいフィールド追加時はここに追記すること
  */
+/**
+ * time_slot から pay_unit を推論する（job.pay_unit 未設定時のフォールバック）
+ */
+function inferUnitFromTimeSlot(timeSlot) {
+  switch ((timeSlot || '').toLowerCase().trim()) {
+    case 'am': case 'pm': case 'mitei': return 'halfday';
+    case 'shuujitsu': return 'fullday';
+    case 'yakin': return 'night';
+    case 'jotou': return 'tobi';
+    default: return 'basic';
+  }
+}
+
+/**
+ * スロットなし案件の場合、job.pay_unit を単価区分のデフォルトに設定
+ * pay_unit 未設定なら time_slot から推論
+ */
+function setDefaultInvoiceUnit(job, slots) {
+  if (slots && slots.length > 0) return;
+  const el = document.getElementById('form-invoice-unit');
+  if (!el || !job) return;
+  const unit = job.pay_unit || inferUnitFromTimeSlot(job.time_slot);
+  el.value = unit || 'basic';
+}
+
 function resetAssignmentModalUI() {
   if (staffSearchDebounceTimer) {
     clearTimeout(staffSearchDebounceTimer);
@@ -507,6 +533,7 @@ function resetAssignmentModalUI() {
   document.getElementById('staff-type-filter').value = '';
 
   // 配置フォーム
+  // デフォルトはbasic（job読み込み後にsetDefaultInvoiceUnitで再設定される）
   document.getElementById('form-invoice-unit').value = 'basic';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
@@ -614,8 +641,12 @@ function fillAssignmentModalFromCache(cachedData) {
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
+  updatePayUnitTag(job, assignmentModalState.slots);
   updateSiteAddress(job.site_address);
   updateWorkContent(job.work_detail, job.work_detail_other_text);
+
+  // スロットなし案件はjob.pay_unitをデフォルトに
+  setDefaultInvoiceUnit(job, slots);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -746,11 +777,15 @@ function handleAssignmentData(response, requestJobId) {
   document.getElementById('modal-job-time').textContent = formatTimeSlotLabel(job.time_slot);
   updateStartTimeDisplay(job.start_time);
   updateWorkCategoryTag(job.work_category);
+  updatePayUnitTag(job, assignmentModalState.slots);
   updateSiteAddress(job.site_address);
   updateWorkContent(job.work_detail, job.work_detail_other_text);
 
   // 請求書集計済みチェック（サーバーからデータ取得後）
   checkInvoiceExistsNotification();
+
+  // スロットなし案件はjob.pay_unitをデフォルトに
+  setDefaultInvoiceUnit(job, slots);
 
   // 枠セレクトを更新
   updateSlotSelect();
@@ -2257,6 +2292,38 @@ const WORK_CATEGORY_TAG_MAP = {
   'keisagyo': { cls: 'tag-keisagyo', label: '軽作業' },
   'niage': { cls: 'tag-niage', label: '搬入' },
 };
+
+const PAY_UNIT_TAG_MAP = {
+  'basic': { label: '基本', cls: 'tag-pay-basic' },
+  'halfday': { label: 'ハーフ', cls: 'tag-pay-halfday' },
+  'fullday': { label: '終日', cls: 'tag-pay-fullday' },
+  'night': { label: '夜勤', cls: 'tag-pay-night' },
+  'tobi': { label: '上棟鳶', cls: 'tag-pay-tobi' },
+  'age': { label: '上棟荷揚げ', cls: 'tag-pay-age' },
+  'tobiage': { label: '上棟鳶揚げ', cls: 'tag-pay-tobiage' },
+};
+
+function updatePayUnitTag(job, slots) {
+  const el = document.getElementById('modal-pay-unit-tag');
+  if (!el) return;
+  let info;
+  if (slots && slots.length > 0) {
+    const uniqueUnits = [...new Set(slots.map(s => s.slot_pay_unit))];
+    info = uniqueUnits.length === 1
+      ? PAY_UNIT_TAG_MAP[uniqueUnits[0]]
+      : { label: '複数', cls: 'tag-pay-basic' };
+  } else {
+    const unit = (job && job.pay_unit) || inferUnitFromTimeSlot(job && job.time_slot);
+    info = PAY_UNIT_TAG_MAP[unit];
+  }
+  if (info) {
+    el.textContent = info.label;
+    el.className = 'work-category-tag ' + info.cls;
+    el.style.display = 'inline';
+  } else {
+    el.style.display = 'none';
+  }
+}
 
 function updateWorkCategoryTag(category) {
   const el = document.getElementById('modal-job-type-tag');
