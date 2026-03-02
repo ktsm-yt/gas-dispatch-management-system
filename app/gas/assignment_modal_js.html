@@ -452,12 +452,28 @@ function getWorkDetailLabel(workDetail, otherText) {
  * 新しいフィールド追加時はここに追記すること
  */
 /**
+ * time_slot から pay_unit を推論する（job.pay_unit 未設定時のフォールバック）
+ */
+function inferUnitFromTimeSlot(timeSlot) {
+  switch ((timeSlot || '').toLowerCase().trim()) {
+    case 'am': case 'pm': case 'mitei': return 'halfday';
+    case 'shuujitsu': return 'fullday';
+    case 'yakin': return 'night';
+    case 'jotou': return 'tobi';
+    default: return 'basic';
+  }
+}
+
+/**
  * スロットなし案件の場合、job.pay_unit を単価区分のデフォルトに設定
+ * pay_unit 未設定なら time_slot から推論
  */
 function setDefaultInvoiceUnit(job, slots) {
   if (slots && slots.length > 0) return;
   const el = document.getElementById('form-invoice-unit');
-  if (el) el.value = (job && job.pay_unit) || 'basic';
+  if (!el || !job) return;
+  const unit = job.pay_unit || inferUnitFromTimeSlot(job.time_slot);
+  el.value = unit || 'basic';
 }
 
 function resetAssignmentModalUI() {

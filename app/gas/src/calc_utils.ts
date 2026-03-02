@@ -64,17 +64,45 @@ function normalizeUnit_(unit: string | null | undefined): string {
 }
 
 /**
+ * time_slot から pay_unit を推論する。
+ * job.pay_unit が未設定の既存データ用フォールバック。
+ */
+function inferUnitFromTimeSlot_(timeSlot: string | null | undefined): string {
+  switch (normalizeUnit_(timeSlot)) {
+    case 'am':
+    case 'pm':
+    case 'mitei':
+      return 'halfday';
+    case 'shuujitsu':
+      return 'fullday';
+    case 'yakin':
+      return 'night';
+    case 'jotou':
+      return 'tobi';
+    default:
+      return 'basic';
+  }
+}
+
+/**
  * 配置の単価区分を解決する。
  * invoice_unit/pay_unit が未設定またはbasicの場合、job.pay_unit にフォールバック。
- * 既存データの互換性を保ちつつ、正しい単価区分を返す。
+ * job.pay_unit も未設定なら time_slot から推論する。
  */
 function resolveEffectiveUnit_(
   unitFromAssignment: string | null | undefined,
-  job: { pay_unit?: unknown } | null | undefined
+  job: { pay_unit?: unknown; time_slot?: unknown } | null | undefined
 ): string {
   const unit = normalizeUnit_(unitFromAssignment) || 'basic';
-  if (unit === 'basic' && job?.pay_unit && job.pay_unit !== 'basic') {
-    return job.pay_unit as string;
+  if (unit === 'basic' && job) {
+    // 1. job.pay_unit があればそれを使う
+    if (job.pay_unit && job.pay_unit !== 'basic') {
+      return job.pay_unit as string;
+    }
+    // 2. job.pay_unit も未設定なら time_slot から推論
+    if (job.time_slot) {
+      return inferUnitFromTimeSlot_(job.time_slot as string);
+    }
   }
   return unit;
 }
