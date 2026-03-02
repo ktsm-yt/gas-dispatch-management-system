@@ -9,6 +9,10 @@
  */
 function switchToDevDb() {
   PropertiesService.getScriptProperties().setProperty('ENV', 'dev');
+  REQUEST_DB_CACHE = null;
+  REQUEST_DB_ID_CACHE = null;
+  Object.keys(REQUEST_SHEET_CACHE).forEach(k => delete REQUEST_SHEET_CACHE[k]);
+  REQUEST_RECORDS_CACHE = {};
 }
 
 /**
@@ -16,6 +20,10 @@ function switchToDevDb() {
  */
 function switchToProdDb() {
   PropertiesService.getScriptProperties().setProperty('ENV', 'prod');
+  REQUEST_DB_CACHE = null;
+  REQUEST_DB_ID_CACHE = null;
+  Object.keys(REQUEST_SHEET_CACHE).forEach(k => delete REQUEST_SHEET_CACHE[k]);
+  REQUEST_RECORDS_CACHE = {};
 }
 
 /**
@@ -93,4 +101,12 @@ function assertDevEnv(caller) {
   if (getEnv() === 'prod') {
     throw new Error('⚠️ PROD環境では ' + caller + ' の実行は禁止されています');
   }
+}
+
+/**
+ * MasterCacheの全キャッシュをクリア（GASエディタから実行可能）
+ */
+function clearMasterCache() {
+  MasterCache.invalidate();
+  Logger.log('MasterCache: 全キャッシュをクリアしました');
 }
