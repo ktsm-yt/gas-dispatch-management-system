@@ -451,6 +451,15 @@ function getWorkDetailLabel(workDetail, otherText) {
  * モーダルのUI要素を全てリセット（ローディング状態に）
  * 新しいフィールド追加時はここに追記すること
  */
+/**
+ * スロットなし案件の場合、job.pay_unit を単価区分のデフォルトに設定
+ */
+function setDefaultInvoiceUnit(job, slots) {
+  if (slots && slots.length > 0) return;
+  const el = document.getElementById('form-invoice-unit');
+  if (el) el.value = (job && job.pay_unit) || 'basic';
+}
+
 function resetAssignmentModalUI() {
   if (staffSearchDebounceTimer) {
     clearTimeout(staffSearchDebounceTimer);
@@ -507,6 +516,7 @@ function resetAssignmentModalUI() {
   document.getElementById('staff-type-filter').value = '';
 
   // 配置フォーム
+  // デフォルトはbasic（job読み込み後にsetDefaultInvoiceUnitで再設定される）
   document.getElementById('form-invoice-unit').value = 'basic';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
@@ -616,6 +626,9 @@ function fillAssignmentModalFromCache(cachedData) {
   updateWorkCategoryTag(job.work_category);
   updateSiteAddress(job.site_address);
   updateWorkContent(job.work_detail, job.work_detail_other_text);
+
+  // スロットなし案件はjob.pay_unitをデフォルトに
+  setDefaultInvoiceUnit(job, slots);
 
   // 枠セレクト更新
   updateSlotSelect();
@@ -751,6 +764,9 @@ function handleAssignmentData(response, requestJobId) {
 
   // 請求書集計済みチェック（サーバーからデータ取得後）
   checkInvoiceExistsNotification();
+
+  // スロットなし案件はjob.pay_unitをデフォルトに
+  setDefaultInvoiceUnit(job, slots);
 
   // 枠セレクトを更新
   updateSlotSelect();
