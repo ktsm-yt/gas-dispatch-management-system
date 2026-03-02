@@ -2070,7 +2070,7 @@ function generateLineTemplate() {
   const workCategoryLabels = {
     'jotou': '上棟',
     'keisagyo': '軽作業',
-    'niage': '荷揚げ'
+    'niage': '搬入'
   };
   const workCategoryPrefix = workCategoryLabels[job.work_category] || '';
 
@@ -2255,7 +2255,7 @@ function updateStartTimeDisplay(startTime) {
 const WORK_CATEGORY_TAG_MAP = {
   'jotou': { cls: 'tag-jotou', label: '上棟' },
   'keisagyo': { cls: 'tag-keisagyo', label: '軽作業' },
-  'niage': { cls: 'tag-niage', label: '荷揚げ' },
+  'niage': { cls: 'tag-niage', label: '搬入' },
 };
 
 function updateWorkCategoryTag(category) {
