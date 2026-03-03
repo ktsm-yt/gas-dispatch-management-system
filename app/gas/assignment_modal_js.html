@@ -194,6 +194,7 @@ function getJobFromDashboardCache(jobId) {
       job_id: job.job_id,
       customer_id: job.customer_id,
       customer_name: job.customer_name,
+      company_name: job.company_name || '',
       site_name: job.site_name,
       site_address: job.site_address || '',
       time_slot: job.time_slot,
@@ -1383,11 +1384,14 @@ function filterStaffList(resetScroll = false) {
     return true;
   });
 
-  // Sort: assigned first, then by kana
+  // Sort: assigned first, then employee before subcontract, then by kana
   filtered.sort((a, b) => {
     const aAssigned = assignedIdSet.has(a.staff_id) ? 0 : 1;
     const bAssigned = assignedIdSet.has(b.staff_id) ? 0 : 1;
     if (aAssigned !== bAssigned) return aAssigned - bAssigned;
+    const aIsSub = a.staff_type === 'subcontract' ? 1 : 0;
+    const bIsSub = b.staff_type === 'subcontract' ? 1 : 0;
+    if (aIsSub !== bIsSub) return aIsSub - bIsSub;
     const nameA = a.name_kana || a.name || '';
     const nameB = b.name_kana || b.name || '';
     return nameA.localeCompare(nameB, 'ja');
@@ -2186,13 +2190,14 @@ function generateLineTemplate() {
   // 最寄駅（配置の transport_station から取得）
   const nearestStation = activeAssignments.map(a => a.transport_station).find(s => s) || '';
 
-  // 顧客名付き現場名
-  const siteWithCustomer = job.customer_name
-    ? `${job.site_name || ''}（${job.customer_name}）`
+  // 顧客名付き現場名（LINEテンプレでは部署名を除外し会社名のみ使用）
+  const lineCustomerName = job.company_name || job.customer_name || '';
+  const siteWithCustomer = lineCustomerName
+    ? `${job.site_name || ''}（${lineCustomerName}）`
     : job.site_name || '';
 
   // テンプレート生成
-  return `【工事発注書】${dateStr}${headerMemberNames ? ' ' + headerMemberNames : ''}${job.customer_name ? '（' + job.customer_name + '）' : ''}
+  return `【工事発注書】${dateStr}${headerMemberNames ? ' ' + headerMemberNames : ''}${lineCustomerName ? '（' + lineCustomerName + '）' : ''}
 
 お世話になっております。
 内容確認次第、ご返信お願いします。

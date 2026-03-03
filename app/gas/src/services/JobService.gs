@@ -18,10 +18,11 @@ const JobService = {
     }
 
     // 顧客名を追加
-    const customerMap = this._getCustomerMap();
+    const { customerMap, companyNameMap } = this._getCustomerMaps();
     const jobWithCustomer = {
       ...job,
-      customer_name: customerMap[job.customer_id] || ''
+      customer_name: customerMap[job.customer_id] || '',
+      company_name: companyNameMap[job.customer_id] || ''
     };
 
     // 配置情報取得
@@ -58,7 +59,7 @@ const JobService = {
       return null;
     }
 
-    const customerMap = this._getCustomerMap();
+    const customerMap = this._getCustomerMaps().customerMap;
     const jobWithCustomer = {
       ...job,
       customer_name: customerMap[job.customer_id] || ''
@@ -147,7 +148,7 @@ const JobService = {
     const jobIds = jobs.map(j => j.job_id);
 
     // 顧客マスターを取得してマップ作成
-    const customerMap = this._getCustomerMap();
+    const { customerMap, companyNameMap } = this._getCustomerMaps();
 
     // 配置データを取得（jobIdsを渡して二重呼び出し防止）
     const allAssignments = AssignmentRepository.findByDate(date, jobIds);
@@ -212,6 +213,7 @@ const JobService = {
         job_id: job.job_id,
         customer_id: job.customer_id,
         customer_name: customerMap[job.customer_id] || '',
+        company_name: companyNameMap[job.customer_id] || '',
         site_name: job.site_name,
         site_address: job.site_address || '',
         work_date: date,
@@ -318,7 +320,7 @@ const JobService = {
     const jobIdSet = new Set(jobIds);
 
     // 顧客マスターを取得してマップ作成
-    const customerMap = this._getCustomerMap();
+    const customerMap = this._getCustomerMaps().customerMap;
 
     // 全配置を取得して、対象ジョブIDのみフィルタリング（早期スキップで最適化）
     const allAssignments = getAllRecords('T_JobAssignments');
@@ -369,20 +371,28 @@ const JobService = {
    * 顧客IDから会社名へのマップを作成
    * @returns {Object} { customer_id: company_name }
    */
-  _getCustomerMap: function() {
+  /**
+   * 顧客名マップを一括取得（1回のループで2種類を生成）
+   * @returns {{ customerMap: Object, companyNameMap: Object }}
+   *   customerMap: customer_id → "会社名 支店名"（表示用）
+   *   companyNameMap: customer_id → "会社名"（LINEテンプレ等で部署名不要な場合）
+   */
+  _getCustomerMaps: function() {
     try {
       const customers = MasterCache.getCustomerMap();
-      const map = {};
+      const customerMap = {};
+      const companyNameMap = {};
       for (const customerId in customers) {
         const c = customers[customerId];
         if (c.customer_id && !c.is_deleted) {
-          map[c.customer_id] = (c.company_name || '') + (c.branch_name ? ' ' + c.branch_name : '');
+          companyNameMap[c.customer_id] = c.company_name || '';
+          customerMap[c.customer_id] = companyNameMap[c.customer_id] + (c.branch_name ? ' ' + c.branch_name : '');
         }
       }
-      return map;
+      return { customerMap, companyNameMap };
     } catch (e) {
-      Logger.log('_getCustomerMap error: ' + e.message);
-      return {};
+      Logger.log('_getCustomerMaps error: ' + e.message);
+      return { customerMap: {}, companyNameMap: {} };
     }
   },
 

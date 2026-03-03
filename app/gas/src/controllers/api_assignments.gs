@@ -364,8 +364,11 @@ function getAvailableStaff(options = {}) {
       });
     }
 
-    // 名前順でソート
+    // ソート: 自社スタッフ優先（外注は後ろ）→ 名前順
     staff.sort((a, b) => {
+      const aIsSub = a.staff_type === 'subcontract' ? 1 : 0;
+      const bIsSub = b.staff_type === 'subcontract' ? 1 : 0;
+      if (aIsSub !== bIsSub) return aIsSub - bIsSub;
       const nameA = a.name_kana || a.name || '';
       const nameB = b.name_kana || b.name || '';
       return nameA.localeCompare(nameB, 'ja');
