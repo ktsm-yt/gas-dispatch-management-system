@@ -304,6 +304,7 @@
     .tag-pay-tobi { background: var(--tag-tobi); }
     .tag-pay-age { background: var(--tag-age); }
     .tag-pay-tobiage { background: var(--tag-tobiage); }
+    .tag-transport { background: #e8f4e8; color: #2d7d32; border: 1px solid #c8e6c9; font-weight: 500; }
 
     .customer-name {
       flex: 1;
@@ -781,6 +782,13 @@
       'niage': '搬入'
     };
 
+    // Transport fee check
+    function hasTransportFee(job) {
+      return (job.assignments || []).some(
+        a => a.status !== 'CANCELLED' && a.transport_amount > 0
+      );
+    }
+
     // Pay unit labels and tag classes
     const PAY_UNIT_TAG = {
       'basic': { label: '基本', cls: 'tag-pay-basic' },
@@ -1152,6 +1160,7 @@
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${payUnitInfo ? `<span class="tag ${payUnitInfo.cls}">${payUnitInfo.label}</span>` : ''}
+              ${hasTransportFee(job) ? '<span class="tag tag-transport">¥交</span>' : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${safeCustomerName}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>
