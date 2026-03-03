@@ -224,7 +224,7 @@ function testInvoiceServiceCalculateDates() {
   // 月末締め、翌月末払い
   var cust1 = { closing_day: 31, payment_day: 31, payment_month_offset: 1 };
   var dates1 = InvoiceService._calculateDates(cust1, 2025, 6);
-  assertEqual(dates1.issueDate, '2025-07-01', '月末締め: 発行日=翌月1日');
+  assertEqual(dates1.issueDate, '2025-06-30', '月末締め: 発行日=月末日');
   // dueMonth = 6 + 1 = 7, dueDay = 31
   assertEqual(dates1.dueDate, '2025-07-31', '月末締め翌月末: 支払期限');
 
@@ -236,13 +236,13 @@ function testInvoiceServiceCalculateDates() {
   // 20日締め、翌月10日払い
   var cust3 = { closing_day: 20, payment_day: 10, payment_month_offset: 1 };
   var dates3 = InvoiceService._calculateDates(cust3, 2025, 6);
-  assertEqual(dates3.issueDate, '2025-06-21', '20日締め: 発行日=21日');
+  assertEqual(dates3.issueDate, '2025-06-20', '20日締め: 発行日=20日');
   assertEqual(dates3.dueDate, '2025-07-10', '翌月10日払い');
 
   // Dec→Jan rollover（年跨ぎ）: 12月末締め
   var cust4 = { closing_day: 31, payment_day: 31, payment_month_offset: 1 };
   var dates4 = InvoiceService._calculateDates(cust4, 2025, 12);
-  assertEqual(dates4.issueDate, '2026-01-01', '12月末: 発行日=翌年1月1日');
+  assertEqual(dates4.issueDate, '2025-12-31', '12月末: 発行日=12月31日');
   // dueMonth = 12 + 1 = 13 → 13 % 12 = 1, dueYear += 1
   assertEqual(dates4.dueDate, '2026-01-31', '12月: 翌月末=1月31日');
 

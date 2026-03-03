@@ -1132,7 +1132,8 @@
         const workCategoryLabel = WORK_CATEGORY_LABEL[job.work_category] || '';
         const hasShortage = job.assigned_count < job.required_count;
         const cardClass = hasShortage ? 'job-card has-shortage' : 'job-card';
-        const safeJobId = escapeHtml(job.job_id || '');
+        const normalizedJobId = normalizeDashboardJobId(job.job_id);
+        const safeJobId = escapeHtml(normalizedJobId || '');
         const safeCustomerName = escapeHtml(job.customer_name || '-');
         const safeSiteName = escapeHtml(job.site_name || '');
         const safeStartTime = escapeHtml(job.start_time || '');
@@ -1424,18 +1425,45 @@
     }
 
     /**
+     * 案件IDを正規化（空白・null文字列を除外）
+     * @param {any} jobId
+     * @returns {string|null}
+     */
+    function normalizeDashboardJobId(jobId) {
+      if (jobId === null || jobId === undefined) {
+        return null;
+      }
+      const normalized = String(jobId).trim();
+      if (!normalized) {
+        return null;
+      }
+      const lowered = normalized.toLowerCase();
+      if (lowered === 'null' || lowered === 'undefined') {
+        return null;
+      }
+      return normalized;
+    }
+
+    /**
      * Dashboard用のopenJobModal wrapper
      * 共通コンポーネントのopenJobModalにダッシュボード固有のオプションを渡す
      */
     function openJobModalForDashboard(jobId) {
+      const isNewJob = jobId === null;
+      const normalizedJobId = isNewJob ? null : normalizeDashboardJobId(jobId);
+      if (!isNewJob && !normalizedJobId) {
+        showToast('案件IDが不正のため、案件編集を開けません。', true);
+        return;
+      }
+
       // キャッシュから案件データを取得（スロット含む）
-      const cachedJob = jobId && dashboardData.jobs
-        ? dashboardData.jobs.find(j => j.job_id === jobId)
+      const cachedJob = normalizedJobId && dashboardData.jobs
+        ? dashboardData.jobs.find(j => normalizeDashboardJobId(j.job_id) === normalizedJobId)
         : null;
 
-      openJobModal(jobId, {
+      openJobModal(normalizedJobId, {
         defaultDate: formatDate(currentDate),
-        showSaveNext: !jobId,  // 新規作成時のみ「保存して次へ」を表示
+        showSaveNext: !normalizedJobId,  // 新規作成時のみ「保存して次へ」を表示
         cachedJob: cachedJob   // キャッシュデータを渡す（スロット即座表示）
       });
     }
@@ -1445,9 +1473,15 @@
      * キャッシュデータを渡して配置モーダルを即座表示
      */
     function openJobAssignmentsForDashboard(jobId) {
+      const normalizedJobId = normalizeDashboardJobId(jobId);
+      if (!normalizedJobId) {
+        showToast('案件IDが不正のため、配置モーダルを開けません。', true);
+        return;
+      }
+
       // キャッシュから案件データを取得（assignments, slots含む）
-      const jobData = jobId && dashboardData && dashboardData.jobs
-        ? dashboardData.jobs.find(j => j.job_id === jobId)
+      const jobData = dashboardData && dashboardData.jobs
+        ? dashboardData.jobs.find(j => normalizeDashboardJobId(j.job_id) === normalizedJobId)
         : null;
 
       // fillAssignmentModalFromCacheが期待する構造に変換
@@ -1459,7 +1493,7 @@
         allStaff: []       // スタッフ一覧はバックグラウンドで取得
       } : null;
 
-      openJobAssignments(jobId, {
+      openJobAssignments(normalizedJobId, {
         cachedJob: cachedJob  // キャッシュデータを渡す（即座表示）
       });
     }

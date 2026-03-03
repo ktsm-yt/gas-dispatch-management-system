@@ -13,7 +13,7 @@
     "e2e:connect": "npx tsx e2e/scripts/screenshot-connect.ts",
     "build": "bash scripts/build-gas.sh",
     "gas:push": "npm run build && cd app/gas && npx clasp push",
-    "gas:push:legacy": "cd app/gas && npx clasp push",
+    "gas:status": "bash scripts/clasp-env-status.sh",
     "gas:deploy": "bash scripts/deploy-prod.sh",
     "typecheck": "tsc -p app/gas/tsconfig.json --noEmit",
     "lint": "eslint app/gas/src/ --ext .js,.gs,.ts",
