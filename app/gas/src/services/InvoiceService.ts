@@ -1336,15 +1336,15 @@ const InvoiceService = {
     const paymentDay = Number(customer.payment_day) || 31;
     const paymentMonthOffset = Number(customer.payment_month_offset) || 1;
 
-    // 発行日
+    // 発行日（締め日当日）
+    // 末日締め: その月の最終日（3月→3/31, 4月→4/30）
+    // 20日締め: その月の20日
     let issueDate: string | undefined;
     if (closingDay === 31) {
-      const nextMonth = month === 12 ? 1 : month + 1;
-      const nextYear = month === 12 ? year + 1 : year;
-      issueDate = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      issueDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
     } else {
-      const d = new Date(year, month - 1, closingDay + 1);
-      issueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      issueDate = `${year}-${String(month).padStart(2, '0')}-${String(closingDay).padStart(2, '0')}`;
     }
 
     // 支払期限
