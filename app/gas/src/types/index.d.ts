@@ -445,6 +445,9 @@ declare global {
   }
 
   // === 未移行サービスのambient宣言 ===
+  const StatsService: {
+    updateMonthlyStats(year: number, month: number): { success: boolean; error?: string; stats?: Record<string, unknown> };
+  };
   const ArchiveService: {
     getArchiveDbId(fiscalYear: number): string | null;
     getCurrentFiscalYear(): number;

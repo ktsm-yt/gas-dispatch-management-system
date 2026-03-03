@@ -269,6 +269,17 @@ function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expecte
       return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
     }
 
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      const year = Number(invoice.billing_year);
+      const month = Number(invoice.billing_month);
+      if (year && month) {
+        StatsService.updateMonthlyStats(year, month);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`saveInvoice: T_MonthlyStats auto-update failed (non-critical): ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+    }
+
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
