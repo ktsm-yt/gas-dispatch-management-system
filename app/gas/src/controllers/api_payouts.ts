@@ -306,11 +306,14 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
     }
 
     // 差分取得
-    const deltaResult = PayoutService.getUnpaidStaffListDelta(endDate, lastSyncTimestamp) as {
-      changedStaffIds: string[];
-      removedStaffIds: string[];
-      staffList: UnpaidStaffItem[];
-    };
+    const deltaResult = PayoutService.getUnpaidStaffListDelta(endDate, lastSyncTimestamp);
+
+    // 変更スタッフが多すぎる場合はフルリロードにフォールバック
+    if ('ok' in deltaResult && deltaResult.ok === false) {
+      return buildErrorResponse('DELTA_TOO_LARGE', '差分が大きすぎるため全件取得に切り替えます', {}, requestId);
+    }
+
+    const delta = deltaResult as { changedStaffIds: string[]; removedStaffIds: string[]; staffList: UnpaidStaffItem[] };
 
     // 確認済みPayoutも差分で取得
     const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
@@ -320,11 +323,11 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
       lastSyncTimestamp: lastSyncTimestamp,
       currentTimestamp: new Date().toISOString(),
       isDelta: true,
-      changedStaffIds: deltaResult.changedStaffIds,
-      removedStaffIds: deltaResult.removedStaffIds,
-      staffList: deltaResult.staffList,
-      totalCount: deltaResult.staffList.length,
-      totalAmount: deltaResult.staffList.reduce(function(sum: number, s: UnpaidStaffItem) { return sum + s.estimatedAmount; }, 0),
+      changedStaffIds: delta.changedStaffIds,
+      removedStaffIds: delta.removedStaffIds,
+      staffList: delta.staffList,
+      totalCount: delta.staffList.length,
+      totalAmount: delta.staffList.reduce(function(sum: number, s: UnpaidStaffItem) { return sum + s.estimatedAmount; }, 0),
       confirmedPayouts: confirmedPayouts,
       confirmedCount: confirmedPayouts.length,
       confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)

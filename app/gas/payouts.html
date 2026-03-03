@@ -936,6 +936,16 @@
     // 世代トークン: 連続クリック時に最新のrevalidateのみがclearSessionを実行
     let revalidateGeneration = 0;
 
+    // トースト抑制: 自動リフレッシュや自分のアクションのみの場合は表示しない
+    const SILENT_REFRESH_REASONS = new Set(['paid', 'confirm', 'modal-close', 'focus']);
+
+    // フォーカスリフレッシュのスロットル（30秒）
+    let lastFocusRefreshTimestamp = 0;
+    const FOCUS_REFRESH_INTERVAL_MS = 30000;
+
+    // モーダル内でmutationが発生したかどうか
+    let modalHadMutation = false;
+
     /**
      * キャッシュから日付フィルターを復元（init時に呼び出し）
      * @returns {boolean} 復元できたかどうか
@@ -1197,11 +1207,15 @@
       // ★ SWR: タブ復帰時のrevalidate
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
-          // スタッフタブのrevalidate
+          // スタッフタブのrevalidate（タブ復帰時にリフレッシュ、モーダル開放中は除く、30秒スロットル）
           if (currentUnpaidQuery && currentUnpaidQuery.endDate) {
-            if (isSessionStale(currentUnpaidQuery.endDate)) {
+            const payoutModal = document.getElementById('payoutDetailModal');
+            const now = Date.now();
+            if ((!payoutModal || !payoutModal.classList.contains('active')) &&
+                (now - lastFocusRefreshTimestamp >= FOCUS_REFRESH_INTERVAL_MS)) {
+              lastFocusRefreshTimestamp = now;
               console.log('[SWR] Tab visible - revalidating staff unpaid list');
-              refreshUnpaidListInBackground(currentUnpaidQuery.endDate);
+              refreshUnpaidListInBackground(currentUnpaidQuery.endDate, { reason: 'focus' });
             }
           }
           // 外注タブのrevalidate
@@ -1572,6 +1586,13 @@
     // 未払一覧をバックグラウンドで更新（差分更新対応）
     function refreshUnpaidListInBackground(endDate, options) {
       options = options || {};
+
+      // generation が渡された場合、既に新しい世代が発行されていたらスキップ（RPC抑制）
+      if (options.generation != null && options.generation !== revalidateGeneration) {
+        console.log('[SWR] Skipping stale generation refresh', options.generation, '!=', revalidateGeneration);
+        return;
+      }
+
       const cached = loadFromSession(endDate);
       const lastSyncTimestamp = cached?.syncTimestamp;
 
@@ -1621,10 +1642,9 @@
 
                 renderUnpaidStaffList(mergedData, confirmedData);
 
-                // reason由来のトースト抑制: paid/confirm操作で自分のアクションのみなら表示しない
-                const isSelfAction = ['paid', 'confirm'].includes(options.reason);
+                // reason由来のトースト抑制: 自動リフレッシュや自分のアクションのみなら表示しない
                 const changedCount = data.changedStaffIds.length;
-                if (!isSelfAction || changedCount > 1) {
+                if (!SILENT_REFRESH_REASONS.has(options.reason) || changedCount > 1) {
                   showToast('info', `データを更新しました（${changedCount}件変更）`);
                 }
               } else {
@@ -1682,8 +1702,7 @@
               if (hasChanged) {
                 renderUnpaidStaffList(unpaidData, confirmedData);
                 // reason由来のトースト抑制
-                const isSelfAction = ['paid', 'confirm'].includes(options.reason);
-                if (!isSelfAction) {
+                if (!SILENT_REFRESH_REASONS.has(options.reason)) {
                   showToast('info', 'データを更新しました');
                 }
               }
@@ -2466,6 +2485,7 @@
                 const currentEndDate = document.getElementById('endDateFilter')?.value;
                 if (currentEndDate) {
                   console.log('[SWR] Status changed (confirm) - scheduling background revalidate');
+                  modalHadMutation = true;
                   setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
                 }
               } else {
@@ -2556,6 +2576,7 @@
                 const currentEndDate = document.getElementById('endDateFilter')?.value;
                 if (currentEndDate) {
                   console.log('[SWR] Status changed (paid) - scheduling background revalidate');
+                  modalHadMutation = true;
                   setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
                 }
               } else {
@@ -2640,6 +2661,7 @@
                 const currentEndDate = document.getElementById('endDateFilter')?.value;
                 if (currentEndDate) {
                   console.log('[SWR] Status changed (undo confirm) - scheduling background revalidate');
+                  modalHadMutation = true;
                   setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
                 }
               } else {
@@ -2702,6 +2724,7 @@
                 const currentEndDate = document.getElementById('endDateFilter')?.value;
                 if (currentEndDate) {
                   console.log('[SWR] Status changed (undo paid) - scheduling background revalidate');
+                  modalHadMutation = true;
                   clearSession();
                   setTimeout(() => refreshUnpaidListInBackground(currentEndDate), 500);
                 }
@@ -3394,6 +3417,12 @@
       modalPayoutId = null;
       modalPayoutUpdatedAt = null;
       hidePayoutArchiveWarning();
+
+      // モーダル内でmutationがあった場合のみ一覧を再同期
+      if (modalHadMutation && currentUnpaidQuery && currentUnpaidQuery.endDate) {
+        refreshUnpaidListInBackground(currentUnpaidQuery.endDate, { reason: 'modal-close' });
+      }
+      modalHadMutation = false;
     }
 
     /**
