@@ -329,6 +329,135 @@ const StatsService = {
   },
 
   /**
+   * 日別売上データを取得（T_InvoiceLines ベース）
+   * @param {string} startDate - 'yyyy-MM-dd'
+   * @param {string} endDate - 'yyyy-MM-dd'
+   * @returns {Object} { daily, byCustomer, summary }
+   */
+  getDailySalesData: function(startDate, endDate) {
+    // 1. 期間内のInvoiceLinesを一括取得
+    var lines = InvoiceLineRepository.findByDateRange(startDate, endDate);
+
+    // 2. invoice_id → customer_id マッピング用に請求書を取得
+    var invoiceIds = {};
+    for (var i = 0; i < lines.length; i++) {
+      invoiceIds[lines[i].invoice_id] = true;
+    }
+    var uniqueInvoiceIds = Object.keys(invoiceIds);
+
+    // T_Invoicesからcustomer_idを一括取得（カラムインデックス直参照）
+    var invoiceCustomerMap = {}; // invoice_id → customer_id
+    if (uniqueInvoiceIds.length > 0) {
+      var invSheet = getSheet('T_Invoices');
+      var invData = invSheet.getDataRange().getValues();
+      if (invData.length > 1) {
+        var invH = invData[0];
+        var invCol = {
+          id: invH.indexOf('invoice_id'),
+          cid: invH.indexOf('customer_id'),
+          del: invH.indexOf('is_deleted')
+        };
+        var idSet = {};
+        for (var k = 0; k < uniqueInvoiceIds.length; k++) {
+          idSet[uniqueInvoiceIds[k]] = true;
+        }
+        for (var j = 1; j < invData.length; j++) {
+          var row = invData[j];
+          if (row[invCol.del]) continue;
+          var iid = String(row[invCol.id]);
+          if (iid in idSet) {
+            invoiceCustomerMap[iid] = String(row[invCol.cid]);
+          }
+        }
+      }
+    }
+
+    // 3. M_Customersからcustomer_id → company_name マッピング
+    var customerNameMap = {}; // customer_id → label
+    var customerIds = {};
+    for (var cKey in invoiceCustomerMap) {
+      customerIds[invoiceCustomerMap[cKey]] = true;
+    }
+    if (Object.keys(customerIds).length > 0) {
+      var custSheet = getSheet('M_Customers');
+      var custData = custSheet.getDataRange().getValues();
+      if (custData.length > 1) {
+        var custH = custData[0];
+        var custCol = {
+          id: custH.indexOf('customer_id'),
+          name: custH.indexOf('company_name'),
+          branch: custH.indexOf('branch_name'),
+          del: custH.indexOf('is_deleted')
+        };
+        for (var c = 1; c < custData.length; c++) {
+          var cr = custData[c];
+          if (cr[custCol.del]) continue;
+          var cid = String(cr[custCol.id]);
+          if (cid in customerIds) {
+            var name = String(cr[custCol.name] || '');
+            var branch = String(cr[custCol.branch] || '');
+            customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
+          }
+        }
+      }
+    }
+
+    // 4. 日別集計
+    var dailyMap = {}; // 'yyyy-MM-dd' → amount
+    var totalAmount = 0;
+    for (var d = 0; d < lines.length; d++) {
+      var line = lines[d];
+      var amt = Number(line.amount) || 0;
+      var wd = line.work_date || '';
+      if (!dailyMap[wd]) dailyMap[wd] = 0;
+      dailyMap[wd] += amt;
+      totalAmount += amt;
+    }
+
+    // 期間内の全日を生成（売上0の日も含む）
+    var daily = [];
+    var cur = new Date(startDate + 'T00:00:00');
+    var end = new Date(endDate + 'T00:00:00');
+    var dayNames = ['日', '月', '火', '水', '木', '金', '土'];
+    while (cur <= end) {
+      var dateStr = Utilities.formatDate(cur, 'Asia/Tokyo', 'yyyy-MM-dd');
+      daily.push({
+        date: dateStr,
+        dayOfWeek: dayNames[cur.getDay()],
+        amount: dailyMap[dateStr] || 0
+      });
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    // 5. 顧客別集計
+    var customerAmountMap = {}; // customerName → amount
+    for (var e = 0; e < lines.length; e++) {
+      var ln = lines[e];
+      var invId = ln.invoice_id;
+      var custId = invoiceCustomerMap[invId] || '';
+      var custName = customerNameMap[custId] || '（不明）';
+      if (!customerAmountMap[custName]) customerAmountMap[custName] = 0;
+      customerAmountMap[custName] += Number(ln.amount) || 0;
+    }
+
+    // 降順ソート
+    var byCustomer = [];
+    for (var cn in customerAmountMap) {
+      byCustomer.push({ customerName: cn, amount: customerAmountMap[cn] });
+    }
+    byCustomer.sort(function(a, b) { return b.amount - a.amount; });
+
+    return {
+      daily: daily,
+      byCustomer: byCustomer,
+      summary: {
+        totalAmount: totalAmount,
+        dayCount: daily.length
+      }
+    };
+  },
+
+  /**
    * 請求データを集計
    * @private
    */

@@ -243,6 +243,35 @@ function finalizeMonthlyStats(year, month) {
 }
 
 /**
+ * 日別売上集計データを取得
+ * @param {Object} options - { startDate: 'yyyy-MM-dd', endDate: 'yyyy-MM-dd' }
+ * @returns {Object} APIレスポンス
+ */
+function getDailySalesStats(options) {
+  var requestId = generateRequestId();
+
+  try {
+    var authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!options || !options.startDate || !options.endDate) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'startDate, endDate は必須です', {}, requestId);
+    }
+
+    var data = StatsService.getDailySalesData(options.startDate, options.endDate);
+
+    return buildSuccessResponse(data, requestId);
+
+  } catch (error) {
+    var errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log('getDailySalesStats error: ' + errMsg);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  }
+}
+
+/**
  * 全月の統計一覧を取得
  * @returns {Object} APIレスポンス
  */

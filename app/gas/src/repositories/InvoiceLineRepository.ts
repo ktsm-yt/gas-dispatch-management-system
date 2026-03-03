@@ -554,6 +554,23 @@ const InvoiceLineRepository = {
     return [];
   },
 
+  /**
+   * 日付範囲で明細を検索（日別売上集計用）
+   * @param startDate 'yyyy-MM-dd'
+   * @param endDate 'yyyy-MM-dd'
+   */
+  findByDateRange: function(startDate: string, endDate: string): InvoiceLineRecord[] {
+    let records = getAllRecords(this.TABLE_NAME);
+
+    records = records.filter(r => {
+      if (r.is_deleted) return false;
+      const wd = this._normalizeDate(r.work_date);
+      return wd >= startDate && wd <= endDate;
+    });
+
+    return records.map(r => this._normalizeRecord(r));
+  },
+
   _normalizeRecord: function(record: Record<string, unknown>): InvoiceLineRecord {
     return {
       ...record,

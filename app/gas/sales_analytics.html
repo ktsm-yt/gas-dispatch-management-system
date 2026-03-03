@@ -43,6 +43,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -353,6 +354,77 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Daily Sales Section */
+    .daily-sales-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-lg);
+      box-shadow: var(--shadow-card);
+    }
+
+    .daily-sales-section h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+    }
+
+    .daily-sales-toolbar {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+      flex-wrap: wrap;
+    }
+
+    .daily-sales-toolbar input[type="date"] {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    .daily-sales-toolbar input[type="date"]:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .daily-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: var(--spacing-md);
+      border-bottom: 2px solid var(--border-color);
+    }
+
+    .daily-tab {
+      padding: var(--spacing-sm) var(--spacing-md);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.15s;
+    }
+
+    .daily-tab.active {
+      color: var(--color-primary);
+      border-bottom-color: var(--color-primary);
+    }
+
+    .daily-tab:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
+    .daily-total-row td {
+      font-weight: 700;
+      border-top: 2px solid var(--text-primary);
+    }
+
     /* Error State */
     .error-message {
       background: #FEE2E2;
@@ -437,12 +509,28 @@
       </div>
     </div>
 
-    <!-- Chart -->
-    <div class="chart-section">
-      <h3>月次推移</h3>
-      <div class="chart-container">
-        <canvas id="monthly-chart"></canvas>
+    <!-- Daily Sales Section -->
+    <div class="daily-sales-section">
+      <h3>日別売上集計</h3>
+      <div class="daily-sales-toolbar">
+        <label style="font-size: 13px; color: var(--text-muted);">期間:</label>
+        <input type="date" id="daily-start-date">
+        <span>〜</span>
+        <input type="date" id="daily-end-date">
+        <button class="btn btn-primary" onclick="loadDailySales()">集計</button>
       </div>
+      <div class="daily-tabs">
+        <button class="daily-tab active" data-tab="daily" onclick="switchDailyTab('daily')">日別</button>
+        <button class="daily-tab" data-tab="customer" onclick="switchDailyTab('customer')">顧客別</button>
+      </div>
+      <table class="data-table" id="daily-sales-table">
+        <thead id="daily-sales-thead">
+          <tr><th>日付</th><th>売上額</th></tr>
+        </thead>
+        <tbody id="daily-sales-tbody">
+          <tr><td colspan="2" style="text-align: center; color: var(--text-muted);">期間を選択して「集計」を押してください</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Data Table -->
@@ -472,9 +560,20 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Chart -->
+    <div class="chart-section">
+      <h3>月次推移</h3>
+      <div class="chart-container">
+        <canvas id="monthly-chart"></canvas>
+      </div>
+    </div>
   </div>
 
+  <?!= include('confirmation_modal'); ?>
+
   <script>
+    <?!= include('confirmation_modal_js'); ?>
     let monthlyChart = null;
     let currentData = null;
 
@@ -898,21 +997,39 @@
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
 
-      if (!confirm(year + '年' + month + '月の統計を再計算しますか？')) {
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.ok) {
-            alert('統計を再計算しました');
-            loadData();
-          } else {
-            alert('エラー: ' + (result.error?.message || '再計算に失敗しました'));
-          }
-        })
-        .withFailureHandler(handleError)
-        .recalculateMonthlyStats(year, month);
+      ConfirmationModal.show({
+        type: 'warning',
+        title: '当月再計算',
+        message: year + '年' + month + '月の統計を再計算しますか？',
+        confirmText: '再計算',
+        cancelText: 'キャンセル',
+        onConfirm: function() {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result.ok) {
+                ConfirmationModal.show({
+                  type: 'info',
+                  title: '完了',
+                  message: '統計を再計算しました',
+                  confirmText: 'OK',
+                  cancelText: '閉じる',
+                  onConfirm: function() { loadData(); },
+                  onCancel: function() { loadData(); }
+                });
+              } else {
+                ConfirmationModal.show({
+                  type: 'danger',
+                  title: 'エラー',
+                  message: result.error?.message || '再計算に失敗しました',
+                  confirmText: 'OK',
+                  cancelText: '閉じる'
+                });
+              }
+            })
+            .withFailureHandler(handleError)
+            .recalculateMonthlyStats(year, month);
+        }
+      });
     }
 
     function showLoading() {
@@ -957,6 +1074,129 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    // === Daily Sales Section ===
+    var _dailySalesData = null;
+    var _dailyActiveTab = 'daily';
+
+    (function initDailySalesDefaults() {
+      document.addEventListener('DOMContentLoaded', function() {
+        var now = new Date();
+        var y = now.getFullYear();
+        var m = String(now.getMonth() + 1).padStart(2, '0');
+        var d = String(now.getDate()).padStart(2, '0');
+        document.getElementById('daily-start-date').value = y + '-' + m + '-01';
+        document.getElementById('daily-end-date').value = y + '-' + m + '-' + d;
+      });
+    })();
+
+    function loadDailySales() {
+      var startDate = document.getElementById('daily-start-date').value;
+      var endDate = document.getElementById('daily-end-date').value;
+      if (!startDate || !endDate) {
+        ConfirmationModal.show({ type: 'warning', title: '入力エラー', message: '開始日と終了日を指定してください', confirmText: 'OK', cancelText: '閉じる' });
+        return;
+      }
+      if (startDate > endDate) {
+        ConfirmationModal.show({ type: 'warning', title: '入力エラー', message: '開始日は終了日以前にしてください', confirmText: 'OK', cancelText: '閉じる' });
+        return;
+      }
+
+      var tbody = document.getElementById('daily-sales-tbody');
+      tbody.innerHTML = '<tr><td colspan="2" class="loading"><div class="loading-spinner"></div> <span>集計中...</span></td></tr>';
+
+      var cacheKey = PageCache.makeKey('daily_sales', { startDate: startDate, endDate: endDate });
+      var cached = PageCache.get(cacheKey);
+      if (cached) {
+        _dailySalesData = normalizeDailySalesData(cached.data);
+        renderDailySalesTab();
+        if (cached.age > PageCache.ANALYTICS_TTL) {
+          fetchDailySalesFromServer(startDate, endDate, cacheKey, true);
+        }
+        return;
+      }
+
+      fetchDailySalesFromServer(startDate, endDate, cacheKey, false);
+    }
+
+    function fetchDailySalesFromServer(startDate, endDate, cacheKey, isBackground) {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result && result.ok) {
+            _dailySalesData = normalizeDailySalesData(result.data);
+            PageCache.set(cacheKey, _dailySalesData);
+            renderDailySalesTab();
+          } else if (!isBackground) {
+            var tbody = document.getElementById('daily-sales-tbody');
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--color-danger);">' + escapeHtml((result && result.error && result.error.message) || '取得に失敗しました') + '</td></tr>';
+          }
+        })
+        .withFailureHandler(function(error) {
+          if (!isBackground) {
+            var tbody = document.getElementById('daily-sales-tbody');
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--color-danger);">エラー: ' + escapeHtml(error.message || '不明') + '</td></tr>';
+          }
+        })
+        .getDailySalesStats({ startDate: startDate, endDate: endDate });
+    }
+
+    function switchDailyTab(tab) {
+      _dailyActiveTab = tab;
+      document.querySelectorAll('.daily-tab').forEach(function(el) {
+        el.classList.toggle('active', el.dataset.tab === tab);
+      });
+      renderDailySalesTab();
+    }
+
+    function normalizeDailySalesData(raw) {
+      if (!raw) return null;
+
+      // Backward compatibility: old cache may store full API response { ok, data, ... }
+      var data = raw;
+      if (!Array.isArray(data.daily) && data.data) {
+        data = data.data;
+      }
+
+      var daily = Array.isArray(data.daily) ? data.daily : [];
+      var byCustomer = Array.isArray(data.byCustomer) ? data.byCustomer : [];
+      var summary = data.summary || {};
+
+      return {
+        daily: daily,
+        byCustomer: byCustomer,
+        summary: {
+          totalAmount: Number(summary.totalAmount) || 0,
+          dayCount: Number(summary.dayCount) || daily.length
+        }
+      };
+    }
+
+    function renderDailySalesTab() {
+      if (!_dailySalesData) return;
+
+      var thead = document.getElementById('daily-sales-thead');
+      var tbody = document.getElementById('daily-sales-tbody');
+
+      if (_dailyActiveTab === 'daily') {
+        thead.innerHTML = '<tr><th>日付</th><th>売上額</th></tr>';
+        var rows = _dailySalesData.daily.map(function(d) {
+          return '<tr><td>' + escapeHtml(d.date) + '（' + escapeHtml(d.dayOfWeek) + '）</td><td>' + formatCurrency(d.amount) + '</td></tr>';
+        });
+        rows.push('<tr class="daily-total-row"><td>合計</td><td>' + formatCurrency(_dailySalesData.summary.totalAmount) + '</td></tr>');
+        tbody.innerHTML = rows.join('');
+      } else {
+        thead.innerHTML = '<tr><th>顧客名</th><th>売上額</th></tr>';
+        if (_dailySalesData.byCustomer.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
+          return;
+        }
+        var rows = _dailySalesData.byCustomer.map(function(c) {
+          return '<tr><td>' + escapeHtml(c.customerName) + '</td><td>' + formatCurrency(c.amount) + '</td></tr>';
+        });
+        rows.push('<tr class="daily-total-row"><td>合計</td><td>' + formatCurrency(_dailySalesData.summary.totalAmount) + '</td></tr>');
+        tbody.innerHTML = rows.join('');
+      }
     }
   </script>
 </body>
