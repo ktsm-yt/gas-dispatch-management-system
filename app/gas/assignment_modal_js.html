@@ -659,6 +659,9 @@ function fillAssignmentModalFromCache(cachedData) {
   // 統計更新
   updateModalStats();
 
+  // 交通費サマリーを描画
+  renderTransportSummary(assignmentModalState.assignments);
+
   // スタッフリスト描画
   filterStaffList();
 }
@@ -782,6 +785,9 @@ function handleAssignmentData(response, requestJobId) {
   updatePayUnitTag(job, assignmentModalState.slots);
   updateSiteAddress(job.site_address);
   updateWorkContent(job.work_detail, job.work_detail_other_text);
+
+  // 交通費サマリーを描画
+  renderTransportSummary(assignmentModalState.assignments);
 
   // 請求書集計済みチェック（サーバーからデータ取得後）
   checkInvoiceExistsNotification();
@@ -1820,6 +1826,9 @@ function doSaveAllChanges() {
         // ダッシュボードキャッシュも更新される
         updateDayAssignmentsCacheForCurrentJob();
 
+        // 交通費サマリーを更新
+        renderTransportSummary(assignmentModalState.assignments);
+
         // 請求書存在チェック（案件担当への通知用）
         checkInvoiceExistsNotification();
       } else {
@@ -1934,6 +1943,44 @@ function loadTransportAreas() {
 
 function populateTransportAreas() {
   populateTransportAreaSelect('form-transport-area');
+}
+
+/**
+ * 交通費サマリーパネルを描画
+ * アクティブな配置の交通費をリスト表示し、合計を表示する
+ */
+function renderTransportSummary(assignments) {
+  const panel = document.getElementById('transport-summary-panel');
+  const list = document.getElementById('transport-summary-list');
+  const totalEl = document.getElementById('transport-summary-total');
+  if (!panel || !list || !totalEl) return;
+
+  const active = (assignments || []).filter(
+    a => a.status !== 'CANCELLED' && a.transport_amount > 0
+  );
+
+  if (active.length === 0) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  const total = active.reduce((sum, a) => sum + Number(a.transport_amount), 0);
+  totalEl.textContent = '合計 ¥' + total.toLocaleString();
+
+  list.innerHTML = active.map(a => {
+    const name = escapeHtml(a.staff_nickname || a.staff_name || '不明');
+    const station = a.transport_station ? escapeHtml(a.transport_station) : '';
+    const area = a.transport_area ? escapeHtml(a.transport_area) : '';
+    const bus = a.transport_has_bus ? ' 🚌' : '';
+    const location = [area, station].filter(Boolean).join(' / ');
+    return `<div class="transport-summary-row">
+      <span class="transport-summary-name">${name}</span>
+      <span class="transport-summary-location">${location}${bus}</span>
+      <span class="transport-summary-amount">¥${Number(a.transport_amount).toLocaleString()}</span>
+    </div>`;
+  }).join('');
+
+  panel.style.display = 'block';
 }
 
 function populateTransportAreaSelect(selectId) {
