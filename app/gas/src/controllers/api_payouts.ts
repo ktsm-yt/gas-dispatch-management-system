@@ -205,6 +205,12 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
           calculated_wage: adjustedWage
         };
       });
+
+      // 配置の再計算合計でbaseAmountを上書き（配置変更後の整合性を保つ）
+      const recalculatedBase = (result.assignments as Array<Record<string, unknown>>)
+        .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.calculated_wage as number) || 0); }, 0);
+      result.baseAmount = recalculatedBase;
+      result.totalAmount = recalculatedBase + ((result.transportAmount as number) || 0) + ((result.adjustmentAmount as number) || 0) + ((result.ninkuAdjustmentAmount as number) || 0);
     }
 
     return buildSuccessResponse(result, requestId);
