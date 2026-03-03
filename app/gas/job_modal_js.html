@@ -141,6 +141,9 @@ function openJobModal(jobId = null, options = {}) {
     document.getElementById('customer-search').value = options.defaultCustomerName;
   }
 
+  // 作業詳細オプションをロード
+  loadWorkDetailOptions();
+
   // Show modal
   document.getElementById('job-modal').style.display = 'flex';
 
@@ -1035,6 +1038,271 @@ function validateTimeSlotStartTime() {
     hint.textContent = `${range.label}：開始時間を確認`;
     hint.style.display = 'block';
   }
+}
+
+// ========== Work Detail Options Management ==========
+
+/** 作業詳細オプションのキャッシュ */
+var _workDetailOptionsCache = null;
+
+/**
+ * 作業詳細オプションをロードしてドロップダウンを構築
+ * PageCache(SWR) パターン: キャッシュ → 即表示 → バックグラウンドで最新取得
+ */
+function loadWorkDetailOptions() {
+  var select = document.getElementById('work-detail');
+  if (!select) return;
+
+  var currentValue = select.value;
+
+  // キャッシュがあれば即時反映
+  if (_workDetailOptionsCache) {
+    _renderWorkDetailSelect(select, _workDetailOptionsCache, currentValue);
+  }
+
+  // PageCacheからも試行
+  var cached = PageCache.get('work_detail_options');
+  if (cached && PageCache.isValid(cached, PageCache.MASTER_TTL)) {
+    _workDetailOptionsCache = cached.data;
+    _renderWorkDetailSelect(select, _workDetailOptionsCache, currentValue);
+    return; // TTL内なのでAPI呼び出し不要
+  }
+
+  // APIから取得
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.ok && result.data && result.data.items) {
+        _workDetailOptionsCache = result.data.items;
+        PageCache.set('work_detail_options', result.data.items);
+        var sel = document.getElementById('work-detail');
+        if (sel) {
+          var cv = sel.value;
+          _renderWorkDetailSelect(sel, result.data.items, cv);
+        }
+      }
+    })
+    .withFailureHandler(function(err) {
+      console.warn('loadWorkDetailOptions failed:', err);
+    })
+    .getWorkDetailOptions();
+}
+
+/**
+ * select要素にオプションを描画
+ */
+function _renderWorkDetailSelect(select, items, selectedValue) {
+  var html = '<option value="">選択してください</option>';
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    if (item.is_deleted) continue;
+    var selected = (item.value === selectedValue) ? ' selected' : '';
+    html += '<option value="' + escapeHtml(item.value) + '"' + selected + '>' + escapeHtml(item.label) + '</option>';
+  }
+  select.innerHTML = html;
+}
+
+/**
+ * 編集パネルの表示/非表示を切り替え
+ */
+function toggleWorkDetailEditPanel() {
+  var panel = document.getElementById('work-detail-edit-panel');
+  if (!panel) return;
+  var isVisible = panel.style.display !== 'none';
+  panel.style.display = isVisible ? 'none' : 'block';
+  if (!isVisible) {
+    _renderWorkDetailEditList();
+  }
+}
+
+/**
+ * 編集パネル内の項目リストを描画
+ */
+function _renderWorkDetailEditList() {
+  var container = document.getElementById('work-detail-edit-list');
+  if (!container || !_workDetailOptionsCache) return;
+
+  var items = _workDetailOptionsCache.filter(function(i) { return !i.is_deleted; });
+  var html = '';
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var isProtected = item.is_protected;
+    html += '<div style="display:flex; align-items:center; gap:4px; padding:3px 0; border-bottom:1px solid #eee; font-size:12px;" data-wd-id="' + item.work_detail_id + '">';
+    // 並替えボタン
+    html += '<button type="button" onclick="moveWorkDetailOption(\'' + item.work_detail_id + '\', -1)" style="background:none; border:none; cursor:pointer; padding:0 2px; font-size:11px;"' + (i === 0 || isProtected ? ' disabled' : '') + '>▲</button>';
+    html += '<button type="button" onclick="moveWorkDetailOption(\'' + item.work_detail_id + '\', 1)" style="background:none; border:none; cursor:pointer; padding:0 2px; font-size:11px;"' + (i === items.length - 1 || isProtected ? ' disabled' : '') + '>▼</button>';
+    // ラベル
+    html += '<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="' + escapeHtml(item.value) + '">';
+    html += escapeHtml(item.label) + ' <span style="color:#999;">(' + escapeHtml(item.value) + ')</span>';
+    if (isProtected) html += ' 🔒';
+    html += '</span>';
+    // 削除ボタン
+    if (!isProtected) {
+      html += '<button type="button" onclick="removeWorkDetailOption(\'' + item.work_detail_id + '\', \'' + escapeHtml(item.label) + '\')" style="background:none; border:none; cursor:pointer; color:#e74c3c; font-size:14px; padding:0 4px;" title="削除">×</button>';
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html || '<div style="color:#999; text-align:center; padding:8px;">項目がありません</div>';
+}
+
+/**
+ * 作業詳細オプションを追加
+ */
+function addWorkDetailOption() {
+  var valueInput = document.getElementById('wd-new-value');
+  var labelInput = document.getElementById('wd-new-label');
+  if (!valueInput || !labelInput) return;
+
+  var value = valueInput.value.trim().toLowerCase();
+  var label = labelInput.value.trim();
+
+  if (!value || !label) {
+    showToast('キーと表示名を入力してください', 'warning');
+    return;
+  }
+  if (!/^[a-z0-9_]+$/.test(value)) {
+    showToast('キーは半角英数字とアンダースコアのみです', 'warning');
+    return;
+  }
+
+  // 次のsort_orderを計算
+  var maxOrder = 0;
+  if (_workDetailOptionsCache) {
+    for (var i = 0; i < _workDetailOptionsCache.length; i++) {
+      var so = Number(_workDetailOptionsCache[i].sort_order) || 0;
+      if (so < 9999 && so > maxOrder) maxOrder = so;
+    }
+  }
+
+  var data = { value: value, label: label, sort_order: maxOrder + 10 };
+
+  var addBtn = document.getElementById('wd-add-btn');
+  if (addBtn) { addBtn.disabled = true; addBtn.textContent = '追加中'; }
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = '追加'; }
+      if (result && result.ok) {
+        showToast('「' + label + '」を追加しました', 'success');
+        valueInput.value = '';
+        labelInput.value = '';
+        _workDetailOptionsCache = null;
+        PageCache.clear('work_detail_options');
+        loadWorkDetailOptions();
+        setTimeout(function() { _renderWorkDetailEditList(); }, 500);
+      } else {
+        showToast((result && result.error && result.error.message) || '追加に失敗しました', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (addBtn) { addBtn.disabled = false; addBtn.textContent = '追加'; }
+      showToast('追加に失敗しました: ' + err.message, 'error');
+    })
+    .saveWorkDetailOption(data, null);
+}
+
+/**
+ * 作業詳細オプションを削除
+ */
+function removeWorkDetailOption(id, label) {
+  var item = _workDetailOptionsCache && _workDetailOptionsCache.find(function(i) { return i.work_detail_id === id; });
+  var updatedAt = item ? item.updated_at : null;
+
+  // Optimistic UI: 即座にUIから除去
+  var snapshot = _workDetailOptionsCache ? _workDetailOptionsCache.slice() : [];
+  _workDetailOptionsCache = _workDetailOptionsCache.filter(function(i) { return i.work_detail_id !== id; });
+  _renderWorkDetailEditList();
+  var select = document.getElementById('work-detail');
+  if (select) _renderWorkDetailSelect(select, _workDetailOptionsCache, select.value);
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.ok) {
+        showToast('「' + label + '」を削除しました', 'success');
+        PageCache.clear('work_detail_options');
+      } else {
+        // 失敗: ロールバック
+        _workDetailOptionsCache = snapshot;
+        _renderWorkDetailEditList();
+        if (select) _renderWorkDetailSelect(select, _workDetailOptionsCache, select.value);
+        showToast((result && result.error && result.error.message) || '削除に失敗しました', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      // 失敗: ロールバック
+      _workDetailOptionsCache = snapshot;
+      _renderWorkDetailEditList();
+      if (select) _renderWorkDetailSelect(select, _workDetailOptionsCache, select.value);
+      showToast('削除に失敗しました', 'error');
+    })
+    .deleteWorkDetailOption(id, updatedAt);
+}
+
+/** 並替えのダーティフラグ */
+var _workDetailOrderDirty = false;
+
+/**
+ * 作業詳細オプションの並び順を変更（ローカルのみ、保存は saveWorkDetailOrder で一括）
+ */
+function moveWorkDetailOption(id, direction) {
+  if (!_workDetailOptionsCache) return;
+
+  var items = _workDetailOptionsCache.filter(function(i) { return !i.is_deleted && !i.is_protected; });
+  var protectedItems = _workDetailOptionsCache.filter(function(i) { return !i.is_deleted && i.is_protected; });
+
+  var idx = -1;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].work_detail_id === id) { idx = i; break; }
+  }
+  if (idx < 0) return;
+
+  var newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= items.length) return;
+
+  var temp = items[idx];
+  items[idx] = items[newIdx];
+  items[newIdx] = temp;
+
+  _workDetailOptionsCache = items.concat(protectedItems);
+  _renderWorkDetailEditList();
+  _renderWorkDetailSelect(document.getElementById('work-detail'), _workDetailOptionsCache, document.getElementById('work-detail').value);
+
+  // ダーティフラグON → 「順番を保存」ボタン表示
+  _workDetailOrderDirty = true;
+  var btn = document.getElementById('wd-save-order-btn');
+  if (btn) btn.style.display = 'inline-block';
+}
+
+/**
+ * 並び順をAPIに一括保存
+ */
+function saveWorkDetailOrder() {
+  if (!_workDetailOptionsCache || !_workDetailOrderDirty) return;
+
+  var items = _workDetailOptionsCache.filter(function(i) { return !i.is_deleted && !i.is_protected; });
+  var orderedIds = items.map(function(i) { return i.work_detail_id; });
+
+  var btn = document.getElementById('wd-save-order-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '保存中'; }
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.ok) {
+        showToast('順番を保存しました', 'success');
+        _workDetailOrderDirty = false;
+        if (btn) btn.style.display = 'none';
+        PageCache.clear('work_detail_options');
+        _workDetailOptionsCache = null;
+        loadWorkDetailOptions();
+      } else {
+        showToast((result && result.error && result.error.message) || '保存に失敗しました', 'error');
+      }
+      if (btn) { btn.disabled = false; btn.textContent = '順番を保存'; }
+    })
+    .withFailureHandler(function(err) {
+      showToast('保存に失敗しました', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '順番を保存'; }
+    })
+    .reorderWorkDetailOptions(orderedIds, null);
 }
 
 // ========== Event Listeners Setup ==========

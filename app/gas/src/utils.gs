@@ -285,6 +285,7 @@ const MasterCache = {
   CACHE_KEY_SUBCONTRACTORS: 'MasterCache_M_Subcontractors',
   CACHE_KEY_TRANSPORT_FEES: 'MasterCache_M_TransportFees',
   CACHE_KEY_COMPANY: 'MasterCache_M_Company',
+  CACHE_KEY_WORK_DETAILS: 'MasterCache_M_WorkDetails',
 
   _staffCache: null,
   _staffMap: null,
@@ -294,6 +295,8 @@ const MasterCache = {
   _transportFeeCache: null,
   _transportFeeMap: null,
   _companyCache: null,
+  _workDetailCache: null,
+  _workDetailMap: null,
 
   /**
    * M_Staffの全レコードを取得（2層キャッシュ付き）
@@ -430,6 +433,8 @@ const MasterCache = {
     this._subcontractorCache = null;
     this._transportFeeCache = null;
     this._companyCache = null;
+    this._workDetailCache = null;
+    this._workDetailMap = null;
     try {
       const cache = CacheService.getScriptCache();
       cache.removeAll([
@@ -437,7 +442,8 @@ const MasterCache = {
         this.CACHE_KEY_CUSTOMERS,
         this.CACHE_KEY_SUBCONTRACTORS,
         this.CACHE_KEY_TRANSPORT_FEES,
-        this.CACHE_KEY_COMPANY
+        this.CACHE_KEY_COMPANY,
+        this.CACHE_KEY_WORK_DETAILS
       ]);
     } catch (e) {
       console.warn('CacheService.removeAll failed:', e);
@@ -622,6 +628,70 @@ const MasterCache = {
   },
 
   /**
+   * M_WorkDetailsの全レコードを取得（2層キャッシュ付き、sort_order昇順）
+   * @returns {Object[]} 作業詳細配列
+   */
+  getWorkDetails: function() {
+    if (this._workDetailCache !== null) {
+      return this._workDetailCache;
+    }
+
+    try {
+      var cache = CacheService.getScriptCache();
+      var cached = cache.get(this.CACHE_KEY_WORK_DETAILS);
+      if (cached) {
+        this._workDetailCache = JSON.parse(cached);
+        return this._workDetailCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for workDetails:', e);
+    }
+
+    this._workDetailCache = getAllRecords('M_WorkDetails')
+      .filter(function(d) { return !d.is_deleted; })
+      .sort(function(a, b) { return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0); });
+
+    try {
+      var cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_WORK_DETAILS, JSON.stringify(this._workDetailCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for workDetails:', e);
+    }
+
+    return this._workDetailCache;
+  },
+
+  /**
+   * M_WorkDetailsをマップ形式で取得（value → workDetail）
+   * @returns {Object} 作業詳細マップ
+   */
+  getWorkDetailMap: function() {
+    if (this._workDetailMap === null) {
+      var details = this.getWorkDetails();
+      this._workDetailMap = {};
+      for (var i = 0; i < details.length; i++) {
+        if (details[i].value) {
+          this._workDetailMap[details[i].value] = details[i];
+        }
+      }
+    }
+    return this._workDetailMap;
+  },
+
+  /**
+   * 作業詳細キャッシュをクリア
+   */
+  invalidateWorkDetails: function() {
+    this._workDetailCache = null;
+    this._workDetailMap = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_WORK_DETAILS);
+    } catch (e) {
+      console.warn('CacheService.remove failed for workDetails:', e);
+    }
+  },
+
+  /**
    * 全マスターデータをCacheServiceに事前読み込み（ウォームアップ）
    * 毎朝6時のトリガーから呼び出す
    * @returns {Object} ウォームアップ結果
@@ -640,6 +710,8 @@ const MasterCache = {
       this._transportFeeCache = null;
       this._transportFeeMap = null;
       this._companyCache = null;
+      this._workDetailCache = null;
+      this._workDetailMap = null;
 
       // CacheServiceもクリア
       const cache = CacheService.getScriptCache();
@@ -648,7 +720,8 @@ const MasterCache = {
         this.CACHE_KEY_CUSTOMERS,
         this.CACHE_KEY_SUBCONTRACTORS,
         this.CACHE_KEY_TRANSPORT_FEES,
-        this.CACHE_KEY_COMPANY
+        this.CACHE_KEY_COMPANY,
+        this.CACHE_KEY_WORK_DETAILS
       ]);
 
       // 各マスターをロード（CacheServiceに自動保存される）
@@ -666,6 +739,9 @@ const MasterCache = {
 
       const company = this.getCompany();
       results.company = company.company_id ? 1 : 0;
+
+      const workDetails = this.getWorkDetails();
+      results.workDetails = workDetails.length;
 
       results.duration = Date.now() - startTime;
       results.success = true;

@@ -22,7 +22,8 @@ const TABLE_SHEET_MAP = {
   'T_MonthlyStats': 'MonthlyStats',
   'T_Payments': 'Payments',
   'T_AuditLog': 'AuditLog',
-  'T_InvoiceAdjustments': 'InvoiceAdjustments'
+  'T_InvoiceAdjustments': 'InvoiceAdjustments',
+  'M_WorkDetails': 'WorkDetails'
 };
 
 // リクエスト内キャッシュ（同一実行内でのopenById/getSheetByName重複を削減）
