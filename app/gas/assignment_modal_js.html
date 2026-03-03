@@ -453,28 +453,13 @@ function getWorkDetailLabel(workDetail, otherText) {
  * 新しいフィールド追加時はここに追記すること
  */
 /**
- * time_slot から pay_unit を推論する（job.pay_unit 未設定時のフォールバック）
- */
-function inferUnitFromTimeSlot(timeSlot) {
-  switch ((timeSlot || '').toLowerCase().trim()) {
-    case 'am': case 'pm': case 'mitei': return 'halfday';
-    case 'shuujitsu': return 'fullday';
-    case 'yakin': return 'night';
-    case 'jotou': return 'tobi';
-    default: return 'basic';
-  }
-}
-
-/**
  * スロットなし案件の場合、job.pay_unit を単価区分のデフォルトに設定
- * pay_unit 未設定なら time_slot から推論
  */
 function setDefaultInvoiceUnit(job, slots) {
   if (slots && slots.length > 0) return;
   const el = document.getElementById('form-invoice-unit');
   if (!el || !job) return;
-  const unit = job.pay_unit || inferUnitFromTimeSlot(job.time_slot);
-  el.value = unit || 'basic';
+  el.value = job.pay_unit || 'basic';
 }
 
 function resetAssignmentModalUI() {
@@ -2171,24 +2156,16 @@ function generateLineTemplate() {
     ? (unitLabels[unitTypes[0]] || '-')
     : unitTypes.length > 1 ? '混在' : '-';
 
-  // 作業内容（種別＋小項目）
-  const workDetailLabel = getWorkDetailLabel(job.work_detail, job.work_detail_other_text);
-  // 作業内容：役割グループがある場合は「上棟鳶補助、上棟荷揚げ作業」形式
-  let workContent;
-  if (workCategoryPrefix && memberLines.length > 0) {
-    // memberLinesから役割名を抽出して「〇〇作業」形式に
-    const roleNames = memberLines.map(line => {
-      const match = line.match(/^(.+?)（/);
-      return match ? match[1] : null;
-    }).filter(Boolean);
-    workContent = roleNames.length > 0
-      ? roleNames.join('、') + '作業'
-      : (workCategoryPrefix + (workDetailLabel || '') + '作業');
-  } else {
-    workContent = job.work_category
-      ? (workDetailLabel ? `${workCategoryLabels[job.work_category] || job.work_category}${workDetailLabel}` : (workCategoryLabels[job.work_category] || job.work_category))
-      : workDetailLabel;
+  // 作業内容（work_categoryラベルのみ）
+  const workContent = workCategoryLabels[job.work_category] || job.work_category || '-';
+
+  // 詳細行の生成（work_detail + notes）
+  const detailLines = [];
+  if (job.work_category !== 'jotou') {
+    const detailLabel = getWorkDetailLabel(job.work_detail, job.work_detail_other_text);
+    if (detailLabel) detailLines.push(`・${detailLabel}`);
   }
+  if (job.notes) detailLines.push(`・${job.notes}`);
 
   // 最寄駅（配置の transport_station から取得）
   const nearestStation = activeAssignments.map(a => a.transport_station).find(s => s) || '';
@@ -2218,8 +2195,7 @@ function generateLineTemplate() {
 ◉作業内容：${workContent}
 ◉単価：${payUnitLabel}
 ◉装備品：
-◉詳細
-・別途${job.notes ? '\n・' + job.notes : ''}
+◉詳細：${detailLines.length > 0 ? '\n' + detailLines.join('\n') : ''}
 ◉連絡事項
 ・現場周辺煙草NGです。
 
@@ -2314,7 +2290,7 @@ function updatePayUnitTag(job, slots) {
       ? PAY_UNIT_TAG_MAP[uniqueUnits[0]]
       : { label: '複数', cls: 'tag-pay-basic' };
   } else {
-    const unit = (job && job.pay_unit) || inferUnitFromTimeSlot(job && job.time_slot);
+    const unit = (job && job.pay_unit) || 'basic';
     info = PAY_UNIT_TAG_MAP[unit];
   }
   if (info) {

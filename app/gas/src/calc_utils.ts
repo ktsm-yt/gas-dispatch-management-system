@@ -64,34 +64,13 @@ function normalizeUnit_(unit: string | null | undefined): string {
 }
 
 /**
- * time_slot から pay_unit を推論する。
- * job.pay_unit が未設定の既存データ用フォールバック。
- */
-function inferUnitFromTimeSlot_(timeSlot: string | null | undefined): string {
-  switch (normalizeUnit_(timeSlot)) {
-    case 'am':
-    case 'pm':
-    case 'mitei':
-      return 'halfday';
-    case 'shuujitsu':
-      return 'fullday';
-    case 'yakin':
-      return 'night';
-    case 'jotou':
-      return 'tobi';
-    default:
-      return 'basic';
-  }
-}
-
-/**
  * 配置の単価区分を解決する。
  * invoice_unit/pay_unit が未設定またはbasicの場合、job.pay_unit にフォールバック。
- * job.pay_unit も未設定なら time_slot から推論する。
+ * job.pay_unit も未設定なら basic のまま返す。
  */
 function resolveEffectiveUnit_(
   unitFromAssignment: string | null | undefined,
-  job: { pay_unit?: unknown; time_slot?: unknown } | null | undefined
+  job: { pay_unit?: unknown } | null | undefined
 ): string {
   const normalized = normalizeUnit_(unitFromAssignment);
 
@@ -100,14 +79,9 @@ function resolveEffectiveUnit_(
     return normalized;
   }
 
-  // 未設定（null/undefined/空文字）の場合のみ推論
-  if (job) {
-    if (job.pay_unit) {
-      return normalizeUnit_(job.pay_unit as string) || 'basic';
-    }
-    if (job.time_slot) {
-      return inferUnitFromTimeSlot_(job.time_slot as string);
-    }
+  // 未設定の場合のみ job.pay_unit にフォールバック（time_slot 推論は廃止）
+  if (job?.pay_unit) {
+    return normalizeUnit_(job.pay_unit as string) || 'basic';
   }
   return 'basic';
 }
@@ -202,19 +176,19 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
     case 'tobiage':
       return customer.unit_price_tobiage ?? Math.floor((customer.unit_price_tobi || 0) * TOBIAGE_MULTIPLIER);
     case 'basic':
-      return customer.unit_price_basic ?? customer.unit_price_tobi ?? 0;
+      return customer.unit_price_basic ?? 0;
     case 'half':
     case 'halfday':
     case 'am':
     case 'pm':
       return customer.unit_price_half ?? 0;
     case 'fullday':
-      return customer.unit_price_fullday ?? customer.unit_price_tobi ?? 0;
+      return customer.unit_price_fullday ?? 0;
     case 'night':
     case 'yakin':
-      return customer.unit_price_night ?? customer.unit_price_tobi ?? 0;
+      return customer.unit_price_night ?? 0;
     default:
-      return customer.unit_price_basic ?? customer.unit_price_tobi ?? 0;
+      return customer.unit_price_basic ?? 0;
   }
 }
 
@@ -230,12 +204,12 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
     case 'pm':
       return staff.daily_rate_half ?? 0;
     case 'basic':
-      return staff.daily_rate_basic ?? staff.daily_rate_tobi ?? 0;
+      return staff.daily_rate_basic ?? 0;
     case 'fullday':
-      return staff.daily_rate_fullday ?? staff.daily_rate_tobi ?? 0;
+      return staff.daily_rate_fullday ?? 0;
     case 'night':
     case 'yakin':
-      return staff.daily_rate_night ?? staff.daily_rate_tobi ?? 0;
+      return staff.daily_rate_night ?? 0;
     case 'tobi':
       return staff.daily_rate_tobi ?? 0;
     case 'age':
@@ -243,7 +217,7 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
     case 'tobiage':
       return staff.daily_rate_tobiage ?? Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     default:
-      return staff.daily_rate_basic ?? staff.daily_rate_tobi ?? 0;
+      return staff.daily_rate_basic ?? 0;
   }
 }
 
