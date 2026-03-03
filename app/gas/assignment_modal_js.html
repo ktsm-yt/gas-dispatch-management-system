@@ -157,6 +157,26 @@ function getJobTimeSignature(job) {
   return `${job?.time_slot || ''}|${job?.start_time || ''}`;
 }
 
+/**
+ * 案件IDを正規化（空白・null文字列を除外）
+ * @param {any} jobId
+ * @returns {string|null}
+ */
+function normalizeAssignmentJobId(jobId) {
+  if (jobId === null || jobId === undefined) {
+    return null;
+  }
+  const normalized = String(jobId).trim();
+  if (!normalized) {
+    return null;
+  }
+  const lowered = normalized.toLowerCase();
+  if (lowered === 'null' || lowered === 'undefined') {
+    return null;
+  }
+  return normalized;
+}
+
 // ========== Dashboard Cache Access ==========
 /**
  * ダッシュボードのキャッシュから案件データを取得
@@ -584,8 +604,14 @@ function resetAssignmentModalState(jobId) {
  * @param {Object} options.cachedJob - キャッシュされた案件データ（assignments, slots含む）
  */
 function openJobAssignments(jobId, options = {}) {
+  const normalizedJobId = normalizeAssignmentJobId(jobId);
+  if (!normalizedJobId) {
+    showToast('案件IDが不正のため、配置モーダルを開けません。', 'error');
+    return;
+  }
+
   // 1. 状態を完全リセット
-  resetAssignmentModalState(jobId);
+  resetAssignmentModalState(normalizedJobId);
 
   // 2. UIを完全リセット（ローディング表示）
   resetAssignmentModalUI();
@@ -594,12 +620,12 @@ function openJobAssignments(jobId, options = {}) {
   document.getElementById('assignment-modal').style.display = 'flex';
 
   // 4. キャッシュを優先チェック: options.cachedJob > assignmentJobCache
-  const cachedData = options.cachedJob || getAssignmentJobFromCache(jobId);
+  const cachedData = options.cachedJob || getAssignmentJobFromCache(normalizedJobId);
   if (cachedData) {
     fillAssignmentModalFromCache(cachedData);
     // options.cachedJobがあればキャッシュにも保存（次回用）
     if (options.cachedJob) {
-      saveAssignmentJobToCache(jobId, options.cachedJob);
+      saveAssignmentJobToCache(normalizedJobId, options.cachedJob);
     }
   }
 
@@ -608,7 +634,7 @@ function openJobAssignments(jobId, options = {}) {
 
   // 6. データ読み込み（キャッシュがあっても最新データを取得）
   // Note: 請求書集計済みチェックは handleAssignmentData 内で実行
-  loadAssignmentModalData(jobId, !!cachedData);
+  loadAssignmentModalData(normalizedJobId, !!cachedData);
 
   // 8. 交通費エリアマスタ読み込み
   loadTransportAreas();
@@ -704,7 +730,13 @@ function closeAssignmentModal() {
 }
 
 function loadAssignmentModalData(jobId, hasCache = false) {
-  const currentJobId = jobId;  // クロージャでキャプチャ
+  const currentJobId = normalizeAssignmentJobId(jobId);  // クロージャでキャプチャ
+  if (!currentJobId) {
+    assignmentModalState.isLoadingJob = false;
+    assignmentModalState.isLoadingStaff = false;
+    showToast('案件IDが不正のため、データを取得できません。', 'error');
+    return;
+  }
 
   // ローディング状態を設定
   assignmentModalState.isLoadingJob = true;
@@ -723,7 +755,7 @@ function loadAssignmentModalData(jobId, hasCache = false) {
   }
 
   // ★ダッシュボードキャッシュから案件データを取得（RPC削減）
-  const dashboardJobData = getJobFromDashboardCache(jobId);
+  const dashboardJobData = getJobFromDashboardCache(currentJobId);
   if (dashboardJobData) {
     // ダッシュボードキャッシュから即座に表示（getJob RPC不要）
     handleAssignmentData({ ok: true, data: dashboardJobData }, currentJobId);
@@ -734,7 +766,7 @@ function loadAssignmentModalData(jobId, hasCache = false) {
         handleAssignmentData(response, currentJobId);
       })
       .withFailureHandler(handleAssignmentModalError)
-      .getJob(jobId);
+      .getJob(currentJobId);
   }
 
   // スタッフは「全件キャッシュ」を利用（未取得時のみサーバー取得）
@@ -1721,6 +1753,12 @@ function checkAllConflictsBeforeSave(selectedIds) {
  * 実際の保存処理
  */
 function doSaveAllChanges() {
+  const currentJobId = normalizeAssignmentJobId(assignmentModalState.jobId);
+  if (!currentJobId) {
+    showToast('案件IDが不正のため、配置を保存できません。', 'error');
+    return;
+  }
+
   // UIフィードバックを即時化（payload構築前にボタンを無効化）
   assignmentModalState.isSaving = true;
   updateSaveButton();
@@ -1832,7 +1870,7 @@ function doSaveAllChanges() {
       showToast('エラー: ' + error.message, 'error');
       updateSaveButton();
     })
-    .saveAssignments(assignmentModalState.jobId, changes, assignmentModalState.jobUpdatedAt);
+    .saveAssignments(currentJobId, changes, assignmentModalState.jobUpdatedAt);
 }
 
 // Legacy function name for compatibility

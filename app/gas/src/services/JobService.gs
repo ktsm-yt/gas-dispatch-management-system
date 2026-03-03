@@ -11,7 +11,12 @@ const JobService = {
    * @returns {Object|null} { job, assignments[], slots[], slotStatus } または null
    */
   get: function(jobId) {
-    const job = JobRepository.findById(jobId);
+    const normalizedJobId = this._normalizeJobId(jobId);
+    if (!normalizedJobId) {
+      return null;
+    }
+
+    const job = JobRepository.findById(normalizedJobId);
 
     if (!job) {
       return null;
@@ -26,17 +31,17 @@ const JobService = {
     };
 
     // 配置情報取得
-    const assignmentsData = AssignmentService.getAssignmentsByJobId(jobId);
+    const assignmentsData = AssignmentService.getAssignmentsByJobId(normalizedJobId);
     const assignments = assignmentsData.assignments || [];
 
     // 枠情報取得
-    const slotsData = SlotService.getSlotsByJobId(jobId);
+    const slotsData = SlotService.getSlotsByJobId(normalizedJobId);
     const slots = slotsData.slots || [];
 
     // 枠充足状況を取得（枠がある場合のみ）
     let slotStatus = null;
     if (slots.length > 0) {
-      slotStatus = SlotService.getSlotStatus(jobId);
+      slotStatus = SlotService.getSlotStatus(normalizedJobId);
     }
 
     return {
@@ -53,7 +58,12 @@ const JobService = {
    * @returns {Object|null} { job, slots[] } または null
    */
   getForEdit: function(jobId) {
-    const job = JobRepository.findById(jobId);
+    const normalizedJobId = this._normalizeJobId(jobId);
+    if (!normalizedJobId) {
+      return null;
+    }
+
+    const job = JobRepository.findById(normalizedJobId);
 
     if (!job) {
       return null;
@@ -65,13 +75,27 @@ const JobService = {
       customer_name: customerMap[job.customer_id] || ''
     };
 
-    const slotsData = SlotService.getSlotsByJobId(jobId);
+    const slotsData = SlotService.getSlotsByJobId(normalizedJobId);
     const slots = slotsData.slots || [];
 
     return {
       job: jobWithCustomer,
       slots: slots
     };
+  },
+
+  /**
+   * 案件IDを正規化（空白・null文字列を除外）
+   * @param {any} jobId
+   * @returns {string|null}
+   */
+  _normalizeJobId: function(jobId) {
+    if (jobId === null || jobId === undefined) return null;
+    const normalized = String(jobId).trim();
+    if (!normalized) return null;
+    const lowered = normalized.toLowerCase();
+    if (lowered === 'null' || lowered === 'undefined') return null;
+    return normalized;
   },
 
   /**
@@ -143,9 +167,23 @@ const JobService = {
     }
 
     const jobs = JobRepository.findByDate(date);
+    const validJobs = [];
+    let skippedInvalidJobIdCount = 0;
+    for (const job of jobs) {
+      const normalizedJobId = this._normalizeJobId(job.job_id);
+      if (!normalizedJobId) {
+        skippedInvalidJobIdCount++;
+        continue;
+      }
+      validJobs.push({
+        ...job,
+        job_id: normalizedJobId
+      });
+    }
+    Logger.log('[DASHBOARD] date=' + date + ' skipped_invalid_job_id=' + skippedInvalidJobIdCount);
 
     // 案件IDを抽出（後続処理で再利用）
-    const jobIds = jobs.map(j => j.job_id);
+    const jobIds = validJobs.map(j => j.job_id);
 
     // 顧客マスターを取得してマップ作成
     const { customerMap, companyNameMap } = this._getCustomerMaps();
@@ -173,7 +211,7 @@ const JobService = {
     const slotsByJob = SlotRepository.findByJobIds(jobIds);
 
     // 顧客名と配置情報をJOIN
-    const jobsWithCustomer = jobs.map(job => {
+    const jobsWithCustomer = validJobs.map(job => {
       const jobAssignments = assignmentsByJob[job.job_id] || [];
 
       // ダッシュボード用の軽量配置データ
