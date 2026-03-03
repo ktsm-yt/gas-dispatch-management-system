@@ -399,35 +399,51 @@ function getStaffById(staffId) {
 // ========== Work Detail Labels ==========
 /**
  * 作業詳細のラベルマップ（job.work_detail → 表示ラベル）
+ * 初期値はフォールバック用。loadWorkDetailLabels() でAPIから動的更新される。
  */
-const WORK_DETAIL_LABELS = {
-  // 資材系
-  'sekkou': 'ボード',
-  'tategu': '建具',
-  'kitchen': 'キッチン',
-  'unit_bath': 'ユニットバス',
-  'flooring': 'フローリング',
-  'habaki': '幅木',
-  'cross': 'クロス',
-  'prefab': 'プレハブ材',
-  'scaffold': '足場材',
-  'material': '資材一般',
-  'sk': 'SK',
-  'toilet': 'トイレ',
-  'furniture': '家具',
-  'appliance': '家電',
-  // 上棟系
-  'tobi': '鳶',
-  'tobi_hojo': '鳶補助',
-  'niage': '荷揚げ',
-  'tobiage': '鳶揚げ',
-  // 作業系
-  'hansyutsu': '搬出',
-  'temoto': '手元',
-  'kaitai': '解体',
-  'seisou': '清掃',
-  'other': 'その他'
+var WORK_DETAIL_LABELS = {
+  'sekkou': 'ボード', 'tategu': '建具', 'kitchen': 'キッチン', 'unit_bath': 'ユニットバス',
+  'flooring': 'フローリング', 'habaki': '幅木', 'cross': 'クロス', 'prefab': 'プレハブ材',
+  'scaffold': '足場材', 'material': '資材一般', 'sk': 'SK', 'toilet': 'トイレ',
+  'furniture': '家具', 'appliance': '家電', 'tobi': '鳶', 'tobi_hojo': '鳶補助',
+  'niage': '荷揚げ', 'tobiage': '鳶揚げ', 'hansyutsu': '搬出', 'temoto': '手元',
+  'kaitai': '解体', 'seisou': '清掃', 'other': 'その他'
 };
+
+/**
+ * 作業詳細ラベルをAPIから動的にロード
+ * PageCacheキーを job_modal_js.html と共有
+ */
+function loadWorkDetailLabels() {
+  // PageCacheから試行
+  var cached = typeof PageCache !== 'undefined' && PageCache.get('work_detail_options');
+  if (cached && cached.data) {
+    _applyWorkDetailLabels(cached.data);
+    if (PageCache.isValid(cached, PageCache.MASTER_TTL)) return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(result) {
+      if (result && result.ok && result.data && result.data.items) {
+        _applyWorkDetailLabels(result.data.items);
+        if (typeof PageCache !== 'undefined') {
+          PageCache.set('work_detail_options', result.data.items);
+        }
+      }
+    })
+    .withFailureHandler(function() { /* フォールバック静的マップを使用 */ })
+    .getWorkDetailOptions();
+}
+
+function _applyWorkDetailLabels(items) {
+  var newLabels = {};
+  for (var i = 0; i < items.length; i++) {
+    if (!items[i].is_deleted && items[i].value && items[i].label) {
+      newLabels[items[i].value] = items[i].label;
+    }
+  }
+  WORK_DETAIL_LABELS = newLabels;
+}
 
 const SKILL_BADGE_CLASS_MAP = {
   '鳶': 'skill-tobi',
@@ -2376,8 +2392,12 @@ function setupAssignmentModalEventListeners() {
 
 // Auto-setup when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupAssignmentModalEventListeners);
+  document.addEventListener('DOMContentLoaded', function() {
+    setupAssignmentModalEventListeners();
+    loadWorkDetailLabels();
+  });
 } else {
   setupAssignmentModalEventListeners();
+  loadWorkDetailLabels();
 }
 </script>

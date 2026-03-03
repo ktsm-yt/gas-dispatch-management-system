@@ -211,6 +211,15 @@ const TABLE_DEFINITIONS = {
       // メタデータ
       'is_final', 'created_at', 'updated_at'
     ]
+  },
+  M_WorkDetails: {
+    sheetName: 'WorkDetails',
+    headers: [
+      'work_detail_id', 'value', 'label', 'sort_order',
+      'is_active', 'is_protected',
+      'created_at', 'created_by', 'updated_at', 'updated_by',
+      'is_deleted', 'deleted_at', 'deleted_by'
+    ]
   }
 };
 

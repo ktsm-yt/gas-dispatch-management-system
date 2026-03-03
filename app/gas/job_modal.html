@@ -140,40 +140,34 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="work-detail">作業詳細</label>
+            <label for="work-detail">作業詳細
+              <button type="button" onclick="toggleWorkDetailEditPanel()" title="作業詳細の項目を管理"
+                      style="background:none; border:none; cursor:pointer; font-size:14px; padding:0 2px; vertical-align:middle;">✏️</button>
+            </label>
             <select id="work-detail" name="work_detail" onchange="toggleWorkDetailOtherText(this.value)">
               <option value="">選択してください</option>
-              <!-- 資材系 -->
-              <option value="sekkou">ボード</option>
-              <option value="tategu">建具</option>
-              <option value="kitchen">キッチン</option>
-              <option value="unit_bath">ユニットバス</option>
-              <option value="flooring">フローリング</option>
-              <option value="habaki">幅木</option>
-              <option value="cross">クロス</option>
-              <option value="prefab">プレハブ材</option>
-              <option value="scaffold">足場材</option>
-              <option value="material">資材一般</option>
-              <option value="sk">SK</option>
-              <option value="toilet">トイレ</option>
-              <option value="furniture">家具</option>
-              <option value="appliance">家電</option>
-              <!-- 上棟系 -->
-              <option value="tobi">鳶</option>
-              <option value="tobi_hojo">鳶補助</option>
-              <option value="niage">荷揚げ</option>
-              <option value="tobiage">鳶揚げ</option>
-              <!-- 作業系 -->
-              <option value="hansyutsu">搬出</option>
-              <option value="temoto">手元</option>
-              <option value="kaitai">解体</option>
-              <option value="seisou">清掃</option>
-              <option value="other">その他</option>
+              <!-- 動的にロードされる -->
             </select>
             <input type="text" id="work-detail-other-text" name="work_detail_other_text"
                    placeholder="具体的な作業内容を入力"
                    maxlength="100"
                    style="display:none; margin-top:6px;">
+
+            <!-- インライン編集パネル -->
+            <div id="work-detail-edit-panel" style="display:none; margin-top:8px; border:1px solid #ddd; border-radius:6px; padding:10px; background:#f9f9f9;">
+              <div style="font-weight:600; margin-bottom:8px; font-size:13px;">作業詳細の管理</div>
+              <div id="work-detail-edit-list" style="max-height:250px; overflow-y:auto; margin-bottom:8px;"></div>
+              <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
+                <input type="text" id="wd-new-value" placeholder="キー (英数字)" style="width:100px; font-size:12px; padding:4px 6px;"
+                       pattern="[a-z0-9_]+" title="半角英数字とアンダースコアのみ">
+                <input type="text" id="wd-new-label" placeholder="表示名" style="flex:1; font-size:12px; padding:4px 6px;">
+                <button type="button" id="wd-add-btn" class="btn btn-primary" onclick="addWorkDetailOption()" style="white-space:nowrap; padding:4px 10px; font-size:12px; min-width:60px;">追加</button>
+              </div>
+              <div style="display:flex; gap:6px; justify-content:flex-end;">
+                <button type="button" id="wd-save-order-btn" class="btn btn-primary" onclick="saveWorkDetailOrder()" style="padding:4px 10px; font-size:12px; min-width:60px; display:none;">順番を保存</button>
+                <button type="button" class="btn" onclick="toggleWorkDetailEditPanel()" style="padding:4px 10px; font-size:12px; min-width:60px;">閉じる</button>
+              </div>
+            </div>
           </div>
         </div>
 

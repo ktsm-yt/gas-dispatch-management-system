@@ -29,7 +29,8 @@ const SHEET_NAMES = {
   STAFF: TABLE_SHEET_MAP['M_Staff'],
   SUBCONTRACTORS: TABLE_SHEET_MAP['M_Subcontractors'],
   TRANSPORT_FEE: TABLE_SHEET_MAP['M_TransportFee'],
-  COMPANY: TABLE_SHEET_MAP['M_Company']
+  COMPANY: TABLE_SHEET_MAP['M_Company'],
+  WORK_DETAILS: TABLE_SHEET_MAP['M_WorkDetails']
 };
 
 // ID列名定義
@@ -38,7 +39,8 @@ const ID_COLUMNS = {
   STAFF: 'staff_id',
   SUBCONTRACTORS: 'subcontractor_id',
   TRANSPORT_FEE: 'area_code',
-  COMPANY: 'company_id'
+  COMPANY: 'company_id',
+  WORK_DETAILS: 'work_detail_id'
 };
 
 // ========================================
@@ -961,6 +963,170 @@ function getCompany() {
 
   } catch (error) {
     Logger.log(`getCompany error: ${error.message}`);
+    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
+  }
+}
+
+// ========================================
+// M_WorkDetails (作業詳細)
+// ========================================
+
+/**
+ * 作業詳細バリデーション
+ */
+function validateWorkDetail(data) {
+  if (!data.value || String(data.value).trim() === '') {
+    return { valid: false, message: 'キー（value）は必須です', details: { field: 'value' } };
+  }
+  if (!/^[a-z0-9_]+$/.test(data.value)) {
+    return { valid: false, message: 'キーは半角英数字とアンダースコアのみ使用できます', details: { field: 'value' } };
+  }
+  if (!data.label || String(data.label).trim() === '') {
+    return { valid: false, message: '表示名は必須です', details: { field: 'label' } };
+  }
+
+  // 重複チェック（value はユニーク）
+  var existing = listWorkDetails();
+  if (existing.ok) {
+    var duplicate = existing.data.items.find(function(item) {
+      return item.value === data.value && item.work_detail_id !== data.work_detail_id && !item.is_deleted;
+    });
+    if (duplicate) {
+      return { valid: false, message: '同じキー「' + data.value + '」が既に存在します', details: { field: 'value' } };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
+ * 作業詳細を保存（新規/更新）
+ * @param {Object} workDetail - 作業詳細データ { value, label, sort_order }
+ * @param {string} expectedUpdatedAt - 楽観ロック用
+ */
+function saveWorkDetail(workDetail, expectedUpdatedAt) {
+  requireManager();
+
+  // 更新時: value（キー）の変更を禁止
+  if (workDetail.work_detail_id) {
+    var current = getMasterRecord(SHEET_NAMES.WORK_DETAILS, ID_COLUMNS.WORK_DETAILS, workDetail.work_detail_id);
+    if (current.ok && current.data && current.data.value !== workDetail.value) {
+      return errorResponse('VALIDATION_ERROR', 'キー（value）は変更できません', { field: 'value' }, generateRequestId());
+    }
+  }
+
+  var result = saveMasterRecord(
+    SHEET_NAMES.WORK_DETAILS,
+    ID_COLUMNS.WORK_DETAILS,
+    'M_WorkDetails',
+    workDetail,
+    expectedUpdatedAt,
+    validateWorkDetail
+  );
+  if (result.ok) {
+    MasterCache.invalidateWorkDetails();
+  }
+  return result;
+}
+
+/**
+ * 作業詳細を削除（論理削除）
+ * is_protected=true のレコードは削除不可
+ * @param {string} id - work_detail_id
+ * @param {string} expectedUpdatedAt - 楽観ロック用
+ */
+function deleteWorkDetail(id, expectedUpdatedAt) {
+  requireManager();
+
+  // is_protected チェック
+  var current = getMasterRecord(SHEET_NAMES.WORK_DETAILS, ID_COLUMNS.WORK_DETAILS, id);
+  if (current.ok && current.data && current.data.is_protected) {
+    return errorResponse('VALIDATION_ERROR', 'この項目は削除できません（保護されています）', { id: id }, generateRequestId());
+  }
+
+  var result = deleteMasterRecord(
+    SHEET_NAMES.WORK_DETAILS,
+    ID_COLUMNS.WORK_DETAILS,
+    'M_WorkDetails',
+    id,
+    expectedUpdatedAt
+  );
+  if (result.ok) {
+    MasterCache.invalidateWorkDetails();
+  }
+  return result;
+}
+
+/**
+ * 作業詳細一覧を取得（sort_order昇順）
+ * @param {Object} options - オプション
+ */
+function listWorkDetails(options) {
+  var result = listMasterRecords(SHEET_NAMES.WORK_DETAILS, options || {});
+  if (result.ok && result.data && result.data.items) {
+    result.data.items.sort(function(a, b) {
+      return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
+    });
+  }
+  return result;
+}
+
+/**
+ * 作業詳細の並び順を一括更新
+ * @param {string[]} orderedIds - 並び順通りのwork_detail_id配列
+ * @param {Object} expectedUpdatedAts - { work_detail_id: updatedAt } の楽観ロック用マップ
+ */
+function reorderWorkDetails(orderedIds, expectedUpdatedAts) {
+  requireManager();
+  var requestId = generateRequestId();
+
+  try {
+    var lock = acquireLock();
+    if (!lock) {
+      return errorResponse('BUSY_ERROR', '処理が混み合っています。', {}, requestId);
+    }
+
+    try {
+      var sheet = getSheetDirect(SHEET_NAMES.WORK_DETAILS);
+      var rows = getAllRows(sheet, { includeDeleted: false });
+      var now = getCurrentTimestamp();
+      var user = getCurrentUserEmail();
+
+      // IDで行を引けるmapを作成
+      var rowMap = {};
+      for (var i = 0; i < rows.length; i++) {
+        rowMap[rows[i].work_detail_id] = rows[i];
+      }
+
+      for (var idx = 0; idx < orderedIds.length; idx++) {
+        var id = orderedIds[idx];
+        var row = rowMap[id];
+        if (!row) continue;
+
+        // is_protected は sort_order=9999 固定
+        if (row.is_protected) continue;
+
+        // 楽観ロック
+        var expected = expectedUpdatedAts && expectedUpdatedAts[id];
+        if (expected && !checkOptimisticLock(row, expected)) {
+          return errorResponse('CONFLICT_ERROR', '他のユーザーによって更新されています。', { id: id }, requestId);
+        }
+
+        var newOrder = (idx + 1) * 10;
+        if (Number(row.sort_order) !== newOrder) {
+          updateRow(sheet, row._rowIndex, { sort_order: newOrder, updated_at: now, updated_by: user });
+        }
+      }
+
+      MasterCache.invalidateWorkDetails();
+      invalidateExecutionCache('M_WorkDetails');
+      return successResponse({ reordered: true }, requestId);
+
+    } finally {
+      lock.releaseLock();
+    }
+  } catch (error) {
+    Logger.log('reorderWorkDetails error: ' + error.message);
     return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
   }
 }
