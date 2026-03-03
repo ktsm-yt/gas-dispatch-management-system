@@ -372,6 +372,19 @@
       flex-shrink: 0;
     }
 
+    .work-detail-address-line {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .tag-work-detail {
+      background: #90A4AE;
+      flex-shrink: 0;
+    }
+
     .site-address-line {
       font-size: 9px;
       color: var(--text-muted);
@@ -379,6 +392,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       opacity: 0.8;
+      min-width: 0;
     }
 
     .staff-list {
@@ -450,7 +464,7 @@
       border-radius: var(--radius-md);
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       display: none;
-      z-index: 9999;
+      z-index: 10003;
     }
 
     .toast.show { display: block; }
@@ -1125,6 +1139,7 @@
             ? PAY_UNIT_TAG[uniqueUnits[0]]
             : { label: '複数', cls: 'tag-pay-basic' };
         }
+        const workDetailLabel = getWorkDetailLabel(job.work_detail, job.work_detail_other_text);
         const staffChips = (job.assignments || [])
           .filter(a => a.status !== 'CANCELLED')
           .map(a => a.staff_nickname || (a.staff_name || '').slice(0, 4))
@@ -1147,11 +1162,14 @@
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
               </svg>
             </button>
+            ${(workDetailLabel || safeSiteAddress) ? `<div class="work-detail-address-line">
+              ${workDetailLabel ? `<span class="tag tag-work-detail">${escapeHtml(workDetailLabel)}</span>` : ''}
+              ${safeSiteAddress ? `<span class="site-address-line">${escapeHtml(safeSiteAddress)}</span>` : ''}
+            </div>` : ''}
             <div class="job-card-footer">
               <span class="site-name">${safeSiteName}</span>
               <span class="start-time">${safeStartTime}</span>
             </div>
-            ${safeSiteAddress ? `<div class="site-address-line">${escapeHtml(safeSiteAddress)}</div>` : ''}
             ${staffChips ? `<div class="staff-names">${staffChips}</div>` : ''}
           </div>
         `;
