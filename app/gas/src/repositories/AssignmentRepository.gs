@@ -146,6 +146,7 @@ const AssignmentRepository = {
       safety_training_date: assignment.safety_training_date || '',
       status: assignment.status || 'ASSIGNED',
       notes: assignment.notes || '',
+      slot_id: assignment.slot_id ?? '',
       created_at: now,
       created_by: user,
       updated_at: now,
@@ -196,7 +197,7 @@ const AssignmentRepository = {
       'site_role', 'assignment_role', 'is_leader',
       'entry_date', 'safety_training_date',
       'status', 'payout_id',  // P2-3: 二重計上防止用
-      'notes'
+      'notes', 'slot_id'
     ];
 
     const updatedAssignment = { ...currentAssignment };
@@ -307,7 +308,7 @@ const AssignmentRepository = {
       'site_role', 'assignment_role', 'is_leader',
       'entry_date', 'safety_training_date',
       'status', 'payout_id',
-      'notes'
+      'notes', 'slot_id'
     ];
     const fieldIndexMap = {};
     for (const field of updatableFields) {
@@ -518,6 +519,7 @@ const AssignmentRepository = {
       safety_training_date: assignment.safety_training_date || '',
       status: assignment.status || 'ASSIGNED',
       notes: assignment.notes || '',
+      slot_id: assignment.slot_id ?? '',
       created_at: now,
       created_by: user,
       updated_at: now,
