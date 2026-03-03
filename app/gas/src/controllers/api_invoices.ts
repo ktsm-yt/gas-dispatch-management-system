@@ -91,6 +91,15 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
       return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
     }
 
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      if (year && month) {
+        StatsService.updateMonthlyStats(year, month);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`generateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+    }
+
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -125,6 +134,15 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
 
     // Service呼び出し
     const result = InvoiceService.bulkGenerate(year, month, options || {});
+
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      if (year && month) {
+        StatsService.updateMonthlyStats(year, month);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`bulkGenerateInvoices: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+    }
 
     return buildSuccessResponse(result, requestId);
 
@@ -267,17 +285,6 @@ function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expecte
         ? ERROR_CODES.CONFLICT_ERROR
         : ERROR_CODES.VALIDATION_ERROR;
       return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
-    }
-
-    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
-    try {
-      const year = Number(invoice.billing_year);
-      const month = Number(invoice.billing_month);
-      if (year && month) {
-        StatsService.updateMonthlyStats(year, month);
-      }
-    } catch (statsError: unknown) {
-      Logger.log(`saveInvoice: T_MonthlyStats auto-update failed (non-critical): ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
     }
 
     return buildSuccessResponse(result, requestId);
@@ -548,6 +555,11 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
     }
 
+    // 削除前に年月を取得（削除後は取得できない）
+    const invoiceForStats = InvoiceRepository.findById(invoiceId);
+    const statsYear = invoiceForStats ? Number(invoiceForStats.billing_year) : 0;
+    const statsMonth = invoiceForStats ? Number(invoiceForStats.billing_month) : 0;
+
     // Service呼び出し
     const result = InvoiceService.delete(invoiceId, expectedUpdatedAt);
 
@@ -558,6 +570,15 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
         ? ERROR_CODES.VALIDATION_ERROR
         : ERROR_CODES.SYSTEM_ERROR;
       return buildErrorResponse(errorCode, result.error || 'エラーが発生しました', {}, requestId);
+    }
+
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      if (statsYear && statsMonth) {
+        StatsService.updateMonthlyStats(statsYear, statsMonth);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`deleteInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
     }
 
     return buildSuccessResponse({ deleted: true }, requestId);
@@ -616,6 +637,17 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
       };
       const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
       return buildErrorResponse(errorCode, message, {}, requestId);
+    }
+
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      const rYear = Number(result.invoice?.billing_year);
+      const rMonth = Number(result.invoice?.billing_month);
+      if (rYear && rMonth) {
+        StatsService.updateMonthlyStats(rYear, rMonth);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`regenerateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
     }
 
     return buildSuccessResponse(result, requestId);
@@ -1125,6 +1157,18 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
         partialUpdate: !!result.partialUpdate,
         errors: result.errors || []
       }, requestId);
+    }
+
+    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+    try {
+      const updatedInvoice = InvoiceRepository.findById(invoiceId);
+      const uYear = updatedInvoice ? Number(updatedInvoice.billing_year) : 0;
+      const uMonth = updatedInvoice ? Number(updatedInvoice.billing_month) : 0;
+      if (uYear && uMonth) {
+        StatsService.updateMonthlyStats(uYear, uMonth);
+      }
+    } catch (statsError: unknown) {
+      Logger.log(`updateInvoiceDetails: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
     }
 
     return buildSuccessResponse(result, requestId);
