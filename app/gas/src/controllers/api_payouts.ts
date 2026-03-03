@@ -187,7 +187,7 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
         // calculateWage_で正確な賃金を計算（マスタ解決含む）
         const calculatedWage = calculateWage_(a as any, staffData as any, payUnit);
 
-        // 人工割反映後の単価を計算
+        // 人工割反映後の単価を計算（フロントのオレンジ表示用）
         const requiredCount = Number((job as Record<string, unknown>).required_count) || 0;
         const actualCount = assignmentCountByJob.get(a.job_id as string) || 0;
         const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
@@ -201,10 +201,24 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
           site_name: ((job as Record<string, unknown>).site_name as string) || '(現場名なし)',
           pay_unit: a.pay_unit,
           invoice_unit: a.invoice_unit,
-          wage_rate: a.wage_rate,
+          wage_rate: calculatedWage,
           calculated_wage: adjustedWage
         };
       });
+
+      // 未確認（pending）の場合のみ配置から再計算（配置変更後の整合性を保つ）
+      // 確認済み（confirmed）の場合は確定時のスナップショットを維持
+      if (payout.status !== 'confirmed') {
+        const assignments = result.assignments as Array<Record<string, unknown>>;
+        const recalculatedBase = assignments
+          .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.wage_rate as number) || 0); }, 0);
+        const recalculatedAdjusted = assignments
+          .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.calculated_wage as number) || 0); }, 0);
+        const recalculatedNinku = recalculatedAdjusted - recalculatedBase; // マイナス値 or 0
+        result.baseAmount = recalculatedBase;
+        result.ninkuAdjustmentAmount = recalculatedNinku;
+        result.totalAmount = recalculatedBase + ((result.transportAmount as number) || 0) + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;
+      }
     }
 
     return buildSuccessResponse(result, requestId);
