@@ -267,8 +267,14 @@ const JobRepository = {
 
     if (timeValue instanceof Date) {
       if (isNaN(timeValue.getTime())) return '';
-      const jst = new Date(timeValue.getTime() + 9 * 3600000);
-      return String(jst.getUTCHours()).padStart(2, '0') + ':' + String(jst.getUTCMinutes()).padStart(2, '0');
+      // GASはスプレッドシートの時刻セルをExcelエポック(1899-12-30)基準のDateで返す
+      // getUTCHours()は0-23しか返せないため、24時以降(24:30, 25:00等)が失われる
+      // エポックからの経過分で計算することで24時以降も正しく復元できる
+      const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30); // 1899-12-30 UTC
+      const totalMinutes = Math.round((timeValue.getTime() - EXCEL_EPOCH_MS) / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
     }
 
     if (typeof timeValue === 'number') {
