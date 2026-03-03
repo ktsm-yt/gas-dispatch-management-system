@@ -496,7 +496,7 @@ function setDefaultInvoiceUnit(job, slots) {
   if (slots && slots.length > 0) return;
   const el = document.getElementById('form-invoice-unit');
   if (!el || !job) return;
-  el.value = job.pay_unit || 'basic';
+  el.value = job.pay_unit || 'halfday';
 }
 
 function resetAssignmentModalUI() {
@@ -555,8 +555,8 @@ function resetAssignmentModalUI() {
   document.getElementById('staff-type-filter').value = '';
 
   // 配置フォーム
-  // デフォルトはbasic（job読み込み後にsetDefaultInvoiceUnitで再設定される）
-  document.getElementById('form-invoice-unit').value = 'basic';
+  // デフォルトはhalfday（job読み込み後にsetDefaultInvoiceUnitで再設定される）
+  document.getElementById('form-invoice-unit').value = 'halfday';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
   document.getElementById('form-transport-station').value = '';
@@ -1462,16 +1462,20 @@ function renderStaffRowHtml(staff, ctx) {
   const roleLabel = isAssigned ? (assignment.assignment_role || '') : '';
   const leaderBadge = isAssigned && assignment.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
 
-  // スロットバッジ
+  // 支払区分バッジ（スロットあり→slot_pay_unit、なし→invoice_unit/pay_unit）
   let slotBadge = '';
-  if (isAssigned && assignment.slot_id && slotMap) {
-    const slot = slotMap[assignment.slot_id];
-    if (slot) {
-      const tl = (timeSlotLabels || {})[slot.slot_time_slot] || slot.slot_time_slot;
-      const pl = (payUnitLabels || {})[slot.slot_pay_unit] || slot.slot_pay_unit;
-      slotBadge = `<span class="slot-badge">${escapeHtml(tl)} / ${escapeHtml(pl)}</span>`;
-    } else {
-      slotBadge = '<span class="slot-badge slot-badge-unknown">不明な枠</span>';
+  if (isAssigned) {
+    let payUnitVal = '';
+    if (assignment.slot_id && slotMap) {
+      const slot = slotMap[assignment.slot_id];
+      payUnitVal = slot ? slot.slot_pay_unit : '';
+    }
+    if (!payUnitVal) {
+      payUnitVal = assignment.invoice_unit || assignment.pay_unit || '';
+    }
+    if (payUnitVal) {
+      const pl = (payUnitLabels || {})[payUnitVal] || payUnitVal;
+      slotBadge = `<span class="slot-badge">${escapeHtml(pl)}</span>`;
     }
   }
 
