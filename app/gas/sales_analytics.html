@@ -43,6 +43,7 @@
     }
 
     <?!= include('nav_styles'); ?>
+    <?!= include('confirmation_modal_styles'); ?>
 
     /* Toolbar */
     .toolbar {
@@ -569,7 +570,10 @@
     </div>
   </div>
 
+  <?!= include('confirmation_modal'); ?>
+
   <script>
+    <?!= include('confirmation_modal_js'); ?>
     let monthlyChart = null;
     let currentData = null;
 
@@ -993,21 +997,39 @@
       var year = now.getFullYear();
       var month = now.getMonth() + 1;
 
-      if (!confirm(year + '年' + month + '月の統計を再計算しますか？')) {
-        return;
-      }
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          if (result.ok) {
-            alert('統計を再計算しました');
-            loadData();
-          } else {
-            alert('エラー: ' + (result.error?.message || '再計算に失敗しました'));
-          }
-        })
-        .withFailureHandler(handleError)
-        .recalculateMonthlyStats(year, month);
+      ConfirmationModal.show({
+        type: 'warning',
+        title: '当月再計算',
+        message: year + '年' + month + '月の統計を再計算しますか？',
+        confirmText: '再計算',
+        cancelText: 'キャンセル',
+        onConfirm: function() {
+          google.script.run
+            .withSuccessHandler(function(result) {
+              if (result.ok) {
+                ConfirmationModal.show({
+                  type: 'info',
+                  title: '完了',
+                  message: '統計を再計算しました',
+                  confirmText: 'OK',
+                  cancelText: '閉じる',
+                  onConfirm: function() { loadData(); },
+                  onCancel: function() { loadData(); }
+                });
+              } else {
+                ConfirmationModal.show({
+                  type: 'danger',
+                  title: 'エラー',
+                  message: result.error?.message || '再計算に失敗しました',
+                  confirmText: 'OK',
+                  cancelText: '閉じる'
+                });
+              }
+            })
+            .withFailureHandler(handleError)
+            .recalculateMonthlyStats(year, month);
+        }
+      });
     }
 
     function showLoading() {
@@ -1073,11 +1095,11 @@
       var startDate = document.getElementById('daily-start-date').value;
       var endDate = document.getElementById('daily-end-date').value;
       if (!startDate || !endDate) {
-        alert('開始日と終了日を指定してください');
+        ConfirmationModal.show({ type: 'warning', title: '入力エラー', message: '開始日と終了日を指定してください', confirmText: 'OK', cancelText: '閉じる' });
         return;
       }
       if (startDate > endDate) {
-        alert('開始日は終了日以前にしてください');
+        ConfirmationModal.show({ type: 'warning', title: '入力エラー', message: '開始日は終了日以前にしてください', confirmText: 'OK', cancelText: '閉じる' });
         return;
       }
 
