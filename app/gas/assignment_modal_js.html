@@ -1444,7 +1444,7 @@ function filterStaffList(resetScroll = false) {
 }
 
 function renderStaffRowHtml(staff, ctx) {
-  const { workCategory, selectedStaffSet, assignmentMap, typeLabels } = ctx;
+  const { workCategory, selectedStaffSet, assignmentMap, typeLabels, slotMap, timeSlotLabels, payUnitLabels } = ctx;
   const s = staff;
   const typeLabel = typeLabels[s.staff_type] || s.staff_type;
   const typeClass = s.staff_type || 'employee';
@@ -1461,6 +1461,19 @@ function renderStaffRowHtml(staff, ctx) {
   // 配置済みスタッフの追加情報
   const roleLabel = isAssigned ? (assignment.assignment_role || '') : '';
   const leaderBadge = isAssigned && assignment.is_leader ? '<span class="leader-badge">リーダー</span>' : '';
+
+  // スロットバッジ
+  let slotBadge = '';
+  if (isAssigned && assignment.slot_id && slotMap) {
+    const slot = slotMap[assignment.slot_id];
+    if (slot) {
+      const tl = (timeSlotLabels || {})[slot.slot_time_slot] || slot.slot_time_slot;
+      const pl = (payUnitLabels || {})[slot.slot_pay_unit] || slot.slot_pay_unit;
+      slotBadge = `<span class="slot-badge">${escapeHtml(tl)} / ${escapeHtml(pl)}</span>`;
+    } else {
+      slotBadge = '<span class="slot-badge slot-badge-unknown">不明な枠</span>';
+    }
+  }
 
   // 競合警告バッジ
   const conflictBadge = hasConflict
@@ -1506,6 +1519,7 @@ function renderStaffRowHtml(staff, ctx) {
       <input type="checkbox" class="staff-checkbox" ${checkboxChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleStaffSelection('${s.staff_id}')">
       <div class="staff-list-info">
         <span class="staff-list-name">${s.nickname ? escapeHtml(s.nickname) + ' (' + escapeHtml(s.name) + ')' : escapeHtml(s.name)}${leaderBadge}${conflictBadge}</span>
+        ${slotBadge}
         <span class="staff-type-badge ${typeClass}">${typeLabel}</span>
         ${roleLabel ? `<span class="role-label">${escapeHtml(roleLabel)}</span>` : ''}
         ${skillBadges}
@@ -1546,7 +1560,12 @@ function renderStaffList() {
     'subcontract': '外注'
   };
 
-  const ctx = { workCategory, selectedStaffSet, assignmentMap, typeLabels };
+  const slots = assignmentModalState.slots || [];
+  const slotMap = slots.reduce((m, s) => { m[s.slot_id] = s; return m; }, {});
+  const timeSlotLabels = { jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤', mitei: '未定' };
+  const payUnitLabels = { basic: '基本', halfday: 'ハーフ', fullday: '終日', night: '夜勤', tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ' };
+
+  const ctx = { workCategory, selectedStaffSet, assignmentMap, typeLabels, slotMap, timeSlotLabels, payUnitLabels };
   const rowsHtml = staff
     .map(s => renderStaffRowHtml(s, ctx))
     .join('');
