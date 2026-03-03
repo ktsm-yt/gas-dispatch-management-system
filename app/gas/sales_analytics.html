@@ -472,7 +472,7 @@
     </div>
 
     <div class="toolbar-actions">
-      <button class="btn btn-secondary" onclick="recalculateCurrentMonth()">
+      <button class="btn btn-secondary" onclick="recalculateCurrentMonth()" title="請求書保存時に自動更新されます。ずれが生じた場合に使用">
         当月を再計算
       </button>
       <button class="btn btn-primary" onclick="loadData()">
@@ -1152,15 +1152,9 @@
     function normalizeDailySalesData(raw) {
       if (!raw) return null;
 
-      // Backward compatibility: old cache may store full API response { ok, data, ... }
-      var data = raw;
-      if (!Array.isArray(data.daily) && data.data) {
-        data = data.data;
-      }
-
-      var daily = Array.isArray(data.daily) ? data.daily : [];
-      var byCustomer = Array.isArray(data.byCustomer) ? data.byCustomer : [];
-      var summary = data.summary || {};
+      var daily = Array.isArray(raw.daily) ? raw.daily : [];
+      var byCustomer = Array.isArray(raw.byCustomer) ? raw.byCustomer : [];
+      var summary = raw.summary || {};
 
       return {
         daily: daily,
