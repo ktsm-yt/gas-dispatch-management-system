@@ -1146,7 +1146,7 @@ const PayoutService = {
    * @param lastSyncTimestamp - 前回同期時刻（ISO形式）
    * @returns 差分データ
    */
-  getUnpaidStaffListDelta: function(endDate: string, lastSyncTimestamp: string): { changedStaffIds: string[]; removedStaffIds: string[]; staffList: UnpaidStaffItem[] } {
+  getUnpaidStaffListDelta: function(endDate: string, lastSyncTimestamp: string): { ok?: false; reason?: string } | { changedStaffIds: string[]; removedStaffIds: string[]; staffList: UnpaidStaffItem[] } {
     Logger.log(`[getUnpaidStaffListDelta] endDate=${endDate}, lastSync=${lastSyncTimestamp}`);
 
     // 1. lastSyncTimestamp以降に更新されたAssignmentを取得
@@ -1155,8 +1155,23 @@ const PayoutService = {
       a.updated_at && (a.updated_at as string) > lastSyncTimestamp
     );
 
-    // 2. 変更があったスタッフIDを抽出
+    // 2. 変更があったスタッフIDを抽出（人工割の影響を受ける同現場スタッフも追加）
     const changedStaffIdSet = new Set(changedAssignments.map(a => a.staff_id as string).filter(Boolean));
+
+    // [人工割の波及] 変更スタッフと同じ現場に配置されている他スタッフも再計算対象に追加
+    // 人工割はactualCount（現場の配置人数）に依存するため、配置変更は同現場の全員に影響する
+    if (changedStaffIdSet.size > 0) {
+      const touchedJobIds = new Set<string>(
+        changedAssignments.map(a => a.job_id as string).filter(Boolean)
+      );
+      if (touchedJobIds.size > 0) {
+        for (const a of allAssignments) {
+          if (a.job_id && touchedJobIds.has(a.job_id as string) && a.staff_id) {
+            changedStaffIdSet.add(a.staff_id as string);
+          }
+        }
+      }
+    }
 
     // 3. lastSyncTimestamp以降に作成/更新されたPayoutも確認
     const recentPayouts = PayoutRepository.search({
@@ -1172,7 +1187,13 @@ const PayoutService = {
     const changedStaffIds = Array.from(changedStaffIdSet);
     Logger.log(`[getUnpaidStaffListDelta] ${changedStaffIds.length} staff changed since ${lastSyncTimestamp}`);
 
-    // 4. 変更があったスタッフがいない場合は空の差分を返す
+    // 4a. 変更スタッフが多すぎる場合はクライアント側で全件再取得させる
+    if (changedStaffIds.length > 15) {
+      Logger.log(`[getUnpaidStaffListDelta] Too many changed staff (${changedStaffIds.length}), falling back to full reload`);
+      return { ok: false, reason: 'too-many-changes' };
+    }
+
+    // 4b. 変更があったスタッフがいない場合は空の差分を返す
     if (changedStaffIds.length === 0) {
       return {
         changedStaffIds: [],
