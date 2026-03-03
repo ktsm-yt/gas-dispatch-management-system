@@ -206,16 +206,19 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
         };
       });
 
-      // 配置から全額を再計算（配置変更後の整合性を保つ）
-      const assignments = result.assignments as Array<Record<string, unknown>>;
-      const recalculatedBase = assignments
-        .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.wage_rate as number) || 0); }, 0);
-      const recalculatedAdjusted = assignments
-        .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.calculated_wage as number) || 0); }, 0);
-      const recalculatedNinku = recalculatedAdjusted - recalculatedBase; // マイナス値 or 0
-      result.baseAmount = recalculatedBase;
-      result.ninkuAdjustmentAmount = recalculatedNinku;
-      result.totalAmount = recalculatedBase + ((result.transportAmount as number) || 0) + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;
+      // 未確認（pending）の場合のみ配置から再計算（配置変更後の整合性を保つ）
+      // 確認済み（confirmed）の場合は確定時のスナップショットを維持
+      if (payout.status !== 'confirmed') {
+        const assignments = result.assignments as Array<Record<string, unknown>>;
+        const recalculatedBase = assignments
+          .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.wage_rate as number) || 0); }, 0);
+        const recalculatedAdjusted = assignments
+          .reduce(function(sum: number, a: Record<string, unknown>) { return sum + ((a.calculated_wage as number) || 0); }, 0);
+        const recalculatedNinku = recalculatedAdjusted - recalculatedBase; // マイナス値 or 0
+        result.baseAmount = recalculatedBase;
+        result.ninkuAdjustmentAmount = recalculatedNinku;
+        result.totalAmount = recalculatedBase + ((result.transportAmount as number) || 0) + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;
+      }
     }
 
     return buildSuccessResponse(result, requestId);
