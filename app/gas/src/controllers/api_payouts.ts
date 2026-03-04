@@ -217,7 +217,7 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
         const recalculatedNinku = recalculatedAdjusted - recalculatedBase; // マイナス値 or 0
         result.baseAmount = recalculatedBase;
         result.ninkuAdjustmentAmount = recalculatedNinku;
-        result.totalAmount = recalculatedBase + ((result.transportAmount as number) || 0) + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;
+        result.totalAmount = recalculatedBase + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;  // 交通費除外
       }
     }
 
@@ -607,8 +607,8 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
     if (payout.adjustment_amount !== undefined) {
       const current = PayoutRepository.findById(payout.payout_id);
       if (current) {
-        payout.total_amount = current.base_amount + current.transport_amount +
-          (Number(payout.adjustment_amount) || 0) - (Number(payout.tax_amount) || current.tax_amount || 0);
+        payout.total_amount = current.base_amount +
+          (Number(payout.adjustment_amount) || 0) - (Number(payout.tax_amount) || current.tax_amount || 0);  // 交通費除外
       }
     }
 
