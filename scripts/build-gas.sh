@@ -3,6 +3,46 @@ set -e
 
 GAS_DIR="app/gas"
 DIST_DIR="$GAS_DIR/dist"
+APPSSCRIPT="$GAS_DIR/appsscript.json"
+
+# ── OAuthスコープ検証 ──────────────────────────────
+# リベース等でoauthScopesが消えると、デプロイ後に権限エラーが発生し
+# GASプロジェクトの紐付け削除→再認証が必要になる。ここで事前に防止する。
+REQUIRED_SCOPES=(
+  "https://www.googleapis.com/auth/spreadsheets"
+  "https://www.googleapis.com/auth/drive"
+  "https://www.googleapis.com/auth/script.external_request"
+  "https://www.googleapis.com/auth/script.send_mail"
+  "https://www.googleapis.com/auth/userinfo.email"
+  "https://www.googleapis.com/auth/script.scriptapp"
+)
+
+if [ ! -f "$APPSSCRIPT" ]; then
+  echo "ERROR: $APPSSCRIPT not found" >&2
+  exit 1
+fi
+
+MISSING_SCOPES=()
+for scope in "${REQUIRED_SCOPES[@]}"; do
+  if ! grep -Fq "$scope" "$APPSSCRIPT"; then
+    MISSING_SCOPES+=("$scope")
+  fi
+done
+
+if [ ${#MISSING_SCOPES[@]} -gt 0 ]; then
+  echo "ERROR: appsscript.json is missing required oauthScopes!" >&2
+  echo "This usually happens after a git rebase that reverted the oauthScopes block." >&2
+  echo "" >&2
+  echo "Missing scopes:" >&2
+  for s in "${MISSING_SCOPES[@]}"; do
+    echo "  - $s" >&2
+  done
+  echo "" >&2
+  echo "Fix: restore the oauthScopes array in $APPSSCRIPT" >&2
+  echo "Ref: commit 9a1f941 added these scopes" >&2
+  exit 1
+fi
+# ───────────────────────────────────────────────────
 
 # クリーン
 rm -rf "$DIST_DIR"
