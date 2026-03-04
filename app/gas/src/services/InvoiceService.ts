@@ -1147,10 +1147,10 @@ const InvoiceService = {
       const timeNote = this._formatTimeValue(job.start_time);
 
       lines.push({
-        work_date: isFirstLineForDateSite ? job.work_date : '',
+        work_date: job.work_date || '',
         job_id: job.job_id,
         assignment_id: (group.assignments[0] as Record<string, unknown>).assignment_id,
-        site_name: isFirstLineForDateSite ? (job.site_name || '') : '',
+        site_name: job.site_name || '',
         item_name: itemName,
         time_note: timeNote,
         quantity: quantity,

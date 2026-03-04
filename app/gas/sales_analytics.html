@@ -488,7 +488,7 @@
     <!-- KPI Cards -->
     <div class="kpi-grid" id="kpi-cards">
       <div class="kpi-card">
-        <div class="kpi-card-header">売上（税込）</div>
+        <div class="kpi-card-header">売上</div>
         <div class="kpi-card-value" id="kpi-invoice-total">-</div>
         <div class="kpi-card-sub" id="kpi-invoice-count">案件数: -</div>
       </div>
@@ -542,7 +542,7 @@
             <th>年月</th>
             <th>案件数</th>
             <th>配置数</th>
-            <th>売上（税込）</th>
+            <th>売上</th>
             <th>支払</th>
             <th>交通費</th>
             <th>粗利益</th>
@@ -862,18 +862,20 @@
         cards[i].style.display = isCustomerFilter ? 'none' : '';
       }
 
-      document.getElementById('kpi-invoice-total').textContent = formatCurrency(totals.invoice_total);
+      document.getElementById('kpi-invoice-total').textContent = formatCurrency(totals.work_amount);
       document.getElementById('kpi-invoice-count').textContent = totals.job_count !== null ? '案件数: ' + totals.job_count : '';
 
       if (!isCustomerFilter) {
         document.getElementById('kpi-payout-total').textContent = formatCurrency(totals.payout_total);
         document.getElementById('kpi-assignment-count').textContent = '配置数: ' + totals.assignment_count;
 
+        var grossMargin = totals.work_amount - totals.payout_total;
+        var marginRate = totals.work_amount > 0 ? Math.round((grossMargin / totals.work_amount) * 10000) / 100 : 0;
         var marginEl = document.getElementById('kpi-gross-margin');
-        marginEl.textContent = formatCurrency(totals.gross_margin);
-        marginEl.className = 'kpi-card-value ' + (totals.gross_margin >= 0 ? 'positive' : 'negative');
+        marginEl.textContent = formatCurrency(grossMargin);
+        marginEl.className = 'kpi-card-value ' + (grossMargin >= 0 ? 'positive' : 'negative');
 
-        document.getElementById('kpi-margin-rate').textContent = '粗利率: ' + totals.margin_rate + '%';
+        document.getElementById('kpi-margin-rate').textContent = '粗利率: ' + marginRate + '%';
         document.getElementById('kpi-transport-total').textContent = formatCurrency(totals.transport_total);
       }
     }
@@ -882,7 +884,7 @@
       var ctx = document.getElementById('monthly-chart').getContext('2d');
 
       var labels = monthlyStats.map(function(s) { return s.year + '/' + s.month; });
-      var invoiceData = monthlyStats.map(function(s) { return s.invoice_total; });
+      var invoiceData = monthlyStats.map(function(s) { return s.work_amount; });
 
       if (monthlyChart) {
         monthlyChart.destroy();
@@ -901,7 +903,7 @@
 
       if (!isCustomerFilter) {
         var payoutData = monthlyStats.map(function(s) { return s.payout_total; });
-        var marginData = monthlyStats.map(function(s) { return s.gross_margin; });
+        var marginData = monthlyStats.map(function(s) { return s.work_amount - s.payout_total; });
         datasets.push(
           {
             label: '支払',
@@ -958,9 +960,9 @@
       var thead = tbody.parentElement.querySelector('thead tr');
 
       if (isCustomerFilter) {
-        thead.innerHTML = '<th>年月</th><th>売上（税込）</th>';
+        thead.innerHTML = '<th>年月</th><th>売上</th>';
       } else {
-        thead.innerHTML = '<th>年月</th><th>案件数</th><th>配置数</th><th>売上（税込）</th><th>支払</th><th>交通費</th><th>粗利益</th><th>粗利率</th><th>状態</th>';
+        thead.innerHTML = '<th>年月</th><th>案件数</th><th>配置数</th><th>売上</th><th>支払</th><th>交通費</th><th>粗利益</th><th>粗利率</th><th>状態</th>';
       }
 
       var colSpan = isCustomerFilter ? 2 : 9;
@@ -972,20 +974,20 @@
 
       tbody.innerHTML = monthlyStats.map(function(s) {
         if (isCustomerFilter) {
-          return '<tr><td>' + s.year + '年' + s.month + '月</td><td>' + formatCurrency(s.invoice_total) + '</td></tr>';
+          return '<tr><td>' + s.year + '年' + s.month + '月</td><td>' + formatCurrency(s.work_amount) + '</td></tr>';
         }
-        var marginColor = s.gross_margin >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
+        var marginColor = (s.work_amount - s.payout_total) >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
         var statusBadge = s.is_final ? '<span class="finalized-badge">確定</span>' : '<span class="draft-badge">暫定</span>';
         return [
           '<tr>',
           '<td>' + s.year + '年' + s.month + '月</td>',
           '<td>' + s.job_count + '</td>',
           '<td>' + s.assignment_count + '</td>',
-          '<td>' + formatCurrency(s.invoice_total) + '</td>',
+          '<td>' + formatCurrency(s.work_amount) + '</td>',
           '<td>' + formatCurrency(s.payout_total) + '</td>',
           '<td>' + formatCurrency(s.transport_total) + '</td>',
-          '<td style="color: ' + marginColor + '">' + formatCurrency(s.gross_margin) + '</td>',
-          '<td>' + s.margin_rate + '%</td>',
+          '<td style="color: ' + marginColor + '">' + formatCurrency(s.work_amount - s.payout_total) + '</td>',
+          '<td>' + (s.work_amount > 0 ? Math.round(((s.work_amount - s.payout_total) / s.work_amount) * 10000) / 100 : 0) + '%</td>',
           '<td>' + statusBadge + '</td>',
           '</tr>'
         ].join('');
@@ -1159,6 +1161,8 @@
       return {
         daily: daily,
         byCustomer: byCustomer,
+        noDateAmount: Number(raw.noDateAmount) || 0,
+        expenseTotal: Number(raw.expenseTotal) || 0,
         summary: {
           totalAmount: Number(summary.totalAmount) || 0,
           dayCount: Number(summary.dayCount) || daily.length
@@ -1177,7 +1181,14 @@
         var rows = _dailySalesData.daily.map(function(d) {
           return '<tr><td>' + escapeHtml(d.date) + '（' + escapeHtml(d.dayOfWeek) + '）</td><td>' + formatCurrency(d.amount) + '</td></tr>';
         });
-        rows.push('<tr class="daily-total-row"><td>合計</td><td>' + formatCurrency(_dailySalesData.summary.totalAmount) + '</td></tr>');
+        if (_dailySalesData.expenseTotal > 0) {
+          rows.push('<tr style="color:var(--text-muted);"><td>諸経費</td><td>' + formatCurrency(_dailySalesData.expenseTotal) + '</td></tr>');
+        }
+        if (_dailySalesData.noDateAmount > 0) {
+          rows.push('<tr style="color:var(--text-muted);"><td>日付なし（その他）</td><td>' + formatCurrency(_dailySalesData.noDateAmount) + '</td></tr>');
+        }
+        var grandTotal = _dailySalesData.summary.totalAmount + _dailySalesData.expenseTotal + _dailySalesData.noDateAmount;
+        rows.push('<tr class="daily-total-row"><td>合計（税抜）</td><td>' + formatCurrency(grandTotal) + '</td></tr>');
         tbody.innerHTML = rows.join('');
       } else {
         thead.innerHTML = '<tr><th>顧客名</th><th>売上額</th></tr>';

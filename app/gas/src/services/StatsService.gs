@@ -27,10 +27,10 @@ const StatsService = {
     // 案件・配置数の集計（work_dateで検索）
     const jobStats = this._aggregateJobs(year, month);
 
-    // 粗利計算
-    const grossMargin = invoiceStats.invoice_total - payoutStats.payout_total;
-    const marginRate = invoiceStats.invoice_total > 0
-      ? Math.round((grossMargin / invoiceStats.invoice_total) * 10000) / 100
+    // 粗利計算（税抜・作業代ベース）
+    const grossMargin = invoiceStats.work_amount - payoutStats.payout_total;
+    const marginRate = invoiceStats.work_amount > 0
+      ? Math.round((grossMargin / invoiceStats.work_amount) * 10000) / 100
       : 0;
 
     return {
@@ -238,6 +238,7 @@ const StatsService = {
       monthly.push({
         year: y, month: m,
         invoice_total: 0,
+        work_amount: 0,
         payout_total: null, transport_total: null,
         gross_margin: null, margin_rate: null,
         job_count: null, assignment_count: null,
@@ -256,6 +257,7 @@ const StatsService = {
       const col = {
         cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
         bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+        sub: h.indexOf('subtotal'),
         del: h.indexOf('is_deleted')
       };
       for (let i = 1; i < mainData.length; i++) {
@@ -265,6 +267,7 @@ const StatsService = {
         const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
         if (key in monthMap) {
           monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
+          monthly[monthMap[key]].work_amount += Number(row[col.sub]) || 0;
         }
       }
     }
@@ -288,6 +291,7 @@ const StatsService = {
         const col = {
           cid: h.indexOf('customer_id'), by: h.indexOf('billing_year'),
           bm: h.indexOf('billing_month'), total: h.indexOf('total_amount'),
+          sub: h.indexOf('subtotal'),
           del: h.indexOf('is_deleted')
         };
         for (let i = 1; i < data.length; i++) {
@@ -297,6 +301,7 @@ const StatsService = {
           const key = Number(row[col.by]) + '-' + Number(row[col.bm]);
           if (key in monthMap) {
             monthly[monthMap[key]].invoice_total += Number(row[col.total]) || 0;
+            monthly[monthMap[key]].work_amount += Number(row[col.sub]) || 0;
           }
         }
       } catch (e) {
@@ -306,8 +311,10 @@ const StatsService = {
 
     // 集計
     let totalInvoice = 0;
+    let totalWorkAmount = 0;
     for (const entry of monthly) {
       totalInvoice += entry.invoice_total;
+      totalWorkAmount += entry.work_amount;
     }
 
     return {
@@ -317,6 +324,7 @@ const StatsService = {
       },
       totals: {
         invoice_total: totalInvoice,
+        work_amount: totalWorkAmount,
         payout_total: null,
         transport_total: null,
         gross_margin: null,
@@ -402,17 +410,26 @@ const StatsService = {
       }
     }
 
-    // 4. 日別集計
+    // 4. 日別集計（諸経費行は分離）
     var dailyMap = {}; // 'yyyy-MM-dd' → amount
     var totalAmount = 0;
+    var expenseTotal = 0;
     for (var d = 0; d < lines.length; d++) {
       var line = lines[d];
       var amt = Number(line.amount) || 0;
+      if (line.item_name === '諸経費') {
+        expenseTotal += amt;
+        continue;
+      }
       var wd = line.work_date || '';
       if (!dailyMap[wd]) dailyMap[wd] = 0;
       dailyMap[wd] += amt;
       totalAmount += amt;
     }
+
+    // 日付なし行の合計を分離（諸経費以外で日付なしがある場合）
+    var noDateAmount = dailyMap[''] || 0;
+    delete dailyMap[''];
 
     // 期間内の全日を生成（売上0の日も含む）
     var daily = [];
@@ -450,6 +467,8 @@ const StatsService = {
     return {
       daily: daily,
       byCustomer: byCustomer,
+      noDateAmount: noDateAmount,
+      expenseTotal: expenseTotal,
       summary: {
         totalAmount: totalAmount,
         dayCount: daily.length
@@ -602,9 +621,9 @@ const StatsService = {
       totals.gross_margin += s.gross_margin;
     }
 
-    // 平均粗利率を計算
-    totals.margin_rate = totals.invoice_total > 0
-      ? Math.round((totals.gross_margin / totals.invoice_total) * 10000) / 100
+    // 平均粗利率を計算（税抜・作業代ベース）
+    totals.margin_rate = totals.work_amount > 0
+      ? Math.round((totals.gross_margin / totals.work_amount) * 10000) / 100
       : 0;
 
     return totals;

@@ -110,3 +110,53 @@ function clearMasterCache() {
   MasterCache.invalidate();
   Logger.log('MasterCache: 全キャッシュをクリアしました');
 }
+
+/**
+ * InvoiceLine の work_date 欠落をバックフィル
+ * _generateLines のグルーピングバグで空になった行を job_id から自動修復
+ * 実行後、関数を削除すること
+ */
+function backfillInvoiceLineWorkDates() {
+  var lineSheet = getSheet('T_InvoiceLines');
+  var lineData = lineSheet.getDataRange().getValues();
+  var lineHeaders = lineData[0];
+  var lineIdCol = lineHeaders.indexOf('line_id');
+  var workDateCol = lineHeaders.indexOf('work_date');
+  var jobIdCol = lineHeaders.indexOf('job_id');
+
+  // Jobs シートから job_id → work_date マップを作成
+  var jobSheet = getSheet('T_Jobs');
+  var jobData = jobSheet.getDataRange().getValues();
+  var jobHeaders = jobData[0];
+  var jIdCol = jobHeaders.indexOf('job_id');
+  var jWdCol = jobHeaders.indexOf('work_date');
+  var jobDateMap = {};
+  for (var j = 1; j < jobData.length; j++) {
+    jobDateMap[jobData[j][jIdCol]] = jobData[j][jWdCol];
+  }
+
+  Logger.log('Total lines: ' + (lineData.length - 1));
+
+  var skipped = 0;
+  var updated = 0;
+  var noJob = 0;
+  for (var i = 1; i < lineData.length; i++) {
+    var currentWd = lineData[i][workDateCol];
+    if (currentWd && String(currentWd).trim() !== '') {
+      skipped++;
+      continue;
+    }
+    var jid = lineData[i][jobIdCol];
+    if (!jid || !jobDateMap[jid]) {
+      noJob++;
+      Logger.log('NO_JOB: row=' + (i+1) + ' line_id=' + lineData[i][lineIdCol] + ' job_id=' + jid);
+      continue;
+    }
+    var wd = jobDateMap[jid];
+    var wdStr = (wd instanceof Date) ? Utilities.formatDate(wd, 'Asia/Tokyo', 'yyyy-MM-dd') : String(wd);
+    lineSheet.getRange(i + 1, workDateCol + 1).setValue(wdStr);
+    updated++;
+    Logger.log('UPDATED: row=' + (i+1) + ' ' + lineData[i][lineIdCol] + ' → ' + wdStr);
+  }
+  Logger.log('Done. skipped=' + skipped + ' updated=' + updated + ' noJob=' + noJob);
+}
