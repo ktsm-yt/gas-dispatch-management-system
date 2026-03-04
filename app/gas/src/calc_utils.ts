@@ -243,6 +243,21 @@ function getSubcontractorRateByUnit_(
     case 'fullday':
       rate = Number(subcontractor.full_day_rate ?? subcontractor.basic_rate) || 0;
       break;
+    case 'yakin':
+    case 'night':
+      rate = Number(subcontractor.night_rate ?? subcontractor.basic_rate) || 0;
+      break;
+    case 'tobi':
+    case 'tobi_hojo':
+      rate = Number(subcontractor.tobi_rate ?? subcontractor.basic_rate) || 0;
+      break;
+    case 'age':
+    case 'niage':
+      rate = Number(subcontractor.age_rate ?? subcontractor.basic_rate) || 0;
+      break;
+    case 'tobiage':
+      rate = Number(subcontractor.tobiage_rate ?? subcontractor.basic_rate) || 0;
+      break;
     default:
       rate = Number(subcontractor.basic_rate ?? subcontractor.full_day_rate) || 0;
       break;
