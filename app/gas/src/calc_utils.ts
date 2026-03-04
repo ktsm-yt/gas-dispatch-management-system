@@ -345,14 +345,15 @@ function calculateMonthlyPayout_(
   staff: Record<string, any>
 ): { baseAmount: number; transportAmount: number; totalAmount: number } {
   let baseAmount = 0;
-  let transportAmount = 0;
+  const transportAmount = 0;
 
   assignments.forEach(asg => {
     baseAmount += calculateWage_(asg, staff, asg.pay_unit || 'basic');
 
-    if (asg.transport_amount) {
-      transportAmount += Number(asg.transport_amount) || 0;
-    }
+    // 交通費は請求書のみに反映。スタッフ支払いには含めない（調整額で別途対応）
+    // if (asg.transport_amount) {
+    //   transportAmount += Number(asg.transport_amount) || 0;
+    // }
   });
 
   assertInvariant_(
@@ -364,7 +365,7 @@ function calculateMonthlyPayout_(
   return {
     baseAmount: baseAmount,
     transportAmount: transportAmount,
-    totalAmount: baseAmount + transportAmount
+    totalAmount: baseAmount  // transport除外（請求書のみに反映）
   };
 }
 

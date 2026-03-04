@@ -178,7 +178,7 @@ const PayoutExportService = {
         p.target_name || '',
         p.payout_type === 'STAFF' ? 'スタッフ' : '外注',
         p.base_amount || 0,
-        p.transport_amount || 0,
+        0,  // 交通費除外（列構造は維持）
         p.adjustment_amount || 0,
         p.tax_amount || 0,
         p.total_amount || 0,
@@ -211,7 +211,7 @@ const PayoutExportService = {
       }
       monthly[ym].count++;
       monthly[ym].base += p.base_amount || 0;
-      monthly[ym].transport += p.transport_amount || 0;
+      monthly[ym].transport += 0;  // 交通費除外
       monthly[ym].adjustment += p.adjustment_amount || 0;
       monthly[ym].tax += p.tax_amount || 0;
       monthly[ym].total += p.total_amount || 0;

@@ -334,7 +334,7 @@ const PayoutDetailExportService = {
       }
 
       const unitLabel = PAY_UNIT_LABEL_MAP[a.pay_unit] || '式';
-      const transport = a.transport_amount ? a.transport_amount : '';
+      const transport = '';  // 交通費除外（移動列は空で出力）
 
       // 同日最初の行にだけ日次源泉徴収税を表示
       let taxCell: number | string = '';
@@ -406,7 +406,7 @@ const PayoutDetailExportService = {
       '合計', '', '', rowCount, '',
       '', adjustedBaseAmount,
       '', '', '',
-      payout.transport_amount || 0,
+      0,  // 交通費除外
       calculatedTaxTotal
     ];
 
