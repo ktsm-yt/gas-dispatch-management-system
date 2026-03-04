@@ -329,9 +329,46 @@ function validateCustomer(data) {
         details: { field: 'company_name', duplicateId: duplicate.customer_id }
       };
     }
+
+    // customer_code 重複チェック（空でない場合のみ）
+    if (data.customer_code && String(data.customer_code).trim() !== '') {
+      const duplicateCode = existingCustomers.data.items.find(function(c) {
+        return c.customer_code === String(data.customer_code).trim() &&
+          c.customer_id !== data.customer_id &&
+          !c.is_deleted;
+      });
+      if (duplicateCode) {
+        return {
+          valid: false,
+          message: '顧客コード「' + data.customer_code + '」は既に使用されています',
+          details: { field: 'customer_code', duplicateId: duplicateCode.customer_id }
+        };
+      }
+    }
   }
 
   return { valid: true };
+}
+
+/**
+ * 次の顧客コードを自動採番（cus_ + 連番）
+ */
+function generateNextCustomerCode() {
+  var sheet = getSheet(SHEET_NAMES.CUSTOMERS);
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var codeIdx = headers.indexOf('customer_code');
+  if (codeIdx === -1) return 'cus_1';
+
+  var maxNum = 0;
+  for (var i = 1; i < data.length; i++) {
+    var code = String(data[i][codeIdx] || '');
+    var match = code.match(/^cus_(\d+)$/);
+    if (match) {
+      maxNum = Math.max(maxNum, parseInt(match[1], 10));
+    }
+  }
+  return 'cus_' + (maxNum + 1);
 }
 
 /**
@@ -343,6 +380,11 @@ function validateCustomer(data) {
 function saveCustomer(customer, expectedUpdatedAt) {
   requireManager();
   const isNew = !customer.customer_id;
+
+  // 自動採番: customer_code が空なら cus_ + 連番を付与
+  if (!customer.customer_code || String(customer.customer_code).trim() === '') {
+    customer.customer_code = generateNextCustomerCode();
+  }
 
   const result = saveMasterRecord(
     SHEET_NAMES.CUSTOMERS,
