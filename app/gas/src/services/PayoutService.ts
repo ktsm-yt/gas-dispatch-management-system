@@ -1724,7 +1724,7 @@ const PayoutService = {
       const rate = getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
       asg.wage_rate = rate;
       baseAmount += rate;
-      transportAmount += (asg.transport_amount as number) || 0;
+      transportAmount += Number(asg.transport_amount) || 0;
     }
 
     const totalAmount = baseAmount + transportAmount;
@@ -1980,7 +1980,7 @@ const PayoutService = {
       let minDate = endDate;
       for (const { assignment: asg, job } of subAssignments) {
         baseAmount += getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
-        transportAmount += (asg.transport_amount as number) || 0;
+        transportAmount += Number(asg.transport_amount) || 0;
         if (job.work_date && (job.work_date as string) < minDate) {
           minDate = job.work_date as string;
         }

@@ -237,14 +237,14 @@ function getSubcontractorRateByUnit_(
     case 'halfday':
     case 'am':
     case 'pm':
-      rate = subcontractor.half_day_rate ?? subcontractor.basic_rate ?? 0;
+      rate = Number(subcontractor.half_day_rate ?? subcontractor.basic_rate) || 0;
       break;
     case 'full':
     case 'fullday':
-      rate = subcontractor.full_day_rate ?? subcontractor.basic_rate ?? 0;
+      rate = Number(subcontractor.full_day_rate ?? subcontractor.basic_rate) || 0;
       break;
     default:
-      rate = subcontractor.basic_rate ?? subcontractor.full_day_rate ?? 0;
+      rate = Number(subcontractor.basic_rate ?? subcontractor.full_day_rate) || 0;
       break;
   }
 
