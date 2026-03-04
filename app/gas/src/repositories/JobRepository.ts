@@ -270,8 +270,11 @@ const JobRepository = {
       // GASはスプレッドシートの時刻セルをExcelエポック(1899-12-30)基準のDateで返す
       // getUTCHours()は0-23しか返せないため、24時以降(24:30, 25:00等)が失われる
       // エポックからの経過分で計算することで24時以降も正しく復元できる
+      // GASのDateはJST(UTC+9)基準だがgetTime()はUTCミリ秒を返すため補正が必要
+      // このプロジェクトはJST固定運用（Spreadsheet/Scriptのタイムゾーン="Asia/Tokyo"）
       const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30); // 1899-12-30 UTC
-      const totalMinutes = Math.round((timeValue.getTime() - EXCEL_EPOCH_MS) / 60000);
+      const JST_OFFSET_MS = 9 * 60 * 60 * 1000; // JST = UTC+9（固定）
+      const totalMinutes = Math.round((timeValue.getTime() - EXCEL_EPOCH_MS + JST_OFFSET_MS) / 60000);
       const hours = Math.floor(totalMinutes / 60);
       const minutes = totalMinutes % 60;
       return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
