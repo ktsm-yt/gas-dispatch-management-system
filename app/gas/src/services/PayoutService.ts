@@ -1410,7 +1410,7 @@ const PayoutService = {
     }
 
     let totalAdjustment = 0;
-    let transportAdjustment = 0;
+    const transportAdjustment = 0;
     let coefficientSum = 0;
     let coefficientCount = 0;
 

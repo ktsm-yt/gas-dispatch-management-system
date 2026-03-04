@@ -345,7 +345,7 @@ function calculateMonthlyPayout_(
   staff: Record<string, any>
 ): { baseAmount: number; transportAmount: number; totalAmount: number } {
   let baseAmount = 0;
-  let transportAmount = 0;
+  const transportAmount = 0;
 
   assignments.forEach(asg => {
     baseAmount += calculateWage_(asg, staff, asg.pay_unit || 'basic');
