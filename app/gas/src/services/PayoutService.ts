@@ -186,8 +186,8 @@ const PayoutService = {
     const assignmentCountByJob = this._buildAssignmentCountByJob(jobIds);
     const ninku = this._calculateNinkuAdjustments(assignments, staff, jobMap, assignmentCountByJob);
 
-    // 人工割: 過剰配置時の交通費キャップを適用
-    const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
+    // 交通費は請求書のみに反映。スタッフ支払いには含めない（調整額で別途対応）
+    const adjustedTransport = 0;
 
     // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
     const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, assignmentCountByJob);
@@ -201,11 +201,11 @@ const PayoutService = {
       assignments: includeAssignments ? assignments : null,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: adjustedTransport,
+      transportAmount: 0,  // 交通費除外
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.baseAmount + adjustedTransport + ninku.totalAdjustment - taxAmount,
+      totalAmount: result.baseAmount + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -479,7 +479,7 @@ const PayoutService = {
             assignments: preCalc.assignmentIds.map(id => ({ assignment_id: id })),
             assignmentCount: preCalc.assignmentIds.length,
             baseAmount: preCalc.baseAmount || 0,
-            transportAmount: preCalc.transportAmount || 0,
+            transportAmount: 0,  // 交通費除外（クライアント由来の値を信用しない）
             ninkuCoefficient: preCalc.ninkuCoefficient || 0,
             ninkuAdjustmentAmount: preCalc.ninkuAdjustmentAmount || 0,
             taxAmount: preCalc.taxAmount || 0,
@@ -1261,8 +1261,8 @@ const PayoutService = {
     const assignmentCountByJob = bulkCache.assignmentCountByJob || new Map();
     const ninku = this._calculateNinkuAdjustments(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
-    // 人工割: 過剰配置時の交通費キャップを適用
-    const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
+    // 交通費は請求書のみに反映。スタッフ支払いには含めない
+    // const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
 
     // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
     const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
@@ -1276,11 +1276,11 @@ const PayoutService = {
       assignments: assignments,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: adjustedTransport,
+      transportAmount: 0,  // 交通費除外
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.baseAmount + adjustedTransport + ninku.totalAdjustment - taxAmount,
+      totalAmount: result.baseAmount + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -1415,8 +1415,8 @@ const PayoutService = {
     let coefficientCount = 0;
 
     // 人工割（CR-029）: 過剰配置時の交通費キャップ
-    // job単位で「このスタッフが何番目か」を追跡し、required_count超過分の交通費をカット
-    const jobStaffIndex: Map<string, number> = new Map();
+    // 交通費は支払いに含めないため、transportAdjustment計算をスキップ
+    // （assignment の transport_amount から負値を生成して totalAmount を減らすのを防止）
 
     for (const asg of staffAssignments) {
       const jobId = asg.job_id as string;
@@ -1427,19 +1427,6 @@ const PayoutService = {
       const actualCount = assignmentCountByJob.get(jobId) || 0;
 
       const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
-
-      // 交通費キャップ: 過剰配置時（actual > required）、required_count人分まで
-      if (requiredCount > 0 && actualCount > requiredCount) {
-        const idx = (jobStaffIndex.get(jobId) || 0) + 1;
-        jobStaffIndex.set(jobId, idx);
-        if (idx > requiredCount) {
-          // このスタッフはrequired_count超過分 → 交通費カット
-          const transport = Number(asg.transport_amount) || 0;
-          if (transport > 0) {
-            transportAdjustment -= transport;
-          }
-        }
-      }
 
       if (coefficient === 1.0) continue;
 
@@ -1718,16 +1705,15 @@ const PayoutService = {
 
     // 金額計算（外注先マスタの単価を pay_unit に応じて取得）
     let baseAmount = 0;
-    let transportAmount = 0;
+    // 交通費は請求書のみに反映。外注支払いには含めない（調整額で別途対応）
 
     for (const asg of assignments) {
       const rate = getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
       asg.wage_rate = rate;
       baseAmount += rate;
-      transportAmount += (asg.transport_amount as number) || 0;
     }
 
-    const totalAmount = baseAmount + transportAmount;
+    const totalAmount = baseAmount;
 
     assertInvariant_(
       assignments.length === 0 || baseAmount > 0,
@@ -1743,7 +1729,7 @@ const PayoutService = {
       assignments: assignments,
       assignmentCount: assignments.length,
       baseAmount: baseAmount,
-      transportAmount: transportAmount,
+      transportAmount: 0,  // 交通費除外
       ninkuCoefficient: 0,
       ninkuAdjustmentAmount: 0,  // 外注には人工割なし
       taxAmount: 0,  // 外注費は源泉徴収なし
@@ -1976,11 +1962,10 @@ const PayoutService = {
 
       // 金額計算（外注先マスタの単価を参照）
       let baseAmount = 0;
-      let transportAmount = 0;
+      // 交通費は請求書のみに反映。外注支払いには含めない
       let minDate = endDate;
       for (const { assignment: asg, job } of subAssignments) {
         baseAmount += getSubcontractorRateByUnit_(sub, (asg.pay_unit as string) || 'basic');
-        transportAmount += (asg.transport_amount as number) || 0;
         if (job.work_date && (job.work_date as string) < minDate) {
           minDate = job.work_date as string;
         }
@@ -1990,9 +1975,9 @@ const PayoutService = {
         subcontractorId: subId,
         companyName: sub.company_name as string,
         unpaidCount: subAssignments.length,
-        estimatedAmount: baseAmount + transportAmount,
+        estimatedAmount: baseAmount,
         baseAmount: baseAmount,
-        transportAmount: transportAmount,
+        transportAmount: 0,  // 交通費除外
         periodStart: minDate,
         periodEnd: endDate
       });

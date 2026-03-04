@@ -1777,7 +1777,7 @@
             <div class="label">基本給与</div>
             <div class="value amount">${formatCurrency(data.baseAmount)}</div>
           </div>
-          <div class="summary-item">
+          <div class="summary-item" style="display:none">
             <div class="label">交通費</div>
             <div class="value amount">${formatCurrency(data.transportAmount)}</div>
           </div>
@@ -2215,7 +2215,7 @@
       `;
 
       payouts.forEach(p => {
-        const baseAmount = (p.base_amount || 0) + (p.transport_amount || 0);
+        const baseAmount = (p.base_amount || 0);  // 交通費除外
         const adjustmentAmount = p.adjustment_amount || 0;
         const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
         const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済' : '下書き');
@@ -2267,7 +2267,7 @@
       `;
 
       payouts.forEach(p => {
-        const baseAmount = (p.base_amount || 0) + (p.transport_amount || 0);
+        const baseAmount = (p.base_amount || 0);  // 交通費除外
         const adjustmentAmount = p.adjustment_amount || 0;
         html += `
           <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
@@ -2693,7 +2693,7 @@
         unpaidCount: undone.assignment_count,
         periodStart: undone.period_start,
         periodEnd: undone.period_end,
-        estimatedAmount: (undone.base_amount || 0) + (undone.transport_amount || 0),
+        estimatedAmount: (undone.base_amount || 0),  // 交通費除外
         status: 'unpaid',
         rowId: `unpaid-${undone.staff_id}`
       };
@@ -3159,7 +3159,7 @@
                 <div class="label">基本給与</div>
                 <div class="value amount">${baseText}</div>
               </div>
-              <div class="summary-item">
+              <div class="summary-item" style="display:none">
                 <div class="label">交通費</div>
                 <div class="value amount">${transportText}</div>
               </div>
@@ -3677,7 +3677,7 @@
       }
 
       // 行を作成
-      const baseAmount = (payout.base_amount || 0) + (payout.transport_amount || 0);
+      const baseAmount = (payout.base_amount || 0);  // 交通費除外
       const adjustmentAmount = payout.adjustment_amount || 0;
       const tr = document.createElement('tr');
       tr.style.whiteSpace = 'nowrap';
@@ -4450,7 +4450,7 @@
               <th>件数</th>
               <th>期間</th>
               <th style="text-align: right;">金額</th>
-              <th style="text-align: right;">交通費</th>
+              <th style="text-align: right; display:none;">交通費</th>
               <th style="text-align: right;">合計</th>
               <th>操作</th>
             </tr>
@@ -4468,7 +4468,7 @@
             <td>${sub.unpaidCount}件</td>
             <td style="font-size: 12px; white-space: nowrap;">${periodText}</td>
             <td class="amount">¥${formatNumber(sub.baseAmount)}</td>
-            <td class="amount">¥${formatNumber(sub.transportAmount)}</td>
+            <td class="amount" style="display:none">¥${formatNumber(sub.transportAmount)}</td>
             <td class="amount">¥${formatNumber(sub.estimatedAmount)}</td>
             <td>
               <button class="btn btn-secondary" onclick="showSubcontractorDetail('${sub.subcontractorId}')">詳細</button>
@@ -4516,7 +4516,7 @@
             <div class="label">基本金額</div>
             <div class="value amount">${baseText}</div>
           </div>
-          <div class="summary-item">
+          <div class="summary-item" style="display:none">
             <div class="label">交通費</div>
             <div class="value">${transportText}</div>
           </div>
@@ -4533,7 +4533,7 @@
               <th>現場名</th>
               <th>スタッフ</th>
               <th style="text-align: right;">金額</th>
-              <th style="text-align: right;">交通費</th>
+              <th style="text-align: right; display:none;">交通費</th>
             </tr>
           </thead>
           <tbody>
@@ -4547,7 +4547,7 @@
               <td>${escapeHtml(asg.site_name || '-')}</td>
               <td>${escapeHtml(asg.staff_name || '-')}</td>
               <td class="amount">¥${formatNumber(asg.wage_rate || 0)}</td>
-              <td class="amount">¥${formatNumber(asg.transport_amount || 0)}</td>
+              <td class="amount" style="display:none">¥${formatNumber(asg.transport_amount || 0)}</td>
             </tr>
           `;
         });
