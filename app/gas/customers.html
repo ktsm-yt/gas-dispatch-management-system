@@ -243,26 +243,23 @@
     /* 5-column layout for unit prices */
     .form-row-3 {
       display: grid;
-      grid-template-columns: repeat(3, minmax(88px, 120px));
+      grid-template-columns: repeat(3, minmax(88px, 1fr));
       gap: var(--spacing-sm);
       margin-bottom: var(--spacing-md);
-      justify-content: start;
     }
 
     .form-row-4 {
       display: grid;
-      grid-template-columns: repeat(4, minmax(88px, 120px));
+      grid-template-columns: repeat(4, minmax(88px, 1fr));
       gap: var(--spacing-sm);
       margin-bottom: var(--spacing-md);
-      justify-content: start;
     }
 
     .form-row-5 {
       display: grid;
-      grid-template-columns: repeat(5, minmax(88px, 120px));
+      grid-template-columns: repeat(5, minmax(88px, 1fr));
       gap: var(--spacing-sm);
       margin-bottom: var(--spacing-md);
-      justify-content: start;
     }
 
     .form-row-3 .form-group input,
@@ -540,7 +537,7 @@
               </div>
               <div class="form-group">
                 <label for="customer-code">顧客コード</label>
-                <input type="text" id="customer-code" name="customer_code" placeholder="CUST001">
+                <input type="text" id="customer-code" name="customer_code" placeholder="空欄で自動採番（例: cus_820）">
               </div>
             </div>
             <div class="form-group">
