@@ -140,6 +140,7 @@ const StatsRepository = {
       assignment_count: stats.assignment_count || 0,
       work_amount: stats.work_amount || 0,
       expense_amount: stats.expense_amount || 0,
+      adjustment_total: stats.adjustment_total || 0,
       invoice_subtotal: stats.invoice_subtotal || 0,
       invoice_tax: stats.invoice_tax || 0,
       invoice_total: stats.invoice_total || 0,
@@ -213,7 +214,7 @@ const StatsRepository = {
     // 更新可能フィールド
     const updatableFields = [
       'job_count', 'assignment_count',
-      'work_amount', 'expense_amount', 'invoice_subtotal', 'invoice_tax', 'invoice_total',
+      'work_amount', 'expense_amount', 'adjustment_total', 'invoice_subtotal', 'invoice_tax', 'invoice_total',
       'payout_total', 'transport_total',
       'gross_margin', 'margin_rate',
       'is_final'
@@ -348,6 +349,7 @@ const StatsRepository = {
       assignment_count: Number(record.assignment_count) || 0,
       work_amount: Number(record.work_amount) || 0,
       expense_amount: Number(record.expense_amount) || 0,
+      adjustment_total: Number(record.adjustment_total) || 0,
       invoice_subtotal: Number(record.invoice_subtotal) || 0,
       invoice_tax: Number(record.invoice_tax) || 0,
       invoice_total: Number(record.invoice_total) || 0,
