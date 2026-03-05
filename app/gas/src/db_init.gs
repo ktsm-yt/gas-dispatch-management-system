@@ -1125,66 +1125,66 @@ function migrateAddSubcontractorRateColumns() {
  */
 function migrateAddSubcontractorExtendedRates() {
   const prop = PropertiesService.getScriptProperties();
-  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+  const ids = [
+    { key: 'SPREADSHEET_ID_DEV', id: prop.getProperty('SPREADSHEET_ID_DEV') },
+    { key: 'SPREADSHEET_ID_PROD', id: prop.getProperty('SPREADSHEET_ID_PROD') }
+  ].filter(e => e.id);
 
-  if (!spreadsheetId) {
+  if (ids.length === 0) {
     Logger.log('✗ SPREADSHEET_ID が設定されていません');
     return;
   }
 
-  const ss = SpreadsheetApp.openById(spreadsheetId);
-  const sheet = ss.getSheetByName('Subcontractors');
+  for (const entry of ids) {
+    Logger.log('=== CR-081 外注先拡張単価カラム追加 [' + entry.key + '] ===\n');
 
-  if (!sheet) {
-    Logger.log('✗ 外注先シートが見つかりません');
-    return;
-  }
+    const ss = SpreadsheetApp.openById(entry.id);
+    const sheet = ss.getSheetByName('Subcontractors');
 
-  Logger.log('=== CR-081 外注先拡張単価カラム追加マイグレーション ===\n');
-
-  const lastCol = sheet.getLastColumn();
-  const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-
-  Logger.log('現在のカラム数: ' + lastCol);
-  Logger.log('現在のヘッダー: ' + headers.join(', '));
-
-  // full_day_rateの後に挿入
-  const fullDayRateIndex = headers.indexOf('full_day_rate');
-  if (fullDayRateIndex === -1) {
-    Logger.log('✗ full_day_rateカラムが見つかりません。先にP2-8マイグレーションを実行してください。');
-    return;
-  }
-
-  const columnsToAdd = ['night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate'];
-  let addedCount = 0;
-
-  // 逆順で挿入（full_day_rateの直後に正しい順序で並ぶ）
-  for (let i = columnsToAdd.length - 1; i >= 0; i--) {
-    const colName = columnsToAdd[i];
-
-    if (headers.includes(colName)) {
-      Logger.log('✓ ' + colName + 'カラムは既に存在します');
+    if (!sheet) {
+      Logger.log('✗ 外注先シートが見つかりません（スキップ）');
       continue;
     }
 
-    const insertPosition = fullDayRateIndex + 2; // 1-indexed, full_day_rateの次
-    sheet.insertColumnAfter(fullDayRateIndex + 1);
-    sheet.getRange(1, insertPosition).setValue(colName);
-    Logger.log('✓ カラム追加: ' + colName + ' (位置: ' + insertPosition + ')');
-    addedCount++;
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    Logger.log('現在のカラム数: ' + lastCol);
+    Logger.log('現在のヘッダー: ' + headers.join(', '));
+
+    const fullDayRateIndex = headers.indexOf('full_day_rate');
+    if (fullDayRateIndex === -1) {
+      Logger.log('✗ full_day_rateカラムが見つかりません（スキップ）');
+      continue;
+    }
+
+    const columnsToAdd = ['night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate'];
+    let addedCount = 0;
+
+    for (let i = columnsToAdd.length - 1; i >= 0; i--) {
+      const colName = columnsToAdd[i];
+
+      if (headers.includes(colName)) {
+        Logger.log('✓ ' + colName + 'カラムは既に存在します');
+        continue;
+      }
+
+      const insertPosition = fullDayRateIndex + 2;
+      sheet.insertColumnAfter(fullDayRateIndex + 1);
+      sheet.getRange(1, insertPosition).setValue(colName);
+      Logger.log('✓ カラム追加: ' + colName + ' (位置: ' + insertPosition + ')');
+      addedCount++;
+    }
+
+    if (addedCount > 0) {
+      const newLastCol = sheet.getLastColumn();
+      sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+    }
+
+    Logger.log(addedCount + '個のカラムを追加しました\n');
   }
 
-  if (addedCount > 0) {
-    const newLastCol = sheet.getLastColumn();
-    sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
-  }
-
-  Logger.log('\n=== CR-081 マイグレーション完了 ===');
-  Logger.log(addedCount + '個のカラムを追加しました');
-  Logger.log('night_rate: 夜間単価');
-  Logger.log('tobi_rate: 上棟鳶単価');
-  Logger.log('age_rate: 上棟荷揚げ単価');
-  Logger.log('tobiage_rate: 上棟鳶揚げ単価');
+  Logger.log('=== CR-081 マイグレーション完了（全DB処理済み） ===');
 }
 
 /**
