@@ -29,23 +29,26 @@ const SlotService = {
    * @param {string} expectedUpdatedAt - 期待するupdated_at
    * @returns {Object} 保存結果
    */
-  saveSlots: function(jobId, slots, expectedUpdatedAt) {
-    const requestId = generateRequestId();
+  saveSlots: function(jobId, slots, expectedUpdatedAt, options) {
+    var skipLock = options && options.skipLock;
+    var requestId = generateRequestId();
 
-    // ロック取得
-    const lock = acquireLock(3000);
-    if (!lock) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '現在混み合っています。しばらく待ってから再度お試しください。',
-        {},
-        requestId
-      );
+    var lock = null;
+    if (!skipLock) {
+      lock = acquireLock(3000);
+      if (!lock) {
+        return buildErrorResponse(
+          ERROR_CODES.BUSY_ERROR,
+          '現在混み合っています。しばらく待ってから再度お試しください。',
+          {},
+          requestId
+        );
+      }
     }
 
     try {
       // 案件の存在確認
-      const job = JobRepository.findById(jobId);
+      var job = JobRepository.findById(jobId);
       if (!job) {
         return buildErrorResponse(
           ERROR_CODES.NOT_FOUND,
@@ -69,7 +72,7 @@ const SlotService = {
       }
 
       // 削除予定の枠に配置が紐づいていないかチェック
-      const deleteCheck = this._checkSlotsCanBeDeleted(jobId, slots);
+      var deleteCheck = this._checkSlotsCanBeDeleted(jobId, slots);
       if (!deleteCheck.canDelete) {
         return buildErrorResponse(
           ERROR_CODES.VALIDATION_ERROR,
@@ -80,7 +83,7 @@ const SlotService = {
       }
 
       // 枠を一括更新
-      const result = SlotRepository.bulkUpdateForJob(jobId, slots, expectedUpdatedAt);
+      var result = SlotRepository.bulkUpdateForJob(jobId, slots, expectedUpdatedAt);
 
       if (!result.success && result.errors.length > 0) {
         return buildErrorResponse(
@@ -91,12 +94,21 @@ const SlotService = {
         );
       }
 
-      // 案件のrequired_countを枠合計で更新
-      const totalCount = SlotRepository.getTotalCount(jobId);
-      JobRepository.update(
+      // bulkUpdateForJobの結果からtotalCountを計算（DB再読み込み不要）
+      // 重複slot_idがあれば最後の値を採用（防御的デデュプ）
+      var slotMap = {};
+      var merged = result.created.concat(result.updated);
+      for (var i = 0; i < merged.length; i++) {
+        slotMap[merged[i].slot_id] = merged[i];
+      }
+      var allSlots = Object.keys(slotMap).map(function(k) { return slotMap[k]; });
+      var totalCount = allSlots.reduce(function(sum, s) { return sum + (Number(s.slot_count) || 0); }, 0);
+
+      var jobUpdateResult = JobRepository.update(
         { job_id: jobId, required_count: totalCount },
         job.updated_at
       );
+      var updatedJob = (jobUpdateResult && jobUpdateResult.job) || job;
 
       // 監査ログ
       logToAudit('SLOT_UPDATE', 'T_JobSlots', jobId, null, {
@@ -105,12 +117,12 @@ const SlotService = {
         deleted: result.deleted.length
       });
 
-      // 更新後の枠一覧を返却
-      const updatedSlots = SlotRepository.findByJobId(jobId);
-      const updatedJob = JobRepository.findById(jobId);
+      // bulkUpdateForJobの結果をそのまま返却（DB再読み込み不要）
+      // sort_order順にソート
+      allSlots.sort(function(a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
 
       return buildSuccessResponse({
-        slots: updatedSlots,
+        slots: allSlots,
         totalCount: totalCount,
         job: updatedJob,
         changes: {
@@ -129,7 +141,7 @@ const SlotService = {
         requestId
       );
     } finally {
-      releaseLock(lock);
+      if (lock) releaseLock(lock);
     }
   },
 

@@ -493,7 +493,7 @@ const JobService = {
       // 枠が指定されていれば保存
       let savedSlots = [];
       if (slots && Array.isArray(slots) && slots.length > 0) {
-        const slotResult = SlotService.saveSlots(newJob.job_id, slots, null);
+        const slotResult = SlotService.saveSlots(newJob.job_id, slots, null, { skipLock: true });
         if (slotResult.ok) {
           savedSlots = slotResult.data.slots || [];
           // 枠合計で required_count を更新（DBにも反映済み）
@@ -543,7 +543,7 @@ const JobService = {
     let savedSlots = [];
     if (slots && Array.isArray(slots)) {
       // 空配列は「枠をすべて削除」を意味する
-      const slotResult = SlotService.saveSlots(job.job_id, slots, result.job.updated_at);
+      const slotResult = SlotService.saveSlots(job.job_id, slots, result.job.updated_at, { skipLock: true });
       if (slotResult.ok) {
         savedSlots = slotResult.data.slots || [];
         // required_countはSlotService.saveSlotsで既に更新済み

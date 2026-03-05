@@ -257,6 +257,11 @@ const SlotRepository = {
 
     // 新しい枠リストに含まれるslot_idを収集
     const newSlotIds = new Set();
+    // 一括insert用のバッファ
+    const toInsert = [];
+
+    const user = getCurrentUserEmail() || 'system';
+    const now = getCurrentTimestamp();
 
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
@@ -276,15 +281,36 @@ const SlotRepository = {
         }
         newSlotIds.add(slot.slot_id);
       } else {
-        // 新規作成
-        const result = this.insert({ ...slot, job_id: jobId });
-        if (result.success) {
-          results.created.push(result.slot);
-          newSlotIds.add(result.slot.slot_id);
-        } else {
-          results.errors.push({ slot, error: result.error });
+        // 新規作成 — バリデーションしてバッファに追加
+        const mergedSlot = { ...slot, job_id: jobId };
+        const validation = this._validate(mergedSlot);
+        if (!validation.valid) {
+          results.errors.push({ slot, error: validation.error });
+          continue;
         }
+        const newSlot = {
+          slot_id: generateId('slt'),
+          job_id: jobId,
+          slot_time_slot: mergedSlot.slot_time_slot,
+          slot_pay_unit: mergedSlot.slot_pay_unit,
+          slot_count: Number(mergedSlot.slot_count) || 1,
+          sort_order: Number(mergedSlot.sort_order) || 0,
+          notes: mergedSlot.notes || '',
+          created_at: now,
+          created_by: user,
+          updated_at: now,
+          updated_by: user,
+          is_deleted: false
+        };
+        toInsert.push(newSlot);
+        newSlotIds.add(newSlot.slot_id);
       }
+    }
+
+    // 新規枠を一括insert（1回のsetValuesで完了）
+    if (toInsert.length > 0) {
+      insertRecords(this.TABLE_NAME, toInsert);
+      results.created = toInsert;
     }
 
     // 削除（新しいリストに含まれない既存枠）
