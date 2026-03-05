@@ -497,7 +497,10 @@ function testNormalizeTaxRate() {
 // ============================================
 
 function testGetSubcontractorRateByUnit() {
-  var sub = { basic_rate: 15000, half_day_rate: 8000, full_day_rate: 18000 };
+  var sub = {
+    basic_rate: 15000, half_day_rate: 8000, full_day_rate: 18000,
+    night_rate: 20000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 25000
+  };
 
   var cases = [
     { unit: 'half', expected: 8000, label: 'half → half_day_rate' },
@@ -507,13 +510,38 @@ function testGetSubcontractorRateByUnit() {
     { unit: 'full', expected: 18000, label: 'full → full_day_rate' },
     { unit: 'fullday', expected: 18000, label: 'fullday → full_day_rate' },
     { unit: '', expected: 15000, label: '空文字 → basic_rate' },
-    { unit: 'tobi', expected: 15000, label: 'unknown(tobi) → basic_rate' }
+    { unit: 'tobi', expected: 22000, label: 'tobi → tobi_rate' },
+    { unit: 'tobi_hojo', expected: 22000, label: 'tobi_hojo → tobi_rate' },
+    { unit: 'age', expected: 19000, label: 'age → age_rate' },
+    { unit: 'niage', expected: 19000, label: 'niage → age_rate' },
+    { unit: 'tobiage', expected: 25000, label: 'tobiage → tobiage_rate' },
+    { unit: 'yakin', expected: 20000, label: 'yakin → night_rate' },
+    { unit: 'night', expected: 20000, label: 'night → night_rate (VALID_PAY_UNITSの実値)' }
   ];
 
   for (var i = 0; i < cases.length; i++) {
     var c = cases[i];
     assertEqual(getSubcontractorRateByUnit_(sub, c.unit), c.expected, c.label);
   }
+
+  // fallback: 拡張単価未設定 → basic_rate（basic_rateとfull_day_rateを異なる値にして
+  // default経路(basic_rate ?? full_day_rate)と拡張case経路(xxx_rate ?? basic_rate)を区別する）
+  var subNoExtended = { basic_rate: 15000, half_day_rate: 8000, full_day_rate: 18000 };
+  assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'yakin'), 15000, 'night未設定 → basic fallback');
+  assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'tobi'), 15000, 'tobi未設定 → basic fallback');
+  assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'age'), 15000, 'age未設定 → basic fallback');
+  assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'tobiage'), 15000, 'tobiage未設定 → basic fallback');
+
+  // 反証テスト: basic_rateも未設定の場合、拡張caseは0を返すがdefaultはfull_day_rateを返す
+  // → caseが存在しないとdefault経路でfull_day_rate(18000)になるため、0との差で検出可能
+  var subOnlyFull = { full_day_rate: 18000 };
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'yakin'), 0, '反証: yakin caseが存在する(defaultなら18000)');
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'night'), 0, '反証: night caseが存在する(defaultなら18000)');
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'tobi'), 0, '反証: tobi caseが存在する(defaultなら18000)');
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'age'), 0, '反証: age caseが存在する(defaultなら18000)');
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'tobiage'), 0, '反証: tobiage caseが存在する(defaultなら18000)');
+  // 対照群: default経路はfull_day_rateを返す
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, ''), 18000, '対照群: default → full_day_rate');
 
   // fallback: half未設定 → basic_rate
   var subNoHalf = { basic_rate: 15000 };
@@ -671,7 +699,10 @@ function testCalculatePayoutForSubcontractor_nullSubcontractor() {
  */
 function testSubcontractorRateByUnit_allPayUnits() {
   // getSubcontractorRateByUnit_ は純粋関数なので直接テスト
-  var sub = { basic_rate: 20000, half_day_rate: 10000, full_day_rate: 20000 };
+  var sub = {
+    basic_rate: 20000, half_day_rate: 10000, full_day_rate: 20000,
+    night_rate: 25000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 24000
+  };
 
   // getUnpaidSubcontractorList 内部で使われるのと同じロジックを検証
   var amRate = getSubcontractorRateByUnit_(sub, 'am');
@@ -681,6 +712,17 @@ function testSubcontractorRateByUnit_allPayUnits() {
   assertEqual(amRate, 10000, '未払一覧: am単価 = half_day_rate');
   assertEqual(fullRate, 20000, '未払一覧: fullday単価 = full_day_rate');
   assertEqual(basicRate, 20000, '未払一覧: basic単価 = basic_rate');
+
+  // 拡張単価の検証
+  var yakinRate = getSubcontractorRateByUnit_(sub, 'yakin');
+  var tobiRate = getSubcontractorRateByUnit_(sub, 'tobi');
+  var ageRate = getSubcontractorRateByUnit_(sub, 'age');
+  var tobiageRate = getSubcontractorRateByUnit_(sub, 'tobiage');
+
+  assertEqual(yakinRate, 25000, '未払一覧: yakin単価 = night_rate');
+  assertEqual(tobiRate, 22000, '未払一覧: tobi単価 = tobi_rate');
+  assertEqual(ageRate, 19000, '未払一覧: age単価 = age_rate');
+  assertEqual(tobiageRate, 24000, '未払一覧: tobiage単価 = tobiage_rate');
 
   // 合計が wage_rate=0 ではなくマスタ単価で計算されることの確認
   var estimated = amRate + fullRate + basicRate;

@@ -69,6 +69,7 @@ const TABLE_DEFINITIONS = {
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
       'basic_rate', 'half_day_rate', 'full_day_rate',
+      'night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]
@@ -1115,6 +1116,75 @@ function migrateAddSubcontractorRateColumns() {
   Logger.log('basic_rate: 基本単価');
   Logger.log('half_day_rate: ハーフ単価');
   Logger.log('full_day_rate: 終日単価');
+}
+
+/**
+ * CR-081 マイグレーション: M_Subcontractorsに拡張単価カラムを追加
+ * night_rate, tobi_rate, age_rate, tobiage_rate
+ * GASエディタから実行: migrateAddSubcontractorExtendedRates()
+ */
+function migrateAddSubcontractorExtendedRates() {
+  const prop = PropertiesService.getScriptProperties();
+  const ids = [
+    { key: 'SPREADSHEET_ID_DEV', id: prop.getProperty('SPREADSHEET_ID_DEV') },
+    { key: 'SPREADSHEET_ID_PROD', id: prop.getProperty('SPREADSHEET_ID_PROD') }
+  ].filter(e => e.id);
+
+  if (ids.length === 0) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  for (const entry of ids) {
+    Logger.log('=== CR-081 外注先拡張単価カラム追加 [' + entry.key + '] ===\n');
+
+    const ss = SpreadsheetApp.openById(entry.id);
+    const sheet = ss.getSheetByName('Subcontractors');
+
+    if (!sheet) {
+      Logger.log('✗ 外注先シートが見つかりません（スキップ）');
+      continue;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    Logger.log('現在のカラム数: ' + lastCol);
+    Logger.log('現在のヘッダー: ' + headers.join(', '));
+
+    const fullDayRateIndex = headers.indexOf('full_day_rate');
+    if (fullDayRateIndex === -1) {
+      Logger.log('✗ full_day_rateカラムが見つかりません（スキップ）');
+      continue;
+    }
+
+    const columnsToAdd = ['night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate'];
+    let addedCount = 0;
+
+    for (let i = columnsToAdd.length - 1; i >= 0; i--) {
+      const colName = columnsToAdd[i];
+
+      if (headers.includes(colName)) {
+        Logger.log('✓ ' + colName + 'カラムは既に存在します');
+        continue;
+      }
+
+      const insertPosition = fullDayRateIndex + 2;
+      sheet.insertColumnAfter(fullDayRateIndex + 1);
+      sheet.getRange(1, insertPosition).setValue(colName);
+      Logger.log('✓ カラム追加: ' + colName + ' (位置: ' + insertPosition + ')');
+      addedCount++;
+    }
+
+    if (addedCount > 0) {
+      const newLastCol = sheet.getLastColumn();
+      sheet.getRange(1, 1, 1, newLastCol).setBackground('#E8F4F8').setFontWeight('bold');
+    }
+
+    Logger.log(addedCount + '個のカラムを追加しました\n');
+  }
+
+  Logger.log('=== CR-081 マイグレーション完了（全DB処理済み） ===');
 }
 
 /**

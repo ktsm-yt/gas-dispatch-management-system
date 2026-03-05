@@ -207,6 +207,26 @@
               <input type="number" id="full-day-rate" min="0" step="100" placeholder="円">
             </div>
           </div>
+          <div class="form-row cols-3">
+            <div class="form-group">
+              <label>上棟鳶</label>
+              <input type="number" id="tobi-rate" min="0" step="100" placeholder="円">
+            </div>
+            <div class="form-group">
+              <label>上棟荷揚げ</label>
+              <input type="number" id="age-rate" min="0" step="100" placeholder="円">
+            </div>
+            <div class="form-group">
+              <label>上棟鳶揚げ</label>
+              <input type="number" id="tobiage-rate" min="0" step="100" placeholder="円">
+            </div>
+          </div>
+          <div class="form-row cols-3">
+            <div class="form-group">
+              <label>夜勤</label>
+              <input type="number" id="night-rate" min="0" step="100" placeholder="円">
+            </div>
+          </div>
           <div class="form-group">
             <label>状態</label>
             <select id="is-active">
@@ -366,6 +386,10 @@
           document.getElementById('basic-rate').value = currentRecord.basic_rate ?? '';
           document.getElementById('half-day-rate').value = currentRecord.half_day_rate ?? '';
           document.getElementById('full-day-rate').value = currentRecord.full_day_rate ?? '';
+          document.getElementById('night-rate').value = currentRecord.night_rate ?? '';
+          document.getElementById('tobi-rate').value = currentRecord.tobi_rate ?? '';
+          document.getElementById('age-rate').value = currentRecord.age_rate ?? '';
+          document.getElementById('tobiage-rate').value = currentRecord.tobiage_rate ?? '';
           document.getElementById('is-active').value = currentRecord.is_active ? 'true' : 'false';
         }
       } else {
@@ -391,6 +415,10 @@
       const basicRate = document.getElementById('basic-rate').value;
       const halfDayRate = document.getElementById('half-day-rate').value;
       const fullDayRate = document.getElementById('full-day-rate').value;
+      const nightRate = document.getElementById('night-rate').value;
+      const tobiRate = document.getElementById('tobi-rate').value;
+      const ageRate = document.getElementById('age-rate').value;
+      const tobiageRate = document.getElementById('tobiage-rate').value;
       const data = {
         company_name: document.getElementById('company-name').value,
         contact_name: document.getElementById('contact-name').value,
@@ -399,6 +427,10 @@
         basic_rate: basicRate !== '' ? Number(basicRate) : null,
         half_day_rate: halfDayRate !== '' ? Number(halfDayRate) : null,
         full_day_rate: fullDayRate !== '' ? Number(fullDayRate) : null,
+        night_rate: nightRate !== '' ? Number(nightRate) : null,
+        tobi_rate: tobiRate !== '' ? Number(tobiRate) : null,
+        age_rate: ageRate !== '' ? Number(ageRate) : null,
+        tobiage_rate: tobiageRate !== '' ? Number(tobiageRate) : null,
         is_active: document.getElementById('is-active').value === 'true'
       };
       if (id) data.subcontractor_id = id;
