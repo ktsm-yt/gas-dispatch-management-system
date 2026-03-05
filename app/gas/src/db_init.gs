@@ -204,7 +204,7 @@ const TABLE_DEFINITIONS = {
       // 案件・配置
       'job_count', 'assignment_count',
       // 売上内訳
-      'work_amount', 'expense_amount', 'invoice_subtotal', 'invoice_tax', 'invoice_total',
+      'work_amount', 'expense_amount', 'adjustment_total', 'invoice_subtotal', 'invoice_tax', 'invoice_total',
       // 費用
       'payout_total', 'transport_total',
       // 利益
@@ -1570,4 +1570,49 @@ function migrateAddStaffNicknameColumn() {
   sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
 
   Logger.log('✓ nickname カラムを name_kana の後に追加しました');
+}
+
+/**
+ * T_MonthlyStatsシートにadjustment_totalカラムを追加（マイグレーション）
+ * expense_amountの後にadjustment_totalを挿入する冪等設計
+ * GASエディタから実行: migrateAddStatsAdjustmentTotal()
+ */
+function migrateAddStatsAdjustmentTotal() {
+  const prop = PropertiesService.getScriptProperties();
+  const spreadsheetId = prop.getProperty('SPREADSHEET_ID_DEV') || prop.getProperty('SPREADSHEET_ID_PROD');
+
+  if (!spreadsheetId) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const sheet = ss.getSheetByName('MonthlyStats');
+
+  if (!sheet) {
+    Logger.log('✗ MonthlyStatsシートが見つかりません');
+    return;
+  }
+
+  Logger.log('=== MonthlyStats adjustment_total カラム追加マイグレーション ===\n');
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  if (headers.includes('adjustment_total')) {
+    Logger.log('✓ adjustment_total カラムは既に存在します');
+    return;
+  }
+
+  const expenseIndex = headers.indexOf('expense_amount');
+  if (expenseIndex === -1) {
+    Logger.log('✗ expense_amount カラムが見つかりません');
+    return;
+  }
+
+  const insertPosition = expenseIndex + 2; // 1-indexed, expense_amountの後
+  sheet.insertColumnAfter(expenseIndex + 1);
+  sheet.getRange(1, insertPosition).setValue('adjustment_total');
+  sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
+
+  Logger.log('✓ adjustment_total カラムを expense_amount の後に追加しました');
 }

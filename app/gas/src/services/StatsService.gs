@@ -27,10 +27,11 @@ const StatsService = {
     // 案件・配置数の集計（work_dateで検索）
     const jobStats = this._aggregateJobs(year, month);
 
-    // 粗利計算（税抜・作業代ベース）
-    const grossMargin = invoiceStats.work_amount - payoutStats.payout_total;
-    const marginRate = invoiceStats.work_amount > 0
-      ? Math.round((grossMargin / invoiceStats.work_amount) * 10000) / 100
+    // 粗利計算（方針A: 売上=作業費+諸経費+調整額）
+    const salesTotal = invoiceStats.work_amount + invoiceStats.expense_amount + invoiceStats.adjustment_total;
+    const grossMargin = salesTotal - payoutStats.payout_total;
+    const marginRate = salesTotal > 0
+      ? Math.round((grossMargin / salesTotal) * 10000) / 100
       : 0;
 
     return {
@@ -42,6 +43,7 @@ const StatsService = {
       // 売上内訳
       work_amount: invoiceStats.work_amount,
       expense_amount: invoiceStats.expense_amount,
+      adjustment_total: invoiceStats.adjustment_total,
       invoice_subtotal: invoiceStats.invoice_subtotal,
       invoice_tax: invoiceStats.invoice_tax,
       invoice_total: invoiceStats.invoice_total,
@@ -486,6 +488,7 @@ const StatsService = {
     const result = {
       work_amount: 0,      // 作業費（subtotal - expense_amount）
       expense_amount: 0,   // 諸経費
+      adjustment_total: 0, // 調整額
       invoice_subtotal: 0, // 小計（税抜）
       invoice_tax: 0,      // 消費税
       invoice_total: 0     // 合計（税込）
@@ -496,12 +499,14 @@ const StatsService = {
 
       const subtotal = Number(inv.subtotal) || 0;
       const expense = Number(inv.expense_amount) || 0;
+      const adjustment = Number(inv.adjustment_total) || 0;
       const tax = Number(inv.tax_amount) || 0;
       const total = Number(inv.total_amount) || 0;
 
       result.work_amount += subtotal;           // subtotalは作業費のみ
       result.expense_amount += expense;
-      result.invoice_subtotal += (subtotal + expense);
+      result.adjustment_total += adjustment;
+      result.invoice_subtotal += (subtotal + expense + adjustment);
       result.invoice_tax += tax;
       result.invoice_total += total;
     }
@@ -600,6 +605,7 @@ const StatsService = {
       assignment_count: 0,
       work_amount: 0,
       expense_amount: 0,
+      adjustment_total: 0,
       invoice_subtotal: 0,
       invoice_tax: 0,
       invoice_total: 0,
@@ -613,6 +619,7 @@ const StatsService = {
       totals.assignment_count += s.assignment_count;
       totals.work_amount += s.work_amount;
       totals.expense_amount += s.expense_amount;
+      totals.adjustment_total += (s.adjustment_total || 0);
       totals.invoice_subtotal += s.invoice_subtotal;
       totals.invoice_tax += s.invoice_tax;
       totals.invoice_total += s.invoice_total;
@@ -621,9 +628,10 @@ const StatsService = {
       totals.gross_margin += s.gross_margin;
     }
 
-    // 平均粗利率を計算（税抜・作業代ベース）
-    totals.margin_rate = totals.work_amount > 0
-      ? Math.round((totals.gross_margin / totals.work_amount) * 10000) / 100
+    // 平均粗利率を計算（方針A: 売上=作業費+諸経費+調整額）
+    const salesTotal = totals.work_amount + totals.expense_amount + totals.adjustment_total;
+    totals.margin_rate = salesTotal > 0
+      ? Math.round((totals.gross_margin / salesTotal) * 10000) / 100
       : 0;
 
     return totals;
