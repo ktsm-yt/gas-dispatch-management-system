@@ -123,9 +123,10 @@
       bottom: 0;
       width: 100%;
       height: 100%;
-      opacity: 0;
+      opacity: 0.01; /* iOS Safari: opacity:0だとピッカーが不安定 */
       cursor: pointer;
       z-index: 1;
+      font-size: 16px; /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
     }
 
     /* カレンダーアイコンを非表示にして全体をクリック可能に */
