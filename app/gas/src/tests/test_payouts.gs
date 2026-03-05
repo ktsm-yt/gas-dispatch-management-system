@@ -20,7 +20,7 @@ function runPayoutTests() {
     testWithholdingTaxCalculation,
     testPaidDateValidation,
     testProgressiveWithholdingBrackets,
-    testDailyWithholdingTaxIntegration
+    testWithholdingTaxIntegration
   ];
 
   let passed = 0;
@@ -709,13 +709,13 @@ function testWithholdingTaxCalculation() {
   assertEqual(lookupDailyWithholdingTax(24000), 2305, '24000 → 2305');
   Logger.log('  累進計算: OK');
 
-  // 4. _calculateDailyWithholdingTaxTotal: 非対象スタッフ → 0
+  // 4. _calculateWithholdingTaxTotal: 非対象スタッフ → 0
   const staffNoTax = { staff_id: 'test', withholding_tax_applicable: false };
-  const tax0 = PayoutService._calculateDailyWithholdingTaxTotal([], staffNoTax, new Map(), new Map());
+  const tax0 = PayoutService._calculateWithholdingTaxTotal([], staffNoTax, new Map(), new Map());
   assertEqual(tax0, 0, '非対象スタッフ → 0');
 
-  // 5. _calculateDailyWithholdingTaxTotal: null スタッフ → 0
-  const taxNull = PayoutService._calculateDailyWithholdingTaxTotal([], null, new Map(), new Map());
+  // 5. _calculateWithholdingTaxTotal: null スタッフ → 0
+  const taxNull = PayoutService._calculateWithholdingTaxTotal([], null, new Map(), new Map());
   assertEqual(taxNull, 0, 'null staff → 0');
   Logger.log('  スタッフフラグ: OK');
 
@@ -840,11 +840,11 @@ function testProgressiveWithholdingBrackets() {
 }
 
 /**
- * _calculateDailyWithholdingTaxTotal 統合テスト ★最重要
- * 同日グルーピング・人工割・非対象スタッフを検証
+ * _calculateWithholdingTaxTotal 統合テスト ★最重要
+ * CR-084: 配置単位で個別テーブル参照・人工割・非対象スタッフを検証
  */
-function testDailyWithholdingTaxIntegration() {
-  Logger.log('--- testDailyWithholdingTaxIntegration ---');
+function testWithholdingTaxIntegration() {
+  Logger.log('--- testWithholdingTaxIntegration ---');
 
   // === Case A: 単一日・単一配置 ===
   // daily=15000 → lookup=725
@@ -854,14 +854,14 @@ function testDailyWithholdingTaxIntegration() {
     const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
     const countMap = new Map([['j1', 1]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 725, 'Case A: 単一日15000 → 725');
   }
   Logger.log('  Case A (単一配置): OK');
 
-  // === Case B: 同日グルーピング (am+pm) ★ ===
-  // 同日wage=8000+7000=15000 → lookup(15000)=725
-  // グルーピングなしだと: lookup(8000)+lookup(7000)=210+175=385 (間違い)
+  // === Case B: 同日2配置 → 配置単位で個別参照 (CR-084) ===
+  // lookup(8000)=210, lookup(7000)=175 → 合計385
+  // (旧ロジック: 合算15000→725)
   {
     const staff = { staff_id: 'test_b', withholding_tax_applicable: true, daily_rate_basic: 15000 };
     const assignments = [
@@ -874,10 +874,10 @@ function testDailyWithholdingTaxIntegration() {
     ]);
     const countMap = new Map([['j1', 1], ['j2', 1]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
-    assertEqual(result, 725, 'Case B: 同日グルーピング 8000+7000=15000 → 725 (NOT 385)');
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 385, 'Case B: 配置単位 lookup(8000)+lookup(7000)=210+175=385');
   }
-  Logger.log('  Case B (同日グルーピング): OK');
+  Logger.log('  Case B (配置単位): OK');
 
   // === Case C: 異なる日 ===
   // j1=10000(1/10), j2=13000(1/11) → lookup(10000)+lookup(13000)=280+525=805
@@ -893,7 +893,7 @@ function testDailyWithholdingTaxIntegration() {
     ]);
     const countMap = new Map([['j1', 1], ['j2', 1]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 805, 'Case C: 異なる日 10000+13000 → 280+525=805');
   }
   Logger.log('  Case C (異なる日): OK');
@@ -909,7 +909,7 @@ function testDailyWithholdingTaxIntegration() {
     const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
     const countMap = new Map([['j1', 1]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 190, 'Case D: am + null wage → basic×0.5=7500 → 190');
   }
   Logger.log('  Case D (am + null wage): OK');
@@ -927,7 +927,7 @@ function testDailyWithholdingTaxIntegration() {
     const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 2 }]]);
     const countMap = new Map([['j1', 3]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 245, 'Case E: 人工割 15000×0.6=9000 → 245');
   }
   Logger.log('  Case E (人工割): OK');
@@ -941,7 +941,7 @@ function testDailyWithholdingTaxIntegration() {
     const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
     const countMap = new Map([['j1', 1]]);
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 0, 'Case F: 非対象スタッフ → 0');
   }
   Logger.log('  Case F (非対象): OK');
@@ -949,7 +949,7 @@ function testDailyWithholdingTaxIntegration() {
   // === Case G: 空 assignments + 対象スタッフ → 早期return 0 ===
   {
     const staff = { staff_id: 'test_g', withholding_tax_applicable: true, daily_rate_basic: 15000 };
-    const result = PayoutService._calculateDailyWithholdingTaxTotal([], staff, new Map(), new Map());
+    const result = PayoutService._calculateWithholdingTaxTotal([], staff, new Map(), new Map());
     assertEqual(result, 0, 'Case G: 空assignments + 対象スタッフ → 0');
   }
   Logger.log('  Case G (空assignments): OK');
@@ -966,10 +966,68 @@ function testDailyWithholdingTaxIntegration() {
     // job=undefined → required_count=0 → coeff=1.0 (ガード) → adjustment=0
     // wage=10000, daily=10000 → lookup(10000)=280
 
-    const result = PayoutService._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
     assertEqual(result, 280, 'Case H: jobMapミスヒット → asg.work_dateフォールバック, lookup(10000)=280');
   }
   Logger.log('  Case H (jobMapミスヒット): OK');
 
-  Logger.log('--- testDailyWithholdingTaxIntegration PASSED ---');
+  // === Case I: 境界値 — 2899円(税額0) / 2900円(税額5) ===
+  {
+    const staff = { staff_id: 'test_i', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 2899, pay_unit: 'basic', work_date: '2025-01-10' },
+      { job_id: 'j2', wage_rate: 2900, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([
+      ['j1', { work_date: '2025-01-10', required_count: 1 }],
+      ['j2', { work_date: '2025-01-10', required_count: 1 }]
+    ]);
+    const countMap = new Map([['j1', 1], ['j2', 1]]);
+
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 5, 'Case I: 境界値 lookup(2899)=0 + lookup(2900)=5 → 5');
+  }
+  Logger.log('  Case I (境界値): OK');
+
+  // === Case J: 同日3配置 + 人工割混在 ===
+  // j1: wage=15000, req=2, act=3 → coeff=0.6, adj=9000-15000=-6000, assignmentWage=9000 → lookup(9000)=245
+  // j2: wage=10000, req=1, act=1 → coeff=1.0, adj=0, assignmentWage=10000 → lookup(10000)=280
+  // j3: wage=7500, req=1, act=1 → coeff=1.0, adj=0, assignmentWage=7500 → lookup(7500)=190
+  // total = 245+280+190 = 715
+  {
+    const staff = { staff_id: 'test_j', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 15000, pay_unit: 'basic', work_date: '2025-01-10' },
+      { job_id: 'j2', wage_rate: 10000, pay_unit: 'basic', work_date: '2025-01-10' },
+      { job_id: 'j3', wage_rate: 7500, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([
+      ['j1', { work_date: '2025-01-10', required_count: 2 }],
+      ['j2', { work_date: '2025-01-10', required_count: 1 }],
+      ['j3', { work_date: '2025-01-10', required_count: 1 }]
+    ]);
+    const countMap = new Map([['j1', 3], ['j2', 1], ['j3', 1]]);
+
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 715, 'Case J: 3配置+人工割混在 245+280+190=715');
+  }
+  Logger.log('  Case J (3配置+人工割混在): OK');
+
+  // === Case K: 人工割で閾値を跨ぐ（3000円→2900円未満に減少） ===
+  // wage=3000, req=1, act=2 → coeff=0.5, adj=floor(3000*0.5)-3000=1500-3000=-1500
+  // assignmentWage=3000+(-1500)=1500 → lookup(1500)=0
+  {
+    const staff = { staff_id: 'test_k', withholding_tax_applicable: true, daily_rate_basic: 15000 };
+    const assignments = [
+      { job_id: 'j1', wage_rate: 3000, pay_unit: 'basic', work_date: '2025-01-10' }
+    ];
+    const jobMap = new Map([['j1', { work_date: '2025-01-10', required_count: 1 }]]);
+    const countMap = new Map([['j1', 2]]);
+
+    const result = PayoutService._calculateWithholdingTaxTotal(assignments, staff, jobMap, countMap);
+    assertEqual(result, 0, 'Case K: 人工割で閾値跨ぎ 3000*0.5=1500 → lookup(1500)=0');
+  }
+  Logger.log('  Case K (人工割閾値跨ぎ): OK');
+
+  Logger.log('--- testWithholdingTaxIntegration PASSED ---');
 }
