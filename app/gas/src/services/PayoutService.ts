@@ -189,8 +189,8 @@ const PayoutService = {
     // 交通費は請求書のみに反映。スタッフ支払いには含めない（調整額で別途対応）
     const adjustedTransport = 0;
 
-    // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
-    const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, jobMap, assignmentCountByJob);
+    // 源泉徴収税を計算（配置単位で個別テーブル参照 → 月合計）
+    const taxAmount = this._calculateWithholdingTaxTotal(assignments, staff, jobMap, assignmentCountByJob);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -1112,8 +1112,8 @@ const PayoutService = {
       // 人工割計算（CR-029）
       const ninku = this._calculateNinkuAdjustments(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
 
-      // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
-      const taxAmount = this._calculateDailyWithholdingTaxTotal(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
+      // 源泉徴収税を計算（配置単位で個別テーブル参照 → 月合計）
+      const taxAmount = this._calculateWithholdingTaxTotal(assignmentsWithJob, staff, jobMap, assignmentCountByJob);
 
       const dates = assignmentsWithJob.map(a => a.work_date as string).filter(d => d);
       const periodStart = dates.length > 0 ? dates[0] : endDate;
@@ -1264,8 +1264,8 @@ const PayoutService = {
     // 交通費は請求書のみに反映。スタッフ支払いには含めない
     // const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
 
-    // 源泉徴収税を計算（日額テーブル: work_date単位で合算 → テーブル参照 → 月合計）
-    const taxAmount = this._calculateDailyWithholdingTaxTotal(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
+    // 源泉徴収税を計算（配置単位で個別テーブル参照 → 月合計）
+    const taxAmount = this._calculateWithholdingTaxTotal(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
     // 期間を算出
     const dates = assignments.map(a => a.work_date as string).filter(d => d);
@@ -1466,14 +1466,15 @@ const PayoutService = {
 
   /**
    * 源泉徴収税を日額テーブル（甲欄・扶養0人）で計算
-   * work_date 単位で日給（人工割調整込み）を合算し、日ごとにテーブル参照して月合計を返す。
+   * 各配置(assignment)の給与（人工割調整込み）を個別にテーブル参照し、全配置の税額を合算して返す。
+   * CR-084: 日額合算→1配置単位に変更（累進課税による過大徴収を防止）
    * @param staffAssignments - 対象スタッフの配置一覧
    * @param staff - スタッフ情報
    * @param jobMap - job_id → job のマップ
    * @param assignmentCountByJob - job_id → 配置人数のマップ
    * @returns 源泉徴収税額の月合計
    */
-  _calculateDailyWithholdingTaxTotal: function(
+  _calculateWithholdingTaxTotal: function(
     staffAssignments: Record<string, unknown>[],
     staff: Record<string, unknown> | null,
     jobMap: Map<string, any>,
@@ -1483,12 +1484,11 @@ const PayoutService = {
     if (!staff.withholding_tax_applicable || String(staff.withholding_tax_applicable).toUpperCase() === 'FALSE') return 0;
     if (!staffAssignments || staffAssignments.length === 0) return 0;
 
-    // Step 1: work_date 単位で (wage + 人工割調整額) を集計
-    const dailyTotals = new Map<string, number>();
+    // 各配置の給与(人工割調整込み)を個別にテーブル参照して合算
+    let total = 0;
     for (const asg of staffAssignments) {
       const jobId = asg.job_id as string;
       const job = jobMap.get(jobId);
-      const workDate = (job?.work_date as string) || (asg.work_date as string) || '';
 
       // 賃金を計算
       const wage = calculateWage_(asg as any, staff as any, (asg.pay_unit as string) || 'basic');
@@ -1499,13 +1499,8 @@ const PayoutService = {
       const coefficient = calculateNinkuCoefficient_(requiredCount, actualCount);
       const adjustment = coefficient !== 1.0 ? calculateNinkuAdjustment_(wage, coefficient) : 0;
 
-      dailyTotals.set(workDate, (dailyTotals.get(workDate) || 0) + wage + adjustment);
-    }
-
-    // Step 2: 日ごとにテーブル参照して税額を合算
-    let total = 0;
-    for (const [, dailyAmount] of dailyTotals) {
-      total += lookupDailyWithholdingTax(dailyAmount);
+      const assignmentWage = wage + adjustment;
+      total += lookupDailyWithholdingTax(assignmentWage);
     }
     return total;
   },

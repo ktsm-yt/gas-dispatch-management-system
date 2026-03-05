@@ -304,26 +304,18 @@ const PayoutDetailExportService = {
   ): number {
     if (assignments.length === 0) return 0;
 
-    // 源泉徴収対象スタッフのみ日次税額を計算
-    const dailyTaxMap = new Map<string, number>();
+    // CR-084: 各配置の給与に対して個別にテーブル参照して税額を算出
     let calculatedTaxTotal = 0;
+    const perRowTax: (number | string)[] = [];
     if (isWithholdingTarget) {
-      const dailyWageMap = new Map<string, number>();
       for (const a of assignments) {
-        const wd = a.work_date || '';
-        dailyWageMap.set(wd, (dailyWageMap.get(wd) || 0) + a.adjusted_wage_rate);
-      }
-      for (const [wd, dailyWage] of dailyWageMap) {
-        const tax = lookupDailyWithholdingTax(dailyWage);
-        dailyTaxMap.set(wd, tax);
+        const tax = lookupDailyWithholdingTax(a.adjusted_wage_rate);
+        perRowTax.push(tax);
         calculatedTaxTotal += tax;
       }
     }
 
-    // 同日の最初の行にだけ税額を表示するためのSet
-    const taxShownForDate = new Set<string>();
-
-    const rows = assignments.map(function(a) {
+    const rows = assignments.map(function(a, idx) {
       // work_date: "2026-02-15" → "2/15"
       let dateStr = '';
       if (a.work_date) {
@@ -336,13 +328,8 @@ const PayoutDetailExportService = {
       const unitLabel = PAY_UNIT_LABEL_MAP[a.pay_unit] || '式';
       const transport = '';  // 交通費除外（移動列は空で出力）
 
-      // 同日最初の行にだけ日次源泉徴収税を表示
-      let taxCell: number | string = '';
-      const wd = a.work_date || '';
-      if (dailyTaxMap.has(wd) && !taxShownForDate.has(wd)) {
-        taxCell = dailyTaxMap.get(wd) || 0;
-        taxShownForDate.add(wd);
-      }
+      // 各行に配置単位の源泉徴収税を表示
+      const taxCell = perRowTax[idx] !== undefined ? perRowTax[idx] : '';
 
       return [
         dateStr,                // 作業日
@@ -356,7 +343,7 @@ const PayoutDetailExportService = {
         '',                     // 時間外（Phase 2）
         '',                     // 残業（Phase 2）
         transport,              // 移動
-        taxCell                 // 源泉徴収税（日次、同日最初の行のみ）
+        taxCell                 // 源泉徴収税（配置単位）
       ];
     });
 
@@ -401,13 +388,17 @@ const PayoutDetailExportService = {
       { payout_id: String(payout.payout_id || ''), rowCount: rowCount, adjustedBaseAmount: adjustedBaseAmount }
     );
 
-    // 源泉徴収税: 日額テーブルで再計算した合計を使用（行レベル合計と一致させるため）
+    // 源泉徴収税: 確定済み支払は payout.tax_amount を優先（CR-084ロジック変更前の確定値を維持）
+    const confirmedTax = payout.tax_amount;
+    const summaryTax = (confirmedTax !== undefined && confirmedTax !== null)
+      ? confirmedTax
+      : calculatedTaxTotal;
     const summaryData = [
       '合計', '', '', rowCount, '',
       '', adjustedBaseAmount,
       '', '', '',
       0,  // 交通費除外
-      calculatedTaxTotal
+      summaryTax
     ];
 
     sheet.getRange(summaryRow, 1, 1, 12).setValues([summaryData]);
