@@ -18,7 +18,9 @@ function getStaffForPayouts(): unknown {
       return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
     }
 
-    const staffList = StaffRepository.search({ is_active: true });
+    // subcontract（外注スタッフ）は通常スタッフのプルダウンから除外
+    const staffList = StaffRepository.search({ is_active: true })
+      .filter((s) => s.staff_type !== 'subcontract');
 
     // 必要なフィールドのみ返す
     const data = staffList.map(function(s) {
