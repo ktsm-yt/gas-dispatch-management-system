@@ -99,8 +99,36 @@ const PayoutRepository = {
    * @returns 最新の支払いまたはnull
    */
   findLastPayout: function(staffId: string): PayoutRecord | null {
-    const payouts = this.findByStaffId(staffId, { limit: 1 });
-    return payouts.length > 0 ? payouts[0] : null;
+    let records = getAllRecords(this.TABLE_NAME);
+    records = records.filter(r =>
+      !r.is_deleted &&
+      r.payout_type === 'STAFF' &&
+      r.staff_id === staffId &&
+      (r.status === 'confirmed' || r.status === 'paid')
+    );
+    if (records.length === 0) return null;
+    records.sort((a, b) => {
+      const dateA = this._parseLocalDate((a.paid_date || a.period_end) as string);
+      const dateB = this._parseLocalDate((b.paid_date || b.period_end) as string);
+      return (dateB?.getTime() ?? 0) - (dateA?.getTime() ?? 0);
+    });
+    return this._normalizeRecord(records[0]);
+  },
+
+  /**
+   * スタッフ・期間終了日でdraft Payoutを検索（下書き保存の上書き判定用）
+   */
+  findDraftByStaffAndEndDate: function(staffId: string, endDate: string): PayoutRecord | null {
+    const normalizedEnd = this._normalizeDate(endDate);
+    let records = getAllRecords(this.TABLE_NAME);
+    records = records.filter(r =>
+      !r.is_deleted &&
+      r.payout_type === 'STAFF' &&
+      r.staff_id === staffId &&
+      r.status === 'draft' &&
+      this._normalizeDate(r.period_end as string | Date) === normalizedEnd
+    );
+    return records.length > 0 ? this._normalizeRecord(records[0]) : null;
   },
 
   /**
