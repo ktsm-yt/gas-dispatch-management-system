@@ -50,6 +50,7 @@
     <?!= include('modal_styles'); ?>
     <?!= include('assignment_modal_styles'); ?>
     <?!= include('confirmation_modal_styles'); ?>
+    <?!= include('search_modal_styles'); ?>
 
     /* Date Navigation - Compact */
     .date-nav {
@@ -642,6 +643,7 @@
     </div>
     <!-- Right: Filter + Stats -->
     <div class="date-nav-right">
+      <button class="date-btn" id="search-btn" onclick="openSearchModal()" title="案件検索" style="font-size:16px;padding:4px 8px;">&#128269;</button>
       <div class="filter-group">
         <label class="filter-label">ステータス</label>
         <select id="status-filter" class="filter-select">
@@ -685,6 +687,8 @@
   <?!= include('job_modal_js'); ?>
 
   <?!= include('assignment_modal_js'); ?>
+  <?!= include('search_modal'); ?>
+  <?!= include('search_modal_js'); ?>
   <?!= include('cache_utils'); ?>
   <?!= include('normalize_utils'); ?>
 
