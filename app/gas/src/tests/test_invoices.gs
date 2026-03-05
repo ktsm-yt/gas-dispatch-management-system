@@ -100,9 +100,13 @@ function testInvoiceRepository() {
   Logger.log('  OptimisticLock: OK');
 
   // 6. GenerateInvoiceNumber テスト
-  const invoiceNumber = InvoiceRepository.generateInvoiceNumber(2025, 1, testInvoice.customer_id);
+  var invoiceNumber = InvoiceRepository.generateInvoiceNumber(2025, 1, 'cus_001');
   assert(invoiceNumber, 'generateInvoiceNumber should return value');
-  assert(invoiceNumber.startsWith('2501_'), 'invoice number format should be YYMM_');
+  assertEqual(invoiceNumber, '2501_001', 'invoice number should be YYMM_customerCodePart');
+  var invoiceNumber2 = InvoiceRepository.generateInvoiceNumber(2025, 1, '');
+  assertEqual(invoiceNumber2, '2501_000', 'empty customer code should fallback to 000');
+  var invoiceNumber3 = InvoiceRepository.generateInvoiceNumber(2025, 1, 'ABC123');
+  assertEqual(invoiceNumber3, '2501_ABC123', 'non-cus_ code should be used as-is');
   Logger.log(`  GenerateInvoiceNumber: OK (${invoiceNumber})`);
 
   // 7. SoftDelete テスト
@@ -611,8 +615,8 @@ function testFormat2MultiPage() {
   const dueMonth = 1 + paymentMonthOffset;
   const dueDate = `2025-${String(dueMonth).padStart(2, '0')}-${String(paymentDay).padStart(2, '0')}`;
 
-  // 請求番号を生成
-  const invoiceNumber = InvoiceRepository.generateInvoiceNumber(2025, 1, customer.customer_id);
+  // 請求番号を生成（顧客コードベース）
+  const invoiceNumber = InvoiceRepository.generateInvoiceNumber(2025, 1, String(customer.customer_code || ''));
 
   const newInvoice = InvoiceRepository.insert({
     customer_id: customer.customer_id,
@@ -826,8 +830,8 @@ function testFormat1And2BulkLines() {
   for (const customer of targetCustomers) {
     Logger.log(`\n--- ${customer.invoice_format}: ${customer.company_name} ---`);
 
-    // 請求番号を生成
-    const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, customer.customer_id);
+    // 請求番号を生成（顧客コードベース）
+    const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, String(customer.customer_code || ''));
 
     // 請求書を作成
     const invoice = InvoiceRepository.insert({
