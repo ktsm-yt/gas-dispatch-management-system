@@ -974,7 +974,15 @@
       }
 
       // 3. キャッシュなし: ローディング表示してRPC
+      document.getElementById('stats-total').textContent = '-';
+      document.getElementById('stats-assigned').textContent = '-';
+      document.getElementById('stats-pending').textContent = '-';
       TIME_SLOT_ORDER.forEach(slot => {
+        document.getElementById(`col-total-${slot}`).textContent = '-';
+        document.getElementById(`col-member-${slot}`).textContent = '-/-';
+        const shortageEl = document.getElementById(`col-shortage-${slot}`);
+        shortageEl.textContent = '過不足なし';
+        shortageEl.className = 'shortage neutral';
         document.getElementById(`col-cards-${slot}`).innerHTML =
           '<div class="loading"><div class="spinner"></div>読み込み中...</div>';
       });
