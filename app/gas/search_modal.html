@@ -1,0 +1,43 @@
+<!-- Search Modal (CR-082) - Dashboard Cross-search -->
+<div class="search-modal-overlay" id="search-modal" style="display: none;">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <div class="modal-header-info">
+        <h2 class="modal-title">案件検索</h2>
+        <div class="modal-subtitle">現場名・スタッフ名で過去案件を横断検索</div>
+      </div>
+      <button class="modal-close" onclick="closeSearchModal()">&times;</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- Search Input -->
+      <div class="search-input-row">
+        <input type="text" id="search-keyword" placeholder="現場名またはスタッフ名を入力..."
+               autocomplete="off">
+        <select id="search-type" class="search-type-select">
+          <option value="all">すべて</option>
+          <option value="site">現場名</option>
+          <option value="staff">スタッフ名</option>
+        </select>
+        <button class="btn btn-primary" id="search-execute-btn" onclick="executeSearch()">検索</button>
+      </div>
+
+      <!-- Results Area -->
+      <div id="search-results-area">
+        <div class="search-empty-state" id="search-empty">
+          <div class="search-empty-icon">&#128269;</div>
+          <div>キーワードを入力して検索してください</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <div class="modal-footer-left">
+        <span class="search-result-count" id="search-result-count"></span>
+      </div>
+      <div class="modal-footer-right">
+        <button class="btn btn-secondary" onclick="closeSearchModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+</div>

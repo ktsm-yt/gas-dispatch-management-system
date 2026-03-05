@@ -1,0 +1,162 @@
+<!-- Search Modal JS (CR-082) -->
+<script>
+(function() {
+  'use strict';
+
+  const TIME_SLOT_LABELS = {
+    jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤', mitei: '未定'
+  };
+
+  const STATUS_LABELS = {
+    pending: '未配置', assigned: '配置済', hold: '保留', cancelled: 'キャンセル', problem: '問題あり'
+  };
+
+  let searchBusy = false;
+
+  window.openSearchModal = function() {
+    document.getElementById('search-modal').style.display = 'flex';
+    const input = document.getElementById('search-keyword');
+    input.value = '';
+    input.focus();
+    document.getElementById('search-results-area').innerHTML =
+      '<div class="search-empty-state" id="search-empty">' +
+      '<div class="search-empty-icon">&#128269;</div>' +
+      '<div>キーワードを入力して検索してください</div></div>';
+    document.getElementById('search-result-count').textContent = '';
+  };
+
+  window.closeSearchModal = function() {
+    document.getElementById('search-modal').style.display = 'none';
+  };
+
+  window.executeSearch = function() {
+    if (searchBusy) return;
+
+    const keyword = document.getElementById('search-keyword').value.trim();
+    if (!keyword) return;
+
+    const searchType = document.getElementById('search-type').value;
+    const btn = document.getElementById('search-execute-btn');
+    const area = document.getElementById('search-results-area');
+
+    searchBusy = true;
+    btn.disabled = true;
+    btn.textContent = '検索中...';
+    area.innerHTML = '<div class="search-loading">検索中...</div>';
+    document.getElementById('search-result-count').textContent = '';
+
+    google.script.run
+      .withSuccessHandler(function(response) {
+        searchBusy = false;
+        btn.disabled = false;
+        btn.textContent = '検索';
+
+        if (!response || !response.ok) {
+          var errMsg = (response && response.error) ? response.error.message : '検索に失敗しました';
+          area.innerHTML = '<div class="search-empty-state"><div>' + escapeHtml(errMsg) + '</div></div>';
+          return;
+        }
+
+        var data = response.data;
+        renderSearchResults(data.results, data.total, data.truncated);
+      })
+      .withFailureHandler(function(err) {
+        searchBusy = false;
+        btn.disabled = false;
+        btn.textContent = '検索';
+        area.innerHTML = '<div class="search-empty-state"><div>エラー: ' + escapeHtml(err.message || String(err)) + '</div></div>';
+      })
+      .searchDashboard({
+        keyword: keyword,
+        search_type: searchType,
+        include_archive: true,
+        limit: 50
+      });
+  };
+
+  function renderSearchResults(results, total, truncated) {
+    var area = document.getElementById('search-results-area');
+    var countEl = document.getElementById('search-result-count');
+
+    if (!results || results.length === 0) {
+      area.innerHTML = '<div class="search-empty-state"><div>該当する案件が見つかりませんでした</div></div>';
+      countEl.textContent = '0件';
+      return;
+    }
+
+    countEl.textContent = truncated
+      ? results.length + '件表示 / ' + total + '件中'
+      : total + '件';
+
+    var html = '<div class="search-results-body">' +
+      '<table class="search-results-table"><thead><tr>' +
+      '<th>日付</th><th>時間帯</th><th>現場名</th><th>得意先</th><th>スタッフ</th><th>ステータス</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      var dateStr = r.work_date || '-';
+      var slotLabel = TIME_SLOT_LABELS[r.time_slot] || r.time_slot || '-';
+      var siteName = escapeHtml(r.site_name || '-');
+      var customerName = escapeHtml(r.customer_name || '-');
+      var staffStr = r.staff_names && r.staff_names.length > 0
+        ? escapeHtml(r.staff_names.join(', '))
+        : '<span style="color:#9ca3af">-</span>';
+      var statusClass = 'status-' + (r.status || 'pending');
+      var statusLabel = STATUS_LABELS[r.status] || r.status || '-';
+
+      var archiveBadge = '';
+      if (r._archived && r._archiveFiscalYear) {
+        archiveBadge = ' <span class="search-badge-archive">' + r._archiveFiscalYear + '年度</span>';
+      }
+
+      html += '<tr>' +
+        '<td style="white-space:nowrap">' + escapeHtml(dateStr) + archiveBadge + '</td>' +
+        '<td>' + escapeHtml(slotLabel) + '</td>' +
+        '<td>' + siteName + '</td>' +
+        '<td>' + customerName + '</td>' +
+        '<td><div class="search-staff-list">' + staffStr + '</div></td>' +
+        '<td><span class="search-status-badge ' + statusClass + '">' + escapeHtml(statusLabel) + '</span></td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table></div>';
+
+    if (truncated) {
+      html += '<div class="search-truncated-notice">表示件数の上限に達しました。キーワードを絞り込んでください。</div>';
+    }
+
+    area.innerHTML = html;
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Enter key handler
+  document.addEventListener('keydown', function(e) {
+    var modal = document.getElementById('search-modal');
+    if (modal && modal.style.display !== 'none') {
+      if (e.key === 'Enter' && e.target.id === 'search-keyword') {
+        e.preventDefault();
+        executeSearch();
+      }
+      if (e.key === 'Escape') {
+        closeSearchModal();
+      }
+    }
+  });
+
+  // Overlay click to close
+  document.getElementById('search-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeSearchModal();
+    }
+  });
+})();
+</script>

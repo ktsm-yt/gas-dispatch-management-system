@@ -412,6 +412,27 @@ declare global {
   // === ステータスルール（status_rules.ts） ===
   function isInvoiceEditable_(status: string): boolean;
 
+  // === ダッシュボード横断検索 (CR-082) ===
+  interface DashboardSearchParams {
+    keyword: string;
+    search_type?: 'all' | 'site' | 'staff';
+    include_archive?: boolean;
+    limit?: number;
+  }
+
+  interface DashboardSearchResult {
+    job_id: string;
+    work_date: string;
+    time_slot: string;
+    site_name: string;
+    customer_name: string;
+    staff_names: string[];
+    assigned_count: number;
+    status: string;
+    _archived?: boolean;
+    _archiveFiscalYear?: number;
+  }
+
   // === 未移行リポジトリのambient宣言（TS移行時に削除して実装に置き換え） ===
   const AssignmentRepository: {
     findByStaffId(staffId: string): Record<string, unknown>[];
