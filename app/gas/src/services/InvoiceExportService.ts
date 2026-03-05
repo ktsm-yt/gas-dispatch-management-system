@@ -1285,6 +1285,20 @@ const InvoiceExportService = {
       sheet.getRange('AI' + currentRow).setValue(adj.amount);
       currentRow++;
     });
+
+    // === 小計・消費税・合計をコード計算値で上書き（テンプレート数式との端数ズレ防止） ===
+    const totalBeforeTax = Number(invoice.subtotal || 0) + expenseAmount + Number(invoice.adjustment_total || 0);
+    const taxAmount = Number(invoice.tax_amount || 0);
+
+    // データシートにも書き込み（データシート方式の一貫性）
+    dataSheet.getRange('B8').setValue(totalBeforeTax);
+    dataSheet.getRange('B9').setValue(taxAmount);
+    dataSheet.getRange('B10').setValue(totalAmount);
+
+    // 原本シートの集計セルに直接書き込み（数式を上書き）
+    sheet.getRange('AI35').setValue(totalBeforeTax);   // ①小計
+    sheet.getRange('AI37').setValue(taxAmount);         // ②消費税(10%)
+    sheet.getRange('AI38').setValue(totalAmount);       // 合計(①+②)
   },
 
   // ============================================
