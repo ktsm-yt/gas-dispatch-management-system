@@ -354,7 +354,7 @@ function validateCustomer(data) {
  * 次の顧客コードを自動採番（cus_ + 連番）
  */
 function generateNextCustomerCode() {
-  var sheet = getSheet(SHEET_NAMES.CUSTOMERS);
+  var sheet = getSheetDirect(SHEET_NAMES.CUSTOMERS);
   var data = sheet.getDataRange().getValues();
   var headers = data[0];
   var codeIdx = headers.indexOf('customer_code');
