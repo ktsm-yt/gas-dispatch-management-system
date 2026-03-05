@@ -212,6 +212,73 @@ const PayoutService = {
   },
 
   /**
+   * 調整額・備考を下書き保存（Assignmentへの紐付けなし）
+   * 既存draftがあればupdate、なければinsert
+   */
+  saveDraft: function(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; expectedUpdatedAt?: string } = {}): { success: boolean; payout?: PayoutRecord & { target_name: string }; error?: string } {
+    Logger.log(`[saveDraft] staffId=${staffId}, endDate=${endDate}, options=${JSON.stringify(options)}`);
+
+    // 金額計算（プレビュー用の計算結果を取得）
+    const calc = this.calculatePayout(staffId, endDate, { include_assignments: false });
+    const adjustmentAmount = options.adjustment_amount || 0;
+    const totalAmount = calc.totalAmount + adjustmentAmount;
+
+    // 既存draftを検索
+    const existingDraft = PayoutRepository.findDraftByStaffAndEndDate(staffId, endDate);
+
+    if (existingDraft) {
+      // 既存draftを更新
+      const result = PayoutRepository.update({
+        payout_id: existingDraft.payout_id,
+        period_start: calc.periodStart || existingDraft.period_start,
+        period_end: endDate,
+        assignment_count: calc.assignmentCount,
+        base_amount: calc.baseAmount,
+        transport_amount: calc.transportAmount,
+        adjustment_amount: adjustmentAmount,
+        ninku_coefficient: calc.ninkuCoefficient,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        tax_amount: calc.taxAmount,
+        total_amount: totalAmount,
+        notes: options.notes || ''
+      }, options.expectedUpdatedAt);
+
+      if (!result.success) {
+        return { success: false, error: result.error || 'UPDATE_FAILED' };
+      }
+
+      return { success: true, payout: this._enrichPayout(result.payout!) };
+    }
+
+    // 新規draft作成
+    const payout = PayoutRepository.insert({
+      payout_type: 'STAFF',
+      staff_id: staffId,
+      period_start: calc.periodStart || endDate,
+      period_end: endDate,
+      assignment_count: calc.assignmentCount,
+      base_amount: calc.baseAmount,
+      transport_amount: calc.transportAmount,
+      adjustment_amount: adjustmentAmount,
+      ninku_coefficient: calc.ninkuCoefficient,
+      ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+      tax_amount: calc.taxAmount,
+      total_amount: totalAmount,
+      status: 'draft',
+      notes: options.notes || ''
+    });
+
+    try {
+      logCreate('T_Payouts', payout.payout_id, payout);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Logger.log(`[saveDraft] Audit log error: ${msg}`);
+    }
+
+    return { success: true, payout: this._enrichPayout(payout) };
+  },
+
+  /**
    * 支払いを確認済みとして記録（confirmed状態で作成）
    * @param staffId - スタッフID
    * @param endDate - 集計終了日
@@ -237,12 +304,15 @@ const PayoutService = {
     const existingPayouts = PayoutRepository.findByStaffAndPeriod(
       staffId, calc.periodStart!, calc.periodEnd
     );
-    if (existingPayouts.length > 0) {
+    const nonDrafts = existingPayouts.filter(p => p.status !== 'draft');
+    const drafts = existingPayouts.filter(p => p.status === 'draft');
+
+    if (nonDrafts.length > 0) {
       Logger.log(`[confirmPayout] SKIP duplicate: ${staffId}|${calc.periodStart}|${calc.periodEnd}`);
       return {
         success: true,  // 冪等性：既存があれば成功扱い
         skipped: true,
-        existingPayout: this._enrichPayout(existingPayouts[0]),
+        existingPayout: this._enrichPayout(nonDrafts[0]),
         message: `この期間（${calc.periodStart}〜${calc.periodEnd}）の支払いは既に存在します`
       };
     }
@@ -251,24 +321,51 @@ const PayoutService = {
     const adjustmentAmount = options.adjustment_amount || 0;
     const totalAmount = calc.totalAmount + adjustmentAmount;
 
-    // 3. 支払いレコード作成（confirmed ステータスで保存）
-    const payout = PayoutRepository.insert({
-      payout_type: 'STAFF',
-      staff_id: staffId,
-      period_start: calc.periodStart!,
-      period_end: calc.periodEnd,
-      assignment_count: calc.assignmentCount,
-      base_amount: calc.baseAmount,
-      transport_amount: calc.transportAmount,
-      adjustment_amount: adjustmentAmount,
-      ninku_coefficient: calc.ninkuCoefficient,
-      ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
-      tax_amount: calc.taxAmount,
-      total_amount: totalAmount,
-      status: 'confirmed',  // confirmed状態
-      paid_date: '',
-      notes: options.notes || ''
-    });
+    // 3. 支払いレコード作成（draftがあればアップグレード、なければ新規挿入）
+    let payout: PayoutRecord;
+    if (drafts.length > 0) {
+      // Draft → confirmed アップグレード
+      const draft = drafts[0];
+      Logger.log(`[confirmPayout] Upgrading draft ${draft.payout_id} to confirmed`);
+      const updateResult = PayoutRepository.update({
+        payout_id: draft.payout_id,
+        period_start: calc.periodStart!,
+        period_end: calc.periodEnd,
+        assignment_count: calc.assignmentCount,
+        base_amount: calc.baseAmount,
+        transport_amount: calc.transportAmount,
+        adjustment_amount: adjustmentAmount,
+        ninku_coefficient: calc.ninkuCoefficient,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        tax_amount: calc.taxAmount,
+        total_amount: totalAmount,
+        status: 'confirmed' as PayoutStatus,
+        paid_date: '',
+        notes: options.notes ?? draft.notes ?? ''
+      });
+      if (!updateResult.success) {
+        return { success: false, error: updateResult.error || 'DRAFT_UPGRADE_FAILED', message: 'Draft→Confirmed更新に失敗しました' };
+      }
+      payout = updateResult.payout!;
+    } else {
+      payout = PayoutRepository.insert({
+        payout_type: 'STAFF',
+        staff_id: staffId,
+        period_start: calc.periodStart!,
+        period_end: calc.periodEnd,
+        assignment_count: calc.assignmentCount,
+        base_amount: calc.baseAmount,
+        transport_amount: calc.transportAmount,
+        adjustment_amount: adjustmentAmount,
+        ninku_coefficient: calc.ninkuCoefficient,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        tax_amount: calc.taxAmount,
+        total_amount: totalAmount,
+        status: 'confirmed',  // confirmed状態
+        paid_date: '',
+        notes: options.notes || ''
+      });
+    }
 
     // 4. 対象Assignmentにpayout_idを設定（二重計上防止）
     const linked = this._linkAssignmentsToPayout(calc.assignments!, payout.payout_id);
@@ -565,16 +662,25 @@ const PayoutService = {
     }).filter(p => p.period_end === endDate);  // endDate完全一致でフィルタ
 
     // キーは (staff_id, period_start, period_end) の3要素
-    const existingPayoutKeys = new Set<string>();
+    // confirmed/paidの重複キー（スキップ対象）
+    const confirmedPayoutKeys = new Set<string>();
+    // draftのマップ（アップグレード対象）
+    const draftPayoutMap = new Map<string, PayoutRecord>();
     for (const p of existingPayouts) {
       if (p.staff_id && p.period_start && p.period_end) {
-        existingPayoutKeys.add(`${p.staff_id}|${p.period_start}|${p.period_end}`);
+        const key = `${p.staff_id}|${p.period_start}|${p.period_end}`;
+        if (p.status === 'draft') {
+          draftPayoutMap.set(key, p);
+        } else {
+          confirmedPayoutKeys.add(key);
+        }
       }
     }
-    Logger.log(`[bulkConfirmPayouts] Loaded ${existingPayouts.length} existing payouts for duplicate check`);
+    Logger.log(`[bulkConfirmPayouts] Loaded ${existingPayouts.length} existing payouts (${draftPayoutMap.size} drafts, ${confirmedPayoutKeys.size} confirmed/paid)`);
 
     // 支払いレコードを準備
     let skipped = 0;
+    const draftsToUpgrade: { draft: PayoutRecord; calc: PayoutCalcResult; adjustmentAmount: number; notes: string; payoutId: string }[] = [];
 
     for (const staffId of staffIds) {
       const calc = staffCalcMap.get(staffId);
@@ -590,9 +696,9 @@ const PayoutService = {
         continue;
       }
 
-      // ★ 重複チェック（冪等性のためエラーではなくスキップ）
+      // ★ 重複チェック（confirmed/paidのみスキップ、draftはアップグレード）
       const payoutKey = `${staffId}|${calc.periodStart}|${calc.periodEnd}`;
-      if (existingPayoutKeys.has(payoutKey)) {
+      if (confirmedPayoutKeys.has(payoutKey)) {
         Logger.log(`[bulkConfirmPayouts] SKIP duplicate: ${payoutKey}`);
         results.push({
           staffId: staffId,
@@ -605,14 +711,38 @@ const PayoutService = {
       }
 
       // バッチ内重複防止（同じキーを追加）
-      existingPayoutKeys.add(payoutKey);
+      confirmedPayoutKeys.add(payoutKey);
 
       const adjustmentAmount = adjustments[staffId]?.adjustment_amount || 0;
       const notes = adjustments[staffId]?.notes || '';
       const totalAmount = calc.totalAmount + adjustmentAmount;
+
+      // Draftが存在する場合はアップグレード対象に
+      const existingDraft = draftPayoutMap.get(payoutKey);
+      if (existingDraft) {
+        const payoutId = existingDraft.payout_id;
+        draftsToUpgrade.push({ draft: existingDraft, calc, adjustmentAmount, notes, payoutId });
+
+        // Assignment更新準備
+        for (const assignment of calc.assignments!) {
+          assignmentUpdates.push({
+            assignment_id: assignment.assignment_id as string,
+            payout_id: payoutId
+          });
+        }
+
+        results.push({
+          staffId: staffId,
+          success: true,
+          payoutId: payoutId
+        });
+        success++;
+        continue;
+      }
+
       const payoutId = generateId('pay');
 
-      // 支払いレコード準備
+      // 支払いレコード準備（新規挿入）
       payoutsToInsert.push({
         payout_id: payoutId,
         payout_type: 'STAFF',
@@ -624,7 +754,7 @@ const PayoutService = {
         transport_amount: calc.transportAmount,
         adjustment_amount: adjustmentAmount,
         ninku_coefficient: calc.ninkuCoefficient,
-      ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
         tax_amount: calc.taxAmount,
         total_amount: totalAmount,
         status: 'confirmed',
@@ -648,12 +778,45 @@ const PayoutService = {
       success++;
     }
 
-    // 3. 一括挿入
+    // 3a. Draft → confirmed アップグレード（個別update）
+    const upgradedPayouts: PayoutRecord[] = [];
+    for (const { draft, calc, adjustmentAmount, notes } of draftsToUpgrade) {
+      const totalAmount = calc.totalAmount + adjustmentAmount;
+      const updateResult = PayoutRepository.update({
+        payout_id: draft.payout_id,
+        period_start: calc.periodStart!,
+        period_end: calc.periodEnd,
+        assignment_count: calc.assignmentCount,
+        base_amount: calc.baseAmount,
+        transport_amount: calc.transportAmount,
+        adjustment_amount: adjustmentAmount,
+        ninku_coefficient: calc.ninkuCoefficient,
+        ninku_adjustment_amount: calc.ninkuAdjustmentAmount,
+        tax_amount: calc.taxAmount,
+        total_amount: totalAmount,
+        status: 'confirmed' as PayoutStatus,
+        paid_date: '',
+        notes: notes
+      });
+      if (updateResult.success && updateResult.payout) {
+        upgradedPayouts.push(updateResult.payout);
+      } else {
+        Logger.log(`[bulkConfirmPayouts] Draft upgrade failed: ${draft.payout_id} - ${updateResult.error}`);
+      }
+    }
+    if (draftsToUpgrade.length > 0) {
+      Logger.log(`[bulkConfirmPayouts] Upgraded ${upgradedPayouts.length}/${draftsToUpgrade.length} drafts to confirmed`);
+    }
+
+    // 3b. 新規一括挿入
     let insertedPayouts: PayoutRecord[] = [];
     if (payoutsToInsert.length > 0) {
       insertedPayouts = PayoutRepository.insertBulk(payoutsToInsert);
       Logger.log(`[bulkConfirmPayouts] Inserted ${insertedPayouts.length} payouts`);
     }
+
+    // 両方を結合
+    const allConfirmedPayouts = [...upgradedPayouts, ...insertedPayouts];
 
     // 4. Assignment一括更新（失敗時はPayoutをdraftに戻す）
     let assignmentUpdateWarning: string | null = null;
@@ -666,8 +829,8 @@ const PayoutService = {
         Logger.log(`[bulkConfirmPayouts] Assignment update failed: ${msg}`);
         assignmentUpdateWarning = msg;
 
-        // 挿入済みPayoutをdraftに戻す（リカバリ）
-        for (const payout of insertedPayouts) {
+        // confirmed化した全Payoutをdraftに戻す（リカバリ）
+        for (const payout of allConfirmedPayouts) {
           try {
             PayoutRepository.update({ payout_id: payout.payout_id, status: 'draft' });
           } catch (revertErr: unknown) {
@@ -680,7 +843,7 @@ const PayoutService = {
 
     // 5. 監査ログ（一括 - 1回のシートI/O）
     try {
-      const auditRecords = insertedPayouts.map(p => ({
+      const auditRecords = allConfirmedPayouts.map(p => ({
         recordId: p.payout_id,
         data: p as unknown
       }));
@@ -691,7 +854,7 @@ const PayoutService = {
     }
 
     // 6. スタッフ名を付与して返す（1回のシートI/O）
-    const enrichedPayouts = this._enrichPayoutsBulk(insertedPayouts);
+    const enrichedPayouts = this._enrichPayoutsBulk(allConfirmedPayouts);
 
     // 7. データ同期を強制（読み取り競合防止）
     SpreadsheetApp.flush();
@@ -980,6 +1143,18 @@ const PayoutService = {
     const payouts = PayoutRepository.search({
       payout_type: 'STAFF',
       status: 'confirmed'
+    }).filter(p => p.period_end === endDate);
+
+    return this._enrichPayoutsBulk(payouts);
+  },
+
+  /**
+   * 指定期間終了日のdraft Payoutを取得（下書きバッジ表示用）
+   */
+  getDraftPayoutsForPeriod: function(endDate: string): (PayoutRecord & { target_name: string })[] {
+    const payouts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      status: 'draft'
     }).filter(p => p.period_end === endDate);
 
     return this._enrichPayoutsBulk(payouts);

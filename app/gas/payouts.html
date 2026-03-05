@@ -688,6 +688,7 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closePayoutModal()">閉じる</button>
+        <button class="btn btn-secondary" id="modalDraftSaveBtn" onclick="saveDraftFromModal()" style="display:none;">保存</button>
         <button class="btn btn-secondary" id="modalDetailExportBtn" onclick="handleExportPayoutDetail()" style="display:none;">明細出力</button>
         <button class="btn btn-primary" id="modalPayBtn" onclick="markAsPaidFromModal()">支払済にする</button>
       </div>
@@ -790,6 +791,7 @@
           <option value="unpaid">未払に戻す</option>
         </select>
         <button class="btn btn-primary" onclick="executeBulkStatusChange()">適用</button>
+        <button class="btn btn-secondary" onclick="bulkSaveDraft()" style="background:#FEF3C7;color:#92400E;border-color:#F59E0B;">下書き保存</button>
         <button class="btn btn-secondary" onclick="clearSelection()">選択解除</button>
       </div>
 
@@ -1109,6 +1111,75 @@
       }
 
       return null;
+    }
+
+    // Draft cache helpers
+    function getDraftForStaff(staffId) {
+      const cached = loadFromSession(document.getElementById('endDateFilter')?.value);
+      if (!cached || !staffId) return null;
+      const drafts = cached.draftPayouts || cached.data?.draftPayouts || [];
+      if (Array.isArray(drafts)) {
+        return drafts.find(d => d.staff_id === staffId) || null;
+      }
+      return null;
+    }
+
+    function updateCachedDraft(staffId, payout) {
+      const endDate = document.getElementById('endDateFilter')?.value;
+      const cached = loadFromSession(endDate);
+      if (!cached) return;
+
+      // draftPayouts配列を更新
+      let drafts = cached.draftPayouts || cached.data?.draftPayouts || [];
+      if (!Array.isArray(drafts)) drafts = [];
+      const idx = drafts.findIndex(d => d.staff_id === staffId);
+      if (idx >= 0) {
+        drafts[idx] = payout;
+      } else {
+        drafts.push(payout);
+      }
+      cached.draftPayouts = drafts;
+      if (cached.data) cached.data.draftPayouts = drafts;
+      saveToSession(cached);
+    }
+
+    function removeCachedDraft(staffId) {
+      const endDate = document.getElementById('endDateFilter')?.value;
+      const cached = loadFromSession(endDate);
+      if (!cached) return;
+
+      let drafts = cached.draftPayouts || cached.data?.draftPayouts || [];
+      if (!Array.isArray(drafts)) return;
+      drafts = drafts.filter(d => d.staff_id !== staffId);
+      cached.draftPayouts = drafts;
+      if (cached.data) cached.data.draftPayouts = drafts;
+      saveToSession(cached);
+    }
+
+    function updateRowDraftBadge(staffId, adjustment, notes) {
+      const row = document.querySelector('tr[data-staff-id="' + staffId + '"][data-status="unpaid"]');
+      if (!row) return;
+      // バッジを追加/更新
+      const badgeCell = row.querySelector('td:nth-last-child(2)');
+      if (badgeCell) {
+        const existing = badgeCell.querySelector('.draft-badge');
+        if (existing) {
+          // 既にある
+        } else {
+          badgeCell.innerHTML = '<span class="status-badge draft">未払</span> <span class="status-badge draft-badge" style="background:#FEF3C7;color:#92400E;font-size:10px;">下書き</span>';
+        }
+      }
+      // 調整額・備考インプットにも反映
+      const adjInput = row.querySelector('.adjustment-input[data-staff-id="' + staffId + '"]');
+      if (adjInput) adjInput.value = Math.abs(adjustment);
+      const signBtn = row.querySelector('.js-toggle-sign[data-staff-id="' + staffId + '"]');
+      if (signBtn && adjustment < 0) {
+        signBtn.textContent = '-';
+        signBtn.classList.remove('positive');
+        signBtn.classList.add('negative');
+      }
+      const notesInput = row.querySelector('.notes-input[data-staff-id="' + staffId + '"]');
+      if (notesInput) notesInput.value = notes || '';
     }
 
     // Staff cache functions (PageCache with TTL)
@@ -1518,7 +1589,8 @@
                   staffId: null,  // 全体キャッシュとして維持
                   endDate: endDate,
                   data: mergedData,
-                  confirmedData: mergedConfirmed
+                  confirmedData: mergedConfirmed,
+                  draftPayouts: mergedData.draftPayouts || []
                 });
 
                 // 個人キャッシュも別途保存（モーダル即時表示用）
@@ -1568,7 +1640,8 @@
               staffId: staffId || null,
               endDate: endDate,
               data: unpaidData,
-              confirmedData: confirmedData
+              confirmedData: confirmedData,
+              draftPayouts: unpaidData.draftPayouts || []
             });
           } else {
             summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
@@ -1637,6 +1710,7 @@
                   endDate: endDate,
                   data: mergedData,
                   confirmedData: confirmedData,
+                  draftPayouts: data.draftPayouts || mergedData.draftPayouts || [],
                   syncTimestamp: data.currentTimestamp
                 });
 
@@ -1695,6 +1769,7 @@
                 endDate: endDate,
                 data: unpaidData,
                 confirmedData: confirmedData,
+                draftPayouts: unpaidData.draftPayouts || [],
                 syncTimestamp: new Date().toISOString()
               });
 
@@ -1748,7 +1823,9 @@
         totalAmount: mergedList.reduce((sum, s) => sum + s.estimatedAmount, 0),
         confirmedPayouts: deltaData.confirmedPayouts || currentData.confirmedPayouts,
         confirmedCount: deltaData.confirmedCount ?? currentData.confirmedCount,
-        confirmedAmount: deltaData.confirmedAmount ?? currentData.confirmedAmount
+        confirmedAmount: deltaData.confirmedAmount ?? currentData.confirmedAmount,
+        draftPayouts: deltaData.draftPayouts || currentData.draftPayouts || [],
+        draftCount: deltaData.draftCount ?? currentData.draftCount ?? 0
       };
     }
 
@@ -1847,6 +1924,13 @@
         rowId: `confirmed-${p.payout_id}`
       }));
 
+      // draftPayoutsマップ構築（staffId → draft）
+      const draftPayouts = data.draftPayouts || [];
+      const draftMap = new Map();
+      if (Array.isArray(draftPayouts)) {
+        draftPayouts.forEach(d => { if (d.staff_id) draftMap.set(d.staff_id, d); });
+      }
+
       const allRows = [...unpaidRows, ...confirmedRows];
 
       // Sort: confirmed first, then unpaid
@@ -1900,7 +1984,7 @@
 
       allRows.forEach(row => {
         if (row.status === 'unpaid') {
-          html += renderUnpaidRow(row);
+          html += renderUnpaidRow(row, draftMap.get(row.staffId));
         } else {
           html += renderConfirmedRow(row);
         }
@@ -1941,12 +2025,19 @@
     }
 
     // Render a single unpaid row
-    function renderUnpaidRow(s) {
+    function renderUnpaidRow(s, draft) {
       const staffId = escapeHtml(s.staffId || '');
       const staffName = escapeHtml(s.staffName || '');
       const staffNameKana = escapeHtml(s.staffNameKana || s.staffName || '');
       const periodStart = escapeHtml(s.periodStart || '-');
       const periodEnd = escapeHtml(s.periodEnd || '-');
+      // draftがあれば調整額・備考をプリセット
+      const draftAdj = draft ? (draft.adjustment_amount || 0) : 0;
+      const adjSign = draftAdj < 0 ? '-' : '+';
+      const adjSignClass = draftAdj < 0 ? 'negative' : 'positive';
+      const adjValue = Math.abs(draftAdj);
+      const draftNotes = draft ? (draft.notes || '') : '';
+      const draftBadge = draft ? ' <span class="status-badge draft-badge" style="background:#FEF3C7;color:#92400E;font-size:10px;">下書き</span>' : '';
       return `
         <tr data-staff-id="${staffId}" data-status="unpaid" data-row-id="${escapeHtml(s.rowId || '')}" data-name-kana="${staffNameKana}" class="clickable-row" onclick="toggleRowCheck(this, event)">
           <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${staffId}"></td>
@@ -1955,11 +2046,11 @@
           <td style="font-size:12px">${periodStart} ~ ${periodEnd}</td>
           <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
           <td style="white-space: nowrap;">
-            <button type="button" class="btn-sign positive js-toggle-sign" data-staff-id="${staffId}">+</button>
-            <input type="number" class="adjustment-input" data-staff-id="${staffId}" value="0" min="0" />
+            <button type="button" class="btn-sign ${adjSignClass} js-toggle-sign" data-staff-id="${staffId}">${adjSign}</button>
+            <input type="number" class="adjustment-input" data-staff-id="${staffId}" value="${adjValue}" min="0" />
           </td>
-          <td><input type="text" class="notes-input" data-staff-id="${staffId}" placeholder="" /></td>
-          <td><span class="status-badge draft">未払</span></td>
+          <td><input type="text" class="notes-input" data-staff-id="${staffId}" placeholder="" value="${escapeHtml(draftNotes)}" /></td>
+          <td><span class="status-badge draft">未払</span>${draftBadge}</td>
           <td>
             <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${staffId}" data-staff-name="${staffName}" data-status="unpaid">詳細</button>
           </td>
@@ -2387,6 +2478,57 @@
       );
     }
 
+    // Bulk draft save (selected unpaid staff → save adjustments/notes as draft)
+    function bulkSaveDraft() {
+      const checkboxes = document.querySelectorAll('.staff-check[data-status="unpaid"]:checked');
+      const staffIds = Array.from(checkboxes).map(cb => cb.value);
+      const endDate = document.getElementById('endDateFilter').value;
+
+      if (staffIds.length === 0) {
+        showToast('error', '未払スタッフを選択してください');
+        return;
+      }
+
+      // Collect adjustments and notes for each staff
+      const adjustments = {};
+      staffIds.forEach(staffId => {
+        const adjInput = document.querySelector(`.adjustment-input[data-staff-id="${staffId}"]`);
+        const signBtn = document.querySelector(`.btn-sign[data-staff-id="${staffId}"]`);
+        const notesInput = document.querySelector(`.notes-input[data-staff-id="${staffId}"]`);
+        const amount = Number(adjInput?.value) || 0;
+        const sign = signBtn?.textContent === '-' ? -1 : 1;
+        adjustments[staffId] = {
+          adjustment_amount: amount * sign,
+          notes: notesInput?.value || ''
+        };
+      });
+
+      showLoading(`${staffIds.length}名の下書きを保存中...`);
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (result.ok) {
+            const data = result.data || {};
+            showToast('success', `${data.success || 0}名の下書きを保存しました`);
+            // キャッシュのdraftPayoutsを更新
+            const payouts = (data.results || []).filter(r => r.success && r.payout);
+            payouts.forEach(r => {
+              updateCachedDraft(r.staffId, r.payout);
+              const adj = adjustments[r.staffId] || {};
+              updateRowDraftBadge(r.staffId, adj.adjustment_amount || 0, adj.notes || '');
+            });
+            clearSelection();
+          } else {
+            showToast('error', result.error || '保存に失敗しました');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          showToast('error', err.message || '保存に失敗しました');
+        })
+        .bulkSaveDraftPayouts(staffIds, endDate, adjustments);
+    }
+
     // Bulk confirm (unpaid → confirmed)
     function bulkConfirm() {
       const checkboxes = document.querySelectorAll('.staff-check[data-status="unpaid"]:checked');
@@ -2698,7 +2840,7 @@
         rowId: `unpaid-${undone.staff_id}`
       };
 
-      const newRowHtml = renderUnpaidRow(unpaidRow);
+      const newRowHtml = renderUnpaidRow(unpaidRow, null);
       row.outerHTML = newRowHtml;
       updatePayoutSummary();
     }
@@ -2868,15 +3010,27 @@
         return;
       }
 
-      // 未払の場合
+      // 未払の場合 — draftがあればプリセット
+      const draft = getDraftForStaff(staffId);
+      if (draft) {
+        modalPayoutId = draft.payout_id;
+        modalPayoutUpdatedAt = draft.updated_at;
+        modalPayoutStatus = 'draft';
+      }
+
       const cachedSummary = getCachedUnpaidPreview(staffId, endDate);
       const cachedHistory = getCachedHistoryForStaff(staffId);
 
       if (cachedSummary) {
         // キャッシュあり → 1回描画のみ（再取得しない）
         modalUnpaidData = cachedSummary.data;
+        // draftの調整額・備考をデータに反映
+        if (draft) {
+          cachedSummary.data._draftAdjustment = draft.adjustment_amount || 0;
+          cachedSummary.data._draftNotes = draft.notes || '';
+        }
         modalHistoryData = cachedHistory || [];
-        renderPayoutModal(cachedSummary.data, cachedHistory || [], { status: 'unpaid' });
+        renderPayoutModal(cachedSummary.data, cachedHistory || [], { status: draft ? 'draft' : 'unpaid' });
         modal.classList.add('active');
 
         // 履歴だけ差分更新
@@ -2914,8 +3068,12 @@
           if (modal.dataset.staffId !== staffId) return;
           if (unpaidResult && unpaidResult.ok) {
             modalUnpaidData = unpaidResult.data;
+            if (draft) {
+              unpaidResult.data._draftAdjustment = draft.adjustment_amount || 0;
+              unpaidResult.data._draftNotes = draft.notes || '';
+            }
             modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
-            renderPayoutModal(unpaidResult.data, modalHistoryData, { status: 'unpaid' });
+            renderPayoutModal(unpaidResult.data, modalHistoryData, { status: draft ? 'draft' : 'unpaid' });
           } else {
             document.getElementById('payoutModalBody').innerHTML =
               `<div class="empty-state">${unpaidResult?.error || 'エラーが発生しました'}</div>`;
@@ -3102,6 +3260,14 @@
         detailExportBtn.style.display = (isConfirmed || isPaid) ? '' : 'none';
       }
 
+      // 保存ボタン: unpaid/draft の場合のみ表示
+      const draftSaveBtn = document.getElementById('modalDraftSaveBtn');
+      const isDraft = status === 'draft';
+      if (draftSaveBtn) {
+        draftSaveBtn.style.display = (!isConfirmed && !isPaid) ? '' : 'none';
+        draftSaveBtn.textContent = isDraft ? '更新' : '保存';
+      }
+
       if (isConfirmed) {
         payBtn.textContent = '支払済にする';
         payBtn.onclick = markAsPaidFromModal;
@@ -3112,11 +3278,12 @@
 
       const historyHtml = buildHistoryListHtml(history);
 
-      // 確認済みの場合、既存の調整額を表示用に準備
-      const existingAdjustment = data.adjustmentAmount || 0;
+      // 調整額を表示用に準備（draft/confirmedの場合はプリセット値を使用）
+      const draftAdj = data._draftAdjustment;
+      const existingAdjustment = (draftAdj !== undefined && draftAdj !== null) ? draftAdj : (data.adjustmentAmount || 0);
       const adjustmentSign = existingAdjustment < 0 ? '-' : '+';
       const adjustmentValue = Math.abs(existingAdjustment);
-      const existingNotes = data.notes || '';
+      const existingNotes = (data._draftNotes !== undefined && data._draftNotes !== null) ? data._draftNotes : (data.notes || '');
 
       const assignmentsLoaded = Array.isArray(data.assignments);
       const modal = document.getElementById('payoutDetailModal');
@@ -3159,9 +3326,9 @@
                 <div class="label">基本給与</div>
                 <div class="value amount">${baseText}</div>
               </div>
-              <div class="summary-item" style="display:none">
-                <div class="label">交通費</div>
-                <div class="value amount">${transportText}</div>
+              <div class="summary-item">
+                <div class="label">調整額</div>
+                <div class="value amount" id="modalAdjustmentDisplay">${existingAdjustment !== 0 ? (existingAdjustment > 0 ? '+' : '') + formatCurrency(existingAdjustment) : '¥0'}</div>
               </div>
               ${(data.ninkuAdjustmentAmount) ? `
               <div class="summary-item">
@@ -3234,6 +3401,11 @@
       const adjustment = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
       const total = modalUnpaidData.totalAmount + adjustment;
       document.getElementById('modalTotalAmount').textContent = formatCurrency(total);
+      // サマリーグリッドの交通費表示も更新
+      const adjDisplay = document.getElementById('modalAdjustmentDisplay');
+      if (adjDisplay) {
+        adjDisplay.textContent = adjustment !== 0 ? (adjustment > 0 ? '+' : '') + formatCurrency(adjustment) : '¥0';
+      }
     }
 
     function markAsPaidFromModal() {
@@ -3385,6 +3557,7 @@
               payBtn.disabled = false;
               if (result.ok) {
                 showToast('success', '確認済みにしました');
+                removeCachedDraft(staffId);
                 closePayoutModal();
                 if (result.data && result.data.payout) {
                   updateRowToConfirmed(staffId, result.data.payout);
@@ -3407,6 +3580,54 @@
             });
         }
       );
+    }
+
+    function saveDraftFromModal() {
+      const modal = document.getElementById('payoutDetailModal');
+      const staffId = modal.dataset.staffId;
+      const endDate = modalUnpaidData?.periodEnd;
+
+      if (!staffId || !endDate) {
+        showToast('error', 'データがありません');
+        return;
+      }
+
+      const signBtn = document.getElementById('modalSignBtn');
+      const sign = signBtn && signBtn.textContent === '-' ? -1 : 1;
+      const adjustment = (Number(document.getElementById('modalAdjustment').value) || 0) * sign;
+      const notes = document.getElementById('modalNotes').value;
+
+      const draftSaveBtn = document.getElementById('modalDraftSaveBtn');
+      if (draftSaveBtn) draftSaveBtn.disabled = true;
+
+      showLoading('保存中...');
+      google.script.run
+        .withSuccessHandler(function(result) {
+          hideLoading();
+          if (draftSaveBtn) draftSaveBtn.disabled = false;
+          if (result.ok) {
+            showToast('success', '下書き保存しました');
+            const payout = result.data.payout;
+            modalPayoutId = payout.payout_id;
+            modalPayoutUpdatedAt = payout.updated_at;
+            modalPayoutStatus = 'draft';
+            // 保存ボタンテキストを「更新」に変更
+            if (draftSaveBtn) draftSaveBtn.textContent = '更新';
+            // キャッシュのdraftPayoutsを更新
+            updateCachedDraft(staffId, payout);
+            // テーブル行にdraftバッジ反映
+            updateRowDraftBadge(staffId, adjustment, notes);
+            modalHadMutation = true;
+          } else {
+            showToast('error', result.error || '保存に失敗しました');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          if (draftSaveBtn) draftSaveBtn.disabled = false;
+          showToast('error', err.message || '保存に失敗しました');
+        })
+        .saveDraftPayout(staffId, endDate, { adjustment_amount: adjustment, notes: notes });
     }
 
     function closePayoutModal() {

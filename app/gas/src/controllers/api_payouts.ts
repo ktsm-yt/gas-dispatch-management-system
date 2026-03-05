@@ -258,10 +258,13 @@ function getUnpaidStaffList(endDate: string, options: { staffId?: string } = {})
 
     // ★ 同じ期間の確認済みPayoutも取得（リロード後の状態復元用）
     let confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+    // ★ 同じ期間のdraft Payoutも取得（下書きバッジ・値復元用）
+    let draftPayouts = PayoutService.getDraftPayoutsForPeriod(endDate);
 
-    // 特定スタッフ指定時は確認済みもフィルタ
+    // 特定スタッフ指定時はフィルタ
     if (options.staffId) {
       confirmedPayouts = confirmedPayouts.filter(function(p) { return p.staff_id === options.staffId; });
+      draftPayouts = draftPayouts.filter(function(p) { return p.staff_id === options.staffId; });
     }
 
     return buildSuccessResponse({
@@ -273,7 +276,10 @@ function getUnpaidStaffList(endDate: string, options: { staffId?: string } = {})
       // ★ 確認済みPayoutを追加
       confirmedPayouts: confirmedPayouts,
       confirmedCount: confirmedPayouts.length,
-      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)
+      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0),
+      // ★ draft Payoutを追加
+      draftPayouts: draftPayouts,
+      draftCount: draftPayouts.length
     }, requestId);
 
   } catch (error: unknown) {
@@ -317,8 +323,9 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
 
     const delta = deltaResult as { changedStaffIds: string[]; removedStaffIds: string[]; staffList: UnpaidStaffItem[] };
 
-    // 確認済みPayoutも差分で取得
+    // 確認済み・draft Payoutも差分で取得
     const confirmedPayouts = PayoutService.getConfirmedPayoutsForPeriod(endDate);
+    const draftPayouts = PayoutService.getDraftPayoutsForPeriod(endDate);
 
     return buildSuccessResponse({
       endDate: endDate,
@@ -332,7 +339,9 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
       totalAmount: delta.staffList.reduce(function(sum: number, s: UnpaidStaffItem) { return sum + s.estimatedAmount; }, 0),
       confirmedPayouts: confirmedPayouts,
       confirmedCount: confirmedPayouts.length,
-      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0)
+      confirmedAmount: confirmedPayouts.reduce(function(sum: number, p: PayoutRecord) { return sum + (p.total_amount || 0); }, 0),
+      draftPayouts: draftPayouts,
+      draftCount: draftPayouts.length
     }, requestId);
 
   } catch (error: unknown) {
@@ -629,6 +638,138 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
   } catch (error: unknown) {
     logErr('savePayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  }
+}
+
+// ========== Draft Save API ==========
+
+/**
+ * 調整額・備考を下書き保存（ステータスを変えずに保存）
+ * @param staffId - スタッフID
+ * @param endDate - 集計終了日
+ * @param options - オプション { adjustment_amount, notes }
+ * @returns APIレスポンス
+ */
+function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
+  const requestId = generateRequestId();
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
+  try {
+    lock.waitLock(5000);
+    lockAcquired = true;
+
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!staffId) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const result = PayoutService.saveDraft(staffId, endDate, options) as { success: boolean; error?: string };
+
+    if (!result.success) {
+      const errorCode = result.error === 'CONFLICT_ERROR'
+        ? ERROR_CODES.CONFLICT_ERROR
+        : ERROR_CODES.VALIDATION_ERROR;
+      return buildErrorResponse(errorCode, result.error || 'Unknown error', {}, requestId);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
+    logErr('saveDraftPayout', error, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
+  }
+}
+
+/**
+ * 複数スタッフの調整額・備考を一括下書き保存
+ * @param staffIds - スタッフID配列
+ * @param endDate - 集計終了日
+ * @param adjustments - { [staffId]: { adjustment_amount, notes } }
+ * @returns APIレスポンス
+ */
+function bulkSaveDraftPayouts(staffIds: string[], endDate: string, adjustments: Record<string, { adjustment_amount?: number; notes?: string }> = {}): unknown {
+  const requestId = generateRequestId();
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
+  try {
+    lock.waitLock(10000);
+    lockAcquired = true;
+
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
+    }
+
+    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+    }
+
+    const results: { staffId: string; success: boolean; payout?: unknown; error?: string }[] = [];
+    let successCount = 0;
+    let failedCount = 0;
+
+    for (const staffId of staffIds) {
+      const opts = adjustments[staffId] || {};
+      const result = PayoutService.saveDraft(staffId, endDate, {
+        adjustment_amount: opts.adjustment_amount || 0,
+        notes: opts.notes || ''
+      });
+
+      if (result.success) {
+        successCount++;
+        results.push({ staffId, success: true, payout: result.payout });
+      } else {
+        failedCount++;
+        results.push({ staffId, success: false, error: result.error });
+      }
+    }
+
+    if (failedCount > 0) {
+      return buildErrorResponse(
+        ERROR_CODES.BUSINESS_ERROR,
+        `下書き保存で一部失敗しました (${successCount}/${staffIds.length} 件成功)`,
+        { success: successCount, failed: failedCount, results: results },
+        requestId
+      );
+    }
+
+    return buildSuccessResponse({
+      success: successCount,
+      failed: failedCount,
+      results: results
+    }, requestId);
+
+  } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
+    logErr('bulkSaveDraftPayouts', error, requestId);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
