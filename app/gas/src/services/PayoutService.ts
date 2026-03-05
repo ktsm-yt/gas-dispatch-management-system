@@ -680,7 +680,7 @@ const PayoutService = {
 
     // 支払いレコードを準備
     let skipped = 0;
-    const draftsToUpgrade: { draft: PayoutRecord; calc: PayoutCalcResult; adjustmentAmount: number; notes: string; payoutId: string }[] = [];
+    const draftsToUpgrade: { staffId: string; draft: PayoutRecord; calc: PayoutCalcResult; adjustmentAmount: number; notes: string; payoutId: string }[] = [];
 
     for (const staffId of staffIds) {
       const calc = staffCalcMap.get(staffId);
@@ -721,22 +721,7 @@ const PayoutService = {
       const existingDraft = draftPayoutMap.get(payoutKey);
       if (existingDraft) {
         const payoutId = existingDraft.payout_id;
-        draftsToUpgrade.push({ draft: existingDraft, calc, adjustmentAmount, notes, payoutId });
-
-        // Assignment更新準備
-        for (const assignment of calc.assignments!) {
-          assignmentUpdates.push({
-            assignment_id: assignment.assignment_id as string,
-            payout_id: payoutId
-          });
-        }
-
-        results.push({
-          staffId: staffId,
-          success: true,
-          payoutId: payoutId
-        });
-        success++;
+        draftsToUpgrade.push({ staffId, draft: existingDraft, calc, adjustmentAmount, notes, payoutId });
         continue;
       }
 
@@ -780,7 +765,7 @@ const PayoutService = {
 
     // 3a. Draft → confirmed アップグレード（個別update）
     const upgradedPayouts: PayoutRecord[] = [];
-    for (const { draft, calc, adjustmentAmount, notes } of draftsToUpgrade) {
+    for (const { staffId, draft, calc, adjustmentAmount, notes } of draftsToUpgrade) {
       const totalAmount = calc.totalAmount + adjustmentAmount;
       const updateResult = PayoutRepository.update({
         payout_id: draft.payout_id,
@@ -800,8 +785,27 @@ const PayoutService = {
       });
       if (updateResult.success && updateResult.payout) {
         upgradedPayouts.push(updateResult.payout);
+        for (const assignment of calc.assignments!) {
+          assignmentUpdates.push({
+            assignment_id: assignment.assignment_id as string,
+            payout_id: draft.payout_id
+          });
+        }
+        results.push({
+          staffId: staffId,
+          success: true,
+          payoutId: draft.payout_id
+        });
+        success++;
       } else {
         Logger.log(`[bulkConfirmPayouts] Draft upgrade failed: ${draft.payout_id} - ${updateResult.error}`);
+        results.push({
+          staffId: staffId,
+          success: false,
+          error: updateResult.error || 'DRAFT_UPGRADE_FAILED',
+          message: 'Draft→Confirmed更新に失敗しました'
+        });
+        failed++;
       }
     }
     if (draftsToUpgrade.length > 0) {
@@ -822,8 +826,12 @@ const PayoutService = {
     let assignmentUpdateWarning: string | null = null;
     if (assignmentUpdates.length > 0) {
       try {
-        const updateResult = AssignmentRepository.bulkUpdatePayoutId(assignmentUpdates);
+        const updateResult = AssignmentRepository.bulkUpdatePayoutId(assignmentUpdates) as { success: number; failed?: number };
         Logger.log(`[bulkConfirmPayouts] Updated ${updateResult.success} assignments`);
+        const failedCount = Number(updateResult.failed || 0);
+        if (failedCount > 0) {
+          throw new Error(`ASSIGNMENT_LINK_PARTIAL_FAILED: ${failedCount}/${assignmentUpdates.length}`);
+        }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         Logger.log(`[bulkConfirmPayouts] Assignment update failed: ${msg}`);
@@ -833,6 +841,10 @@ const PayoutService = {
         for (const payout of allConfirmedPayouts) {
           try {
             PayoutRepository.update({ payout_id: payout.payout_id, status: 'draft' });
+            const unlinkOk = this._unlinkAssignmentsFromPayout(payout.payout_id);
+            if (!unlinkOk) {
+              Logger.log(`[bulkConfirmPayouts] Failed to unlink assignments for payout ${payout.payout_id}`);
+            }
           } catch (revertErr: unknown) {
             const revertMsg = revertErr instanceof Error ? revertErr.message : String(revertErr);
             Logger.log(`[bulkConfirmPayouts] Failed to revert payout ${payout.payout_id}: ${revertMsg}`);

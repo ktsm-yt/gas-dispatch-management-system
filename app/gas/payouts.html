@@ -1573,8 +1573,9 @@
 
                 // 確認済みもマージ
                 const existingConfirmed = existingCache.confirmedData || [];
-                const mergedConfirmed = existingConfirmed.filter(p => p.staff_id !== staffId)
-                  .concat(newConfirmedData);
+                const mergedConfirmed = newConfirmedData.length > 0
+                  ? existingConfirmed.filter(p => p.staff_id !== staffId).concat(newConfirmedData)
+                  : existingConfirmed;
 
                 const mergedData = { ...existingCache.data, staffList: mergedStaffList };
 
