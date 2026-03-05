@@ -494,54 +494,12 @@ const InvoiceRepository = {
     };
   },
 
-  generateInvoiceNumber: function(year: number, month: number, _customerId: string): string {
-    const MAX_RETRIES = 3;
-    const lock = LockService.getScriptLock();
-
-    const acquired = lock.tryLock(5000);
-    if (!acquired) {
-      throw new Error('LOCK_ACQUISITION_FAILED: 請求番号生成のロック取得に失敗しました。しばらく待ってから再試行してください。');
-    }
-
-    try {
-      const yy = String(year).slice(-2);
-      const mm = String(month).padStart(2, '0');
-      const prefix = `${yy}${mm}_`;
-
-      for (let retry = 0; retry < MAX_RETRIES; retry++) {
-        const records = getAllRecords(this.TABLE_NAME);
-
-        let maxSeq = 0;
-        for (const inv of records) {
-          if (!inv.is_deleted && inv.invoice_number && (inv.invoice_number as string).startsWith(prefix)) {
-            const parts = (inv.invoice_number as string).split('_');
-            if (parts.length === 2) {
-              const seq = parseInt(parts[1], 10);
-              if (!isNaN(seq) && seq > maxSeq) {
-                maxSeq = seq;
-              }
-            }
-          }
-        }
-
-        const candidateSeq = maxSeq + 1 + retry;
-        const candidateNumber = `${prefix}${candidateSeq}`;
-
-        const isDuplicate = records.some(r =>
-          !r.is_deleted && r.invoice_number === candidateNumber
-        );
-
-        if (!isDuplicate) {
-          return candidateNumber;
-        }
-
-        console.warn(`Invoice number collision detected: ${candidateNumber}, retrying...`);
-      }
-
-      throw new Error('INVOICE_NUMBER_GENERATION_FAILED: 一意な請求番号の生成に失敗しました。');
-    } finally {
-      lock.releaseLock();
-    }
+  generateInvoiceNumber: function(year: number, month: number, customerCode: string): string {
+    const yy = String(year).slice(-2);
+    const mm = String(month).padStart(2, '0');
+    // cus_001 → 001, cus_42 → 42。空なら '000'
+    const codePart = customerCode ? customerCode.replace(/^cus_/, '') : '000';
+    return `${yy}${mm}_${codePart}`;
   },
 
   isInvoiceNumberAvailable: function(invoiceNumber: string): boolean {

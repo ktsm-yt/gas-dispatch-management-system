@@ -112,7 +112,7 @@ const InvoiceService = {
       const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format as string, taxRoundingMode);
 
       // 6. 請求番号を生成
-      const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, customerId);
+      const invoiceNumber = InvoiceRepository.generateInvoiceNumber(year, month, String(customer.customer_code || ''));
 
       // 7. 発行日・支払期限を計算
       const dates = this._calculateDates(customer, year, month);
@@ -525,11 +525,7 @@ const InvoiceService = {
         }
       }
 
-      // 請求番号の開始連番を取得
-      const yy = String(year).slice(-2);
-      const mm = String(month).padStart(2, '0');
-      const prefix = `${yy}${mm}_`;
-      let maxSeq = this._getMaxInvoiceSequence(allInvoices, prefix);
+      // 請求番号は顧客コードベースで生成（連番不要）
 
       // === 上書きモード: 既存請求書を一括削除 ===
       if (options.overwrite) {
@@ -590,9 +586,10 @@ const InvoiceService = {
           const taxRoundingMode = this._getTaxRoundingMode(customer);
           const totals = this._calculateTotals(lines, taxRate, expenseRate, customer.invoice_format as string, taxRoundingMode);
 
-          // 請求番号を生成
-          maxSeq++;
-          const invoiceNumber = `${prefix}${maxSeq}`;
+          // 請求番号を生成（顧客コードベース）
+          const invoiceNumber = InvoiceRepository.generateInvoiceNumber(
+            year, month, String(customer.customer_code || '')
+          );
 
           // 発行日・支払期限を計算
           const dates = this._calculateDates(customer, year, month);
@@ -721,25 +718,6 @@ const InvoiceService = {
     return result;
   },
 
-  /**
-   * 請求番号の最大連番を取得
-   */
-  _getMaxInvoiceSequence: function(invoices: Record<string, unknown>[], prefix: string): number {
-    let maxSeq = 0;
-    for (const inv of invoices) {
-      const invNum = inv.invoice_number as string;
-      if (!inv.is_deleted && invNum && invNum.startsWith(prefix)) {
-        const parts = invNum.split('_');
-        if (parts.length === 2) {
-          const seq = parseInt(parts[1], 10);
-          if (!isNaN(seq) && seq > maxSeq) {
-            maxSeq = seq;
-          }
-        }
-      }
-    }
-    return maxSeq;
-  },
 
   /**
    * キャッシュから配置データを取得（メモリ上で処理）

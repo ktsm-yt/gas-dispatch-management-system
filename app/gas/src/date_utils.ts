@@ -150,12 +150,6 @@ function calculatePaymentDate_(
   return formatDate_(new Date(payYear, payMonth - 1, actualPayDay));
 }
 
-function generateInvoiceNumber_(year: number, month: number, seq: number): string {
-  const yy = String(year).slice(-2);
-  const mm = String(month).padStart(2, '0');
-  return `${yy}${mm}_${seq}`;
-}
-
 // ============================================
 // 稼働日数計算
 // ============================================
