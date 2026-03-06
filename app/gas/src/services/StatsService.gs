@@ -717,7 +717,7 @@ const StatsService = {
       var custName = customerNameMap[custId] || '（不明）';
       if (!customerBuckets[custName]) customerBuckets[custName] = { sales: 0, expense: 0 };
       var lineAmt = Number(ln.amount) || 0;
-      if (ln.item_name === '諸経費') {
+      if (ln.item_name === EXPENSE_ITEM_NAME) {
         customerBuckets[custName].expense += lineAmt;
       } else {
         customerBuckets[custName].sales += lineAmt;
