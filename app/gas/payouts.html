@@ -82,6 +82,77 @@
       background: white;
     }
 
+    /* Staff Autocomplete */
+    .autocomplete-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    .autocomplete-wrapper input[type="text"] {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+      width: 160px;
+    }
+
+    .autocomplete-wrapper input[type="text"]:focus {
+      outline: none;
+      border-color: var(--color-secondary);
+      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
+    }
+
+    .autocomplete-wrapper input[type="text"].has-value {
+      color: var(--text-primary);
+    }
+
+    .autocomplete-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-height: 240px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid var(--border-color);
+      border-top: none;
+      border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      z-index: 100;
+    }
+
+    .autocomplete-dropdown.open {
+      display: block;
+    }
+
+    .autocomplete-item {
+      padding: 6px var(--spacing-sm);
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .autocomplete-item:hover,
+    .autocomplete-item.highlighted {
+      background: var(--bg-hover);
+    }
+
+    .autocomplete-item.selected {
+      background: var(--color-secondary);
+      color: white;
+    }
+
+    .autocomplete-no-results {
+      padding: 6px var(--spacing-sm);
+      font-size: 13px;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
     .toolbar-actions {
       display: flex;
       gap: var(--spacing-sm);
@@ -757,9 +828,11 @@
       <!-- 集計フィルター（未払い集計ビュー用） -->
       <div class="filter-group" id="staffAggregationFilter">
         <label>スタッフ:</label>
-        <select id="staffFilter">
-          <option value="">全て</option>
-        </select>
+        <div class="autocomplete-wrapper">
+          <input type="text" id="staffFilterInput" placeholder="全て" autocomplete="off">
+          <input type="hidden" id="staffFilter" value="">
+          <div class="autocomplete-dropdown" id="staffFilterDropdown"></div>
+        </div>
         <label>締日:</label>
         <input type="date" id="endDateFilter" />
         <button class="btn btn-secondary" onclick="loadUnpaidList()">集計</button>
@@ -1497,19 +1570,164 @@
         .getStaffForPayouts();
     }
 
-    function populateStaffFilter() {
-      const select = document.getElementById('staffFilter');
-      const prevValue = select.value;
-      select.innerHTML = '<option value="">全て</option>';
-      staffList.forEach(s => {
-        const option = document.createElement('option');
-        option.value = s.staff_id;
-        option.textContent = s.name;
-        select.appendChild(option);
+    let staffAutocomplete = null;
+
+    function filterStaff(items, query) {
+      const source = Array.isArray(items) ? items : [];
+      const q = (query || '').trim().toLowerCase();
+      if (!q) return source;
+      return source.filter(s => {
+        const text = [s.name || '', s.name_kana || ''].join(' ').toLowerCase();
+        return text.indexOf(q) !== -1;
       });
-      // 選択保持: 候補に残っていれば復元
-      if (prevValue && [...select.options].some(o => o.value === prevValue)) {
-        select.value = prevValue;
+    }
+
+    function createStaffAutocomplete() {
+      const input = document.getElementById('staffFilterInput');
+      const hidden = document.getElementById('staffFilter');
+      const dropdown = document.getElementById('staffFilterDropdown');
+      let items = [];
+      let highlightIndex = -1;
+      let isOpen = false;
+
+      function render(filtered) {
+        dropdown.innerHTML = '';
+        // 「全て」オプション
+        const allItem = document.createElement('div');
+        allItem.className = 'autocomplete-item' + (!hidden.value ? ' selected' : '');
+        allItem.textContent = '全て';
+        allItem.addEventListener('mousedown', e => { e.preventDefault(); selectItem('', ''); });
+        dropdown.appendChild(allItem);
+
+        if (filtered.length === 0 && input.value.trim()) {
+          const noResult = document.createElement('div');
+          noResult.className = 'autocomplete-no-results';
+          noResult.textContent = '該当なし';
+          dropdown.appendChild(noResult);
+          return;
+        }
+
+        filtered.forEach((s, i) => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          if (s.staff_id === hidden.value) div.className += ' selected';
+          if (i === highlightIndex) div.className += ' highlighted';
+          div.textContent = s.name;
+          div.addEventListener('mousedown', e => { e.preventDefault(); selectItem(s.staff_id, s.name); });
+          dropdown.appendChild(div);
+        });
+      }
+
+      function open() {
+        if (isOpen) return;
+        isOpen = true;
+        highlightIndex = -1;
+        render(filterStaff(items, input.value));
+        dropdown.classList.add('open');
+      }
+
+      function close() {
+        if (!isOpen) return;
+        isOpen = false;
+        dropdown.classList.remove('open');
+        highlightIndex = -1;
+      }
+
+      function selectItem(value, label) {
+        hidden.value = value;
+        if (value) {
+          input.value = label;
+          input.classList.add('has-value');
+        } else {
+          input.value = '';
+          input.classList.remove('has-value');
+        }
+        close();
+      }
+
+      input.addEventListener('focus', () => open());
+
+      input.addEventListener('input', () => {
+        highlightIndex = -1;
+        render(filterStaff(items, input.value));
+        if (!isOpen) { isOpen = true; dropdown.classList.add('open'); }
+        hidden.value = '';
+        input.classList.remove('has-value');
+      });
+
+      input.addEventListener('keydown', e => {
+        if (!isOpen) return;
+        const visibleItems = dropdown.querySelectorAll('.autocomplete-item');
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          highlightIndex = Math.min(highlightIndex + 1, visibleItems.length - 1);
+          updateHighlight(visibleItems);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          highlightIndex = Math.max(highlightIndex - 1, 0);
+          updateHighlight(visibleItems);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (highlightIndex >= 0 && visibleItems[highlightIndex]) {
+            visibleItems[highlightIndex].dispatchEvent(new MouseEvent('mousedown'));
+          }
+        } else if (e.key === 'Escape') {
+          close();
+          if (!hidden.value) input.value = '';
+        }
+      });
+
+      function updateHighlight(nodeList) {
+        nodeList.forEach((node, i) => {
+          node.classList.toggle('highlighted', i === highlightIndex);
+          if (i === highlightIndex) node.scrollIntoView({ block: 'nearest' });
+        });
+      }
+
+      input.addEventListener('blur', () => {
+        setTimeout(() => { close(); }, 150);
+        if (!hidden.value && input.value.trim()) {
+          const typed = input.value.trim().toLowerCase();
+          const match = items.find(s =>
+            s.name === input.value.trim() ||
+            (s.name_kana && s.name_kana.toLowerCase() === typed)
+          );
+          if (match) {
+            selectItem(match.staff_id, match.name);
+          } else {
+            input.value = '';
+          }
+        }
+      });
+
+      document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) close();
+      });
+
+      return {
+        setItems(newItems) {
+          items = Array.isArray(newItems) ? newItems.filter(s => s && s.staff_id && s.name) : [];
+          if (isOpen) render(filterStaff(items, input.value));
+        },
+        getValue() { return hidden.value; },
+        setValue(value, label) { selectItem(value, label); }
+      };
+    }
+
+    function populateStaffFilter() {
+      if (!staffAutocomplete) {
+        staffAutocomplete = createStaffAutocomplete();
+      }
+      const prevValue = staffAutocomplete.getValue();
+      staffAutocomplete.setItems(staffList);
+      // 選択保持: 前の選択がリストに残っていれば復元、なければクリア
+      if (prevValue) {
+        const match = staffList.find(s => s.staff_id === prevValue);
+        if (match) {
+          staffAutocomplete.setValue(match.staff_id, match.name);
+        } else {
+          staffAutocomplete.setValue('', '');
+        }
       }
     }
 
