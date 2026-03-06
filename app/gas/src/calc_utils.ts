@@ -2,6 +2,7 @@
 // 金額計算ユーティリティ（KTSM-63）
 
 const DEFAULT_TAX_RATE = 0.10;
+const EXPENSE_ITEM_NAME = '諸経費';
 
 // ============================================
 // ランタイムアサーション（warn-only）

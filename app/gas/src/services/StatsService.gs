@@ -679,7 +679,7 @@ const StatsService = {
     for (var d = 0; d < lines.length; d++) {
       var line = lines[d];
       var amt = Number(line.amount) || 0;
-      if (line.item_name === '諸経費') {
+      if (line.item_name === EXPENSE_ITEM_NAME) {
         expenseTotal += amt;
         continue;
       }

@@ -1161,7 +1161,7 @@ const InvoiceService = {
             job_id: job.job_id,
             assignment_id: (expGroup.assignments[0] as Record<string, unknown>).assignment_id,
             site_name: '',
-            item_name: '諸経費',
+            item_name: EXPENSE_ITEM_NAME,
             time_note: expGroup.expenseNote,
             quantity: expQuantity,
             unit: '人',
@@ -1275,7 +1275,7 @@ const InvoiceService = {
 
     lines.forEach((line: Record<string, unknown>) => {
       const amount = Number(line.amount) || 0;
-      if (line.item_name === '諸経費') {
+      if (line.item_name === EXPENSE_ITEM_NAME) {
         expenseAmount += amount;
       } else {
         workAmount += amount;
