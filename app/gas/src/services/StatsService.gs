@@ -215,8 +215,10 @@ const StatsService = {
     const monthlyStats = StatsRepository.findByRange(startYear, startMonth, endYear, endMonth);
 
     // 概算込みの支払データを一括取得 → 各月の stats に上書き
+    // ただし is_final（確定済み）の月は保存値を維持する（アーカイブ後のデータ消失リスク回避）
     const payoutBuckets = this._aggregatePayoutsForRange(startYear, startMonth, endYear, endMonth);
     for (const s of monthlyStats) {
+      if (s.is_final) continue;
       const key = s.year + '-' + s.month;
       const pb = payoutBuckets[key];
       if (pb) {
@@ -865,8 +867,8 @@ const StatsService = {
     for (const payout of payouts) {
       const periodStart = payout.period_start;
       if (periodStart >= rangeStart && periodStart <= rangeEnd) {
-        const d = new Date(periodStart);
-        const key = d.getFullYear() + '-' + (d.getMonth() + 1);
+        const parts = String(periodStart).split('-');
+        const key = Number(parts[0]) + '-' + Number(parts[1]);
         if (buckets[key]) {
           const amt = Number(payout.total_amount) || 0;
           buckets[key].payout_confirmed += amt;
@@ -931,8 +933,8 @@ const StatsService = {
       if (!job) continue;
 
       const workDate = this._normalizeDate(job.work_date);
-      const d = new Date(workDate);
-      const key = d.getFullYear() + '-' + (d.getMonth() + 1);
+      const wdParts = workDate.split('-');
+      const key = Number(wdParts[0]) + '-' + Number(wdParts[1]);
       if (!buckets[key]) continue;
 
       const payUnit = resolveEffectiveUnit_(asg.pay_unit, job);
