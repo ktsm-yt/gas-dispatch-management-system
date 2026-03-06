@@ -214,13 +214,262 @@ const StatsService = {
     // 集計
     const totals = this._aggregateStats(monthlyStats);
 
+    // 企業別集計
+    var byCustomer = this._aggregateByCustomer(startYear, startMonth, endYear, endMonth);
+
     return {
       period: {
         start: { year: startYear, month: startMonth },
         end: { year: endYear, month: endMonth }
       },
       totals: totals,
-      monthly: monthlyStats
+      monthly: monthlyStats,
+      byCustomer: byCustomer
+    };
+  },
+
+  /**
+   * 企業（顧客）別の売上集計（全顧客対象、売上降順）
+   * @private
+   * @param {number} startYear
+   * @param {number} startMonth
+   * @param {number} endYear
+   * @param {number} endMonth
+   * @returns {Array<{customerId, customerName, salesTotal, invoiceCount}>}
+   */
+  _aggregateByCustomer: function(startYear, startMonth, endYear, endMonth) {
+    // 期間内の年月セットを生成（フィルタ用）
+    var validMonths = {};
+    var y = startYear, m = startMonth;
+    while (y < endYear || (y === endYear && m <= endMonth)) {
+      validMonths[y + '-' + m] = true;
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+
+    // 顧客別バケット: { customerId: { salesTotal, invoiceCount } }
+    var buckets = {};
+
+    // シートからデータを集計する共通関数
+    function aggregateSheet(sheet) {
+      if (!sheet) return;
+      var data = sheet.getDataRange().getValues();
+      if (data.length <= 1) return;
+      var h = data[0];
+      var col = {
+        cid: h.indexOf('customer_id'),
+        by: h.indexOf('billing_year'),
+        bm: h.indexOf('billing_month'),
+        sub: h.indexOf('subtotal'),
+        exp: h.indexOf('expense_amount'),
+        adj: h.indexOf('adjustment_total'),
+        del: h.indexOf('is_deleted')
+      };
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        if (row[col.del]) continue;
+        var key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+        if (!(key in validMonths)) continue;
+        var cid = String(row[col.cid]);
+        if (!buckets[cid]) buckets[cid] = { salesTotal: 0, invoiceCount: 0 };
+        var subtotal = Number(row[col.sub]) || 0;
+        var expense = Number(row[col.exp]) || 0;
+        var adjustment = Number(row[col.adj]) || 0;
+        buckets[cid].salesTotal += subtotal + expense + adjustment;
+        buckets[cid].invoiceCount++;
+      }
+    }
+
+    // メインDB
+    aggregateSheet(getSheet('T_Invoices'));
+
+    // アーカイブDB（期間に含まれる会計年度を特定）
+    var fiscalYears = new Set();
+    var yy = startYear, mm = startMonth;
+    while (yy < endYear || (yy === endYear && mm <= endMonth)) {
+      fiscalYears.add(getFiscalYear_(new Date(yy, mm - 1, 1)));
+      mm++;
+      if (mm > 12) { mm = 1; yy++; }
+    }
+    for (var fy of fiscalYears) {
+      var archiveDbId = ArchiveService.getArchiveDbId(fy);
+      if (!archiveDbId) continue;
+      try {
+        var archiveDb = SpreadsheetApp.openById(archiveDbId);
+        var archSheet = findSheetFromDb(archiveDb, 'T_Invoices');
+        aggregateSheet(archSheet);
+      } catch (e) {
+        Logger.log('企業別集計: アーカイブ読み込みエラー: ' + e.message);
+      }
+    }
+
+    // M_Customers から表示名マッピング
+    var customerNameMap = {};
+    var custSheet = getSheet('M_Customers');
+    var custData = custSheet.getDataRange().getValues();
+    if (custData.length > 1) {
+      var custH = custData[0];
+      var custCol = {
+        id: custH.indexOf('customer_id'),
+        name: custH.indexOf('company_name'),
+        branch: custH.indexOf('branch_name'),
+        del: custH.indexOf('is_deleted')
+      };
+      for (var c = 1; c < custData.length; c++) {
+        var cr = custData[c];
+        if (cr[custCol.del]) continue;
+        var cid = String(cr[custCol.id]);
+        var name = String(cr[custCol.name] || '');
+        var branch = String(cr[custCol.branch] || '');
+        customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
+      }
+    }
+
+    // 結果配列に変換（0円除外 + 売上降順ソート）
+    var result = [];
+    for (var id in buckets) {
+      if (buckets[id].salesTotal === 0) continue;
+      result.push({
+        customerId: id,
+        customerName: customerNameMap[id] || '（不明）',
+        salesTotal: buckets[id].salesTotal,
+        invoiceCount: buckets[id].invoiceCount
+      });
+    }
+    result.sort(function(a, b) { return b.salesTotal - a.salesTotal; });
+    return result;
+  },
+
+  /**
+   * 企業別の売上を過去numYears年度分集計（年次比較タブ用）
+   * T_Invoices を1回だけ読み、会計年度ごとにバケット分けする。
+   * @param {number} numYears - 集計する年度数（デフォルト5）
+   * @returns {Object} { fiscalYears: number[], customers: Array<{customerId, customerName, years: Object}> }
+   */
+  _aggregateByCustomerYearly: function(numYears) {
+    numYears = numYears || 5;
+    var now = new Date();
+    var currentFy = getFiscalYear_(now);
+
+    // 対象年度リスト（新しい順）
+    var fiscalYears = [];
+    for (var i = 0; i < numYears; i++) {
+      fiscalYears.push(currentFy - i);
+    }
+
+    // 年月 → 会計年度マッピングを生成（全対象年度の開始月〜終了月）
+    var monthToFy = {};
+    for (var fi = 0; fi < fiscalYears.length; fi++) {
+      var fy = fiscalYears[fi];
+      var range = getFiscalYearRange_(fy);
+      var start = parseDate_(range.startDate);
+      var end = parseDate_(range.endDate);
+      var sy = start.getFullYear(), sm = start.getMonth() + 1;
+      var ey = end.getFullYear(), em = end.getMonth() + 1;
+      var yy = sy, mm = sm;
+      while (yy < ey || (yy === ey && mm <= em)) {
+        monthToFy[yy + '-' + mm] = fy;
+        mm++;
+        if (mm > 12) { mm = 1; yy++; }
+      }
+    }
+
+    // 顧客別 × 年度別バケット: { customerId: { fy: salesTotal } }
+    var buckets = {};
+
+    function aggregateSheet(sheet) {
+      if (!sheet) return;
+      var data = sheet.getDataRange().getValues();
+      if (data.length <= 1) return;
+      var h = data[0];
+      var col = {
+        cid: h.indexOf('customer_id'),
+        by: h.indexOf('billing_year'),
+        bm: h.indexOf('billing_month'),
+        sub: h.indexOf('subtotal'),
+        exp: h.indexOf('expense_amount'),
+        adj: h.indexOf('adjustment_total'),
+        del: h.indexOf('is_deleted')
+      };
+      for (var i = 1; i < data.length; i++) {
+        var row = data[i];
+        if (row[col.del]) continue;
+        var key = Number(row[col.by]) + '-' + Number(row[col.bm]);
+        var fy = monthToFy[key];
+        if (fy === undefined) continue;
+        var cid = String(row[col.cid]);
+        if (!buckets[cid]) buckets[cid] = {};
+        if (!buckets[cid][fy]) buckets[cid][fy] = 0;
+        var subtotal = Number(row[col.sub]) || 0;
+        var expense = Number(row[col.exp]) || 0;
+        var adjustment = Number(row[col.adj]) || 0;
+        buckets[cid][fy] += subtotal + expense + adjustment;
+      }
+    }
+
+    // メインDB
+    aggregateSheet(getSheet('T_Invoices'));
+
+    // アーカイブDB（対象年度ごと）
+    for (var ai = 0; ai < fiscalYears.length; ai++) {
+      var archiveFy = fiscalYears[ai];
+      var archiveDbId = ArchiveService.getArchiveDbId(archiveFy);
+      if (!archiveDbId) continue;
+      try {
+        var archiveDb = SpreadsheetApp.openById(archiveDbId);
+        var archSheet = findSheetFromDb(archiveDb, 'T_Invoices');
+        aggregateSheet(archSheet);
+      } catch (e) {
+        Logger.log('年次比較: アーカイブ読み込みエラー (FY' + archiveFy + '): ' + e.message);
+      }
+    }
+
+    // M_Customers から表示名マッピング
+    var customerNameMap = {};
+    var custSheet = getSheet('M_Customers');
+    var custData = custSheet.getDataRange().getValues();
+    if (custData.length > 1) {
+      var custH = custData[0];
+      var custCol = {
+        id: custH.indexOf('customer_id'),
+        name: custH.indexOf('company_name'),
+        branch: custH.indexOf('branch_name'),
+        del: custH.indexOf('is_deleted')
+      };
+      for (var c = 1; c < custData.length; c++) {
+        var cr = custData[c];
+        if (cr[custCol.del]) continue;
+        var cid = String(cr[custCol.id]);
+        var name = String(cr[custCol.name] || '');
+        var branch = String(cr[custCol.branch] || '');
+        customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
+      }
+    }
+
+    // 結果配列に変換（全年度0の企業を除外、最新年度の売上で降順ソート）
+    var customers = [];
+    for (var id in buckets) {
+      var hasAnySales = false;
+      var yearsData = {};
+      for (var yi = 0; yi < fiscalYears.length; yi++) {
+        var fyKey = fiscalYears[yi];
+        yearsData[fyKey] = buckets[id][fyKey] || 0;
+        if (yearsData[fyKey] !== 0) hasAnySales = true;
+      }
+      if (!hasAnySales) continue;
+      customers.push({
+        customerId: id,
+        customerName: customerNameMap[id] || '（不明）',
+        years: yearsData
+      });
+    }
+    customers.sort(function(a, b) {
+      return (b.years[currentFy] || 0) - (a.years[currentFy] || 0);
+    });
+
+    return {
+      fiscalYears: fiscalYears,
+      customers: customers
     };
   },
 

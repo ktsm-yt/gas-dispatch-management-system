@@ -272,6 +272,44 @@ function getDailySalesStats(options) {
 }
 
 /**
+ * 年次比較データを取得（企業別×過去5年度の売上）
+ * 年次比較タブから遅延呼び出し。CacheServiceで6時間キャッシュ。
+ * @returns {Object} APIレスポンス
+ */
+function getYearlyCustomerStats() {
+  var requestId = generateRequestId();
+
+  try {
+    var authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    var cacheKey = 'yearly_customer_stats';
+    var cached = CacheService.getScriptCache().get(cacheKey);
+    if (cached) {
+      return buildSuccessResponse(JSON.parse(cached), requestId);
+    }
+
+    var result = StatsService._aggregateByCustomerYearly(5);
+
+    // CacheService最大100KB、最大6時間（21600秒）
+    try {
+      CacheService.getScriptCache().put(cacheKey, JSON.stringify(result), 21600);
+    } catch (e) {
+      Logger.log('年次比較キャッシュ保存エラー（データサイズ超過の可能性）: ' + e.message);
+    }
+
+    return buildSuccessResponse(result, requestId);
+
+  } catch (error) {
+    var errMsg = error instanceof Error ? error.message : String(error);
+    Logger.log('getYearlyCustomerStats error: ' + errMsg);
+    return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  }
+}
+
+/**
  * 全月の統計一覧を取得
  * @returns {Object} APIレスポンス
  */
