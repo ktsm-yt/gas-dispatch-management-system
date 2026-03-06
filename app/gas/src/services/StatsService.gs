@@ -773,19 +773,18 @@ const StatsService = {
     const lastDay = new Date(year, month, 0).getDate();
     const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
-    // 全支払データを取得してフィルタリング
-    const allPayouts = getAllRecords('T_Payouts');
+    // PayoutRepository.search() 経由で取得（_normalizeRecord で日付が YYYY-MM-DD 文字列に正規化される）
+    // 旧実装: getAllRecords() の生データは Date オブジェクトのため文字列比較が失敗していた
+    const payouts = PayoutRepository.search({
+      status_in: ['paid', 'confirmed']
+    });
 
     const result = {
       payout_total: 0,
       transport_total: 0
     };
 
-    for (const payout of allPayouts) {
-      if (payout.is_deleted) continue;
-      if (payout.status !== 'paid' && payout.status !== 'confirmed') continue;
-
-      // period_startが月内に含まれるものを集計
+    for (const payout of payouts) {
       const periodStart = payout.period_start;
       if (periodStart >= startDate && periodStart <= endDate) {
         result.payout_total += Number(payout.total_amount) || 0;
