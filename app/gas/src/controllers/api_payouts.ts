@@ -6,6 +6,25 @@
  */
 
 /**
+ * Payout変更後に該当月の売上統計を再計算（ベストエフォート）
+ * endDate (YYYY-MM-DD) から年月を抽出して StatsService.updateMonthlyStats を呼ぶ
+ * 失敗しても payout 操作自体には影響しない
+ */
+function _refreshStatsForPayoutMonth(endDate: string): void {
+  try {
+    const parts = endDate.split('-');
+    const year = Number(parts[0]);
+    const month = Number(parts[1]);
+    if (year && month) {
+      StatsService.updateMonthlyStats(year, month);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    Logger.log('[_refreshStatsForPayoutMonth] best-effort failed: ' + msg);
+  }
+}
+
+/**
  * スタッフ一覧を取得（支払い画面用）
  * @returns { ok: true, data: { staff: [] } }
  */
@@ -393,6 +412,7 @@ function markAsPaid(staffId: string, endDate: string, options: { adjustment_amou
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -442,6 +462,7 @@ function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_dat
     // Service呼び出し
     const result = PayoutService.bulkMarkAsPaid(staffIds, endDate, options);
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -813,6 +834,7 @@ function confirmPayout(staffId: string, endDate: string, options: { adjustment_a
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -857,6 +879,7 @@ function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adju
     // Service呼び出し
     const result = PayoutService.bulkConfirmPayouts(staffIds, endDate, options);
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -1406,6 +1429,7 @@ function confirmSubcontractorPayout(subcontractorId: string, endDate: string, op
       return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
@@ -1448,6 +1472,7 @@ function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string,
       return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
     }
 
+    _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {

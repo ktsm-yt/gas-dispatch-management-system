@@ -1203,6 +1203,8 @@
           google.script.run
             .withSuccessHandler(function(result) {
               if (result.ok) {
+                // 再計算後はキャッシュを無効化してから再読み込み
+                PageCache.clearByPrefix('sales_analytics');
                 ConfirmationModal.show({
                   type: 'info',
                   title: '完了',
