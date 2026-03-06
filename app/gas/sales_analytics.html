@@ -500,14 +500,16 @@
         <div class="kpi-card-header">支払総額</div>
         <div class="kpi-card-value" id="kpi-payout-total">-</div>
         <div class="kpi-card-sub" id="kpi-assignment-count">配置数: -</div>
+        <div class="kpi-card-sub" id="kpi-payout-estimate-note" style="display:none; color: var(--color-warning); font-size: 11px;"></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-card-header">粗利益</div>
         <div class="kpi-card-value" id="kpi-gross-margin">-</div>
         <div class="kpi-card-sub" id="kpi-margin-rate">粗利率: -%</div>
+        <div class="kpi-card-sub" id="kpi-margin-estimate-note" style="display:none; color: var(--color-warning); font-size: 11px;"></div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-card-header">交通費</div>
+        <div class="kpi-card-header">諸経費</div>
         <div class="kpi-card-value" id="kpi-transport-total">-</div>
         <div class="kpi-card-sub">&nbsp;</div>
       </div>
@@ -900,6 +902,19 @@
         document.getElementById('kpi-payout-total').textContent = formatCurrency(totals.payout_total);
         document.getElementById('kpi-assignment-count').textContent = '配置数: ' + totals.assignment_count;
 
+        // 概算含む注釈
+        var payoutNote = document.getElementById('kpi-payout-estimate-note');
+        var marginNote = document.getElementById('kpi-margin-estimate-note');
+        if (totals.has_payout_estimate) {
+          payoutNote.textContent = '(税抜概算 ' + formatCurrency(totals.payout_estimated) + ' 含)';
+          payoutNote.style.display = '';
+          marginNote.textContent = '(概算含)';
+          marginNote.style.display = '';
+        } else {
+          payoutNote.style.display = 'none';
+          marginNote.style.display = 'none';
+        }
+
         var grossMargin = salesTotal - totals.payout_total;
         var marginRate = salesTotal > 0 ? Math.round((grossMargin / salesTotal) * 10000) / 100 : 0;
         var marginEl = document.getElementById('kpi-gross-margin');
@@ -993,7 +1008,7 @@
       if (isCustomerFilter) {
         thead.innerHTML = '<th>年月</th><th>売上</th>';
       } else {
-        thead.innerHTML = '<th>年月</th><th>案件数</th><th>配置数</th><th>売上</th><th>支払</th><th>交通費</th><th>粗利益</th><th>粗利率</th><th>状態</th>';
+        thead.innerHTML = '<th>年月</th><th>案件数</th><th>配置数</th><th>売上</th><th>支払</th><th>諸経費</th><th>粗利益</th><th>粗利率</th><th>状態</th>';
       }
 
       var colSpan = isCustomerFilter ? 2 : 9;
@@ -1012,13 +1027,14 @@
         var sGrossMargin = sSalesTotal - s.payout_total;
         var marginColor = sGrossMargin >= 0 ? 'var(--color-success)' : 'var(--color-danger)';
         var statusBadge = s.is_final ? '<span class="finalized-badge">確定</span>' : '<span class="draft-badge">暫定</span>';
+        var estimateBadge = s.has_payout_estimate ? ' <span style="background:#FFC107;color:#333;font-size:10px;padding:1px 4px;border-radius:3px;">概算含</span>' : '';
         return [
           '<tr>',
           '<td>' + s.year + '年' + s.month + '月</td>',
           '<td>' + s.job_count + '</td>',
           '<td>' + s.assignment_count + '</td>',
           '<td>' + formatCurrency(sSalesTotal) + '</td>',
-          '<td>' + formatCurrency(s.payout_total) + '</td>',
+          '<td>' + formatCurrency(s.payout_total) + estimateBadge + '</td>',
           '<td>' + formatCurrency(s.transport_total + (s.expense_amount || 0)) + '</td>',
           '<td style="color: ' + marginColor + '">' + formatCurrency(sGrossMargin) + '</td>',
           '<td>' + (sSalesTotal > 0 ? Math.round((sGrossMargin / sSalesTotal) * 10000) / 100 : 0) + '%</td>',
