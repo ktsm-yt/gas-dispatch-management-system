@@ -116,19 +116,27 @@ const PayoutRepository = {
   },
 
   /**
-   * スタッフ・期間終了日でdraft Payoutを検索（下書き保存の上書き判定用）
+   * スタッフのdraft Payoutを検索（締日不問、最新1件を返す）
+   * 1スタッフ1draftの前提。複数存在時は最新updated_atを採用し警告ログ出力。
    */
-  findDraftByStaffAndEndDate: function(staffId: string, endDate: string): PayoutRecord | null {
-    const normalizedEnd = this._normalizeDate(endDate);
+  findDraftByStaff: function(staffId: string): PayoutRecord | null {
     let records = getAllRecords(this.TABLE_NAME);
     records = records.filter(r =>
       !r.is_deleted &&
       r.payout_type === 'STAFF' &&
       r.staff_id === staffId &&
-      r.status === 'draft' &&
-      this._normalizeDate(r.period_end as string | Date) === normalizedEnd
+      r.status === 'draft'
     );
-    return records.length > 0 ? this._normalizeRecord(records[0]) : null;
+    if (records.length === 0) return null;
+    if (records.length > 1) {
+      Logger.log(`[PayoutRepository] WARNING: ${records.length} drafts found for staff ${staffId}, using latest`);
+      records.sort((a, b) => {
+        const dateA = new Date(a.updated_at as string).getTime() || 0;
+        const dateB = new Date(b.updated_at as string).getTime() || 0;
+        return dateB - dateA;
+      });
+    }
+    return this._normalizeRecord(records[0]);
   },
 
   /**

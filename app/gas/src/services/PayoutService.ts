@@ -223,8 +223,8 @@ const PayoutService = {
     const adjustmentAmount = options.adjustment_amount || 0;
     const totalAmount = calc.totalAmount + adjustmentAmount;
 
-    // 既存draftを検索
-    const existingDraft = PayoutRepository.findDraftByStaffAndEndDate(staffId, endDate);
+    // 既存draftを検索（締日不問 — 調整額を引き継ぐため）
+    const existingDraft = PayoutRepository.findDraftByStaff(staffId);
 
     if (existingDraft) {
       // 既存draftを更新
@@ -653,30 +653,42 @@ const PayoutService = {
     }
 
     // ========== Phase 2.5: 重複チェック用のSet構築 ==========
-    // 対象endDateの既存Payoutを取得（全件取得を避ける）
-    const existingPayouts = PayoutRepository.search({
+    // confirmed/paid: endDate一致のみ取得（重複スキップ用）
+    const confirmedPaidPayouts = PayoutRepository.search({
       payout_type: 'STAFF',
       period_end_to: endDate,
-      period_start_from: null,  // 全期間（開始日は不特定）
-      status_in: ['draft', 'confirmed', 'paid']
-    }).filter(p => p.period_end === endDate);  // endDate完全一致でフィルタ
+      period_start_from: null,
+      status_in: ['confirmed', 'paid']
+    }).filter(p => p.period_end === endDate);
 
-    // キーは (staff_id, period_start, period_end) の3要素
-    // confirmed/paidの重複キー（スキップ対象）
+    // draft: 締日不問で全draft取得（調整額引き継ぎのため）
+    const allDrafts = PayoutRepository.search({
+      payout_type: 'STAFF',
+      status: 'draft'
+    });
+
+    // confirmed/paidの重複キー（スキップ対象）— 3部キー
     const confirmedPayoutKeys = new Set<string>();
-    // draftのマップ（アップグレード対象）
-    const draftPayoutMap = new Map<string, PayoutRecord>();
-    for (const p of existingPayouts) {
+    for (const p of confirmedPaidPayouts) {
       if (p.staff_id && p.period_start && p.period_end) {
-        const key = `${p.staff_id}|${p.period_start}|${p.period_end}`;
-        if (p.status === 'draft') {
-          draftPayoutMap.set(key, p);
-        } else {
-          confirmedPayoutKeys.add(key);
-        }
+        confirmedPayoutKeys.add(`${p.staff_id}|${p.period_start}|${p.period_end}`);
       }
     }
-    Logger.log(`[bulkConfirmPayouts] Loaded ${existingPayouts.length} existing payouts (${draftPayoutMap.size} drafts, ${confirmedPayoutKeys.size} confirmed/paid)`);
+
+    // draftのマップ（アップグレード対象）— staffIdキー（締日不問）
+    const draftPayoutMap = new Map<string, PayoutRecord>();
+    // updated_at降順ソートで最新draftを優先
+    allDrafts.sort((a, b) => {
+      const dateA = new Date(a.updated_at as string).getTime() || 0;
+      const dateB = new Date(b.updated_at as string).getTime() || 0;
+      return dateB - dateA;
+    });
+    for (const p of allDrafts) {
+      if (p.staff_id && !draftPayoutMap.has(p.staff_id)) {
+        draftPayoutMap.set(p.staff_id, p);
+      }
+    }
+    Logger.log(`[bulkConfirmPayouts] Loaded ${confirmedPaidPayouts.length} confirmed/paid, ${draftPayoutMap.size} drafts (from ${allDrafts.length} total drafts)`);
 
     // 支払いレコードを準備
     let skipped = 0;
@@ -717,8 +729,8 @@ const PayoutService = {
       const notes = adjustments[staffId]?.notes || '';
       const totalAmount = calc.totalAmount + adjustmentAmount;
 
-      // Draftが存在する場合はアップグレード対象に
-      const existingDraft = draftPayoutMap.get(payoutKey);
+      // Draftが存在する場合はアップグレード対象に（staffIdキーで検索 — 締日不問）
+      const existingDraft = draftPayoutMap.get(staffId);
       if (existingDraft) {
         const payoutId = existingDraft.payout_id;
         draftsToUpgrade.push({ staffId, draft: existingDraft, calc, adjustmentAmount, notes, payoutId });
@@ -1161,13 +1173,14 @@ const PayoutService = {
   },
 
   /**
-   * 指定期間終了日のdraft Payoutを取得（下書きバッジ表示用）
+   * 全draft Payoutを取得（締日不問 — 調整額は締日変更時も引き継ぐ）
+   * @param endDate - 互換性のため引数を残すが内部では未使用
    */
-  getDraftPayoutsForPeriod: function(endDate: string): (PayoutRecord & { target_name: string })[] {
+  getDraftPayoutsForPeriod: function(_endDate?: string): (PayoutRecord & { target_name: string })[] {
     const payouts = PayoutRepository.search({
       payout_type: 'STAFF',
       status: 'draft'
-    }).filter(p => p.period_end === endDate);
+    });
 
     return this._enrichPayoutsBulk(payouts);
   },
