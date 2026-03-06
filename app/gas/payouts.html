@@ -322,7 +322,8 @@
       font-weight: 500;
     }
 
-    .status-badge.draft { background: #E5E7EB; color: #374151; }
+    .status-badge.unpaid { background: #E5E7EB; color: #374151; }
+    .status-badge.draft { background: #FEF3C7; color: #92400E; }
     .status-badge.confirmed { background: #DBEAFE; color: #1D4ED8; }
     .status-badge.paid { background: #D1FAE5; color: #047857; }
 
@@ -1242,15 +1243,10 @@
     function updateRowDraftBadge(staffId, adjustment, notes) {
       const row = document.querySelector('tr[data-staff-id="' + staffId + '"][data-status="unpaid"]');
       if (!row) return;
-      // バッジを追加/更新
+      // バッジを「下書き」に切り替え
       const badgeCell = row.querySelector('td:nth-last-child(2)');
-      if (badgeCell) {
-        const existing = badgeCell.querySelector('.draft-badge');
-        if (existing) {
-          // 既にある
-        } else {
-          badgeCell.innerHTML = '<span class="status-badge draft">未払</span> <span class="status-badge draft-badge" style="background:#FEF3C7;color:#92400E;font-size:10px;">下書き</span>';
-        }
+      if (badgeCell && !badgeCell.querySelector('.status-badge.draft')) {
+        badgeCell.innerHTML = '<span class="status-badge draft">下書き</span>';
       }
       // 調整額・備考インプットにも反映
       const adjInput = row.querySelector('.adjustment-input[data-staff-id="' + staffId + '"]');
@@ -2174,6 +2170,7 @@
       }
 
       const unpaidCount = unpaidRows.length;
+      const draftCount = draftMap.size;
       const confirmedCount = confirmedRows.length;
       const unpaidTotal = data.totalAmount || 0;
       const confirmedTotal = confirmedData.reduce((sum, p) => sum + (p.total_amount || 0), 0);
@@ -2183,6 +2180,10 @@
           <div class="summary-item">
             <div class="label">未払</div>
             <div class="value">${unpaidCount}名</div>
+          </div>
+          <div class="summary-item">
+            <div class="label">下書き</div>
+            <div class="value" style="color: #92400E;">${draftCount}名</div>
           </div>
           <div class="summary-item">
             <div class="label">確認済み</div>
@@ -2266,7 +2267,7 @@
       const adjSignClass = draftAdj < 0 ? 'negative' : 'positive';
       const adjValue = Math.abs(draftAdj);
       const draftNotes = draft ? (draft.notes || '') : '';
-      const draftBadge = draft ? ' <span class="status-badge draft-badge" style="background:#FEF3C7;color:#92400E;font-size:10px;">下書き</span>' : '';
+      const statusBadge = draft ? '<span class="status-badge draft">下書き</span>' : '<span class="status-badge unpaid">未払</span>';
       return `
         <tr data-staff-id="${staffId}" data-status="unpaid" data-row-id="${escapeHtml(s.rowId || '')}" data-name-kana="${staffNameKana}" class="clickable-row" onclick="toggleRowCheck(this, event)">
           <td><input type="checkbox" class="staff-check" data-status="unpaid" value="${staffId}"></td>
@@ -2279,7 +2280,7 @@
             <input type="number" class="adjustment-input" data-staff-id="${staffId}" value="${adjValue}" min="0" />
           </td>
           <td><input type="text" class="notes-input" data-staff-id="${staffId}" placeholder="" value="${escapeHtml(draftNotes)}" /></td>
-          <td><span class="status-badge draft">未払</span>${draftBadge}</td>
+          <td>${statusBadge}</td>
           <td>
             <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${staffId}" data-staff-name="${staffName}" data-status="unpaid">詳細</button>
           </td>
@@ -4177,6 +4178,7 @@
     function updateUnpaidListSummary() {
       const rows = document.querySelectorAll('#unpaidSummary tbody tr[data-staff-id]');
       let unpaidCount = 0;
+      let draftCount = 0;
       let confirmedCount = 0;
       let totalAmount = 0;
 
@@ -4185,10 +4187,10 @@
           confirmedCount++;
         } else {
           unpaidCount++;
+          if (row.querySelector('.status-badge.draft')) draftCount++;
         }
         const amountCell = row.querySelector('td.amount');
         if (amountCell) {
-          // 半角¥(U+00A5)と全角￥(U+FFE5)の両方を除去
           const amountText = amountCell.textContent.replace(/[¥￥,]/g, '');
           totalAmount += Number(amountText) || 0;
         }
@@ -4196,10 +4198,11 @@
 
       // サマリーを更新
       const summaryItems = document.querySelectorAll('#unpaidSummary .summary-item .value');
-      if (summaryItems.length >= 3) {
+      if (summaryItems.length >= 4) {
         summaryItems[0].textContent = `${unpaidCount}名`;
-        summaryItems[1].textContent = `${confirmedCount}名`;
-        summaryItems[2].textContent = formatCurrency(totalAmount);
+        summaryItems[1].textContent = `${draftCount}名`;
+        summaryItems[2].textContent = `${confirmedCount}名`;
+        summaryItems[3].textContent = formatCurrency(totalAmount);
       }
 
       // 全員支払済の場合
@@ -4349,7 +4352,7 @@
     }
 
     /**
-     * サマリー（未払/確認済み/合計金額）を再計算
+     * サマリー（未払/下書き/確認済み/合計金額）を再計算
      */
     function updatePayoutSummary() {
       const unpaidRows = document.querySelectorAll('#payoutTable tbody tr[data-status="unpaid"]');
@@ -4357,6 +4360,7 @@
 
       let unpaidTotal = 0;
       let confirmedTotal = 0;
+      let draftCount = 0;
 
       unpaidRows.forEach(row => {
         const amountCell = row.querySelector('td.amount');
@@ -4364,6 +4368,7 @@
           const amountText = amountCell.textContent.replace(/[¥￥,]/g, '');
           unpaidTotal += Number(amountText) || 0;
         }
+        if (row.querySelector('.status-badge.draft')) draftCount++;
       });
 
       confirmedRows.forEach(row => {
@@ -4376,10 +4381,11 @@
 
       // サマリーを更新
       const summaryItems = document.querySelectorAll('#unpaidSummary .summary-item .value');
-      if (summaryItems.length >= 3) {
+      if (summaryItems.length >= 4) {
         summaryItems[0].textContent = `${unpaidRows.length}名`;
-        summaryItems[1].textContent = `${confirmedRows.length}名`;
-        summaryItems[2].textContent = formatCurrency(unpaidTotal + confirmedTotal);
+        summaryItems[1].textContent = `${draftCount}名`;
+        summaryItems[2].textContent = `${confirmedRows.length}名`;
+        summaryItems[3].textContent = formatCurrency(unpaidTotal + confirmedTotal);
       }
 
       // 全員処理済みの場合
