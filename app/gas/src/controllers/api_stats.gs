@@ -285,7 +285,7 @@ function getYearlyCustomerStats() {
       return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
     }
 
-    var cacheKey = 'yearly_customer_stats';
+    var cacheKey = 'yearly_customer_stats_v2';
     var cached = CacheService.getScriptCache().get(cacheKey);
     if (cached) {
       return buildSuccessResponse(JSON.parse(cached), requestId);

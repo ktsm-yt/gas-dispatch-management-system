@@ -271,11 +271,12 @@ const StatsService = {
         var key = Number(row[col.by]) + '-' + Number(row[col.bm]);
         if (!(key in validMonths)) continue;
         var cid = String(row[col.cid]);
-        if (!buckets[cid]) buckets[cid] = { salesTotal: 0, invoiceCount: 0 };
+        if (!buckets[cid]) buckets[cid] = { salesTotal: 0, expenseTotal: 0, invoiceCount: 0 };
         var subtotal = Number(row[col.sub]) || 0;
         var expense = Number(row[col.exp]) || 0;
         var adjustment = Number(row[col.adj]) || 0;
-        buckets[cid].salesTotal += subtotal + expense + adjustment;
+        buckets[cid].salesTotal += subtotal + adjustment;
+        buckets[cid].expenseTotal += expense;
         buckets[cid].invoiceCount++;
       }
     }
@@ -325,18 +326,19 @@ const StatsService = {
       }
     }
 
-    // 結果配列に変換（0円除外 + 売上降順ソート）
+    // 結果配列に変換（売上・諸経費ともに0の企業を除外 + 合計降順ソート）
     var result = [];
     for (var id in buckets) {
-      if (buckets[id].salesTotal === 0) continue;
+      if (buckets[id].salesTotal === 0 && buckets[id].expenseTotal === 0) continue;
       result.push({
         customerId: id,
         customerName: customerNameMap[id] || '（不明）',
         salesTotal: buckets[id].salesTotal,
+        expenseTotal: buckets[id].expenseTotal,
         invoiceCount: buckets[id].invoiceCount
       });
     }
-    result.sort(function(a, b) { return b.salesTotal - a.salesTotal; });
+    result.sort(function(a, b) { return (b.salesTotal + b.expenseTotal) - (a.salesTotal + a.expenseTotal); });
     return result;
   },
 
@@ -399,11 +401,12 @@ const StatsService = {
         if (fy === undefined) continue;
         var cid = String(row[col.cid]);
         if (!buckets[cid]) buckets[cid] = {};
-        if (!buckets[cid][fy]) buckets[cid][fy] = 0;
+        if (!buckets[cid][fy]) buckets[cid][fy] = { sales: 0, expense: 0 };
         var subtotal = Number(row[col.sub]) || 0;
         var expense = Number(row[col.exp]) || 0;
         var adjustment = Number(row[col.adj]) || 0;
-        buckets[cid][fy] += subtotal + expense + adjustment;
+        buckets[cid][fy].sales += subtotal + adjustment;
+        buckets[cid][fy].expense += expense;
       }
     }
 
@@ -446,15 +449,21 @@ const StatsService = {
       }
     }
 
-    // 結果配列に変換（全年度0の企業を除外、最新年度の売上で降順ソート）
+    // 結果配列に変換（全年度0の企業を除外、最新年度の合計で降順ソート）
     var customers = [];
     for (var id in buckets) {
       var hasAnySales = false;
       var yearsData = {};
       for (var yi = 0; yi < fiscalYears.length; yi++) {
         var fyKey = fiscalYears[yi];
-        yearsData[fyKey] = buckets[id][fyKey] || 0;
-        if (yearsData[fyKey] !== 0) hasAnySales = true;
+        var bucket = buckets[id][fyKey];
+        if (bucket) {
+          var total = bucket.sales + bucket.expense;
+          yearsData[fyKey] = { sales: bucket.sales, expense: bucket.expense, total: total };
+          if (total !== 0) hasAnySales = true;
+        } else {
+          yearsData[fyKey] = { sales: 0, expense: 0, total: 0 };
+        }
       }
       if (!hasAnySales) continue;
       customers.push({
@@ -464,7 +473,9 @@ const StatsService = {
       });
     }
     customers.sort(function(a, b) {
-      return (b.years[currentFy] || 0) - (a.years[currentFy] || 0);
+      var aVal = a.years[currentFy] ? a.years[currentFy].total : 0;
+      var bVal = b.years[currentFy] ? b.years[currentFy].total : 0;
+      return bVal - aVal;
     });
 
     return {
@@ -697,21 +708,27 @@ const StatsService = {
       cur.setDate(cur.getDate() + 1);
     }
 
-    // 5. 顧客別集計
-    var customerAmountMap = {}; // customerName → amount
+    // 5. 顧客別集計（作業費と諸経費を分離）
+    var customerBuckets = {}; // customerName → { sales, expense }
     for (var e = 0; e < lines.length; e++) {
       var ln = lines[e];
       var invId = ln.invoice_id;
       var custId = invoiceCustomerMap[invId] || '';
       var custName = customerNameMap[custId] || '（不明）';
-      if (!customerAmountMap[custName]) customerAmountMap[custName] = 0;
-      customerAmountMap[custName] += Number(ln.amount) || 0;
+      if (!customerBuckets[custName]) customerBuckets[custName] = { sales: 0, expense: 0 };
+      var lineAmt = Number(ln.amount) || 0;
+      if (ln.item_name === '諸経費') {
+        customerBuckets[custName].expense += lineAmt;
+      } else {
+        customerBuckets[custName].sales += lineAmt;
+      }
     }
 
-    // 降順ソート
+    // 降順ソート（合計ベース）
     var byCustomer = [];
-    for (var cn in customerAmountMap) {
-      byCustomer.push({ customerName: cn, amount: customerAmountMap[cn] });
+    for (var cn in customerBuckets) {
+      var b = customerBuckets[cn];
+      byCustomer.push({ customerName: cn, salesTotal: b.sales, expenseTotal: b.expense, amount: b.sales + b.expense });
     }
     byCustomer.sort(function(a, b) { return b.amount - a.amount; });
 
