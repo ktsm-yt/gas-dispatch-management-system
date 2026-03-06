@@ -425,6 +425,10 @@
       border-top: 2px solid var(--text-primary);
     }
 
+    .data-table th.sortable:hover {
+      background: var(--border-color);
+    }
+
     /* Error State */
     .error-message {
       background: #FEE2E2;
@@ -536,7 +540,12 @@
     <!-- Data Table -->
     <div class="data-table-section">
       <h3>月別詳細</h3>
-      <table class="data-table">
+      <div class="daily-tabs" id="stats-tabs">
+        <button class="daily-tab active" data-tab="monthly" onclick="switchStatsTab('monthly')">月別</button>
+        <button class="daily-tab" data-tab="byCustomer" onclick="switchStatsTab('byCustomer')">企業別</button>
+        <button class="daily-tab" data-tab="yearly" onclick="switchStatsTab('yearly')">年次比較</button>
+      </div>
+      <table class="data-table" id="stats-table">
         <thead>
           <tr>
             <th>年月</th>
@@ -576,6 +585,12 @@
     <?!= include('confirmation_modal_js'); ?>
     let monthlyChart = null;
     let currentData = null;
+    var _statsActiveTab = 'monthly';
+    var _customerSortAsc = false;
+    var _yearlyData = null;
+    var _yearlyLoading = false;
+    var _yearlySortFy = null;
+    var _yearlySortAsc = false;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -849,10 +864,24 @@
       }
 
       currentData = result.data;
+      currentData.byCustomer = result.data.byCustomer || [];
       var isCustomerFilter = result.data.totals.payout_total === null;
+
+      // 顧客フィルタ時は企業別・年次比較タブを非表示 + activeタブリセット
+      var statsTabs = document.getElementById('stats-tabs');
+      if (isCustomerFilter) {
+        statsTabs.style.display = 'none';
+        _statsActiveTab = 'monthly';
+        document.querySelectorAll('#stats-tabs .daily-tab').forEach(function(el) {
+          el.classList.toggle('active', el.dataset.tab === 'monthly');
+        });
+      } else {
+        statsTabs.style.display = '';
+      }
+
       updateKPIs(result.data.totals, isCustomerFilter);
       updateChart(result.data.monthly, isCustomerFilter);
-      updateTable(result.data.monthly, isCustomerFilter);
+      renderStatsTable(isCustomerFilter);
     }
 
     function updateKPIs(totals, isCustomerFilter) {
@@ -999,6 +1028,166 @@
       }).join('');
     }
 
+    function switchStatsTab(tab) {
+      if (!currentData) return;
+      _statsActiveTab = tab;
+      document.querySelectorAll('#stats-tabs .daily-tab').forEach(function(el) {
+        el.classList.toggle('active', el.dataset.tab === tab);
+      });
+
+      if (tab === 'yearly') {
+        if (!_yearlyData && !_yearlyLoading) {
+          _yearlyLoading = true;
+          showYearlyLoading();
+          google.script.run
+            .withSuccessHandler(function(result) {
+              _yearlyLoading = false;
+              if (result && result.ok) {
+                _yearlyData = result.data;
+              } else {
+                _yearlyData = null;
+              }
+              if (_statsActiveTab === 'yearly') {
+                renderYearlyComparisonTable(_yearlyData);
+              }
+            })
+            .withFailureHandler(function(error) {
+              _yearlyLoading = false;
+              var tbody = document.getElementById('stats-table-body');
+              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--color-danger);">年次比較データの取得に失敗しました</td></tr>';
+            })
+            .getYearlyCustomerStats();
+        } else if (_yearlyData) {
+          renderYearlyComparisonTable(_yearlyData);
+        }
+        return;
+      }
+
+      var isCustomerFilter = currentData.totals && currentData.totals.payout_total === null;
+      renderStatsTable(isCustomerFilter);
+    }
+
+    function renderStatsTable(isCustomerFilter) {
+      if (_statsActiveTab === 'byCustomer' && !isCustomerFilter) {
+        renderByCustomerTable(currentData.byCustomer);
+      } else if (_statsActiveTab === 'yearly') {
+        if (_yearlyData) renderYearlyComparisonTable(_yearlyData);
+      } else {
+        updateTable(currentData.monthly, isCustomerFilter);
+      }
+    }
+
+    function renderByCustomerTable(byCustomer) {
+      var tbody = document.getElementById('stats-table-body');
+      var thead = tbody.parentElement.querySelector('thead tr');
+      var arrow = _customerSortAsc ? ' ▲' : ' ▼';
+
+      thead.innerHTML = '<th>順位</th><th>企業名</th><th class="sortable" style="cursor:pointer;" onclick="toggleCustomerSort()">売上額' + arrow + '</th><th>構成比</th>';
+
+      if (!byCustomer || byCustomer.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">データがありません</td></tr>';
+        return;
+      }
+
+      // ソート（元データ不変）
+      var sorted = byCustomer.slice().sort(function(a, b) {
+        return _customerSortAsc ? a.salesTotal - b.salesTotal : b.salesTotal - a.salesTotal;
+      });
+
+      // 合計算出（構成比用）
+      var total = sorted.reduce(function(sum, c) { return sum + c.salesTotal; }, 0);
+
+      var rows = sorted.map(function(c, i) {
+        var ratio = total > 0 ? (c.salesTotal / total * 100).toFixed(1) : '0.0';
+        return '<tr><td style="text-align:center;">' + (i + 1) + '</td><td>' + escapeHtml(c.customerName) + '</td><td>' + formatCurrency(c.salesTotal) + '</td><td style="text-align:center;">' + ratio + '%</td></tr>';
+      });
+
+      // 合計行
+      rows.push('<tr class="daily-total-row"><td></td><td>合計</td><td>' + formatCurrency(total) + '</td><td style="text-align:center;">100.0%</td></tr>');
+
+      tbody.innerHTML = rows.join('');
+    }
+
+    function toggleCustomerSort() {
+      _customerSortAsc = !_customerSortAsc;
+      renderByCustomerTable(currentData.byCustomer);
+    }
+
+    function showYearlyLoading() {
+      var tbody = document.getElementById('stats-table-body');
+      var thead = tbody.parentElement.querySelector('thead tr');
+      thead.innerHTML = '<th>企業名</th><th colspan="5" style="text-align:center;">読み込み中...</th>';
+      tbody.innerHTML = '<tr><td colspan="6" class="loading"><div class="loading-spinner"></div> <span>年次比較データを取得中...</span></td></tr>';
+    }
+
+    function renderYearlyComparisonTable(data) {
+      var tbody = document.getElementById('stats-table-body');
+      var thead = tbody.parentElement.querySelector('thead tr');
+
+      if (!data || !data.fiscalYears || !data.customers) {
+        thead.innerHTML = '<th>企業名</th>';
+        tbody.innerHTML = '<tr><td style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
+        return;
+      }
+
+      var fys = data.fiscalYears;
+      var sortFy = _yearlySortFy || fys[0];
+
+      // ヘッダー生成（各年度クリック可能）
+      var thHtml = '<th>企業名</th>';
+      for (var i = 0; i < fys.length; i++) {
+        var fy = fys[i];
+        var arrow = '';
+        if (fy === sortFy) {
+          arrow = _yearlySortAsc ? ' ▲' : ' ▼';
+        }
+        thHtml += '<th class="sortable" style="cursor:pointer;" onclick="sortYearlyBy(' + fy + ')">' + fy + '年度' + arrow + '</th>';
+      }
+      thead.innerHTML = thHtml;
+
+      // ソート
+      var sorted = data.customers.slice().sort(function(a, b) {
+        var aVal = a.years[sortFy] || 0;
+        var bVal = b.years[sortFy] || 0;
+        return _yearlySortAsc ? aVal - bVal : bVal - aVal;
+      });
+
+      // 合計計算用
+      var totals = {};
+      for (var ti = 0; ti < fys.length; ti++) {
+        totals[fys[ti]] = 0;
+      }
+
+      var rows = sorted.map(function(c) {
+        var cols = '<td>' + escapeHtml(c.customerName) + '</td>';
+        for (var j = 0; j < fys.length; j++) {
+          var val = c.years[fys[j]] || 0;
+          totals[fys[j]] += val;
+          cols += '<td>' + (val === 0 ? '-' : formatCurrency(val)) + '</td>';
+        }
+        return '<tr>' + cols + '</tr>';
+      });
+
+      // 合計行
+      var totalCols = '<td>合計</td>';
+      for (var k = 0; k < fys.length; k++) {
+        totalCols += '<td>' + formatCurrency(totals[fys[k]]) + '</td>';
+      }
+      rows.push('<tr class="daily-total-row">' + totalCols + '</tr>');
+
+      tbody.innerHTML = rows.join('');
+    }
+
+    function sortYearlyBy(fy) {
+      if (_yearlySortFy === fy) {
+        _yearlySortAsc = !_yearlySortAsc;
+      } else {
+        _yearlySortFy = fy;
+        _yearlySortAsc = false;
+      }
+      renderYearlyComparisonTable(_yearlyData);
+    }
+
     function recalculateCurrentMonth() {
       var now = new Date();
       var year = now.getFullYear();
@@ -1086,6 +1275,9 @@
     // === Daily Sales Section ===
     var _dailySalesData = null;
     var _dailyActiveTab = 'daily';
+    var _dailySortBy = 'date'; // 'date' or 'amount'
+    var _dailySortAsc = true;  // 日付昇順デフォルト
+    var _dailyCustSortAsc = false; // 顧客別タブも売上降順デフォルト
 
     (function initDailySalesDefaults() {
       document.addEventListener('DOMContentLoaded', function() {
@@ -1150,9 +1342,24 @@
 
     function switchDailyTab(tab) {
       _dailyActiveTab = tab;
-      document.querySelectorAll('.daily-tab').forEach(function(el) {
+      document.querySelectorAll('.daily-sales-section .daily-tab').forEach(function(el) {
         el.classList.toggle('active', el.dataset.tab === tab);
       });
+      renderDailySalesTab();
+    }
+
+    function toggleDailySort(column) {
+      if (_dailySortBy === column) {
+        _dailySortAsc = !_dailySortAsc;
+      } else {
+        _dailySortBy = column;
+        _dailySortAsc = column === 'date'; // 日付は昇順、売上は降順デフォルト
+      }
+      renderDailySalesTab();
+    }
+
+    function toggleDailyCustSort() {
+      _dailyCustSortAsc = !_dailyCustSortAsc;
       renderDailySalesTab();
     }
 
@@ -1182,8 +1389,18 @@
       var tbody = document.getElementById('daily-sales-tbody');
 
       if (_dailyActiveTab === 'daily') {
-        thead.innerHTML = '<tr><th>日付</th><th>売上額</th></tr>';
-        var rows = _dailySalesData.daily.map(function(d) {
+        var dateArrow = _dailySortBy === 'date' ? (_dailySortAsc ? ' ▲' : ' ▼') : '';
+        var amtArrow = _dailySortBy === 'amount' ? (_dailySortAsc ? ' ▲' : ' ▼') : '';
+        thead.innerHTML = '<tr><th class="sortable" style="cursor:pointer;" onclick="toggleDailySort(\'date\')">日付' + dateArrow + '</th><th class="sortable" style="cursor:pointer;" onclick="toggleDailySort(\'amount\')">売上額' + amtArrow + '</th></tr>';
+
+        var sorted = _dailySalesData.daily.slice();
+        if (_dailySortBy === 'amount') {
+          sorted.sort(function(a, b) { return _dailySortAsc ? a.amount - b.amount : b.amount - a.amount; });
+        } else if (!_dailySortAsc) {
+          sorted.reverse();
+        }
+
+        var rows = sorted.map(function(d) {
           return '<tr><td>' + escapeHtml(d.date) + '（' + escapeHtml(d.dayOfWeek) + '）</td><td>' + formatCurrency(d.amount) + '</td></tr>';
         });
         if (_dailySalesData.expenseTotal > 0) {
@@ -1196,15 +1413,21 @@
         rows.push('<tr class="daily-total-row"><td>合計（税抜）</td><td>' + formatCurrency(grandTotal) + '</td></tr>');
         tbody.innerHTML = rows.join('');
       } else {
-        thead.innerHTML = '<tr><th>顧客名</th><th>売上額</th></tr>';
+        var custArrow = _dailyCustSortAsc ? ' ▲' : ' ▼';
+        thead.innerHTML = '<tr><th>順位</th><th>企業名</th><th class="sortable" style="cursor:pointer;" onclick="toggleDailyCustSort()">売上額' + custArrow + '</th><th>構成比</th></tr>';
         if (_dailySalesData.byCustomer.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">データがありません</td></tr>';
           return;
         }
-        var rows = _dailySalesData.byCustomer.map(function(c) {
-          return '<tr><td>' + escapeHtml(c.customerName) + '</td><td>' + formatCurrency(c.amount) + '</td></tr>';
+        var sorted = _dailySalesData.byCustomer.slice().sort(function(a, b) {
+          return _dailyCustSortAsc ? a.amount - b.amount : b.amount - a.amount;
         });
-        rows.push('<tr class="daily-total-row"><td>合計</td><td>' + formatCurrency(_dailySalesData.summary.totalAmount) + '</td></tr>');
+        var total = sorted.reduce(function(sum, c) { return sum + (Number(c.amount) || 0); }, 0);
+        var rows = sorted.map(function(c, i) {
+          var ratio = total > 0 ? ((Number(c.amount) || 0) / total * 100).toFixed(1) : '0.0';
+          return '<tr><td style="text-align:center;">' + (i + 1) + '</td><td>' + escapeHtml(c.customerName) + '</td><td>' + formatCurrency(c.amount) + '</td><td style="text-align:center;">' + ratio + '%</td></tr>';
+        });
+        rows.push('<tr class="daily-total-row"><td></td><td>合計</td><td>' + formatCurrency(total) + '</td><td style="text-align:center;">100.0%</td></tr>');
         tbody.innerHTML = rows.join('');
       }
     }
