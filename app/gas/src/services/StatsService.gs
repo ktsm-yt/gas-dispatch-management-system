@@ -50,6 +50,9 @@ const StatsService = {
       // 費用
       payout_total: payoutStats.payout_total,
       transport_total: payoutStats.transport_total,
+      payout_confirmed: payoutStats.payout_confirmed || 0,
+      payout_estimated: payoutStats.payout_estimated || 0,
+      has_payout_estimate: payoutStats.has_payout_estimate || false,
       // 利益
       gross_margin: grossMargin,
       margin_rate: marginRate
@@ -211,8 +214,33 @@ const StatsService = {
     // 期間内の統計を取得
     const monthlyStats = StatsRepository.findByRange(startYear, startMonth, endYear, endMonth);
 
+    // 概算込みの支払データを一括取得 → 各月の stats に上書き
+    const payoutBuckets = this._aggregatePayoutsForRange(startYear, startMonth, endYear, endMonth);
+    for (const s of monthlyStats) {
+      const key = s.year + '-' + s.month;
+      const pb = payoutBuckets[key];
+      if (pb) {
+        s.payout_total = pb.payout_total;
+        s.transport_total = pb.transport_total;
+        s.payout_confirmed = pb.payout_confirmed;
+        s.payout_estimated = pb.payout_estimated;
+        s.has_payout_estimate = pb.has_payout_estimate;
+        // 粗利再計算
+        const salesTotal = s.work_amount + (s.expense_amount || 0) + (s.adjustment_total || 0);
+        s.gross_margin = salesTotal - pb.payout_total;
+        s.margin_rate = salesTotal > 0
+          ? Math.round((s.gross_margin / salesTotal) * 10000) / 100
+          : 0;
+      }
+    }
+
     // 集計
     const totals = this._aggregateStats(monthlyStats);
+
+    // 概算フラグを totals に伝播
+    totals.has_payout_estimate = monthlyStats.some(function(s) { return s.has_payout_estimate; });
+    totals.payout_confirmed = monthlyStats.reduce(function(sum, s) { return sum + (s.payout_confirmed || 0); }, 0);
+    totals.payout_estimated = monthlyStats.reduce(function(sum, s) { return sum + (s.payout_estimated || 0); }, 0);
 
     // 企業別集計
     var byCustomer = this._aggregateByCustomer(startYear, startMonth, endYear, endMonth);
@@ -608,11 +636,25 @@ const StatsService = {
     // 1. 期間内のInvoiceLinesを一括取得
     var lines = InvoiceLineRepository.findByDateRange(startDate, endDate);
 
-    // 2. invoice_id → customer_id マッピング用に請求書を取得
+    // 1b. 諸経費行の補完: findByDateRange は work_date でフィルタするため
+    //     work_date が空の諸経費行が除外される。期間内の請求書に紐づく諸経費行を追加取得する。
     var invoiceIds = {};
     for (var i = 0; i < lines.length; i++) {
       invoiceIds[lines[i].invoice_id] = true;
     }
+    var allLineRecords = getAllRecords('T_InvoiceLines');
+    for (var ei = 0; ei < allLineRecords.length; ei++) {
+      var el = allLineRecords[ei];
+      if (el.item_name !== EXPENSE_ITEM_NAME) continue;
+      if (!invoiceIds[el.invoice_id]) continue;
+      // work_date が空の行のみ補完（日付付きなら既に含まれている）
+      if (!el.work_date) {
+        lines.push(el);
+      }
+    }
+
+    // 2. invoice_id → customer_id マッピング用に請求書を取得
+    // invoiceIds は上で既に構築済み
     var uniqueInvoiceIds = Object.keys(invoiceIds);
 
     // T_Invoicesからcustomer_idを一括取得（カラムインデックス直参照）
@@ -781,35 +823,143 @@ const StatsService = {
   },
 
   /**
-   * 支払データを集計
+   * 支払データを集計（単月ラッパー）
    * @private
    */
   _aggregatePayouts: function(year, month) {
-    // 月の開始日と終了日を計算
-    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-    const lastDay = new Date(year, month, 0).getDate();
-    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+    const result = this._aggregatePayoutsForRange(year, month, year, month);
+    const key = year + '-' + month;
+    return result[key] || { payout_total: 0, transport_total: 0, payout_confirmed: 0, payout_estimated: 0, has_payout_estimate: false };
+  },
 
-    // PayoutRepository.search() 経由で取得（_normalizeRecord で日付が YYYY-MM-DD 文字列に正規化される）
-    // 旧実装: getAllRecords() の生データは Date オブジェクトのため文字列比較が失敗していた
-    const payouts = PayoutRepository.search({
-      status_in: ['paid', 'confirmed']
-    });
+  /**
+   * 指定期間の支払データを一括集計（確定分 + 概算分）
+   *
+   * 確定分: PayoutRepository.search で confirmed/paid を取得 → period_start で月別に分配
+   * 概算分: 月内の配置で payout_id 未設定のものを、マスタ単価から概算
+   *
+   * @private
+   * @param {number} startYear
+   * @param {number} startMonth
+   * @param {number} endYear
+   * @param {number} endMonth
+   * @returns {Object} { "YYYY-M": { payout_total, transport_total, payout_confirmed, payout_estimated, has_payout_estimate } }
+   */
+  _aggregatePayoutsForRange: function(startYear, startMonth, endYear, endMonth) {
+    // 月別バケットを初期化
+    const buckets = {};
+    let y = startYear, m = startMonth;
+    while (y < endYear || (y === endYear && m <= endMonth)) {
+      buckets[y + '-' + m] = { payout_total: 0, transport_total: 0, payout_confirmed: 0, payout_estimated: 0, has_payout_estimate: false };
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
 
-    const result = {
-      payout_total: 0,
-      transport_total: 0
-    };
+    // 全期間の開始・終了日
+    const rangeStart = startYear + '-' + String(startMonth).padStart(2, '0') + '-01';
+    const lastDay = new Date(endYear, endMonth, 0).getDate();
+    const rangeEnd = endYear + '-' + String(endMonth).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
 
+    // === 1. 確定分: confirmed/paid の Payout ===
+    const payouts = PayoutRepository.search({ status_in: ['paid', 'confirmed'] });
     for (const payout of payouts) {
       const periodStart = payout.period_start;
-      if (periodStart >= startDate && periodStart <= endDate) {
-        result.payout_total += Number(payout.total_amount) || 0;
-        result.transport_total += Number(payout.transport_amount) || 0;
+      if (periodStart >= rangeStart && periodStart <= rangeEnd) {
+        const d = new Date(periodStart);
+        const key = d.getFullYear() + '-' + (d.getMonth() + 1);
+        if (buckets[key]) {
+          const amt = Number(payout.total_amount) || 0;
+          buckets[key].payout_confirmed += amt;
+          buckets[key].payout_total += amt;
+          buckets[key].transport_total += Number(payout.transport_amount) || 0;
+        }
       }
     }
 
-    return result;
+    // === 2. 概算分: payout_id 未設定の配置 ===
+    // 2a. 月内の Jobs を取得
+    const allJobs = getAllRecords('T_Jobs');
+    const jobsInRange = [];
+    const jobMap = {};
+    for (const job of allJobs) {
+      if (job.is_deleted) continue;
+      const workDate = this._normalizeDate(job.work_date);
+      if (workDate >= rangeStart && workDate <= rangeEnd) {
+        jobsInRange.push(job);
+        jobMap[job.job_id] = job;
+      }
+    }
+
+    if (jobsInRange.length === 0) {
+      return buckets;
+    }
+
+    const jobIdSet = new Set(jobsInRange.map(j => j.job_id));
+
+    // 2b. 月内配置で payout_id 未設定 & 有効なもの
+    const VALID_STATUSES = ['ASSIGNED', 'CONFIRMED'];
+    const allAssignments = getAllRecords('T_JobAssignments');
+    const unpaidAssignments = [];
+    for (const asg of allAssignments) {
+      if (asg.is_deleted) continue;
+      if (!VALID_STATUSES.includes(asg.status)) continue;
+      if (asg.payout_id) continue; // 確定済みPayoutに紐付け済み → スキップ
+      if (!jobIdSet.has(asg.job_id)) continue;
+      unpaidAssignments.push(asg);
+    }
+
+    if (unpaidAssignments.length === 0) {
+      return buckets;
+    }
+
+    // 2c. マスタを一括取得
+    const staffRecords = getAllRecords('M_Staff');
+    const staffMap = {};
+    for (const s of staffRecords) {
+      staffMap[s.staff_id] = s;
+    }
+
+    const subRecords = getAllRecords('M_Subcontractors');
+    const subMap = {};
+    for (const sub of subRecords) {
+      subMap[sub.subcontractor_id] = sub;
+    }
+
+    // 2d. 各配置の概算費用を算出して月別バケットに加算
+    for (const asg of unpaidAssignments) {
+      const job = jobMap[asg.job_id];
+      if (!job) continue;
+
+      const workDate = this._normalizeDate(job.work_date);
+      const d = new Date(workDate);
+      const key = d.getFullYear() + '-' + (d.getMonth() + 1);
+      if (!buckets[key]) continue;
+
+      const payUnit = resolveEffectiveUnit_(asg.pay_unit, job);
+      let estimatedAmount = 0;
+
+      const staff = staffMap[asg.staff_id];
+      if (isSubcontract_(staff)) {
+        // 外注スタッフ: 外注先マスタの単価を優先
+        const subId = asg.subcontractor_id || (staff && staff.subcontractor_id);
+        const sub = subId ? subMap[subId] : null;
+        if (sub) {
+          estimatedAmount = getSubcontractorRateByUnit_(sub, payUnit);
+        } else if (staff) {
+          // 外注マスタ未設定の場合、staffの日当にフォールバック
+          estimatedAmount = getDailyRateByJobType_(staff, payUnit);
+        }
+      } else {
+        // 自社スタッフ
+        estimatedAmount = calculateWage_(asg, staff, payUnit);
+      }
+
+      buckets[key].payout_estimated += estimatedAmount;
+      buckets[key].payout_total += estimatedAmount;
+      buckets[key].has_payout_estimate = true;
+    }
+
+    return buckets;
   },
 
   /**
