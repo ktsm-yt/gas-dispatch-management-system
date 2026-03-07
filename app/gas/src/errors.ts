@@ -97,43 +97,6 @@ function logErr(context: string, error: unknown, requestId?: string): void {
   }
 }
 
-function generateRequestId_(): string {
-  return 'req_' + Utilities.getUuid().replace(/-/g, '').substring(0, 12);
-}
-
-function getServerTime_(): string {
-  return new Date().toISOString();
-}
-
-/** 内部用。外部からは utils.gs の buildSuccessResponse() を使うこと */
-function successResponse_(data: unknown, requestId: string): { ok: true; data: unknown; serverTime: string; requestId: string } {
-  return {
-    ok: true,
-    data: data,
-    serverTime: getServerTime_(),
-    requestId: requestId
-  };
-}
-
-/** 内部用。外部からは utils.gs の buildErrorResponse() を使うこと */
-function errorResponse_(error: AppError | Error, requestId: string): { ok: false; error: { code: string; message: string; details?: unknown }; requestId: string } {
-  if (error instanceof AppError) {
-    return {
-      ok: false,
-      error: error.toResponse(),
-      requestId: requestId
-    };
-  }
-  return {
-    ok: false,
-    error: {
-      code: ErrorCodes.SYSTEM_ERROR,
-      message: error.message || 'システムエラーが発生しました'
-    },
-    requestId: requestId
-  };
-}
-
 /**
  * API関数をラップし、成功/エラーレスポンスを自動構築する
  *
@@ -157,43 +120,6 @@ function apiHandler_(fn: (...args: unknown[]) => unknown): (...args: unknown[]) 
       }
       const msg = e instanceof Error ? e.message : String(e);
       return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
-    }
-  };
-}
-
-/**
- * API関数をスクリプトロック付きでラップする
- * 同時実行を防止し、成功/エラーレスポンスを自動構築する
- *
- * @param fn - ラップ対象の関数
- * @param lockTimeoutMs - ロック取得タイムアウト（デフォルト3000ms）
- */
-function apiHandlerWithLock_(fn: (...args: unknown[]) => unknown, lockTimeoutMs: number = 3000): (...args: unknown[]) => unknown {
-  return function(this: unknown, ...args: unknown[]): unknown {
-    const requestId = generateRequestId();
-    const lock = LockService.getScriptLock();
-
-    try {
-      const acquired = lock.tryLock(lockTimeoutMs);
-      if (!acquired) {
-        throw new BusyError();
-      }
-
-      const result = fn.apply(this, args);
-      return buildSuccessResponse(result, requestId);
-    } catch (e: unknown) {
-      logErr(fn.name || 'anonymous', e, requestId);
-      if (e instanceof AppError) {
-        return buildErrorResponse(e.code, e.message, e.details, requestId);
-      }
-      const msg = e instanceof Error ? e.message : String(e);
-      return buildErrorResponse(ErrorCodes.SYSTEM_ERROR, msg, {}, requestId);
-    } finally {
-      try {
-        lock.releaseLock();
-      } catch (_e) {
-        // ロック解放エラーは無視
-      }
     }
   };
 }

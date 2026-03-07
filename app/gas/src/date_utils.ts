@@ -1,14 +1,6 @@
 // File: date_utils.ts
 // 日付・期間計算ユーティリティ（KTSM-63）
 
-const DATE_FORMAT = {
-  DATE: 'yyyy-MM-dd',
-  DATETIME: "yyyy-MM-dd'T'HH:mm:ssXXX",
-  TIME: 'HH:mm'
-} as const;
-
-const DEFAULT_TIMEZONE = 'Asia/Tokyo';
-
 // ============================================
 // 基本的な日付操作
 // ============================================
@@ -29,26 +21,6 @@ function formatDate_(date: Date | null | undefined): string | null {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function formatYearMonth_(date: Date | null | undefined): string | null {
-  if (!date) return null;
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
-}
-
-function formatIsoDateTime_(date: Date | null | undefined): string | null {
-  if (!date) return null;
-  return Utilities.formatDate(date, DEFAULT_TIMEZONE, "yyyy-MM-dd'T'HH:mm:ssXXX");
-}
-
-function nowIso_(): string | null {
-  return formatIsoDateTime_(new Date());
-}
-
-function today_(): string | null {
-  return formatDate_(new Date());
 }
 
 // ============================================
@@ -88,11 +60,6 @@ function getLastDayOfMonth_(year: number, month: number): number {
 function getEndOfMonth_(date: Date | string): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
-}
-
-function getStartOfMonth_(date: Date | string): Date {
-  const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
-  return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
 // ============================================
@@ -236,10 +203,6 @@ function countBusinessDays_(startDate: string, endDate: string, excludeHolidays:
   return count;
 }
 
-function countWorkingDays_(startDate: string, endDate: string): number {
-  return diffDays_(startDate, endDate) + 1;
-}
-
 function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = true): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   let year = d.getFullYear();
@@ -345,6 +308,3 @@ function getFiscalMonths_(fiscalYear: number, fiscalMonthEnd: number): Array<{ye
   return months;
 }
 
-function isWithinPeriod_(date: string, startDate: string, endDate: string): boolean {
-  return date >= startDate && date <= endDate;
-}
