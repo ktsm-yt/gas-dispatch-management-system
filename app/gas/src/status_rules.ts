@@ -136,15 +136,6 @@ function getTimeSlotLabel_(timeSlot: string): string {
   return labels[timeSlot] || timeSlot;
 }
 
-function getJobTypeLabel_(jobType: string): string {
-  const labels: Record<string, string> = {
-    tobi: '上棟鳶',
-    age: '上棟荷揚げ',
-    tobiage: '上棟鳶揚げ'
-  };
-  return labels[jobType] || jobType;
-}
-
 // ============================================
 // 案件ステータス自動更新
 // ============================================
@@ -199,20 +190,6 @@ function isJobEditable_(status: string): boolean {
 
 function isInvoiceEditable_(status: string): boolean {
   return status === 'unsent' || status === 'hold' || status === 'draft' || status === 'issued';
-}
-
-function isInvoiceDeletable_(status: string): boolean {
-  return status === 'unsent' || status === 'hold' || status === 'draft' || status === 'issued';
-}
-
-function isAssignmentEditable_(assignmentStatus: string, jobStatus: string): boolean {
-  if (jobStatus === 'cancelled') {
-    return false;
-  }
-  if (assignmentStatus === 'cancelled') {
-    return false;
-  }
-  return true;
 }
 
 // ============================================

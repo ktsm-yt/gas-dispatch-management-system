@@ -394,29 +394,9 @@ function formatCurrency_(amount: number | null | undefined): string {
   return Math.floor(amount).toLocaleString('ja-JP');
 }
 
-function formatYen_(amount: number | null | undefined): string {
-  return '¥' + formatCurrency_(amount);
-}
-
-function formatTaxRate_(rate: number): string {
-  return Math.round(rate * 100) + '%';
-}
-
 // ============================================
 // 交通費計算
 // ============================================
-
-function getTransportFeeByArea_(
-  transportArea: string,
-  transportFees: { area_code?: string; area_name?: string; default_fee?: number }[]
-): number | null {
-  if (!transportArea || !transportFees || transportFees.length === 0) {
-    return null;
-  }
-
-  const fee = transportFees.find(f => f.area_code === transportArea || f.area_name === transportArea);
-  return fee ? (fee.default_fee ?? null) : null;
-}
 
 // ============================================
 // 人工割計算（CR-029）
@@ -457,29 +437,3 @@ function calculateNinkuAdjustment_(
   return adjustedWage - baseWage;
 }
 
-function resolveTransportFee_(
-  assignment: Record<string, any>,
-  transportFees: { area_code?: string; area_name?: string; default_fee?: number }[]
-): { transport_amount: number | null; transport_is_manual: boolean } {
-  if (assignment.transport_is_manual === true) {
-    return {
-      transport_amount: assignment.transport_amount,
-      transport_is_manual: true
-    };
-  }
-
-  if (assignment.transport_area) {
-    const fee = getTransportFeeByArea_(assignment.transport_area, transportFees);
-    if (fee !== null) {
-      return {
-        transport_amount: fee,
-        transport_is_manual: false
-      };
-    }
-  }
-
-  return {
-    transport_amount: null,
-    transport_is_manual: false
-  };
-}

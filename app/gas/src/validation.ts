@@ -222,17 +222,6 @@ function validateTimeFormat_(value: string | null | undefined, fieldName: string
   }
 }
 
-function validateIsoDateTime_(value: string | null | undefined, fieldName: string): void {
-  if (value === null || value === undefined || value === '') return;
-
-  const date = new Date(value);
-  if (isNaN(date.getTime())) {
-    throw new ValidationError(
-      `${fieldName}は有効な日時形式で入力してください`,
-      { field: fieldName, actualValue: value }    );
-  }
-}
-
 function validateEmail_(value: string | null | undefined, fieldName: string): void {
   if (value === null || value === undefined || value === '') return;
 
@@ -481,52 +470,6 @@ function validateStaff_(staff: Record<string, any>, isNew: boolean = false): voi
 
   if (staff.staff_type === STAFF_TYPES.SUBCONTRACT && isNew) {
     requireField_(staff.subcontractor_id, '外注先ID');
-  }
-}
-
-function validateInvoice_(invoice: Record<string, any>, isNew: boolean = false): void {
-  if (isNew) {
-    requireFields_(invoice, ['customer_id', 'billing_year', 'billing_month', 'issue_date', 'invoice_format', 'status']);
-  }
-
-  if (invoice.customer_id !== undefined) {
-    validateUuid_(invoice.customer_id, '顧客ID');
-  }
-
-  if (invoice.billing_year !== undefined) {
-    validateNumber_(invoice.billing_year, '請求対象年', { min: 2020, max: 2100, allowDecimal: false });
-  }
-
-  if (invoice.billing_month !== undefined) {
-    validateNumber_(invoice.billing_month, '請求対象月', { min: 1, max: 12, allowDecimal: false });
-  }
-
-  if (invoice.issue_date !== undefined) {
-    validateDateFormat_(invoice.issue_date, '発行日');
-  }
-
-  if (invoice.due_date !== undefined) {
-    validateDateFormat_(invoice.due_date, '支払期限');
-  }
-
-  if (invoice.invoice_format !== undefined) {
-    validateEnum_(invoice.invoice_format, '請求書書式', INVOICE_FORMATS);
-  }
-
-  if (invoice.status !== undefined) {
-    validateEnum_(invoice.status, 'ステータス', INVOICE_STATUSES);
-  }
-
-  if (invoice.subtotal !== undefined) {
-    validateNumber_(invoice.subtotal, '小計', { min: 0 });
-  }
-
-  if (invoice.tax_amount !== undefined) {
-    validateNumber_(invoice.tax_amount, '消費税額', { min: 0 });
-  }
-
-  if (invoice.total_amount !== undefined) {
-    validateNumber_(invoice.total_amount, '合計金額', { min: 0 });
   }
 }
 
