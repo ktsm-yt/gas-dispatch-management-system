@@ -3,6 +3,7 @@
 
 const DEFAULT_TAX_RATE = 0.10;
 const EXPENSE_ITEM_NAME = '諸経費';
+const ADJUSTMENT_ITEM_NAME = '調整';
 
 // ============================================
 // ランタイムアサーション（warn-only）

@@ -296,6 +296,26 @@ function saveJob(job, expectedUpdatedAt, slots) {
       );
     }
 
+    // CR-091: 調整額バリデーション
+    if (job.adjustment_amount !== undefined && job.adjustment_amount !== null && job.adjustment_amount !== '') {
+      const adjAmount = Number(job.adjustment_amount);
+      if (!Number.isInteger(adjAmount)) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は整数で入力してください', {}, requestId);
+      }
+      if (adjAmount < -9999999 || adjAmount > 9999999) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は±9,999,999以内で入力してください', {}, requestId);
+      }
+      job.adjustment_amount = adjAmount;
+    }
+    if (job.adjustment_note && typeof job.adjustment_note === 'string') {
+      if (job.adjustment_note.length > 50) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモは50文字以内で入力してください', {}, requestId);
+      }
+      if (/^[=+\-@]/.test(job.adjustment_note)) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモの先頭に =, +, -, @ は使用できません', {}, requestId);
+      }
+    }
+
     // テキストフィールド正規化（全角→半角等）
     ['site_name', 'site_address', 'notes', 'supervisor_name'].forEach(function(field) {
       if (job[field] && typeof job[field] === 'string') {

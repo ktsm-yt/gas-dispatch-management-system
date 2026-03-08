@@ -58,7 +58,9 @@ const InvoiceLineRepository = {
     if (quantity < 0) {
       errors.push('quantity（数量）は0以上である必要があります');
     }
-    if (unitPrice < 0) {
+    // CR-091: 調整行は負の単価を許可（値引き対応）
+    const isAdjustmentLine = line.item_name === ADJUSTMENT_ITEM_NAME;
+    if (unitPrice < 0 && !isAdjustmentLine) {
       errors.push('unit_price（単価）は0以上である必要があります');
     }
 
