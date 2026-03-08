@@ -345,6 +345,14 @@
       }
     }
 
+    /* Job Adjustment Badge */
+    .job-adjustment-badge {
+      font-size: 11px;
+      color: #e65100;
+      cursor: default;
+      margin-left: 2px;
+    }
+
     /* Bulk Action Bar */
     .bulk-action-bar {
       position: sticky;
@@ -2649,6 +2657,9 @@
           inv.invoice_id + '\', \'' + escapeHtml((inv.customer && inv.customer.company_name) || inv.customer_name || '') +
           '\', \'' + inv.billing_year + '/' + String(inv.billing_month).padStart(2, '0') + '\', \'' + inv.status +
           '\')" title="配置が変更されています。再集計を検討してください">⚠️</span>';
+      }
+      if (inv.has_job_adjustments) {
+        rowHtml += '<span class="job-adjustment-badge" title="現場調整額を含む請求書です">¥調</span>';
       }
       rowHtml += '</td>';
       rowHtml += '<td>' + escapeHtml(inv.invoice_number) + '</td>';

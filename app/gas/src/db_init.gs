@@ -103,6 +103,8 @@ const TABLE_DEFINITIONS = {
       'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
       // Status (4)
       'status', 'is_damaged', 'is_uncollected', 'is_claimed',
+      // Adjustment (2) — CR-091: 現場ごとの調整額
+      'adjustment_amount', 'adjustment_note',
       // Audit (8)
       'notes', 'created_at', 'created_by', 'updated_at', 'updated_by', 'is_deleted',
       'deleted_at', 'deleted_by'
@@ -1615,4 +1617,57 @@ function migrateAddStatsAdjustmentTotal() {
   sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
 
   Logger.log('✓ adjustment_total カラムを expense_amount の後に追加しました');
+}
+
+/**
+ * T_Jobsシートにadjustment_amount, adjustment_noteカラムを追加（CR-091マイグレーション）
+ * is_claimedの後に挿入する冪等設計
+ * GASエディタから実行: migrateAddJobAdjustmentColumns()
+ */
+function migrateAddJobAdjustmentColumns() {
+  const prop = PropertiesService.getScriptProperties();
+  const ids = [
+    { key: 'SPREADSHEET_ID_DEV', id: prop.getProperty('SPREADSHEET_ID_DEV') },
+    { key: 'SPREADSHEET_ID_PROD', id: prop.getProperty('SPREADSHEET_ID_PROD') }
+  ].filter(e => e.id);
+
+  if (ids.length === 0) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  for (const entry of ids) {
+    Logger.log('=== CR-091 Jobs adjustment カラム追加 [' + entry.key + '] ===\n');
+
+    const ss = SpreadsheetApp.openById(entry.id);
+    const sheet = ss.getSheetByName('Jobs');
+
+    if (!sheet) {
+      Logger.log('✗ Jobsシートが見つかりません（スキップ）');
+      continue;
+    }
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    if (headers.includes('adjustment_amount')) {
+      Logger.log('✓ adjustment_amount カラムは既に存在します（スキップ）');
+      continue;
+    }
+
+    const claimedIndex = headers.indexOf('is_claimed');
+    if (claimedIndex === -1) {
+      Logger.log('✗ is_claimed カラムが見つかりません（スキップ）');
+      continue;
+    }
+
+    // is_claimedの後に2列挿入（1-indexed）
+    sheet.insertColumnsAfter(claimedIndex + 1, 2);
+    sheet.getRange(1, claimedIndex + 2).setValue('adjustment_amount');
+    sheet.getRange(1, claimedIndex + 3).setValue('adjustment_note');
+    sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log('✓ adjustment_amount, adjustment_note カラムを is_claimed の後に追加しました');
+  }
+
+  Logger.log('=== CR-091 マイグレーション完了（全DB処理済み） ===');
 }

@@ -273,6 +273,7 @@ const JobService = {
         branch_office: job.branch_office || '',
         property_code: job.property_code || '',
         construction_div: job.construction_div || '',
+        adjustment_amount: job.adjustment_amount || 0,
         notes: job.notes || '',
         staff_names: staffNames,
         assignments: dashboardAssignments,

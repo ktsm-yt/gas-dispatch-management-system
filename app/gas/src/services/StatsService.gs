@@ -638,8 +638,8 @@ const StatsService = {
     // 1. 期間内のInvoiceLinesを一括取得
     var lines = InvoiceLineRepository.findByDateRange(startDate, endDate);
 
-    // 1b. 諸経費行の補完: findByDateRange は work_date でフィルタするため
-    //     work_date が空の諸経費行が除外される。期間内の請求書に紐づく諸経費行を追加取得する。
+    // 1b. 諸経費行・調整行の補完: findByDateRange は work_date でフィルタするため
+    //     work_date が空の行が除外される。期間内の請求書に紐づく行を追加取得する。
     var invoiceIds = {};
     for (var i = 0; i < lines.length; i++) {
       invoiceIds[lines[i].invoice_id] = true;
@@ -647,7 +647,8 @@ const StatsService = {
     var allLineRecords = getAllRecords('T_InvoiceLines');
     for (var ei = 0; ei < allLineRecords.length; ei++) {
       var el = allLineRecords[ei];
-      if (el.item_name !== EXPENSE_ITEM_NAME) continue;
+      // CR-091: 諸経費行と調整行の両方を補完対象にする
+      if (el.item_name !== EXPENSE_ITEM_NAME && el.item_name !== ADJUSTMENT_ITEM_NAME) continue;
       if (!invoiceIds[el.invoice_id]) continue;
       // work_date が空の行のみ補完（日付付きなら既に含まれている）
       if (!el.work_date) {

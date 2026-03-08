@@ -1268,23 +1268,66 @@ const InvoiceExportService = {
     // === 行24〜: 諸経費（あれば）→ 調整項目を動的配置 ===
     let currentRow = 24;
     const expenseAmount = Number(invoice.expense_amount || 0);
+
+    // atatagami 明細行ヘルパー: F=品目, AC=数量(1), AF=単位(式), AI=金額
+    const writeAtagamiRow = (row: number, label: string, amount: number) => {
+      sheet.getRange('F' + row).setValue(label);
+      sheet.getRange('AC' + row).setValue(1);
+      sheet.getRange('AF' + row).setValue('式');
+      sheet.getRange('AI' + row).setValue(amount);
+    };
+
     if (expenseAmount > 0) {
-      sheet.getRange('F' + currentRow).setValue('諸経費');
-      sheet.getRange('AC' + currentRow).setValue(1);
-      sheet.getRange('AF' + currentRow).setValue('式');
-      sheet.getRange('AI' + currentRow).setValue(expenseAmount);
+      writeAtagamiRow(currentRow, '諸経費', expenseAmount);
       currentRow++;
     }
 
-    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(String(invoice.invoice_id));
-    adjustments.forEach(function(adj, i) {
-      if (i >= 5) return;
-      sheet.getRange('F' + currentRow).setValue(adj.item_name);
-      sheet.getRange('AC' + currentRow).setValue(1);
-      sheet.getRange('AF' + currentRow).setValue('式');
-      sheet.getRange('AI' + currentRow).setValue(adj.amount);
-      currentRow++;
+    // CR-091: 現場ごとの調整行を明細から抽出
+    const lineAdjustments: { label: string; amount: number }[] = [];
+    lines.forEach(function(line: Record<string, unknown>) {
+      if (line.item_name === ADJUSTMENT_ITEM_NAME) {
+        const siteName = line.site_name as string || '';
+        const note = line.time_note as string || '';
+        let label = ADJUSTMENT_ITEM_NAME;
+        if (siteName) {
+          label += '(' + siteName + ')';
+        } else if (note) {
+          label += '(' + note + ')';
+        }
+        lineAdjustments.push({ label: label, amount: Number(line.amount) || 0 });
+      }
     });
+
+    // 手動調整項目（T_InvoiceAdjustments）
+    const adjustments = InvoiceAdjustmentRepository.findByInvoiceId(String(invoice.invoice_id));
+    const manualAdjustments: { label: string; amount: number }[] = [];
+    adjustments.forEach(function(adj) {
+      manualAdjustments.push({ label: String(adj.item_name || '調整'), amount: Number(adj.amount) || 0 });
+    });
+
+    // 現場調整 → 手動調整 の順に結合し、行25-34（最大10行）に収める
+    const allAdjustments = lineAdjustments.concat(manualAdjustments);
+    const MAX_ADJUSTMENT_ROWS = 34 - currentRow + 1;
+
+    if (allAdjustments.length <= MAX_ADJUSTMENT_ROWS) {
+      allAdjustments.forEach(function(adj) {
+        writeAtagamiRow(currentRow, adj.label, adj.amount);
+        currentRow++;
+      });
+    } else {
+      // オーバーフロー: 最後の1行を「その他調整」として合算
+      const displayCount = MAX_ADJUSTMENT_ROWS - 1;
+      for (let i = 0; i < displayCount; i++) {
+        writeAtagamiRow(currentRow, allAdjustments[i].label, allAdjustments[i].amount);
+        currentRow++;
+      }
+      let otherTotal = 0;
+      for (let i = displayCount; i < allAdjustments.length; i++) {
+        otherTotal += allAdjustments[i].amount;
+      }
+      writeAtagamiRow(currentRow, 'その他調整', otherTotal);
+      currentRow++;
+    }
 
     // === 小計・消費税・合計をコード計算値で上書き（テンプレート数式との端数ズレ防止） ===
     const totalBeforeTax = Number(invoice.subtotal || 0) + expenseAmount + Number(invoice.adjustment_total || 0);

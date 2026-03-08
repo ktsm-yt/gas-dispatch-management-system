@@ -152,6 +152,8 @@ declare global {
     is_damaged: boolean;
     is_uncollected: boolean;
     is_claimed: boolean;
+    adjustment_amount: number;
+    adjustment_note: string;
     notes: string;
     created_at: string;
     created_by: string;

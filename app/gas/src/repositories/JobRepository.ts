@@ -4,6 +4,15 @@
  * T_Jobs テーブルのシートI/O処理
  */
 
+const JOB_UPDATABLE_FIELDS = [
+  'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
+  'start_time', 'required_count',
+  'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
+  'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
+  'client_contact', 'adjustment_amount', 'adjustment_note',
+  'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
+];
+
 const JobRepository = {
   TABLE_NAME: 'T_Jobs',
   ID_COLUMN: 'job_id',
@@ -122,6 +131,8 @@ const JobRepository = {
       property_code: job.property_code || '',
       construction_div: job.construction_div || '',
       client_contact: job.client_contact || '',
+      adjustment_amount: Number(job.adjustment_amount) || 0,
+      adjustment_note: job.adjustment_note || '',
       status: job.status || 'pending',
       is_damaged: job.is_damaged || false,
       is_uncollected: job.is_uncollected || false,
@@ -174,17 +185,9 @@ const JobRepository = {
     const user = getCurrentUserEmail() || 'system';
     const now = getCurrentTimestamp();
 
-    const updatableFields = [
-      'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
-      'start_time', 'required_count',
-      'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
-      'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
-      'client_contact', 'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
-    ];
-
     const updatedJob: Record<string, unknown> = { ...currentJob };
 
-    for (const field of updatableFields) {
+    for (const field of JOB_UPDATABLE_FIELDS) {
       if (job[field] !== undefined) {
         updatedJob[field] = job[field];
       }
@@ -297,6 +300,8 @@ const JobRepository = {
       start_time: this._normalizeTime(record.start_time),
       required_count: Number(record.required_count) || 0,
       pay_unit: (record.pay_unit as string) || '',
+      adjustment_amount: Number(record.adjustment_amount) || 0,
+      adjustment_note: String(record.adjustment_note || ''),
       is_damaged: record.is_damaged === true || record.is_damaged === 'true',
       is_uncollected: record.is_uncollected === true || record.is_uncollected === 'true',
       is_claimed: record.is_claimed === true || record.is_claimed === 'true',
@@ -428,17 +433,9 @@ const JobRepository = {
       const user = getCurrentUserEmail() || 'system';
       const now = getCurrentTimestamp();
 
-      const updatableFields = [
-        'customer_id', 'site_name', 'site_address', 'work_date', 'time_slot',
-        'start_time', 'required_count',
-        'pay_unit', 'work_category', 'work_detail', 'work_detail_other_text',
-        'supervisor_name', 'order_number', 'branch_office', 'property_code', 'construction_div',
-        'client_contact', 'status', 'is_damaged', 'is_uncollected', 'is_claimed', 'notes'
-      ];
-
       const updatedJob: Record<string, unknown> = { ...currentRecord };
 
-      for (const field of updatableFields) {
+      for (const field of JOB_UPDATABLE_FIELDS) {
         if (job[field] !== undefined) {
           updatedJob[field] = job[field];
         }

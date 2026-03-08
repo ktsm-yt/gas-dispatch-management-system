@@ -224,8 +224,26 @@ const InvoiceService = {
     // カラム未存在時のみ旧ロジックにフォールバック
     const includeChangeDetection = !hasColumnInDb && query.includeChangeDetection !== false;
     let assignmentUpdates: Record<string, string> = {};
-    if (includeChangeDetection && invoices.length > 0) {
-      assignmentUpdates = this._getAssignmentUpdatesForInvoices(invoices);
+
+    // T_InvoiceLines を1回だけロード（変更検知 + 調整行検出で共有）
+    const adjustmentInvoiceIds: Record<string, boolean> = {};
+    if (invoices.length > 0) {
+      const allLines = getAllRecords('T_InvoiceLines');
+
+      if (includeChangeDetection) {
+        assignmentUpdates = this._getAssignmentUpdatesForInvoices(invoices, allLines);
+      }
+
+      const targetInvoiceIds: Record<string, boolean> = {};
+      for (const inv of invoices) {
+        targetInvoiceIds[inv.invoice_id] = true;
+      }
+      for (let li = 0; li < allLines.length; li++) {
+        const line = allLines[li];
+        if (line.item_name === ADJUSTMENT_ITEM_NAME && !line.is_deleted && targetInvoiceIds[line.invoice_id as string]) {
+          adjustmentInvoiceIds[line.invoice_id as string] = true;
+        }
+      }
     }
 
     return invoices.map((inv: InvoiceRecord) => {
@@ -249,7 +267,8 @@ const InvoiceService = {
       return {
         ...inv,
         customer: customerCache[inv.customer_id],
-        has_assignment_changes: hasAssignmentChanges
+        has_assignment_changes: hasAssignmentChanges,
+        has_job_adjustments: !!adjustmentInvoiceIds[inv.invoice_id]
       };
     });
   },
@@ -889,14 +908,14 @@ const InvoiceService = {
   /**
    * 請求書に関連する配置の最新更新日時を取得
    */
-  _getAssignmentUpdatesForInvoices: function(invoices: InvoiceRecord[]): Record<string, string> {
+  _getAssignmentUpdatesForInvoices: function(invoices: InvoiceRecord[], preloadedLines?: Record<string, unknown>[]): Record<string, string> {
     if (!invoices || invoices.length === 0) {
       return {};
     }
 
     const invoiceIds = invoices.map(inv => inv.invoice_id);
 
-    const allLines = getAllRecords('T_InvoiceLines');
+    const allLines = preloadedLines || getAllRecords('T_InvoiceLines');
     const relevantLines = allLines.filter(line =>
       !line.is_deleted && invoiceIds.includes(line.invoice_id as string)
     );
@@ -1174,6 +1193,28 @@ const InvoiceService = {
             property_code: job.property_code || ''
           });
         }
+
+        // CR-091: 現場ごとの調整行を生成
+        const adjustmentAmount = Number(job.adjustment_amount) || 0;
+        if (adjustmentAmount !== 0) {
+          lines.push({
+            work_date: '',
+            job_id: job.job_id,
+            assignment_id: '',
+            site_name: '',
+            item_name: ADJUSTMENT_ITEM_NAME,
+            time_note: String(job.adjustment_note || ''),
+            quantity: 1,
+            unit: '式',
+            unit_price: adjustmentAmount,
+            amount: adjustmentAmount,
+            order_number: '',
+            branch_office: '',
+            construction_div: job.construction_div || '',
+            supervisor_name: job.supervisor_name || '',
+            property_code: job.property_code || ''
+          });
+        }
       }
     }
 
@@ -1273,11 +1314,16 @@ const InvoiceService = {
 
     let workAmount = 0;
     let expenseAmount = 0;
+    let lineAdjustmentAmount = 0;
 
     lines.forEach((line: Record<string, unknown>) => {
       const amount = Number(line.amount) || 0;
       if (line.item_name === EXPENSE_ITEM_NAME) {
         expenseAmount += amount;
+      } else if (line.item_name === ADJUSTMENT_ITEM_NAME) {
+        // CR-091: 調整行はworkAmountに含めるが、expense_rate自動計算から除外するため別途集計
+        lineAdjustmentAmount += amount;
+        workAmount += amount;
       } else {
         workAmount += amount;
       }
@@ -1291,7 +1337,9 @@ const InvoiceService = {
     }
 
     if (format === 'atamagami' && expenseRate > 0 && expenseAmount === 0) {
-      expenseAmount = calculateExpense_(workAmount, expenseRate);
+      // CR-091: 諸経費の自動計算ベースから調整行の金額を除外
+      const workAmountForExpense = workAmount - lineAdjustmentAmount;
+      expenseAmount = calculateExpense_(workAmountForExpense, expenseRate);
     }
 
     const taxableAmount = workAmount + expenseAmount + adjustmentTotal;
