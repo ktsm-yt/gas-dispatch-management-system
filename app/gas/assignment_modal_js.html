@@ -1288,7 +1288,8 @@ function updateSlotSelect() {
     'night': '夜勤',
     'tobi': '上棟鳶',
     'age': '上棟荷揚げ',
-    'tobiage': '上棟鳶揚げ'
+    'tobiage': '上棟鳶揚げ',
+    'holiday': '休日'
   };
 
   slots.forEach(slot => {
@@ -1567,7 +1568,7 @@ function renderStaffList() {
   const slots = assignmentModalState.slots || [];
   const slotMap = slots.reduce((m, s) => { m[s.slot_id] = s; return m; }, {});
   const timeSlotLabels = { jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤', mitei: '未定' };
-  const payUnitLabels = { basic: '基本', halfday: 'ハーフ', fullday: '終日', night: '夜勤', tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ' };
+  const payUnitLabels = { basic: '基本', halfday: 'ハーフ', fullday: '終日', night: '夜勤', tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ', holiday: '休日' };
 
   const ctx = { workCategory, selectedStaffSet, assignmentMap, typeLabels, slotMap, timeSlotLabels, payUnitLabels };
   const rowsHtml = staff
@@ -2278,7 +2279,8 @@ function generateLineTemplate() {
     'night': '夜間', 'NIGHT': '夜間',
     'tobi': '上棟鳶', 'TOBI': '上棟鳶',
     'age': '上棟荷揚げ', 'AGE': '上棟荷揚げ',
-    'tobiage': '上棟鳶揚げ', 'TOBIAGE': '上棟鳶揚げ'
+    'tobiage': '上棟鳶揚げ', 'TOBIAGE': '上棟鳶揚げ',
+    'holiday': '休日', 'HOLIDAY': '休日'
   };
   const payUnitLabel = unitTypes.length === 1
     ? (unitLabels[unitTypes[0]] || '-')
@@ -2407,6 +2409,7 @@ const PAY_UNIT_TAG_MAP = {
   'tobi': { label: '上棟鳶', cls: 'tag-pay-tobi' },
   'age': { label: '上棟荷揚げ', cls: 'tag-pay-age' },
   'tobiage': { label: '上棟鳶揚げ', cls: 'tag-pay-tobiage' },
+  'holiday': { label: '休日', cls: 'tag-pay-holiday' },
 };
 
 function updatePayUnitTag(job, slots) {
