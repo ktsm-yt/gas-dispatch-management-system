@@ -349,6 +349,7 @@ declare global {
     daily_rate_basic?: number;
     daily_rate_fullday?: number;
     daily_rate_night?: number;
+    daily_rate_holiday?: number;
     [key: string]: unknown;
   }
 
@@ -360,6 +361,7 @@ declare global {
     unit_price_basic?: number;
     unit_price_fullday?: number;
     unit_price_night?: number;
+    unit_price_holiday?: number;
     [key: string]: unknown;
   }
 

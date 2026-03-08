@@ -18,8 +18,10 @@ const SENSITIVE_FIELDS = {
   partial: ['bank_account_number', 'pension_number'],
   full: [
     'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_half',
+    'daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_holiday',
     'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
-    'unit_price_half', 'unit_price_fullday', 'unit_price_night'
+    'unit_price_half', 'unit_price_fullday', 'unit_price_night', 'unit_price_holiday',
+    'holiday_rate'
   ]
 };
 

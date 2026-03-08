@@ -188,6 +188,8 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
     case 'night':
     case 'yakin':
       return customer.unit_price_night ?? 0;
+    case 'holiday':
+      return customer.unit_price_holiday ?? 0;
     default:
       return customer.unit_price_basic ?? 0;
   }
@@ -217,6 +219,8 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
       return staff.daily_rate_age ?? 0;
     case 'tobiage':
       return staff.daily_rate_tobiage ?? Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
+    case 'holiday':
+      return staff.daily_rate_holiday ?? 0;
     default:
       return staff.daily_rate_basic ?? 0;
   }
@@ -258,6 +262,9 @@ function getSubcontractorRateByUnit_(
       break;
     case 'tobiage':
       rate = Number(subcontractor.tobiage_rate ?? subcontractor.basic_rate) || 0;
+      break;
+    case 'holiday':
+      rate = Number(subcontractor.holiday_rate ?? subcontractor.basic_rate) || 0;
       break;
     default:
       rate = Number(subcontractor.basic_rate ?? subcontractor.full_day_rate) || 0;

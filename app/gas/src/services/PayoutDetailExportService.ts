@@ -24,7 +24,7 @@ interface PayoutDetailExistingFileResult {
 }
 
 const PAY_UNIT_LABEL_MAP: Record<string, string> = {
-  basic: '式', tobi: '式', age: '式', tobiage: '式',
+  basic: '式', tobi: '式', age: '式', tobiage: '式', holiday: '休日',
   half: '半日', halfday: '半日', fullday: '終日', night: '夜勤',
   jotou: '式', shuujitsu: '終日', am: '半日', pm: '半日', yakin: '夜勤'
 };
