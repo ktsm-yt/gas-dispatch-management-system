@@ -1199,7 +1199,8 @@ const InvoiceService = {
       'shuujitsu': '作業員（終日）',
       'am': '作業員（AM）',
       'pm': '作業員（PM）',
-      'yakin': '作業員（夜勤）'
+      'yakin': '作業員（夜勤）',
+      'holiday': '作業員（休日）'
     };
 
     return itemNameMap[invoiceUnit] || '作業員';

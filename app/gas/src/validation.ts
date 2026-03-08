@@ -32,7 +32,8 @@ const PAY_UNITS = {
   NIGHT: 'night',
   TOBI: 'tobi',
   AGE: 'age',
-  TOBIAGE: 'tobiage'
+  TOBIAGE: 'tobiage',
+  HOLIDAY: 'holiday'
 } as const;
 
 const WORK_CATEGORIES = {

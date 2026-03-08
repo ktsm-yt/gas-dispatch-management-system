@@ -89,6 +89,21 @@
     .status-inactive { background: #FEE2E2; color: #991B1B; }
     <?!= include('skeleton_styles'); ?>
     <?!= include('confirmation_modal_styles'); ?>
+    .form-row-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(88px, 1fr));
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+    }
+    .form-row-4 .form-group input {
+      width: 100%;
+      font-size: 13px;
+      text-align: right;
+    }
+    .form-row-4 .form-group label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
     .empty-state { text-align: center; color: var(--text-muted); padding: 48px; }
     .add-btn {
       position: fixed;
@@ -193,7 +208,7 @@
             <label>備考</label>
             <textarea id="notes" rows="3"></textarea>
           </div>
-          <div class="form-row cols-3">
+          <div class="form-row-4">
             <div class="form-group">
               <label>基本単価</label>
               <input type="number" id="basic-rate" min="0" step="100" placeholder="円">
@@ -206,8 +221,12 @@
               <label>終日単価</label>
               <input type="number" id="full-day-rate" min="0" step="100" placeholder="円">
             </div>
+            <div class="form-group">
+              <label>夜勤</label>
+              <input type="number" id="night-rate" min="0" step="100" placeholder="円">
+            </div>
           </div>
-          <div class="form-row cols-3">
+          <div class="form-row-4">
             <div class="form-group">
               <label>上棟鳶</label>
               <input type="number" id="tobi-rate" min="0" step="100" placeholder="円">
@@ -220,11 +239,9 @@
               <label>上棟鳶揚げ</label>
               <input type="number" id="tobiage-rate" min="0" step="100" placeholder="円">
             </div>
-          </div>
-          <div class="form-row cols-3">
             <div class="form-group">
-              <label>夜勤</label>
-              <input type="number" id="night-rate" min="0" step="100" placeholder="円">
+              <label>休日</label>
+              <input type="number" id="holiday-rate" min="0" step="100" placeholder="円">
             </div>
           </div>
           <div class="form-group">
@@ -390,6 +407,7 @@
           document.getElementById('tobi-rate').value = currentRecord.tobi_rate ?? '';
           document.getElementById('age-rate').value = currentRecord.age_rate ?? '';
           document.getElementById('tobiage-rate').value = currentRecord.tobiage_rate ?? '';
+          document.getElementById('holiday-rate').value = currentRecord.holiday_rate ?? '';
           document.getElementById('is-active').value = currentRecord.is_active ? 'true' : 'false';
         }
       } else {
@@ -419,6 +437,7 @@
       const tobiRate = document.getElementById('tobi-rate').value;
       const ageRate = document.getElementById('age-rate').value;
       const tobiageRate = document.getElementById('tobiage-rate').value;
+      const holidayRate = document.getElementById('holiday-rate').value;
       const data = {
         company_name: document.getElementById('company-name').value,
         contact_name: document.getElementById('contact-name').value,
@@ -431,6 +450,7 @@
         tobi_rate: tobiRate !== '' ? Number(tobiRate) : null,
         age_rate: ageRate !== '' ? Number(ageRate) : null,
         tobiage_rate: tobiageRate !== '' ? Number(tobiageRate) : null,
+        holiday_rate: holidayRate !== '' ? Number(holidayRate) : null,
         is_active: document.getElementById('is-active').value === 'true'
       };
       if (id) data.subcontractor_id = id;

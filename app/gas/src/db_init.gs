@@ -19,7 +19,7 @@ const TABLE_DEFINITIONS = {
       'contact_name', 'honorific', 'postal_code', 'address', 'phone', 'fax', 'email',
       // Pricing (7)
       'unit_price_basic', 'unit_price_tobi', 'unit_price_age', 'unit_price_tobiage',
-      'unit_price_half', 'unit_price_fullday', 'unit_price_night',
+      'unit_price_half', 'unit_price_fullday', 'unit_price_night', 'unit_price_holiday',
       // Billing Terms (3)
       'closing_day', 'payment_day', 'payment_month_offset',
       // Tax (3)
@@ -52,7 +52,7 @@ const TABLE_DEFINITIONS = {
       'ccus_id', 'special_training', 'skill_training', 'licenses',
       // Compensation (9)
       'daily_rate_basic', 'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage',
-      'daily_rate_half', 'daily_rate_fullday', 'daily_rate_night',
+      'daily_rate_half', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_holiday',
       'payment_frequency', 'withholding_tax_applicable',
       // Banking (5)
       'bank_name', 'bank_branch', 'bank_account_type', 'bank_account_number', 'bank_account_name',
@@ -69,7 +69,7 @@ const TABLE_DEFINITIONS = {
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
       'basic_rate', 'half_day_rate', 'full_day_rate',
-      'night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate',
+      'night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate', 'holiday_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_active', 'is_deleted', 'deleted_at', 'deleted_by'
     ]

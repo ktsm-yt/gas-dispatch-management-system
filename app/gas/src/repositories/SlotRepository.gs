@@ -19,7 +19,7 @@ const SlotRepository = {
    * 許可されるpay_unit値
    * 既存のT_JobAssignmentsのpay_unitと同じ値を使用
    */
-  VALID_PAY_UNITS: ['basic', 'halfday', 'fullday', 'night', 'tobi', 'age', 'tobiage'],
+  VALID_PAY_UNITS: ['basic', 'halfday', 'fullday', 'night', 'tobi', 'age', 'tobiage', 'holiday'],
 
   /**
    * IDで枠を取得

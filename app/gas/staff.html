@@ -758,7 +758,7 @@
                 <input type="number" id="daily-rate-night" name="daily_rate_night" min="0" step="100">
               </div>
             </div>
-            <div class="form-row-3" style="margin-top: 8px;">
+            <div class="form-row-4" style="margin-top: 8px;">
               <div class="form-group">
                 <label for="daily-rate-tobi">上棟鳶</label>
                 <input type="number" id="daily-rate-tobi" name="daily_rate_tobi" min="0" step="100">
@@ -770,6 +770,10 @@
               <div class="form-group">
                 <label for="daily-rate-tobiage">上棟鳶揚げ</label>
                 <input type="number" id="daily-rate-tobiage" name="daily_rate_tobiage" min="0" step="100">
+              </div>
+              <div class="form-group">
+                <label for="daily-rate-holiday">休日</label>
+                <input type="number" id="daily-rate-holiday" name="daily_rate_holiday" min="0" step="100">
               </div>
             </div>
           </div>
@@ -1575,6 +1579,7 @@
       document.getElementById('daily-rate-tobi').value = staff.daily_rate_tobi || '';
       document.getElementById('daily-rate-age').value = staff.daily_rate_age || '';
       document.getElementById('daily-rate-tobiage').value = staff.daily_rate_tobiage || '';
+      document.getElementById('daily-rate-holiday').value = staff.daily_rate_holiday || '';
       document.getElementById('birth-date').value = normalizeDate(staff.birth_date);
       document.getElementById('gender').value = staff.gender || '';
       document.getElementById('blood-type').value = staff.blood_type || '';
@@ -1725,7 +1730,7 @@
       formData.forEach((value, key) => {
         if (value !== '') {
           // Convert numeric fields
-          if (['daily_rate_half', 'daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage'].includes(key)) {
+          if (['daily_rate_half', 'daily_rate_basic', 'daily_rate_fullday', 'daily_rate_night', 'daily_rate_tobi', 'daily_rate_age', 'daily_rate_tobiage', 'daily_rate_holiday'].includes(key)) {
             staff[key] = value ? Number(value) : null;
           } else if (key === 'is_active' || key === 'has_motorbike') {
             staff[key] = value === 'true';

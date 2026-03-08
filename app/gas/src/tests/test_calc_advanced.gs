@@ -91,7 +91,8 @@ function testGetDailyRateByJobType() {
     daily_rate_half: 8000,
     daily_rate_basic: 14000,
     daily_rate_fullday: 16000,
-    daily_rate_night: 17000
+    daily_rate_night: 17000,
+    daily_rate_holiday: 18000
   };
 
   var cases = [
@@ -103,6 +104,7 @@ function testGetDailyRateByJobType() {
     { jobType: 'basic', expected: 14000, label: 'basic' },
     { jobType: 'fullday', expected: 16000, label: 'fullday' },
     { jobType: 'night', expected: 17000, label: 'night' },
+    { jobType: 'holiday', expected: 18000, label: 'holiday' },
     { jobType: 'unknown', expected: 14000, label: 'unknown → basic fallback' },
     { jobType: '', expected: 14000, label: '空文字 → basic fallback' },
     { jobType: null, expected: 14000, label: 'null → basic fallback' }
@@ -142,6 +144,13 @@ function testGetDailyRateByJobType() {
   // am/pm → getDailyRateByJobTypeではbasic fallback（halfではない）
   assertEqual(getDailyRateByJobType_(staff, 'am'), 14000, 'am → basic fallback');
   assertEqual(getDailyRateByJobType_(staff, 'pm'), 14000, 'pm → basic fallback');
+
+  // holiday: マスタ値設定済み → holiday用単価
+  assertEqual(getDailyRateByJobType_(staff, 'holiday'), 18000, 'holiday → daily_rate_holiday');
+
+  // holiday: 未設定 → basic fallback (0 via ?? 0)
+  var staffNoHoliday = { daily_rate_basic: 14000 };
+  assertEqual(getDailyRateByJobType_(staffNoHoliday, 'holiday'), 0, 'holiday未設定 → 0');
 }
 
 // ============================================
@@ -156,7 +165,8 @@ function testGetUnitPriceByJobType() {
     unit_price_basic: 19000,
     unit_price_half: 10000,
     unit_price_fullday: 22000,
-    unit_price_night: 23000
+    unit_price_night: 23000,
+    unit_price_holiday: 24000
   };
 
   var cases = [
@@ -168,6 +178,7 @@ function testGetUnitPriceByJobType() {
     { jobType: 'halfday', expected: 10000, label: 'halfday' },
     { jobType: 'fullday', expected: 22000, label: 'fullday' },
     { jobType: 'night', expected: 23000, label: 'night' },
+    { jobType: 'holiday', expected: 24000, label: 'holiday' },
     { jobType: 'unknown', expected: 19000, label: 'unknown → basic fallback' },
     { jobType: '', expected: 19000, label: '空文字 → basic fallback' }
   ];
@@ -194,6 +205,13 @@ function testGetUnitPriceByJobType() {
 
   // null customer → 0
   assertEqual(getUnitPriceByJobType_(null, 'tobi'), 0, 'null customer → 0');
+
+  // holiday: マスタ値設定済み → holiday用単価
+  assertEqual(getUnitPriceByJobType_(customer, 'holiday'), 24000, 'holiday → unit_price_holiday');
+
+  // holiday: 未設定 → 0 (basic fallbackではなく ?? 0)
+  var custNoHoliday = { unit_price_basic: 19000 };
+  assertEqual(getUnitPriceByJobType_(custNoHoliday, 'holiday'), 0, 'holiday未設定 → 0');
 }
 
 // ============================================
@@ -499,7 +517,8 @@ function testNormalizeTaxRate() {
 function testGetSubcontractorRateByUnit() {
   var sub = {
     basic_rate: 15000, half_day_rate: 8000, full_day_rate: 18000,
-    night_rate: 20000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 25000
+    night_rate: 20000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 25000,
+    holiday_rate: 21000
   };
 
   var cases = [
@@ -516,7 +535,8 @@ function testGetSubcontractorRateByUnit() {
     { unit: 'niage', expected: 19000, label: 'niage → age_rate' },
     { unit: 'tobiage', expected: 25000, label: 'tobiage → tobiage_rate' },
     { unit: 'yakin', expected: 20000, label: 'yakin → night_rate' },
-    { unit: 'night', expected: 20000, label: 'night → night_rate (VALID_PAY_UNITSの実値)' }
+    { unit: 'night', expected: 20000, label: 'night → night_rate (VALID_PAY_UNITSの実値)' },
+    { unit: 'holiday', expected: 21000, label: 'holiday → holiday_rate' }
   ];
 
   for (var i = 0; i < cases.length; i++) {
@@ -531,6 +551,7 @@ function testGetSubcontractorRateByUnit() {
   assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'tobi'), 15000, 'tobi未設定 → basic fallback');
   assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'age'), 15000, 'age未設定 → basic fallback');
   assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'tobiage'), 15000, 'tobiage未設定 → basic fallback');
+  assertEqual(getSubcontractorRateByUnit_(subNoExtended, 'holiday'), 15000, 'holiday未設定 → basic fallback');
 
   // 反証テスト: basic_rateも未設定の場合、拡張caseは0を返すがdefaultはfull_day_rateを返す
   // → caseが存在しないとdefault経路でfull_day_rate(18000)になるため、0との差で検出可能
@@ -540,6 +561,7 @@ function testGetSubcontractorRateByUnit() {
   assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'tobi'), 0, '反証: tobi caseが存在する(defaultなら18000)');
   assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'age'), 0, '反証: age caseが存在する(defaultなら18000)');
   assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'tobiage'), 0, '反証: tobiage caseが存在する(defaultなら18000)');
+  assertEqual(getSubcontractorRateByUnit_(subOnlyFull, 'holiday'), 0, '反証: holiday caseが存在する(defaultなら18000)');
   // 対照群: default経路はfull_day_rateを返す
   assertEqual(getSubcontractorRateByUnit_(subOnlyFull, ''), 18000, '対照群: default → full_day_rate');
 
@@ -701,7 +723,8 @@ function testSubcontractorRateByUnit_allPayUnits() {
   // getSubcontractorRateByUnit_ は純粋関数なので直接テスト
   var sub = {
     basic_rate: 20000, half_day_rate: 10000, full_day_rate: 20000,
-    night_rate: 25000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 24000
+    night_rate: 25000, tobi_rate: 22000, age_rate: 19000, tobiage_rate: 24000,
+    holiday_rate: 23000
   };
 
   // getUnpaidSubcontractorList 内部で使われるのと同じロジックを検証
@@ -723,6 +746,9 @@ function testSubcontractorRateByUnit_allPayUnits() {
   assertEqual(tobiRate, 22000, '未払一覧: tobi単価 = tobi_rate');
   assertEqual(ageRate, 19000, '未払一覧: age単価 = age_rate');
   assertEqual(tobiageRate, 24000, '未払一覧: tobiage単価 = tobiage_rate');
+
+  var holidayRate = getSubcontractorRateByUnit_(sub, 'holiday');
+  assertEqual(holidayRate, 23000, '未払一覧: holiday単価 = holiday_rate');
 
   // 合計が wage_rate=0 ではなくマスタ単価で計算されることの確認
   var estimated = amRate + fullRate + basicRate;

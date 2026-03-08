@@ -63,6 +63,7 @@
 | unit_price_half | NUMBER | - | ハーフ単価（税抜） |
 | unit_price_fullday | NUMBER | - | 終日単価（税抜） |
 | unit_price_night | NUMBER | - | 夜間単価（税抜） |
+| unit_price_holiday | NUMBER | - | 休日単価（税抜） |
 | closing_day | NUMBER | - | 締め日（1-31、末日=31） |
 | payment_day | NUMBER | - | 支払日（締め後何日） |
 | payment_month_offset | NUMBER | - | 支払月（0=当月、1=翌月、2=翌々月） |
@@ -141,6 +142,7 @@ WebUI 請求書一覧
 | daily_rate_fullday | NUMBER | - | 日給（終日） |
 | daily_rate_night | NUMBER | - | 日給（夜間） |
 | daily_rate_tobi | NUMBER | - | 日給（鳶）※鳶揚げは鳶×1.5で計算 |
+| daily_rate_holiday | NUMBER | - | 日給（休日） |
 | staff_type | STRING | ○ | 種別（regular/student/sole_proprietor/subcontract） |
 | employment_type | STRING | - | 雇用形態（employee/sole_proprietor）※2025/12/19追加 |
 | withholding_tax_applicable | BOOLEAN | - | 源泉徴収対象フラグ（true=源泉徴収する）。未設定時はstaff_typeに応じて自動補完（regular/student→true、sole_proprietor/subcontract→false）※2025/12/19追加 |
@@ -226,6 +228,11 @@ WebUI 請求書一覧
 | basic_rate | NUMBER | - | 基本単価（円） |
 | half_day_rate | NUMBER | - | ハーフ単価（円） |
 | full_day_rate | NUMBER | - | 終日単価（円） |
+| night_rate | NUMBER | - | 夜勤単価（円） |
+| tobi_rate | NUMBER | - | 鳶単価（円） |
+| age_rate | NUMBER | - | 荷揚げ単価（円） |
+| tobiage_rate | NUMBER | - | 鳶揚げ単価（円） |
+| holiday_rate | NUMBER | - | 休日単価（円） |
 | folder_id | STRING | - | 関連ファイル格納フォルダID（請求書PDF等） |
 | created_at | DATETIME | ○ | 作成日時 |
 | updated_at | DATETIME | ○ | 更新日時 |
