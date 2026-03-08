@@ -219,6 +219,16 @@
               <input type="text" id="construction-div" name="construction_div">
             </div>
           </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="adjustment-amount">調整額 <small style="color:#888">（正:追加 / 負:値引き）</small></label>
+              <input type="number" id="adjustment-amount" name="adjustment_amount" step="1" value="0" min="-9999999" max="9999999">
+            </div>
+            <div class="form-group">
+              <label for="adjustment-note">調整メモ</label>
+              <input type="text" id="adjustment-note" name="adjustment_note" maxlength="50" placeholder="値引き理由など">
+            </div>
+          </div>
         </details>
 
         <div class="form-group">

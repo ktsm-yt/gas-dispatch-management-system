@@ -308,6 +308,7 @@
     .tag-pay-tobiage { background: var(--tag-tobiage); }
     .tag-pay-holiday { background: #EF5350; }
     .tag-transport { background: #e8f4e8; color: #2d7d32; border: 1px solid #c8e6c9; font-weight: 500; }
+    .tag-adjustment { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; font-weight: 500; }
 
     .customer-name {
       flex: 1;
@@ -1177,6 +1178,7 @@
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
               ${payUnitInfo ? `<span class="tag ${payUnitInfo.cls}">${payUnitInfo.label}</span>` : ''}
               ${hasTransportFee(job) ? '<span class="tag tag-transport">¥交</span>' : ''}
+              ${Number(job.adjustment_amount) ? '<span class="tag tag-adjustment">¥調</span>' : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}
               <span class="customer-name">${safeCustomerName}</span>
               <span class="staff-count ${hasShortage ? 'shortage' : ''}">${job.assigned_count}/${job.required_count}</span>

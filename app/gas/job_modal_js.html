@@ -194,6 +194,8 @@ function fillFormFromCache(job) {
   document.getElementById('property-code').value = job.property_code || '';
   document.getElementById('construction-div').value = job.construction_div || '';
   document.getElementById('client-contact').value = job.client_contact || '';
+  document.getElementById('adjustment-amount').value = job.adjustment_amount || 0;
+  document.getElementById('adjustment-note').value = job.adjustment_note || '';
   document.getElementById('notes').value = job.notes || '';
 
   // pay_unit正規化: 'half'(旧) → 'halfday'(新)
@@ -278,6 +280,8 @@ function loadJobData(jobId) {
       document.getElementById('property-code').value = job.property_code || '';
       document.getElementById('construction-div').value = job.construction_div || '';
       document.getElementById('client-contact').value = job.client_contact || '';
+      document.getElementById('adjustment-amount').value = job.adjustment_amount || 0;
+      document.getElementById('adjustment-note').value = job.adjustment_note || '';
       document.getElementById('notes').value = job.notes || '';
 
       // pay_unit正規化: 'half'(旧) → 'halfday'(新)
@@ -351,6 +355,10 @@ function submitJobModal(saveAndContinue = false) {
   if (job.required_count) {
     job.required_count = parseInt(job.required_count, 10);
   }
+
+  // CR-091: 調整額を整数変換（空欄・0も送信してDBに反映する）
+  job.adjustment_amount = parseInt(document.getElementById('adjustment-amount').value, 10) || 0;
+  job.adjustment_note = document.getElementById('adjustment-note').value || '';
 
   // 「その他」以外なら自由テキストを空文字で明示送信（DB上もクリア）
   if (job.work_detail !== 'other') {
