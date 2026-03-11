@@ -202,7 +202,8 @@
           if (JSON.stringify(newData) !== JSON.stringify(companyData)) {
             companyData = newData;
             PageCache.set(COMPANY_CACHE_KEY, companyData);
-            renderForm();
+            // フォームの再描画はしない（ユーザーが入力中の可能性があるため）
+            // 次回ページ表示時にキャッシュから最新データが反映される
           }
         })
         .getCompany();
