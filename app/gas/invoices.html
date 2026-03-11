@@ -683,7 +683,7 @@
     }
 
     .edit-modal-context-dates input[type="date"] {
-      font-size: 12px;
+      font-size: 16px; /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
       padding: 3px 6px;
       border: 1px solid var(--border-color);
       border-radius: var(--radius-sm);
@@ -702,7 +702,7 @@
     .compact-date-field input[type="date"] {
       width: 100%;
       padding: 6px 8px;
-      font-size: 12px;
+      font-size: 16px; /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
     }
 
     .edit-notes-group {
@@ -1082,6 +1082,12 @@
     .archive-warning-banner .banner-close:hover {
       color: #78350f;
     }
+
+    /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
+    input[type="date"] {
+      font-size: 16px;
+    }
+
   </style>
 </head>
 

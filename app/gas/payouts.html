@@ -692,6 +692,12 @@
     .sub-view.active {
       display: block;
     }
+
+    /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
+    input[type="date"] {
+      font-size: 16px;
+    }
+
   </style>
 </head>
 <body>
