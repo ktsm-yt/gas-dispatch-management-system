@@ -15,6 +15,7 @@ let jobModalState = {
   customerDropdownIndex: -1,
   isSaving: false,
   isLoadingJob: false,  // 案件データ読み込み中かどうか
+  isFormDirty: false,   // ユーザーがフォームを変更したかどうか
   saveAndContinue: false,
   customerBlurTimer: null,  // 顧客検索のblurタイマー
   lastCustomerSearchQuery: ''  // 最後に検索したクエリ（チラつき防止）
@@ -91,6 +92,7 @@ function openJobModal(jobId = null, options = {}) {
   jobModalState.slots = [];
   jobModalState.jobUpdatedAt = null;
   jobModalState.isLoadingJob = false;
+  jobModalState.isFormDirty = false;
   jobModalState.saveAndContinue = false;
 
   // Reset form
@@ -146,6 +148,9 @@ function openJobModal(jobId = null, options = {}) {
 
   // Show modal
   document.getElementById('job-modal').style.display = 'flex';
+
+  // ユーザー入力を検知してdirtyフラグを立てる（バックグラウンド上書き防止）
+  _setupFormDirtyTracking();
 
   // Load job data if editing
   if (jobId) {
@@ -215,6 +220,28 @@ function fillFormFromCache(job) {
   validateTimeSlotStartTime();
 }
 
+/**
+ * フォームのinput/changeイベントでdirtyフラグを立てる
+ * loadJobDataのバックグラウンド上書きを防止するため
+ */
+function _setupFormDirtyTracking() {
+  const form = document.getElementById('job-form');
+  if (!form) return;
+
+  // 既存リスナーの重複防止
+  if (form._dirtyTrackerAttached) return;
+  form._dirtyTrackerAttached = true;
+
+  form.addEventListener('input', () => {
+    if (!jobModalState.isLoadingJob) return; // API応答待ち中のみ意味がある
+    jobModalState.isFormDirty = true;
+  });
+  form.addEventListener('change', () => {
+    if (!jobModalState.isLoadingJob) return;
+    jobModalState.isFormDirty = true;
+  });
+}
+
 function closeJobModal() {
   document.getElementById('job-modal').style.display = 'none';
 
@@ -232,6 +259,8 @@ function closeJobModal() {
     customers: jobModalState.customers, // Keep customer cache
     customerDropdownIndex: -1,
     isSaving: false,
+    isLoadingJob: false,
+    isFormDirty: false,
     saveAndContinue: false
   };
 }
@@ -259,6 +288,21 @@ function loadJobData(jobId) {
       jobModalState.job = job;
       jobModalState.slots = slots || [];
       jobModalState.jobUpdatedAt = job.updated_at;
+
+      // キャッシュに保存（スロット含む完全なデータ）— dirty状態でも常に更新
+      saveJobToCache(job.job_id, {
+        ...job,
+        slots: slots || []
+      });
+
+      // ユーザーが入力中ならフォーム上書きをスキップ（state/cacheは上で更新済み）
+      if (jobModalState.isFormDirty) {
+        console.log('Skipping form overwrite: user has modified the form');
+        // hidden fields（編集ID + optimistic lock用）だけは更新する
+        document.getElementById('job-id').value = job.job_id;
+        document.getElementById('job-updated-at').value = job.updated_at;
+        return;
+      }
 
       // Fill form
       document.getElementById('job-id').value = job.job_id;
@@ -295,12 +339,6 @@ function loadJobData(jobId) {
       } else {
         resetSlotsUI();
       }
-
-      // キャッシュに保存（スロット含む完全なデータ）
-      saveJobToCache(job.job_id, {
-        ...job,
-        slots: slots || []
-      });
 
       // アーカイブデータの場合は警告バナーを表示
       if (job._archived) {
