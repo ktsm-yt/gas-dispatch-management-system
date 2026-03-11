@@ -565,6 +565,11 @@
     .btn-icon:hover { background: var(--bg-hover); }
     .btn-icon:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
+    input[type="date"] {
+      font-size: 16px;
+    }
+
   </style>
 </head>
 <body>

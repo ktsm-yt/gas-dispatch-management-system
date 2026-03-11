@@ -382,7 +382,7 @@
       padding: var(--spacing-xs) var(--spacing-sm);
       border: 1px solid var(--border-color);
       border-radius: var(--radius-sm);
-      font-size: 13px;
+      font-size: 16px; /* iOS Safari: 16px未満で自動ズーム→ピッカーが閉じる */
     }
 
     .daily-sales-toolbar input[type="date"]:focus {
