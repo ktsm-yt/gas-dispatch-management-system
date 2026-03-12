@@ -730,10 +730,10 @@ const InvoiceExportService = {
     // フォーマットに応じてデータを入力
     switch (invoice.invoice_format) {
       case 'format1':
-        this._populateFormat1(sheet, invoice, lines, customer, company);
+        this._populateFormat1(sheet, invoice, lines, customer, company, { forPdf });
         break;
       case 'format2':
-        this._populateFormat2(sheet, invoice, lines, customer, company);
+        this._populateFormat2(sheet, invoice, lines, customer, company, { forPdf });
         break;
       case 'format3':
         this._populateFormat3(sheet, invoice, lines, customer, company);
@@ -742,7 +742,7 @@ const InvoiceExportService = {
         this._populateAtagami(sheet, invoice, lines, customer, company);
         break;
       default:
-        this._populateFormat1(sheet, invoice, lines, customer, company);
+        this._populateFormat1(sheet, invoice, lines, customer, company, { forPdf });
     }
     _t.populate = Date.now();
     Logger.log(`[TIMING][_createFilledSheet] populate (${invoice.invoice_format}): ${_t.populate - _t.coverPage}ms`);
@@ -785,7 +785,7 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateFormat1: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
+  _populateFormat1: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, opts: { forPdf?: boolean } = {}) {
     const spreadsheet = sheet.getParent();
     const dataSheet = spreadsheet.getSheetByName('データ');
 
@@ -814,6 +814,14 @@ const InvoiceExportService = {
     }
 
     // 自社郵便番号・住所はデータシートB7/B8経由で売上シートの数式が参照
+
+    // CR-094: 自社名がExcel出力時にG2セル枠からはみ出る対策（PDF:13ptで収まるがExcel:はみ出る）
+    if (!opts.forPdf) {
+      sheet.getRange('G2').setFontSize(12);
+    }
+    // CR-095: 住所の漢字・カタカナ太字解除 + 文字重なり対策（1pt縮小）
+    sheet.getRange('G3').setFontWeight('normal');
+    sheet.getRange('G4').setFontWeight('normal').setFontSize(8);
 
     // === 明細行（A10から開始、視認性のため1行おき）===
     // テンプレート列構成: A=日付, B=案件名, C=(空), D=品目, E=(空), F=時間/備考, G=数量, H=単位, I=単価, J=金額
@@ -946,7 +954,7 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ
    * @param {Object} company - 自社データ
    */
-  _populateFormat2: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>) {
+  _populateFormat2: function(sheet: GoogleAppsScript.Spreadsheet.Sheet, invoice: Record<string, unknown>, lines: Record<string, unknown>[], customer: Record<string, unknown>, company: Record<string, unknown>, opts: { forPdf?: boolean } = {}) {
     // データシートを取得（atamagamiと同じアーキテクチャ）
     const spreadsheet = sheet.getParent();
     const dataSheet = spreadsheet.getSheetByName('データ');
@@ -969,6 +977,14 @@ const InvoiceExportService = {
     dataSheet.getRange('B8').setValue(company.address || '');  // 自社住所
 
     // 自社郵便番号・住所はデータシートB7/B8経由で売上シートの数式が参照
+
+    // CR-094: 自社名がExcel出力時にG2セル枠からはみ出る対策（PDF:13ptで収まるがExcel:はみ出る）
+    if (!opts.forPdf) {
+      sheet.getRange('G2').setFontSize(12);
+    }
+    // CR-095: 住所の漢字・カタカナ太字解除 + 文字重なり対策（1pt縮小）
+    sheet.getRange('G3').setFontWeight('normal');
+    sheet.getRange('G4').setFontWeight('normal').setFontSize(8);
 
     // === 明細行を売上シートに直接書き込み ===
     // （A10から開始、同一案件内は連続・案件変更時に空行）
