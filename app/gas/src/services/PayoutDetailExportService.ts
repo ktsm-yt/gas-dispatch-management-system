@@ -184,6 +184,7 @@ const PayoutDetailExportService = {
     wage_rate: number;
     adjusted_wage_rate: number;
     transport_amount: number;
+    staff_transport: number;
   }> {
     const linkedAssignments = AssignmentRepository.search({ payout_id: payoutId })
       .filter(function(a) { return !a.is_deleted; });
@@ -220,7 +221,8 @@ const PayoutDetailExportService = {
         pay_unit: (a.pay_unit as string) || 'basic',
         wage_rate: wageRate,
         adjusted_wage_rate: adjustedWageRate,
-        transport_amount: Number(a.transport_amount) || 0
+        transport_amount: Number(a.transport_amount) || 0,
+        staff_transport: Number(a.staff_transport) || 0
       };
     });
 
@@ -298,6 +300,7 @@ const PayoutDetailExportService = {
       wage_rate: number;
       adjusted_wage_rate: number;
       transport_amount: number;
+      staff_transport: number;
     }>,
     dataStartRow: number,
     isWithholdingTarget: boolean
@@ -326,7 +329,7 @@ const PayoutDetailExportService = {
       }
 
       const unitLabel = PAY_UNIT_LABEL_MAP[a.pay_unit] || '式';
-      const transport = '';  // 交通費除外（移動列は空で出力）
+      const transport = (Number(a.staff_transport) || 0) > 0 ? Number(a.staff_transport) : '';
 
       // 各行に配置単位の源泉徴収税を表示
       const taxCell = perRowTax[idx] !== undefined ? perRowTax[idx] : '';
@@ -397,7 +400,7 @@ const PayoutDetailExportService = {
       '合計', '', '', rowCount, '',
       '', adjustedBaseAmount,
       '', '', '',
-      0,  // 交通費除外
+      payout.transport_amount || 0,
       summaryTax
     ];
 

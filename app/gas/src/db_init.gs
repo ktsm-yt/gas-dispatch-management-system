@@ -128,8 +128,9 @@ const TABLE_DEFINITIONS = {
       'display_time_slot',
       // Pricing (4)
       'pay_unit', 'invoice_unit', 'wage_rate', 'invoice_rate',
-      // Transport (5)
+      // Transport (6)
       'transport_area', 'transport_amount', 'transport_is_manual', 'transport_station', 'transport_has_bus',
+      'staff_transport',
       // Role (3)
       'site_role', 'assignment_role', 'is_leader',
       // Compliance (2)
@@ -1670,4 +1671,56 @@ function migrateAddJobAdjustmentColumns() {
   }
 
   Logger.log('=== CR-091 マイグレーション完了（全DB処理済み） ===');
+}
+
+/**
+ * CR-097: Assignments に staff_transport カラムを追加
+ * transport_has_bus の後に1列挿入
+ * GASエディタから手動実行: migrateAddStaffTransportColumn()
+ */
+function migrateAddStaffTransportColumn() {
+  const prop = PropertiesService.getScriptProperties();
+  const ids = [
+    { key: 'SPREADSHEET_ID_DEV', id: prop.getProperty('SPREADSHEET_ID_DEV') },
+    { key: 'SPREADSHEET_ID_PROD', id: prop.getProperty('SPREADSHEET_ID_PROD') }
+  ].filter(e => e.id);
+
+  if (ids.length === 0) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  for (const entry of ids) {
+    Logger.log('=== CR-097 staff_transport カラム追加 [' + entry.key + '] ===\n');
+
+    const ss = SpreadsheetApp.openById(entry.id);
+    const sheet = ss.getSheetByName('Assignments');
+
+    if (!sheet) {
+      Logger.log('✗ Assignmentsシートが見つかりません（スキップ）');
+      continue;
+    }
+
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    if (headers.includes('staff_transport')) {
+      Logger.log('✓ staff_transport カラムは既に存在します（スキップ）');
+      continue;
+    }
+
+    const busIndex = headers.indexOf('transport_has_bus');
+    if (busIndex === -1) {
+      Logger.log('✗ transport_has_bus カラムが見つかりません（スキップ）');
+      continue;
+    }
+
+    // transport_has_busの後に1列挿入（1-indexed）
+    sheet.insertColumnsAfter(busIndex + 1, 1);
+    sheet.getRange(1, busIndex + 2).setValue('staff_transport');
+    sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log('✓ staff_transport カラムを transport_has_bus の後に追加しました');
+  }
+
+  Logger.log('=== CR-097 マイグレーション完了（全DB処理済み） ===');
 }
