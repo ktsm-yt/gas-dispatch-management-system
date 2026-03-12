@@ -267,7 +267,45 @@ const StatsService = {
    * @param {number} endMonth
    * @returns {Array<{customerId, customerName, salesTotal, invoiceCount}>}
    */
+  /**
+   * M_Customers から顧客名マップと削除済み顧客IDセットを構築
+   * @private
+   * @returns {{ nameMap: Object<string, string>, deletedIds: Object<string, true> }}
+   */
+  _buildCustomerMaps: function() {
+    var nameMap = {};
+    var deletedIds = {};
+    var custSheet = getSheet('M_Customers');
+    var custData = custSheet.getDataRange().getValues();
+    if (custData.length > 1) {
+      var h = custData[0];
+      var col = {
+        id: h.indexOf('customer_id'),
+        name: h.indexOf('company_name'),
+        branch: h.indexOf('branch_name'),
+        del: h.indexOf('is_deleted')
+      };
+      for (var i = 1; i < custData.length; i++) {
+        var r = custData[i];
+        var cid = String(r[col.id]);
+        if (r[col.del]) {
+          deletedIds[cid] = true;
+        } else {
+          var name = String(r[col.name] || '');
+          var branch = String(r[col.branch] || '');
+          nameMap[cid] = name + (branch ? '（' + branch + '）' : '');
+        }
+      }
+    }
+    return { nameMap: nameMap, deletedIds: deletedIds };
+  },
+
   _aggregateByCustomer: function(startYear, startMonth, endYear, endMonth) {
+    // 削除済み顧客を除外するためのマップを先に構築
+    var custMaps = this._buildCustomerMaps();
+    var customerNameMap = custMaps.nameMap;
+    var deletedCustomerIds = custMaps.deletedIds;
+
     // 期間内の年月セットを生成（フィルタ用）
     var validMonths = {};
     var y = startYear, m = startMonth;
@@ -301,6 +339,8 @@ const StatsService = {
         var key = Number(row[col.by]) + '-' + Number(row[col.bm]);
         if (!(key in validMonths)) continue;
         var cid = String(row[col.cid]);
+        // 削除済み顧客 or マスタ未存在の顧客を除外
+        if ((cid in deletedCustomerIds) || !(cid in customerNameMap)) continue;
         if (!buckets[cid]) buckets[cid] = { salesTotal: 0, expenseTotal: 0, invoiceCount: 0 };
         var subtotal = Number(row[col.sub]) || 0;
         var expense = Number(row[col.exp]) || 0;
@@ -334,29 +374,8 @@ const StatsService = {
       }
     }
 
-    // M_Customers から表示名マッピング
-    var customerNameMap = {};
-    var custSheet = getSheet('M_Customers');
-    var custData = custSheet.getDataRange().getValues();
-    if (custData.length > 1) {
-      var custH = custData[0];
-      var custCol = {
-        id: custH.indexOf('customer_id'),
-        name: custH.indexOf('company_name'),
-        branch: custH.indexOf('branch_name'),
-        del: custH.indexOf('is_deleted')
-      };
-      for (var c = 1; c < custData.length; c++) {
-        var cr = custData[c];
-        if (cr[custCol.del]) continue;
-        var cid = String(cr[custCol.id]);
-        var name = String(cr[custCol.name] || '');
-        var branch = String(cr[custCol.branch] || '');
-        customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
-      }
-    }
-
     // 結果配列に変換（売上・諸経費ともに0の企業を除外 + 合計降順ソート）
+    // customerNameMap は冒頭の _buildCustomerMaps() で構築済み
     var result = [];
     for (var id in buckets) {
       if (buckets[id].salesTotal === 0 && buckets[id].expenseTotal === 0) continue;
@@ -382,6 +401,11 @@ const StatsService = {
     numYears = numYears || 5;
     var now = new Date();
     var currentFy = getFiscalYear_(now);
+
+    // 削除済み顧客を除外するためのマップを先に構築
+    var custMaps = this._buildCustomerMaps();
+    var customerNameMap = custMaps.nameMap;
+    var deletedCustomerIds = custMaps.deletedIds;
 
     // 対象年度リスト（新しい順）
     var fiscalYears = [];
@@ -430,6 +454,8 @@ const StatsService = {
         var fy = monthToFy[key];
         if (fy === undefined) continue;
         var cid = String(row[col.cid]);
+        // 削除済み顧客 or マスタ未存在の顧客を除外
+        if ((cid in deletedCustomerIds) || !(cid in customerNameMap)) continue;
         if (!buckets[cid]) buckets[cid] = {};
         if (!buckets[cid][fy]) buckets[cid][fy] = { sales: 0, expense: 0 };
         var subtotal = Number(row[col.sub]) || 0;
@@ -457,29 +483,8 @@ const StatsService = {
       }
     }
 
-    // M_Customers から表示名マッピング
-    var customerNameMap = {};
-    var custSheet = getSheet('M_Customers');
-    var custData = custSheet.getDataRange().getValues();
-    if (custData.length > 1) {
-      var custH = custData[0];
-      var custCol = {
-        id: custH.indexOf('customer_id'),
-        name: custH.indexOf('company_name'),
-        branch: custH.indexOf('branch_name'),
-        del: custH.indexOf('is_deleted')
-      };
-      for (var c = 1; c < custData.length; c++) {
-        var cr = custData[c];
-        if (cr[custCol.del]) continue;
-        var cid = String(cr[custCol.id]);
-        var name = String(cr[custCol.name] || '');
-        var branch = String(cr[custCol.branch] || '');
-        customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
-      }
-    }
-
     // 結果配列に変換（全年度0の企業を除外、最新年度の合計で降順ソート）
+    // customerNameMap は冒頭の _buildCustomerMaps() で構築済み
     var customers = [];
     for (var id in buckets) {
       var hasAnySales = false;
@@ -656,12 +661,17 @@ const StatsService = {
       }
     }
 
-    // 2. invoice_id → customer_id マッピング用に請求書を取得
+    // 2. 顧客マスタを先に構築（削除済み顧客の除外判定に必要）
+    var custMaps = this._buildCustomerMaps();
+    var customerNameMap = custMaps.nameMap;
+    var deletedCustomerIds = custMaps.deletedIds;
+
+    // 3. invoice_id → customer_id マッピング + 除外対象請求書IDセット構築
     // invoiceIds は上で既に構築済み
     var uniqueInvoiceIds = Object.keys(invoiceIds);
 
-    // T_Invoicesからcustomer_idを一括取得（カラムインデックス直参照）
     var invoiceCustomerMap = {}; // invoice_id → customer_id
+    var deletedInvoiceIds = {}; // 除外対象の請求書ID
     if (uniqueInvoiceIds.length > 0) {
       var invSheet = getSheet('T_Invoices');
       var invData = invSheet.getDataRange().getValues();
@@ -678,40 +688,13 @@ const StatsService = {
         }
         for (var j = 1; j < invData.length; j++) {
           var row = invData[j];
-          if (row[invCol.del]) continue;
           var iid = String(row[invCol.id]);
-          if (iid in idSet) {
-            invoiceCustomerMap[iid] = String(row[invCol.cid]);
-          }
-        }
-      }
-    }
-
-    // 3. M_Customersからcustomer_id → company_name マッピング
-    var customerNameMap = {}; // customer_id → label
-    var customerIds = {};
-    for (var cKey in invoiceCustomerMap) {
-      customerIds[invoiceCustomerMap[cKey]] = true;
-    }
-    if (Object.keys(customerIds).length > 0) {
-      var custSheet = getSheet('M_Customers');
-      var custData = custSheet.getDataRange().getValues();
-      if (custData.length > 1) {
-        var custH = custData[0];
-        var custCol = {
-          id: custH.indexOf('customer_id'),
-          name: custH.indexOf('company_name'),
-          branch: custH.indexOf('branch_name'),
-          del: custH.indexOf('is_deleted')
-        };
-        for (var c = 1; c < custData.length; c++) {
-          var cr = custData[c];
-          if (cr[custCol.del]) continue;
-          var cid = String(cr[custCol.id]);
-          if (cid in customerIds) {
-            var name = String(cr[custCol.name] || '');
-            var branch = String(cr[custCol.branch] || '');
-            customerNameMap[cid] = name + (branch ? '（' + branch + '）' : '');
+          if (!(iid in idSet)) continue;
+          var cid = String(row[invCol.cid]);
+          invoiceCustomerMap[iid] = cid;
+          // 除外条件: 請求書自体が削除済み OR 顧客が削除済み OR 顧客がマスタに未存在
+          if (row[invCol.del] || (cid in deletedCustomerIds) || !(cid in customerNameMap)) {
+            deletedInvoiceIds[iid] = true;
           }
         }
       }
@@ -723,6 +706,8 @@ const StatsService = {
     var expenseTotal = 0;
     for (var d = 0; d < lines.length; d++) {
       var line = lines[d];
+      // 削除済み顧客の請求書明細を除外
+      if (line.invoice_id in deletedInvoiceIds) continue;
       var amt = Number(line.amount) || 0;
       if (line.item_name === EXPENSE_ITEM_NAME) {
         expenseTotal += amt;
@@ -757,6 +742,8 @@ const StatsService = {
     var customerBuckets = {}; // customerName → { sales, expense }
     for (var e = 0; e < lines.length; e++) {
       var ln = lines[e];
+      // 削除済み顧客の請求書明細を除外
+      if (ln.invoice_id in deletedInvoiceIds) continue;
       var invId = ln.invoice_id;
       var custId = invoiceCustomerMap[invId] || '';
       var custName = customerNameMap[custId] || '（不明）';
