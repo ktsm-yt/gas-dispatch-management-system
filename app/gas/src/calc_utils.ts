@@ -368,16 +368,20 @@ function calculateMonthlyPayout_(
   assignments: Record<string, any>[],
   staff: Record<string, any>
 ): { baseAmount: number; transportAmount: number; totalAmount: number } {
+  // 命名規則:
+  // transport_amount  = 請求用交通費（Invoice向け、顧客請求に反映）
+  // staff_transport   = 支払用交通費（Payout向け、スタッフ支払に反映）
+  // adjustment_amount = 調整額（交通費以外の加減算。物損・ペナルティ等）
   let baseAmount = 0;
-  const transportAmount = 0;
+  let transportAmount = 0;
 
   assignments.forEach(asg => {
     baseAmount += calculateWage_(asg, staff, asg.pay_unit || 'basic');
 
-    // 交通費は請求書のみに反映。スタッフ支払いには含めない（調整額で別途対応）
-    // if (asg.transport_amount) {
-    //   transportAmount += Number(asg.transport_amount) || 0;
-    // }
+    // staff_transport: スタッフ支払用交通費（配置単位で手動入力）
+    if (asg.staff_transport) {
+      transportAmount += Number(asg.staff_transport) || 0;
+    }
   });
 
   assertInvariant_(
@@ -389,7 +393,7 @@ function calculateMonthlyPayout_(
   return {
     baseAmount: baseAmount,
     transportAmount: transportAmount,
-    totalAmount: baseAmount  // transport除外（請求書のみに反映）
+    totalAmount: baseAmount + transportAmount
   };
 }
 

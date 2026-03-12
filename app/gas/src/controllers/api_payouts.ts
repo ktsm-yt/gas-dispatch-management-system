@@ -223,7 +223,8 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
           pay_unit: a.pay_unit,
           invoice_unit: a.invoice_unit,
           wage_rate: calculatedWage,
-          calculated_wage: adjustedWage
+          calculated_wage: adjustedWage,
+          staff_transport: Number(a.staff_transport) || 0
         };
       });
 
@@ -238,7 +239,10 @@ function getPayoutDetails(payoutId: string, options: { include_assignments?: boo
         const recalculatedNinku = recalculatedAdjusted - recalculatedBase; // マイナス値 or 0
         result.baseAmount = recalculatedBase;
         result.ninkuAdjustmentAmount = recalculatedNinku;
-        result.totalAmount = recalculatedBase + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;  // 交通費除外
+        const recalculatedTransport = assignments
+          .reduce(function(sum: number, a: Record<string, unknown>) { return sum + (Number(a.staff_transport) || 0); }, 0);
+        result.transportAmount = recalculatedTransport;
+        result.totalAmount = recalculatedBase + recalculatedTransport + ((result.adjustmentAmount as number) || 0) + recalculatedNinku;
       }
     }
 
@@ -671,7 +675,7 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
  * @param options - オプション { adjustment_amount, notes }
  * @returns APIレスポンス
  */
-function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
+function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
@@ -803,7 +807,7 @@ function bulkSaveDraftPayouts(staffIds: string[], endDate: string, adjustments: 
  * @param options - オプション { adjustment_amount, notes }
  * @returns APIレスポンス
  */
-function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
+function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
   const lock = LockService.getScriptLock();
   let lockAcquired = false;
