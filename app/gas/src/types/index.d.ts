@@ -207,7 +207,7 @@ declare global {
   }
 
   // === DB関数宣言（db.gs） ===
-  function getRecordById(tableName: string, idColumn: string, id: string): Record<string, unknown> | null;
+  function getRecordById(tableName: string, idColumn: string, id: string, options?: { includeDeleted?: boolean }): Record<string, unknown> | null;
   function getAllRecords(tableName: string, options?: { includeDeleted?: boolean }): Record<string, unknown>[];
   function insertRecord(tableName: string, record: Record<string, unknown>): Record<string, unknown>;
   function insertRecords(tableName: string, records: Record<string, unknown>[]): Record<string, unknown>[];

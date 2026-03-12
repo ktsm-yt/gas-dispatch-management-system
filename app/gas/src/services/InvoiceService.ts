@@ -898,7 +898,8 @@ const InvoiceService = {
   // ============================================
 
   _getCustomer: function(customerId: string): Record<string, unknown> | null {
-    return getRecordById('M_Customers', 'customer_id', customerId);
+    // 請求書は過去の取引記録のため、論理削除済み顧客も名前を参照可能にする
+    return getRecordById('M_Customers', 'customer_id', customerId, { includeDeleted: true });
   },
 
   _getTaxRoundingMode: function(customer: Record<string, unknown> | null): string {

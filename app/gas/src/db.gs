@@ -263,7 +263,7 @@ function invalidateExecutionCache(tableName) {
  * @param {string} id - ID
  * @returns {Object|null} レコードまたはnull
  */
-function getRecordById(tableName, idColumn, id) {
+function getRecordById(tableName, idColumn, id, options) {
   const sheet = getSheet(tableName);
   const rowNum = findRowById(sheet, idColumn, id);
 
@@ -276,8 +276,8 @@ function getRecordById(tableName, idColumn, id) {
 
   const record = rowToObject(headers, row);
 
-  // 論理削除済みはnullを返す
-  if (record.is_deleted) {
+  // 論理削除済みはnullを返す（includeDeleted指定時はスキップ）
+  if (record.is_deleted && !(options && options.includeDeleted)) {
     return null;
   }
 
