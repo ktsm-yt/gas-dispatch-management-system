@@ -77,10 +77,13 @@ const InvoiceService = {
    */
   generate: function(customerId: string, year: number, month: number, options: InvoiceGenerateOptions = {}): InvoiceGenerateResult {
     try {
-      // 1. 顧客情報を取得
+      // 1. 顧客情報を取得（削除済みも含めて検索し、削除済みなら生成をブロック）
       const customer = this._getCustomer(customerId);
       if (!customer) {
         return { success: false, error: 'CUSTOMER_NOT_FOUND' };
+      }
+      if (customer.is_deleted) {
+        return { success: false, error: 'CUSTOMER_DELETED' };
       }
 
       // 2. 既存の請求書をチェック（重複防止）
@@ -898,7 +901,8 @@ const InvoiceService = {
   // ============================================
 
   _getCustomer: function(customerId: string): Record<string, unknown> | null {
-    return getRecordById('M_Customers', 'customer_id', customerId);
+    // 請求書は過去の取引記録のため、論理削除済み顧客も名前を参照可能にする
+    return getRecordById('M_Customers', 'customer_id', customerId, { includeDeleted: true });
   },
 
   _getTaxRoundingMode: function(customer: Record<string, unknown> | null): string {
