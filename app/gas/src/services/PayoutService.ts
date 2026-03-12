@@ -186,9 +186,6 @@ const PayoutService = {
     const assignmentCountByJob = this._buildAssignmentCountByJob(jobIds);
     const ninku = this._calculateNinkuAdjustments(assignments, staff, jobMap, assignmentCountByJob);
 
-    // 交通費は請求書のみに反映。スタッフ支払いには含めない（調整額で別途対応）
-    const adjustedTransport = 0;
-
     // 源泉徴収税を計算（配置単位で個別テーブル参照 → 月合計）
     const taxAmount = this._calculateWithholdingTaxTotal(assignments, staff, jobMap, assignmentCountByJob);
 
@@ -201,11 +198,11 @@ const PayoutService = {
       assignments: includeAssignments ? assignments : null,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: 0,  // 交通費除外
+      transportAmount: result.transportAmount,
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.baseAmount + ninku.totalAdjustment - taxAmount,
+      totalAmount: result.baseAmount + result.transportAmount + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
@@ -215,10 +212,19 @@ const PayoutService = {
    * 調整額・備考を下書き保存（Assignmentへの紐付けなし）
    * 既存draftがあればupdate、なければinsert
    */
-  saveDraft: function(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; expectedUpdatedAt?: string } = {}): { success: boolean; payout?: PayoutRecord & { target_name: string }; error?: string } {
+  saveDraft: function(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; expectedUpdatedAt?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): { success: boolean; payout?: PayoutRecord & { target_name: string }; error?: string } {
     Logger.log(`[saveDraft] staffId=${staffId}, endDate=${endDate}, options=${JSON.stringify(options)}`);
 
-    // 金額計算（プレビュー用の計算結果を取得）
+    // 配置ごとのスタッフ交通費を保存
+    if (options.assignmentTransports && options.assignmentTransports.length > 0) {
+      const updates = options.assignmentTransports.map(t => ({
+        assignment_id: t.assignment_id,
+        staff_transport: Math.max(0, Number(t.staff_transport) || 0)
+      }));
+      (AssignmentRepository as any).bulkUpdate(updates);
+    }
+
+    // 金額計算（交通費保存後に再計算）
     const calc = this.calculatePayout(staffId, endDate, { include_assignments: false });
     const adjustmentAmount = options.adjustment_amount || 0;
     const totalAmount = calc.totalAmount + adjustmentAmount;
@@ -285,10 +291,19 @@ const PayoutService = {
    * @param options - オプション
    * @returns 確認結果
    */
-  confirmPayout: function(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): PayoutConfirmResult {
+  confirmPayout: function(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): PayoutConfirmResult {
     Logger.log(`[confirmPayout] staffId=${staffId}, endDate=${endDate}, options=${JSON.stringify(options)}`);
 
-    // 1. 未払い計算
+    // 配置ごとのスタッフ交通費を保存
+    if (options.assignmentTransports && options.assignmentTransports.length > 0) {
+      const updates = options.assignmentTransports.map(t => ({
+        assignment_id: t.assignment_id,
+        staff_transport: Math.max(0, Number(t.staff_transport) || 0)
+      }));
+      (AssignmentRepository as any).bulkUpdate(updates);
+    }
+
+    // 1. 未払い計算（交通費保存後に再計算）
     const calc = this.calculatePayout(staffId, endDate);
     Logger.log(`[confirmPayout] calc result: assignmentCount=${calc.assignmentCount}, totalAmount=${calc.totalAmount}`);
 
@@ -576,7 +591,7 @@ const PayoutService = {
             assignments: preCalc.assignmentIds.map(id => ({ assignment_id: id })),
             assignmentCount: preCalc.assignmentIds.length,
             baseAmount: preCalc.baseAmount || 0,
-            transportAmount: 0,  // 交通費除外（クライアント由来の値を信用しない）
+            transportAmount: preCalc.transportAmount || 0,
             ninkuCoefficient: preCalc.ninkuCoefficient || 0,
             ninkuAdjustmentAmount: preCalc.ninkuAdjustmentAmount || 0,
             taxAmount: preCalc.taxAmount || 0,
@@ -1461,9 +1476,6 @@ const PayoutService = {
     const assignmentCountByJob = bulkCache.assignmentCountByJob || new Map();
     const ninku = this._calculateNinkuAdjustments(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
-    // 交通費は請求書のみに反映。スタッフ支払いには含めない
-    // const adjustedTransport = result.transportAmount + ninku.transportAdjustment;
-
     // 源泉徴収税を計算（配置単位で個別テーブル参照 → 月合計）
     const taxAmount = this._calculateWithholdingTaxTotal(assignments, staff, bulkCache.jobMap, assignmentCountByJob);
 
@@ -1476,11 +1488,11 @@ const PayoutService = {
       assignments: assignments,
       assignmentCount: assignments.length,
       baseAmount: result.baseAmount,
-      transportAmount: 0,  // 交通費除外
+      transportAmount: result.transportAmount,
       ninkuCoefficient: ninku.avgCoefficient,
       ninkuAdjustmentAmount: ninku.totalAdjustment,
       taxAmount: taxAmount,
-      totalAmount: result.baseAmount + ninku.totalAdjustment - taxAmount,
+      totalAmount: result.baseAmount + result.transportAmount + ninku.totalAdjustment - taxAmount,
       periodStart: periodStart,
       periodEnd: periodEnd
     };
