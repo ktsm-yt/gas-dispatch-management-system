@@ -1202,7 +1202,7 @@ const InvoiceService = {
         const adjustmentAmount = Number(job.adjustment_amount) || 0;
         if (adjustmentAmount !== 0) {
           lines.push({
-            work_date: '',
+            work_date: job.work_date || '',
             job_id: job.job_id,
             assignment_id: '',
             site_name: '',
