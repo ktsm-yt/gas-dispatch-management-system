@@ -817,7 +817,7 @@ const InvoiceExportService = {
 
     // CR-094: 自社名がExcel出力時にG2セル枠からはみ出る対策（PDF:13ptで収まるがExcel:はみ出る）
     if (!opts.forPdf) {
-      sheet.getRange('G2').setFontSize(11);
+      sheet.getRange('G2').setFontSize(12);
     }
     // CR-095: 住所の漢字・カタカナ太字解除 + 文字重なり対策（1pt縮小）
     sheet.getRange('G3').setFontWeight('normal');
@@ -980,7 +980,7 @@ const InvoiceExportService = {
 
     // CR-094: 自社名がExcel出力時にG2セル枠からはみ出る対策（PDF:13ptで収まるがExcel:はみ出る）
     if (!opts.forPdf) {
-      sheet.getRange('G2').setFontSize(11);
+      sheet.getRange('G2').setFontSize(12);
     }
     // CR-095: 住所の漢字・カタカナ太字解除 + 文字重なり対策（1pt縮小）
     sheet.getRange('G3').setFontWeight('normal');
