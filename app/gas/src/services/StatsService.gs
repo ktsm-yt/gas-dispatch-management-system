@@ -27,8 +27,8 @@ const StatsService = {
     // 案件・配置数の集計（work_dateで検索）
     const jobStats = this._aggregateJobs(year, month);
 
-    // 粗利計算（方針A: 売上=作業費+諸経費+調整額）
-    const salesTotal = invoiceStats.work_amount + invoiceStats.expense_amount + invoiceStats.adjustment_total;
+    // 粗利計算（税込ベース: 売上=invoice_total）
+    const salesTotal = invoiceStats.invoice_total;
     const grossMargin = salesTotal - payoutStats.payout_total;
     const marginRate = salesTotal > 0
       ? Math.round((grossMargin / salesTotal) * 10000) / 100
@@ -227,8 +227,8 @@ const StatsService = {
         s.payout_confirmed = pb.payout_confirmed;
         s.payout_estimated = pb.payout_estimated;
         s.has_payout_estimate = pb.has_payout_estimate;
-        // 粗利再計算
-        const salesTotal = s.work_amount + (s.expense_amount || 0) + (s.adjustment_total || 0);
+        // 粗利再計算（税込ベース）
+        const salesTotal = s.invoice_total;
         s.gross_margin = salesTotal - pb.payout_total;
         s.margin_rate = salesTotal > 0
           ? Math.round((s.gross_margin / salesTotal) * 10000) / 100
@@ -280,7 +280,7 @@ const StatsService = {
     // 顧客別バケット: { customerId: { salesTotal, invoiceCount } }
     var buckets = {};
 
-    // シートからデータを集計する共通関数
+    // シートからデータを集計する共通関数（税込ベース）
     function aggregateSheet(sheet) {
       if (!sheet) return;
       var data = sheet.getDataRange().getValues();
@@ -293,6 +293,7 @@ const StatsService = {
         sub: h.indexOf('subtotal'),
         exp: h.indexOf('expense_amount'),
         adj: h.indexOf('adjustment_total'),
+        total: h.indexOf('total_amount'),
         del: h.indexOf('is_deleted')
       };
       for (var i = 1; i < data.length; i++) {
@@ -301,12 +302,14 @@ const StatsService = {
         var key = Number(row[col.by]) + '-' + Number(row[col.bm]);
         if (!(key in validMonths)) continue;
         var cid = String(row[col.cid]);
-        if (!buckets[cid]) buckets[cid] = { salesTotal: 0, expenseTotal: 0, invoiceCount: 0 };
+        if (!buckets[cid]) buckets[cid] = { salesTotal: 0, expenseTotal: 0, taxIncTotal: 0, invoiceCount: 0 };
         var subtotal = Number(row[col.sub]) || 0;
         var expense = Number(row[col.exp]) || 0;
         var adjustment = Number(row[col.adj]) || 0;
+        var totalAmount = col.total >= 0 ? (Number(row[col.total]) || 0) : (subtotal + expense + adjustment);
         buckets[cid].salesTotal += subtotal + adjustment;
         buckets[cid].expenseTotal += expense;
+        buckets[cid].taxIncTotal += totalAmount;
         buckets[cid].invoiceCount++;
       }
     }
@@ -356,19 +359,20 @@ const StatsService = {
       }
     }
 
-    // 結果配列に変換（売上・諸経費ともに0の企業を除外 + 合計降順ソート）
+    // 結果配列に変換（税込合計0の企業を除外 + 税込合計降順ソート）
     var result = [];
     for (var id in buckets) {
-      if (buckets[id].salesTotal === 0 && buckets[id].expenseTotal === 0) continue;
+      if (buckets[id].taxIncTotal === 0 && buckets[id].salesTotal + buckets[id].expenseTotal === 0) continue;
       result.push({
         customerId: id,
         customerName: customerNameMap[id] || '（不明）',
         salesTotal: buckets[id].salesTotal,
         expenseTotal: buckets[id].expenseTotal,
+        taxIncTotal: buckets[id].taxIncTotal,
         invoiceCount: buckets[id].invoiceCount
       });
     }
-    result.sort(function(a, b) { return (b.salesTotal + b.expenseTotal) - (a.salesTotal + a.expenseTotal); });
+    result.sort(function(a, b) { return b.taxIncTotal - a.taxIncTotal; });
     return result;
   },
 
@@ -421,6 +425,7 @@ const StatsService = {
         sub: h.indexOf('subtotal'),
         exp: h.indexOf('expense_amount'),
         adj: h.indexOf('adjustment_total'),
+        total: h.indexOf('total_amount'),
         del: h.indexOf('is_deleted')
       };
       for (var i = 1; i < data.length; i++) {
@@ -431,12 +436,14 @@ const StatsService = {
         if (fy === undefined) continue;
         var cid = String(row[col.cid]);
         if (!buckets[cid]) buckets[cid] = {};
-        if (!buckets[cid][fy]) buckets[cid][fy] = { sales: 0, expense: 0 };
+        if (!buckets[cid][fy]) buckets[cid][fy] = { sales: 0, expense: 0, total: 0 };
         var subtotal = Number(row[col.sub]) || 0;
         var expense = Number(row[col.exp]) || 0;
         var adjustment = Number(row[col.adj]) || 0;
+        var totalAmount = col.total >= 0 ? (Number(row[col.total]) || 0) : (subtotal + expense + adjustment);
         buckets[cid][fy].sales += subtotal + adjustment;
         buckets[cid][fy].expense += expense;
+        buckets[cid][fy].total += totalAmount;
       }
     }
 
@@ -488,9 +495,8 @@ const StatsService = {
         var fyKey = fiscalYears[yi];
         var bucket = buckets[id][fyKey];
         if (bucket) {
-          var total = bucket.sales + bucket.expense;
-          yearsData[fyKey] = { sales: bucket.sales, expense: bucket.expense, total: total };
-          if (total !== 0) hasAnySales = true;
+          yearsData[fyKey] = { sales: bucket.sales, expense: bucket.expense, total: bucket.total };
+          if (bucket.total !== 0) hasAnySales = true;
         } else {
           yearsData[fyKey] = { sales: 0, expense: 0, total: 0 };
         }
@@ -656,12 +662,13 @@ const StatsService = {
       }
     }
 
-    // 2. invoice_id → customer_id マッピング用に請求書を取得
+    // 2. invoice_id → customer_id マッピング + 税額情報を取得
     // invoiceIds は上で既に構築済み
     var uniqueInvoiceIds = Object.keys(invoiceIds);
 
-    // T_Invoicesからcustomer_idを一括取得（カラムインデックス直参照）
+    // T_Invoicesからcustomer_id, tax_amount, subtotal+expense+adjustment(税抜小計), total_amountを一括取得
     var invoiceCustomerMap = {}; // invoice_id → customer_id
+    var invoiceTaxMap = {}; // invoice_id → { tax, subtotal, total }
     if (uniqueInvoiceIds.length > 0) {
       var invSheet = getSheet('T_Invoices');
       var invData = invSheet.getDataRange().getValues();
@@ -670,6 +677,11 @@ const StatsService = {
         var invCol = {
           id: invH.indexOf('invoice_id'),
           cid: invH.indexOf('customer_id'),
+          tax: invH.indexOf('tax_amount'),
+          sub: invH.indexOf('subtotal'),
+          exp: invH.indexOf('expense_amount'),
+          adj: invH.indexOf('adjustment_total'),
+          total: invH.indexOf('total_amount'),
           del: invH.indexOf('is_deleted')
         };
         var idSet = {};
@@ -682,7 +694,60 @@ const StatsService = {
           var iid = String(row[invCol.id]);
           if (iid in idSet) {
             invoiceCustomerMap[iid] = String(row[invCol.cid]);
+            var invSub = (Number(row[invCol.sub]) || 0) + (Number(row[invCol.exp]) || 0) + (Number(row[invCol.adj]) || 0);
+            invoiceTaxMap[iid] = {
+              tax: Number(row[invCol.tax]) || 0,
+              subtotal: invSub,
+              total: Number(row[invCol.total]) || 0
+            };
           }
+        }
+      }
+    }
+
+    // 2b. 各明細行の税込金額を按分計算
+    // 請求書ごとに明細行をグループ化して按分
+    var linesByInvoice = {};
+    for (var li = 0; li < lines.length; li++) {
+      var invId = lines[li].invoice_id;
+      if (!linesByInvoice[invId]) linesByInvoice[invId] = [];
+      linesByInvoice[invId].push(li);
+    }
+
+    // 各行に taxIncAmount を設定
+    var invoiceAdjGap = 0; // T_InvoiceLinesにない adjustment_total 分の累計
+    for (var invKey in linesByInvoice) {
+      var lineIdxs = linesByInvoice[invKey];
+      var taxInfo = invoiceTaxMap[invKey];
+
+      // 明細行の amount 合計を計算（adjustment_total との差分検出用）
+      var lineAmtSum = 0;
+      for (var ti = 0; ti < lineIdxs.length; ti++) {
+        lineAmtSum += Number(lines[lineIdxs[ti]].amount) || 0;
+      }
+      // invSub(=subtotal+expense+adj) と明細行合計の差 = 明細行にない調整額（正負両方）
+      if (taxInfo && taxInfo.subtotal !== lineAmtSum) {
+        invoiceAdjGap += (taxInfo.subtotal - lineAmtSum);
+      }
+
+      if (!taxInfo || taxInfo.subtotal === 0 || taxInfo.tax === 0) {
+        // 税額0 or 税抜小計0の場合は元の金額をそのまま使用
+        for (var ti = 0; ti < lineIdxs.length; ti++) {
+          lines[lineIdxs[ti]].taxIncAmount = Number(lines[lineIdxs[ti]].amount) || 0;
+        }
+        continue;
+      }
+
+      var remainingTax = taxInfo.tax;
+      for (var ti = 0; ti < lineIdxs.length; ti++) {
+        var lineAmt = Number(lines[lineIdxs[ti]].amount) || 0;
+        if (ti === lineIdxs.length - 1) {
+          // 最終行: 残差を加算して端数保証
+          lines[lineIdxs[ti]].taxIncAmount = lineAmt + remainingTax;
+        } else {
+          var allocatedTax = Math.floor(lineAmt / taxInfo.subtotal * taxInfo.tax);
+          lines[lineIdxs[ti]].taxIncAmount = lineAmt + allocatedTax;
+          remainingTax -= allocatedTax;
         }
       }
     }
@@ -717,13 +782,14 @@ const StatsService = {
       }
     }
 
-    // 4. 日別集計（諸経費行は分離）
+    // 4. 日別集計（税込按分済み金額を使用、諸経費行は分離）
     var dailyMap = {}; // 'yyyy-MM-dd' → amount
     var totalAmount = 0;
     var expenseTotal = 0;
+    var taxTotal = 0;
     for (var d = 0; d < lines.length; d++) {
       var line = lines[d];
-      var amt = Number(line.amount) || 0;
+      var amt = line.taxIncAmount !== undefined ? line.taxIncAmount : (Number(line.amount) || 0);
       if (line.item_name === EXPENSE_ITEM_NAME) {
         expenseTotal += amt;
         continue;
@@ -733,9 +799,13 @@ const StatsService = {
       dailyMap[wd] += amt;
       totalAmount += amt;
     }
+    // 税額合計を算出（検証用）
+    for (var txKey in invoiceTaxMap) {
+      taxTotal += invoiceTaxMap[txKey].tax;
+    }
 
-    // 日付なし行の合計を分離（諸経費以外で日付なしがある場合）
-    var noDateAmount = dailyMap[''] || 0;
+    // 日付なし行の合計を分離（諸経費以外で日付なし + 明細行にない調整額）
+    var noDateAmount = (dailyMap[''] || 0) + invoiceAdjGap;
     delete dailyMap[''];
 
     // 期間内の全日を生成（売上0の日も含む）
@@ -753,7 +823,7 @@ const StatsService = {
       cur.setDate(cur.getDate() + 1);
     }
 
-    // 5. 顧客別集計（作業費と諸経費を分離）
+    // 5. 顧客別集計（税込按分済み金額、作業費と諸経費を分離）
     var customerBuckets = {}; // customerName → { sales, expense }
     for (var e = 0; e < lines.length; e++) {
       var ln = lines[e];
@@ -761,7 +831,7 @@ const StatsService = {
       var custId = invoiceCustomerMap[invId] || '';
       var custName = customerNameMap[custId] || '（不明）';
       if (!customerBuckets[custName]) customerBuckets[custName] = { sales: 0, expense: 0 };
-      var lineAmt = Number(ln.amount) || 0;
+      var lineAmt = ln.taxIncAmount !== undefined ? ln.taxIncAmount : (Number(ln.amount) || 0);
       if (ln.item_name === EXPENSE_ITEM_NAME) {
         customerBuckets[custName].expense += lineAmt;
       } else {
@@ -782,6 +852,7 @@ const StatsService = {
       byCustomer: byCustomer,
       noDateAmount: noDateAmount,
       expenseTotal: expenseTotal,
+      taxTotal: taxTotal,
       summary: {
         totalAmount: totalAmount,
         dayCount: daily.length
@@ -1046,8 +1117,8 @@ const StatsService = {
       totals.gross_margin += s.gross_margin;
     }
 
-    // 平均粗利率を計算（方針A: 売上=作業費+諸経費+調整額）
-    const salesTotal = totals.work_amount + totals.expense_amount + totals.adjustment_total;
+    // 平均粗利率を計算（税込ベース: 売上=invoice_total）
+    const salesTotal = totals.invoice_total;
     totals.margin_rate = salesTotal > 0
       ? Math.round((totals.gross_margin / salesTotal) * 10000) / 100
       : 0;
