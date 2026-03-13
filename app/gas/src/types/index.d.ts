@@ -211,6 +211,7 @@ declare global {
   function getAllRecords(tableName: string, options?: { includeDeleted?: boolean }): Record<string, unknown>[];
   function insertRecord(tableName: string, record: Record<string, unknown>): Record<string, unknown>;
   function insertRecords(tableName: string, records: Record<string, unknown>[]): Record<string, unknown>[];
+  function updateRecord(tableName: string, idColumn: string, id: string, updates: Record<string, unknown>): Record<string, unknown>;
   function findRowById(sheet: GoogleAppsScript.Spreadsheet.Sheet, idColumn: string, id: string): number | null;
   function getHeaders(sheet: GoogleAppsScript.Spreadsheet.Sheet): string[];
   function rowToObject(headers: string[], row: unknown[]): Record<string, unknown>;
@@ -379,6 +380,28 @@ declare global {
     [key: string]: unknown;
   }
 
+  // === 単価種別（M_PriceTypes / M_CustomPrices） ===
+  interface PriceTypeRecord {
+    price_type_id: string;
+    code: string;
+    label: string;
+    sort_order: number;
+    is_system: boolean;
+    is_active: boolean;
+    created_at?: string;
+    updated_at?: string;
+  }
+
+  interface CustomPriceRecord {
+    custom_price_id: string;
+    entity_type: 'customer' | 'staff' | 'subcontractor';
+    entity_id: string;
+    price_type_code: string;
+    amount: number;
+    created_at?: string;
+    updated_at?: string;
+  }
+
   // === MasterCache（utils.gs） ===
   const MasterCache: {
     getStaff(): Record<string, unknown>[];
@@ -388,11 +411,17 @@ declare global {
     getCustomerMap(): Record<string, Record<string, unknown>>;
     getTransportFees(): Record<string, unknown>[];
     getCompany(): Record<string, unknown> | null;
+    getPriceTypes(): PriceTypeRecord[];
+    getPriceTypeMap(): Record<string, PriceTypeRecord>;
+    getCustomPrices(): CustomPriceRecord[];
+    getCustomPriceMap(): Record<string, number>;
     invalidateCustomers(): void;
     invalidateStaff(): void;
     invalidateSubcontractors(): void;
     invalidateTransportFees(): void;
     invalidateCompany(): void;
+    invalidatePriceTypes(): void;
+    invalidateCustomPrices(): void;
   };
 
   // === 計算ユーティリティ（calc_utils.ts） ===
