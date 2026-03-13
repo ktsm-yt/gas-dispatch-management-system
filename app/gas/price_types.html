@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>単価種別</title>
+  <style>
+    <?!= include('nav_styles') ?>
+    :root {
+      --color-primary: #172D90;
+      --color-secondary: #139BC4;
+      --color-accent: #135DA7;
+      --color-success: #28A745;
+      --color-danger: #DC3545;
+      --color-warning: #FF9800;
+      --bg-main: #FFFFFF;
+      --bg-card: #F7FAFC;
+      --bg-hover: #EEF2F7;
+      --text-primary: #1F2937;
+      --text-muted: #6B7280;
+      --border-color: #E5E7EB;
+      --spacing-sm: 8px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: var(--spacing-lg); }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-lg);
+      box-shadow: var(--shadow-card);
+      margin-bottom: var(--spacing-lg);
+    }
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: var(--spacing-md);
+      color: var(--color-primary);
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    th { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; background: var(--bg-hover); }
+    td { font-size: 0.9rem; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-system { background: #E8F4F8; color: var(--color-accent); }
+    .badge-custom { background: #FFF3E0; color: #E65100; }
+    .badge-inactive { background: #F3F4F6; color: var(--text-muted); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 6px 14px; border: none; border-radius: var(--radius-sm);
+      font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--color-primary); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--color-accent); }
+    .btn-danger { background: transparent; color: var(--color-danger); border: 1px solid var(--color-danger); }
+    .btn-danger:hover:not(:disabled) { background: var(--color-danger); color: #fff; }
+    .btn-sm { padding: 4px 10px; font-size: 0.8rem; }
+    .form-row { display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-md); align-items: flex-end; }
+    .form-group { flex: 1; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .form-group input {
+      width: 100%; padding: 8px 12px; border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm); font-size: 0.9rem;
+    }
+    .form-group input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 2px rgba(23,45,144,0.1); }
+    .toast {
+      position: fixed; top: 80px; right: 20px; padding: 12px 20px;
+      border-radius: var(--radius-sm); color: #fff; font-size: 0.9rem;
+      z-index: 10000; transform: translateX(120%); transition: transform 0.3s;
+    }
+    .toast.show { transform: translateX(0); }
+    .toast-success { background: var(--color-success); }
+    .toast-error { background: var(--color-danger); }
+    .loading-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.7); display: flex; align-items: center;
+      justify-content: center; z-index: 10002; display: none;
+    }
+    .loading-overlay.show { display: flex; }
+    .spinner { width: 40px; height: 40px; border: 4px solid var(--border-color); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .empty-state { text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.9rem; }
+    .tooltip { position: relative; }
+    .tooltip::after {
+      content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%;
+      transform: translateX(-50%); padding: 4px 8px; background: #333; color: #fff;
+      font-size: 0.75rem; border-radius: 4px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .tooltip:hover::after { opacity: 1; }
+  </style>
+</head>
+<body>
+  <?!= include('nav_bar') ?>
+
+  <div class="loading-overlay" id="loading"><div class="spinner"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="container">
+    <!-- 一覧 -->
+    <div class="card">
+      <div class="card-title">単価種別一覧</div>
+      <table id="price-types-table">
+        <thead>
+          <tr>
+            <th>コード</th>
+            <th>表示名</th>
+            <th>種別</th>
+            <th>状態</th>
+            <th>並び順</th>
+            <th style="width:120px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="price-types-body">
+          <tr><td colspan="6" class="empty-state">読み込み中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 追加フォーム -->
+    <div class="card">
+      <div class="card-title">単価種別を追加</div>
+      <form id="add-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="new-code">コード <small>(英小文字・数字・アンダースコア)</small></label>
+            <input type="text" id="new-code" pattern="[a-z][a-z0-9_]*" placeholder="例: scaffold" required>
+          </div>
+          <div class="form-group">
+            <label for="new-label">表示名</label>
+            <input type="text" id="new-label" placeholder="例: 足場組立" required>
+          </div>
+          <div style="flex:0 0 auto">
+            <button type="submit" class="btn btn-primary" id="add-btn">追加</button>
+          </div>
+        </div>
+      </form>
+      <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px">
+        ※ 金額は各マスター編集画面（顧客・スタッフ・外注先）で個別に設定します
+      </p>
+    </div>
+  </div>
+
+  <script>
+    var __SCRIPT_URL__ = '<?= ScriptApp.getService().getUrl() ?>';
+    var priceTypesData = [];
+
+    // ---- Init ----
+    document.addEventListener('DOMContentLoaded', function() {
+      initNavBar('priceTypes', '単価種別');
+      loadPriceTypes();
+    });
+
+    // ---- Load ----
+    function loadPriceTypes() {
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          if (res && res.ok) {
+            priceTypesData = res.data || [];
+            renderTable();
+          } else {
+            showToast((res && res.message) || '読み込みに失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          showToast('エラー: ' + err.message, 'error');
+        })
+        .listPriceTypes();
+    }
+
+    // ---- Render ----
+    function renderTable() {
+      var tbody = document.getElementById('price-types-body');
+      if (priceTypesData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">単価種別がありません</td></tr>';
+        return;
+      }
+
+      var html = '';
+      for (var i = 0; i < priceTypesData.length; i++) {
+        var pt = priceTypesData[i];
+        var isSystem = pt.is_system === true || pt.is_system === 'true' || pt.is_system === 'TRUE';
+        var isActive = pt.is_active === true || pt.is_active === 'true' || pt.is_active === 'TRUE';
+
+        html += '<tr>';
+        html += '<td><code>' + escapeHtml(pt.code) + '</code></td>';
+        html += '<td>' + escapeHtml(pt.label) + '</td>';
+        html += '<td><span class="badge ' + (isSystem ? 'badge-system' : 'badge-custom') + '">' +
+                (isSystem ? 'システム' : 'カスタム') + '</span></td>';
+        html += '<td><span class="badge ' + (isActive ? 'badge-system' : 'badge-inactive') + '">' +
+                (isActive ? '有効' : '無効') + '</span></td>';
+        html += '<td>' + (pt.sort_order || '') + '</td>';
+        html += '<td>';
+        if (!isSystem) {
+          html += '<button class="btn btn-danger btn-sm" onclick="handleDelete(\'' +
+                  pt.price_type_id + '\')" ' + (!isActive ? 'disabled' : '') + '>削除</button>';
+        } else {
+          html += '<span style="color:var(--text-muted);font-size:0.8rem">編集不可</span>';
+        }
+        html += '</td>';
+        html += '</tr>';
+      }
+      tbody.innerHTML = html;
+    }
+
+    // ---- Add ----
+    document.getElementById('add-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var code = document.getElementById('new-code').value.trim();
+      var label = document.getElementById('new-label').value.trim();
+
+      if (!code || !label) {
+        showToast('コードと表示名を入力してください', 'error');
+        return;
+      }
+
+      if (!/^[a-z][a-z0-9_]*$/.test(code)) {
+        showToast('コードは英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます', 'error');
+        return;
+      }
+
+      var addBtn = document.getElementById('add-btn');
+      addBtn.disabled = true;
+      showLoading();
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          addBtn.disabled = false;
+          if (res && res.ok) {
+            sessionStorage.removeItem('_priceTypeLabelMap');
+            showToast('単価種別を追加しました', 'success');
+            document.getElementById('new-code').value = '';
+            document.getElementById('new-label').value = '';
+            loadPriceTypes();
+          } else {
+            showToast((res && res.message) || '追加に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          addBtn.disabled = false;
+          showToast('エラー: ' + err.message, 'error');
+        })
+        .savePriceType({ code: code, label: label });
+    });
+
+    // ---- Delete ----
+    function handleDelete(id) {
+      var pt = priceTypesData.find(function(p) { return p.price_type_id === id; });
+      if (!pt) return;
+      if (!confirm('「' + pt.label + '」を削除（無効化）しますか？\n\n使用中の案件・配置がある場合は削除できません。')) return;
+
+      showLoading();
+      google.script.run
+        .withSuccessHandler(function(res) {
+          hideLoading();
+          if (res && res.ok) {
+            sessionStorage.removeItem('_priceTypeLabelMap');
+            showToast('削除しました', 'success');
+            loadPriceTypes();
+          } else {
+            showToast((res && res.message) || '削除に失敗しました', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          hideLoading();
+          showToast('エラー: ' + err.message, 'error');
+        })
+        .deletePriceType(id);
+    }
+
+    // ---- UI Helpers ----
+    function showLoading() { document.getElementById('loading').classList.add('show'); }
+    function hideLoading() { document.getElementById('loading').classList.remove('show'); }
+    function showToast(msg, type) {
+      var toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = 'toast toast-' + (type || 'success') + ' show';
+      setTimeout(function() { toast.classList.remove('show'); }, 3000);
+    }
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>

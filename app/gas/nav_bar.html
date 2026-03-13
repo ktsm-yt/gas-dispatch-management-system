@@ -24,6 +24,7 @@
         <a href="#" id="nav-subcontractors">外注先</a>
         <a href="#" id="nav-transport">交通費</a>
         <a href="#" id="nav-company">自社情報</a>
+        <a href="#" id="nav-price-types">単価種別</a>
       </div>
     </div>
   </nav>
@@ -52,7 +53,8 @@ function initNavBar(currentPage, pageTitle) {
     'staff': 'nav-settings',
     'subcontractors': 'nav-settings',
     'transportFees': 'nav-settings',
-    'company': 'nav-settings'
+    'company': 'nav-settings',
+    'priceTypes': 'nav-settings'
   };
 
   const activeNavId = navMap[currentPage];
@@ -107,6 +109,10 @@ function initNavBar(currentPage, pageTitle) {
     e.preventDefault();
     navigateTo('company');
   });
+  document.getElementById('nav-price-types').addEventListener('click', (e) => {
+    e.preventDefault();
+    navigateTo('priceTypes');
+  });
 
   // 右クリック→新しいタブ対応: 各リンクにhref属性を設定
   const cachedUrl = sessionStorage.getItem('__SCRIPT_URL__');
@@ -137,6 +143,7 @@ function setNavHrefs(baseUrl) {
     'nav-subcontractors': 'subcontractors',
     'nav-transport': 'transportFees',
     'nav-company': 'company',
+    'nav-price-types': 'priceTypes',
     'nav-manual': 'manual'
   };
 
