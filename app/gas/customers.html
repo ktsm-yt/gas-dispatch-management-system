@@ -457,6 +457,11 @@
                 <input type="number" id="unit-price-holiday" name="unit_price_holiday" min="0" step="1">
               </div>
             </div>
+            <!-- カスタム単価セクション -->
+            <div id="custom-prices-section" style="margin-top: 12px; display: none;">
+              <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px;">カスタム単価</div>
+              <div id="custom-prices-container" class="form-row-4"></div>
+            </div>
           </div>
 
           <!-- 請求設定 -->
@@ -878,6 +883,9 @@
 
         // フォルダUI初期化（新規作成モード）
         updateFolderUI(null, null);
+
+        // カスタム単価欄を表示（空の状態）
+        loadCustomPricesForEntity('customer', null);
       }
 
       modal.style.display = 'flex';
@@ -942,6 +950,11 @@
 
       // フォルダUI更新
       updateFolderUI(customer.folder_id, customer.customer_id);
+
+      // カスタム単価ロード
+      if (customer.customer_id) {
+        loadCustomPricesForEntity('customer', customer.customer_id);
+      }
     }
 
     // フォルダ関連UIを更新
@@ -1098,6 +1111,11 @@
           saveBtn.textContent = '保存';
 
           if (response.ok) {
+            // カスタム単価の保存
+            var savedId = response.data.customer_id;
+            saveCustomPricesForEntity('customer', savedId)
+              .catch(function(err) { showToast('カスタム単価の保存に失敗しました', 'error'); });
+
             // 差分更新（全件再取得せずローカル更新）
             if (isNew) {
               customers.push(response.data);
@@ -1191,6 +1209,100 @@
       setTimeout(() => {
         toast.className = 'toast';
       }, 3000);
+    }
+
+    // ==== カスタム単価共通ロジック ====
+    var _customPriceTypes = null; // { code: { label, is_system } }
+
+    // sessionStorage から即時復元（SWRパターン）
+    (function() {
+      var cached = sessionStorage.getItem('_priceTypeLabelMap');
+      if (cached) { try { _customPriceTypes = JSON.parse(cached); } catch(e) { /* ignore */ } }
+    })();
+
+    function loadCustomPricesForEntity(entityType, entityId) {
+      // キャッシュから即時表示 + バックグラウンドで最新取得
+      var loadTypes = _customPriceTypes
+        ? Promise.resolve(_customPriceTypes)
+        : new Promise(function(resolve) {
+            google.script.run
+              .withSuccessHandler(function(res) {
+                if (res && res.ok) {
+                  _customPriceTypes = res.data;
+                  sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(res.data));
+                  resolve(res.data);
+                } else {
+                  resolve({});
+                }
+              })
+              .withFailureHandler(function() { resolve({}); })
+              .getPriceTypeLabelMap();
+          });
+
+      loadTypes.then(function(labelMap) {
+        // カスタム種別のみフィルタ
+        var customCodes = Object.keys(labelMap).filter(function(code) { return !labelMap[code].is_system; });
+        var section = document.getElementById('custom-prices-section');
+        var container = document.getElementById('custom-prices-container');
+
+        if (customCodes.length === 0) {
+          section.style.display = 'none';
+          return;
+        }
+
+        section.style.display = '';
+        container.innerHTML = '';
+
+        // 入力欄を生成
+        customCodes.sort(function(a, b) { return (labelMap[a].sort_order || 99) - (labelMap[b].sort_order || 99); });
+        customCodes.forEach(function(code) {
+          var div = document.createElement('div');
+          div.className = 'form-group';
+          var lbl = document.createElement('label');
+          lbl.htmlFor = 'custom-price-' + code;
+          lbl.textContent = labelMap[code].label;
+          var inp = document.createElement('input');
+          inp.type = 'number'; inp.id = 'custom-price-' + code;
+          inp.setAttribute('data-custom-code', code); inp.min = '0'; inp.step = '1';
+          div.appendChild(lbl); div.appendChild(inp);
+          container.appendChild(div);
+        });
+
+        // 既存値をロード
+        if (entityId) {
+          google.script.run
+            .withSuccessHandler(function(res) {
+              if (res && res.ok && res.data) {
+                res.data.forEach(function(cp) {
+                  var input = document.getElementById('custom-price-' + cp.price_type_code);
+                  if (input) input.value = cp.amount || '';
+                });
+              }
+            })
+            .listCustomPrices(entityType, entityId);
+        }
+      });
+    }
+
+    function callPriceApi_(methodName, args) {
+      return new Promise(function(resolve, reject) {
+        var runner = google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject);
+        runner[methodName].apply(runner, args);
+      });
+    }
+
+    function saveCustomPricesForEntity(entityType, entityId) {
+      var inputs = Array.from(document.querySelectorAll('[data-custom-code]'));
+      var tasks = inputs.map(function(input) {
+        var code = input.getAttribute('data-custom-code');
+        var val = input.value.trim();
+        return val !== ''
+          ? callPriceApi_('upsertCustomPrice', [entityType, entityId, code, Number(val)])
+          : callPriceApi_('deleteCustomPrice', [entityType, entityId, code]);
+      });
+      return Promise.all(tasks);
     }
   </script>
 </body>

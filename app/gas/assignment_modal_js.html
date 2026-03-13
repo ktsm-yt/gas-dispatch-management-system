@@ -2482,14 +2482,85 @@ function setupAssignmentModalEventListeners() {
   }
 }
 
+/**
+ * 単価区分selectを動的に構築（getPriceTypeLabelMap APIから）
+ * sessionStorageにキャッシュして2回目以降は即時反映
+ */
+var _priceTypeLabelMapCache = null;
+
+function initPriceTypeSelects_() {
+  var cached = sessionStorage.getItem('_priceTypeLabelMap');
+  if (cached) {
+    try { _priceTypeLabelMapCache = JSON.parse(cached); } catch(e) { /* ignore */ }
+  }
+  if (_priceTypeLabelMapCache) {
+    populatePriceTypeSelects_(_priceTypeLabelMapCache);
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.ok && res.data) {
+        _priceTypeLabelMapCache = res.data;
+        sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(res.data));
+        populatePriceTypeSelects_(res.data);
+      }
+    })
+    .getPriceTypeLabelMap();
+}
+
+function populatePriceTypeSelects_(labelMap) {
+  var selects = [document.getElementById('form-invoice-unit')];
+  var sorted = Object.keys(labelMap).sort(function(a, b) {
+    return (labelMap[a].sort_order || 99) - (labelMap[b].sort_order || 99);
+  });
+  var systemCodes = sorted.filter(function(c) { return labelMap[c].is_system; });
+  var customCodes = sorted.filter(function(c) { return !labelMap[c].is_system; });
+
+  selects.forEach(function(select) {
+    if (!select) return;
+    var currentVal = select.value;
+    select.innerHTML = '';
+
+    // 標準グループ
+    var stdGroup = document.createElement('optgroup');
+    stdGroup.label = '標準';
+    systemCodes.forEach(function(code) {
+      var opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = labelMap[code].label;
+      stdGroup.appendChild(opt);
+    });
+    select.appendChild(stdGroup);
+
+    // カスタムグループ
+    if (customCodes.length > 0) {
+      var cusGroup = document.createElement('optgroup');
+      cusGroup.label = 'カスタム';
+      customCodes.forEach(function(code) {
+        var opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = labelMap[code].label;
+        cusGroup.appendChild(opt);
+      });
+      select.appendChild(cusGroup);
+    }
+
+    // 元の値を復元
+    if (currentVal) select.value = currentVal;
+  });
+}
+
 // Auto-setup when DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', function() {
     setupAssignmentModalEventListeners();
     loadWorkDetailLabels();
+    initPriceTypeSelects_();
   });
 } else {
   setupAssignmentModalEventListeners();
   loadWorkDetailLabels();
+  initPriceTypeSelects_();
 }
 </script>

@@ -3464,11 +3464,23 @@
       list.innerHTML = buildHistoryListHtml(history);
     }
 
-    const UNIT_LABEL_MAP = {
+    var UNIT_LABEL_MAP = {
       basic: '基本', tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ', holiday: '休日',
       half: 'ハーフ', halfday: 'ハーフ', fullday: '終日', night: '夜勤',
       jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤'
     };
+    // 動的単価種別をマージ
+    (function() {
+      var cached = sessionStorage.getItem('_priceTypeLabelMap');
+      if (cached) {
+        try {
+          var map = JSON.parse(cached);
+          Object.keys(map).forEach(function(code) {
+            if (!UNIT_LABEL_MAP[code]) UNIT_LABEL_MAP[code] = map[code].label;
+          });
+        } catch(e) { /* ignore */ }
+      }
+    })();
 
     function buildAssignmentTableHtml(assignments) {
       const rows = assignments.map(a => {
@@ -3480,7 +3492,7 @@
         const rawWage = a.wage_rate != null ? Number(a.wage_rate) : 0;
         const isAdjusted = wage != null && rawWage > 0 && wage !== rawWage;
         const amtStyle = isAdjusted ? 'text-align:right;color:#D97706;font-weight:bold' : 'text-align:right';
-        return `<tr><td>${dateStr}</td><td>${siteName}</td><td>${unitLabel}</td><td style="${amtStyle}">${wageRate}</td></tr>`;
+        return `<tr><td>${escapeHtml(dateStr)}</td><td>${escapeHtml(siteName)}</td><td>${escapeHtml(unitLabel)}</td><td style="${amtStyle}">${wageRate}</td></tr>`;
       }).join('');
       return `
         <table class="assignment-list-table">
