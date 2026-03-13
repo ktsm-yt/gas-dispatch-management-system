@@ -531,8 +531,7 @@ function resetAssignmentModalUI() {
 
   // 警告バナーをリセット
   hideInvoiceExistsBanner();
-  var cpBanner = document.getElementById('custom-price-warning-banner');
-  if (cpBanner) cpBanner.style.display = 'none';
+  showCustomPriceWarnings(null);
 
   // スタッフリスト
   const staffListEl = document.getElementById('staff-list');
@@ -825,6 +824,14 @@ function handleAssignmentData(response, requestJobId) {
 
   // 請求書集計済みチェック（サーバーからデータ取得後）
   checkInvoiceExistsNotification();
+
+  // カスタム単価未登録警告（モーダル表示時に表示）
+  if (response.data.warnings) {
+    showCustomPriceWarnings(response.data.warnings);
+  } else {
+    // ダッシュボードキャッシュ等でwarningsがない場合、バックグラウンドでチェック
+    fetchCustomPriceWarnings(job.job_id);
+  }
 
   // スロットなし案件はjob.pay_unitをデフォルトに
   setDefaultInvoiceUnit(job, slots);
@@ -1897,16 +1904,7 @@ function doSaveAllChanges() {
         checkInvoiceExistsNotification();
 
         // カスタム単価未登録警告（手動閉じバナー）
-        var warningBanner = document.getElementById('custom-price-warning-banner');
-        if (warningBanner) {
-          if (response.data.warnings && response.data.warnings.length > 0) {
-            var msgEl = document.getElementById('custom-price-warning-message');
-            msgEl.textContent = response.data.warnings.join(' / ');
-            warningBanner.style.display = '';
-          } else {
-            warningBanner.style.display = 'none';
-          }
-        }
+        showCustomPriceWarnings(response.data.warnings);
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
         updateSaveButton();
@@ -1999,6 +1997,30 @@ function hideInvoiceExistsBanner() {
   if (banner) {
     banner.style.display = 'none';
   }
+}
+
+function showCustomPriceWarnings(warnings) {
+  var banner = document.getElementById('custom-price-warning-banner');
+  if (!banner) return;
+  if (warnings && warnings.length > 0) {
+    var msgEl = document.getElementById('custom-price-warning-message');
+    msgEl.textContent = warnings.join(' / ');
+    banner.style.display = '';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function fetchCustomPriceWarnings(jobId) {
+  if (!jobId) return;
+  google.script.run
+    .withSuccessHandler(function(response) {
+      if (response && response.ok && assignmentModalState.jobId === jobId) {
+        showCustomPriceWarnings(response.data.warnings);
+      }
+    })
+    .withFailureHandler(function() { /* non-critical */ })
+    .checkCustomPriceWarnings(jobId);
 }
 
 function loadTransportAreas() {
