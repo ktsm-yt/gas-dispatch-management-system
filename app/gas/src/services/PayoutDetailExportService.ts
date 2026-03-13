@@ -29,6 +29,13 @@ const PAY_UNIT_LABEL_MAP: Record<string, string> = {
   jotou: '式', shuujitsu: '終日', am: '半日', pm: '半日', yakin: '夜勤'
 };
 
+/** カスタム単価種別を含む動的ラベル取得 */
+function getPayUnitLabel_(payUnit: string): string {
+  if (PAY_UNIT_LABEL_MAP[payUnit]) return PAY_UNIT_LABEL_MAP[payUnit];
+  // カスタム単価種別はデフォルト「式」
+  return '式';
+}
+
 const PayoutDetailExportService = {
 
   TEMPLATE_KEY: 'PAYOUT_DETAIL_TEMPLATE_ID',
@@ -328,7 +335,7 @@ const PayoutDetailExportService = {
         }
       }
 
-      const unitLabel = PAY_UNIT_LABEL_MAP[a.pay_unit] || '式';
+      const unitLabel = getPayUnitLabel_(a.pay_unit as string);
       const transport = (Number(a.staff_transport) || 0) > 0 ? Number(a.staff_transport) : '';
 
       // 各行に配置単位の源泉徴収税を表示

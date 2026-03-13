@@ -286,6 +286,8 @@ const MasterCache = {
   CACHE_KEY_TRANSPORT_FEES: 'MasterCache_M_TransportFees',
   CACHE_KEY_COMPANY: 'MasterCache_M_Company',
   CACHE_KEY_WORK_DETAILS: 'MasterCache_M_WorkDetails',
+  CACHE_KEY_PRICE_TYPES: 'MasterCache_M_PriceTypes',
+  CACHE_KEY_CUSTOM_PRICES: 'MasterCache_M_CustomPrices',
 
   _staffCache: null,
   _staffMap: null,
@@ -297,6 +299,10 @@ const MasterCache = {
   _companyCache: null,
   _workDetailCache: null,
   _workDetailMap: null,
+  _priceTypeCache: null,
+  _priceTypeMap: null,
+  _customPriceCache: null,
+  _customPriceMap: null,
 
   /**
    * M_Staffの全レコードを取得（2層キャッシュ付き）
@@ -435,6 +441,10 @@ const MasterCache = {
     this._companyCache = null;
     this._workDetailCache = null;
     this._workDetailMap = null;
+    this._priceTypeCache = null;
+    this._priceTypeMap = null;
+    this._customPriceCache = null;
+    this._customPriceMap = null;
     try {
       const cache = CacheService.getScriptCache();
       cache.removeAll([
@@ -443,7 +453,9 @@ const MasterCache = {
         this.CACHE_KEY_SUBCONTRACTORS,
         this.CACHE_KEY_TRANSPORT_FEES,
         this.CACHE_KEY_COMPANY,
-        this.CACHE_KEY_WORK_DETAILS
+        this.CACHE_KEY_WORK_DETAILS,
+        this.CACHE_KEY_PRICE_TYPES,
+        this.CACHE_KEY_CUSTOM_PRICES
       ]);
     } catch (e) {
       console.warn('CacheService.removeAll failed:', e);
@@ -692,6 +704,133 @@ const MasterCache = {
   },
 
   /**
+   * M_PriceTypesの全レコードを取得（2層キャッシュ付き、sort_order昇順）
+   * @returns {Object[]} 単価種別配列
+   */
+  getPriceTypes: function() {
+    if (this._priceTypeCache !== null) {
+      return this._priceTypeCache;
+    }
+
+    try {
+      var cache = CacheService.getScriptCache();
+      var cached = cache.get(this.CACHE_KEY_PRICE_TYPES);
+      if (cached) {
+        this._priceTypeCache = JSON.parse(cached);
+        return this._priceTypeCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for priceTypes:', e);
+    }
+
+    this._priceTypeCache = getAllRecords('M_PriceTypes')
+      .sort(function(a, b) { return (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0); });
+
+    try {
+      var cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_PRICE_TYPES, JSON.stringify(this._priceTypeCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for priceTypes:', e);
+    }
+
+    return this._priceTypeCache;
+  },
+
+  /**
+   * M_PriceTypesをマップ形式で取得（code → PriceTypeRecord）
+   * @returns {Object} 単価種別マップ
+   */
+  getPriceTypeMap: function() {
+    if (this._priceTypeMap === null) {
+      var types = this.getPriceTypes();
+      this._priceTypeMap = {};
+      for (var i = 0; i < types.length; i++) {
+        if (types[i].code) {
+          this._priceTypeMap[types[i].code] = types[i];
+        }
+      }
+    }
+    return this._priceTypeMap;
+  },
+
+  /**
+   * M_CustomPricesの全レコードを取得（2層キャッシュ付き）
+   * @returns {Object[]} カスタム単価配列
+   */
+  getCustomPrices: function() {
+    if (this._customPriceCache !== null) {
+      return this._customPriceCache;
+    }
+
+    try {
+      var cache = CacheService.getScriptCache();
+      var cached = cache.get(this.CACHE_KEY_CUSTOM_PRICES);
+      if (cached) {
+        this._customPriceCache = JSON.parse(cached);
+        return this._customPriceCache;
+      }
+    } catch (e) {
+      console.warn('CacheService.get failed for customPrices:', e);
+    }
+
+    this._customPriceCache = getAllRecords('M_CustomPrices');
+
+    try {
+      var cache = CacheService.getScriptCache();
+      cache.put(this.CACHE_KEY_CUSTOM_PRICES, JSON.stringify(this._customPriceCache), this.CACHE_TTL);
+    } catch (e) {
+      console.warn('CacheService.put failed for customPrices:', e);
+    }
+
+    return this._customPriceCache;
+  },
+
+  /**
+   * M_CustomPricesをマップ形式で取得（'entity_type|entity_id|code' → amount）
+   * @returns {Object} カスタム単価マップ
+   */
+  getCustomPriceMap: function() {
+    if (this._customPriceMap === null) {
+      var prices = this.getCustomPrices();
+      this._customPriceMap = {};
+      for (var i = 0; i < prices.length; i++) {
+        var p = prices[i];
+        if (p.entity_type && p.entity_id && p.price_type_code) {
+          var key = p.entity_type + '|' + p.entity_id + '|' + p.price_type_code;
+          this._customPriceMap[key] = Number(p.amount) || 0;
+        }
+      }
+    }
+    return this._customPriceMap;
+  },
+
+  /**
+   * 単価種別キャッシュをクリア
+   */
+  invalidatePriceTypes: function() {
+    this._priceTypeCache = null;
+    this._priceTypeMap = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_PRICE_TYPES);
+    } catch (e) {
+      console.warn('CacheService.remove failed for priceTypes:', e);
+    }
+  },
+
+  /**
+   * カスタム単価キャッシュをクリア
+   */
+  invalidateCustomPrices: function() {
+    this._customPriceCache = null;
+    this._customPriceMap = null;
+    try {
+      CacheService.getScriptCache().remove(this.CACHE_KEY_CUSTOM_PRICES);
+    } catch (e) {
+      console.warn('CacheService.remove failed for customPrices:', e);
+    }
+  },
+
+  /**
    * 全マスターデータをCacheServiceに事前読み込み（ウォームアップ）
    * 毎朝6時のトリガーから呼び出す
    * @returns {Object} ウォームアップ結果
@@ -712,6 +851,10 @@ const MasterCache = {
       this._companyCache = null;
       this._workDetailCache = null;
       this._workDetailMap = null;
+      this._priceTypeCache = null;
+      this._priceTypeMap = null;
+      this._customPriceCache = null;
+      this._customPriceMap = null;
 
       // CacheServiceもクリア
       const cache = CacheService.getScriptCache();
@@ -721,7 +864,9 @@ const MasterCache = {
         this.CACHE_KEY_SUBCONTRACTORS,
         this.CACHE_KEY_TRANSPORT_FEES,
         this.CACHE_KEY_COMPANY,
-        this.CACHE_KEY_WORK_DETAILS
+        this.CACHE_KEY_WORK_DETAILS,
+        this.CACHE_KEY_PRICE_TYPES,
+        this.CACHE_KEY_CUSTOM_PRICES
       ]);
 
       // 各マスターをロード（CacheServiceに自動保存される）
@@ -742,6 +887,12 @@ const MasterCache = {
 
       const workDetails = this.getWorkDetails();
       results.workDetails = workDetails.length;
+
+      const priceTypes = this.getPriceTypes();
+      results.priceTypes = priceTypes.length;
+
+      const customPrices = this.getCustomPrices();
+      results.customPrices = customPrices.length;
 
       results.duration = Date.now() - startTime;
       results.success = true;

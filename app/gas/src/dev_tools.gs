@@ -104,6 +104,32 @@ function assertDevEnv(caller) {
 }
 
 /**
+ * 単価種別テーブル(M_PriceTypes/M_CustomPrices)のマイグレーション実行
+ * GASエディタから実行可能。冪等（何度実行しても安全）
+ */
+function runMigratePriceTypeTables() {
+  migratePriceTypeTables_();
+  Logger.log('migratePriceTypeTables_ 完了');
+}
+
+/**
+ * getPriceTypeLabelMap のレスポンスをログ出力（デバッグ用）
+ */
+function debugPriceTypeLabelMap() {
+  MasterCache.invalidatePriceTypes();
+  var res = getPriceTypeLabelMap();
+  Logger.log('Response keys: ' + Object.keys(res));
+  Logger.log('res.ok: ' + res.ok);
+  if (res.data) {
+    Logger.log('Data keys: ' + Object.keys(res.data));
+    Logger.log('Data: ' + JSON.stringify(res.data).substring(0, 500));
+  } else {
+    Logger.log('res.data is null/undefined');
+    Logger.log('Full response: ' + JSON.stringify(res).substring(0, 500));
+  }
+}
+
+/**
  * MasterCacheの全キャッシュをクリア（GASエディタから実行可能）
  */
 function clearMasterCache() {

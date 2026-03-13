@@ -307,6 +307,7 @@
     .tag-pay-age { background: var(--tag-age); }
     .tag-pay-tobiage { background: var(--tag-tobiage); }
     .tag-pay-holiday { background: #EF5350; }
+    .tag-pay-custom { background: #FF9800; }
     .tag-transport { background: #e8f4e8; color: #2d7d32; border: 1px solid #c8e6c9; font-weight: 500; }
     .tag-adjustment { background: #fff3e0; color: #e65100; border: 1px solid #ffe0b2; font-weight: 500; }
 
@@ -796,8 +797,8 @@
       );
     }
 
-    // Pay unit labels and tag classes
-    const PAY_UNIT_TAG = {
+    // Pay unit labels and tag classes (static fallback + dynamic merge)
+    var PAY_UNIT_TAG = {
       'basic': { label: '基本', cls: 'tag-pay-basic' },
       'halfday': { label: 'ハーフ', cls: 'tag-pay-halfday' },
       'fullday': { label: '終日', cls: 'tag-pay-fullday' },
@@ -807,6 +808,22 @@
       'tobiage': { label: '上棟鳶揚げ', cls: 'tag-pay-tobiage' },
       'holiday': { label: '休日', cls: 'tag-pay-holiday' }
     };
+
+    // 動的にカスタム単価種別を追加
+    function mergeDynamicPriceTypes_(labelMap) {
+      Object.keys(labelMap).forEach(function(code) {
+        if (!PAY_UNIT_TAG[code]) {
+          PAY_UNIT_TAG[code] = { label: labelMap[code].label, cls: 'tag-pay-custom' };
+        }
+      });
+    }
+    // sessionStorageから即時マージ
+    (function() {
+      var cached = sessionStorage.getItem('_priceTypeLabelMap');
+      if (cached) {
+        try { mergeDynamicPriceTypes_(JSON.parse(cached)); } catch(e) { /* ignore */ }
+      }
+    })();
 
     // BroadcastChannel for cross-tab sync
     let dashboardChannel = null;
@@ -818,7 +835,16 @@
       initializeWithServerDate();
       setupEventListeners();
       initBroadcastChannel();
-      // Note: Customer autocomplete is now handled by the shared job_modal_js component
+      // 動的単価種別をロード（PAY_UNIT_TAGにマージ）
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.ok && res.data) {
+            sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(res.data));
+            mergeDynamicPriceTypes_(res.data);
+            applyFilters(); // dashboardData未ロード時は内部ガードで何もしない
+          }
+        })
+        .getPriceTypeLabelMap();
     });
 
     // フィルター適用
@@ -1176,7 +1202,7 @@
           <div class="${cardClass}" data-job-id="${safeJobId}" onclick="openJobAssignmentsForDashboard(this.dataset.jobId)">
             <div class="job-card-header">
               ${workCategoryLabel ? `<span class="tag ${tagClass}">${workCategoryLabel}</span>` : ''}
-              ${payUnitInfo ? `<span class="tag ${payUnitInfo.cls}">${payUnitInfo.label}</span>` : ''}
+              ${payUnitInfo ? `<span class="tag ${payUnitInfo.cls}">${escapeHtml(payUnitInfo.label)}</span>` : ''}
               ${hasTransportFee(job) ? '<span class="tag tag-transport">¥交</span>' : ''}
               ${Number(job.adjustment_amount) ? '<span class="tag tag-adjustment">¥調</span>' : ''}
               ${job.status === 'hold' ? '<span class="status-badge status-hold">保留</span>' : ''}

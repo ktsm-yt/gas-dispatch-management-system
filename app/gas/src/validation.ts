@@ -36,6 +36,23 @@ const PAY_UNITS = {
   HOLIDAY: 'holiday'
 } as const;
 
+/**
+ * バリデーション用の有効な単価区分一覧（動的）
+ * システム8種 + M_PriceTypes のアクティブなカスタム種別
+ */
+function getValidPayUnits_(): string[] {
+  const systemUnits = Object.values(PAY_UNITS) as string[];
+  try {
+    const priceTypes = MasterCache.getPriceTypes();
+    const customCodes = priceTypes
+      .filter((pt: PriceTypeRecord) => pt.is_active)
+      .map((pt: PriceTypeRecord) => pt.code);
+    return [...new Set([...systemUnits, ...customCodes])];
+  } catch {
+    return systemUnits;
+  }
+}
+
 const WORK_CATEGORIES = {
   JOTOU: 'jotou',
   KEISAGYO: 'keisagyo',
@@ -304,7 +321,10 @@ function validateJob_(job: Record<string, any>, isNew: boolean = false): void {
   }
 
   if (job.pay_unit !== undefined) {
-    validateEnum_(job.pay_unit, '給与区分', PAY_UNITS);
+    const validUnits = getValidPayUnits_();
+    if (job.pay_unit && !validUnits.includes(String(job.pay_unit))) {
+      throw new ValidationError(`給与区分の値が不正です: ${job.pay_unit}`, { field: 'pay_unit', validValues: validUnits, actualValue: job.pay_unit });
+    }
   }
 
   if (job.work_category !== undefined) {
@@ -338,12 +358,17 @@ function validateAssignment_(assignment: Record<string, any>, isNew: boolean = f
   }
 
   if (assignment.pay_unit !== undefined) {
-    validateEnum_(assignment.pay_unit, '給与区分', PAY_UNITS);
+    const validUnits = getValidPayUnits_();
+    if (assignment.pay_unit && !validUnits.includes(String(assignment.pay_unit))) {
+      throw new ValidationError(`給与区分の値が不正です: ${assignment.pay_unit}`, { field: 'pay_unit', validValues: validUnits, actualValue: assignment.pay_unit });
+    }
   }
 
   if (assignment.invoice_unit !== undefined) {
-    const validInvoiceUnits = { ...TIME_SLOTS, ...PAY_UNITS };
-    validateEnum_(assignment.invoice_unit, '請求区分', validInvoiceUnits);
+    const validInvoiceUnits = [...new Set([...Object.values(TIME_SLOTS), ...getValidPayUnits_()])];
+    if (assignment.invoice_unit && !validInvoiceUnits.includes(String(assignment.invoice_unit))) {
+      throw new ValidationError(`請求区分の値が不正です: ${assignment.invoice_unit}`, { field: 'invoice_unit', validValues: validInvoiceUnits, actualValue: assignment.invoice_unit });
+    }
   }
 
   if (assignment.wage_rate !== undefined) {

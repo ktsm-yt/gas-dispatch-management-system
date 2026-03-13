@@ -366,11 +366,12 @@ const SlotRepository = {
       return { valid: false, error: 'slot_pay_unit is required' };
     }
 
-    if (!this.VALID_PAY_UNITS.includes(slot.slot_pay_unit)) {
+    var validPayUnits = (typeof getValidPayUnits_ === 'function') ? getValidPayUnits_() : this.VALID_PAY_UNITS;
+    if (!validPayUnits.includes(slot.slot_pay_unit)) {
       return {
         valid: false,
-        error: `Invalid slot_pay_unit: ${slot.slot_pay_unit}. ` +
-               `Valid values: ${this.VALID_PAY_UNITS.join(', ')}`
+        error: 'Invalid slot_pay_unit: ' + slot.slot_pay_unit + '. ' +
+               'Valid values: ' + validPayUnits.join(', ')
       };
     }
 

@@ -14,6 +14,7 @@ function doGet(e: GoogleAppsScript.Events.DoGet): GoogleAppsScript.HTML.HtmlOutp
     invoices: { file: 'invoices', title: '請求管理' },
     payouts: { file: 'payouts', title: '支払管理' },
     sales_analytics: { file: 'sales_analytics', title: '売上分析' },
+    priceTypes: { file: 'price_types', title: '単価種別' },
     manual: { file: 'manual', title: 'マニュアル' }
   };
 

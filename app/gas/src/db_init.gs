@@ -224,6 +224,22 @@ const TABLE_DEFINITIONS = {
       'created_at', 'created_by', 'updated_at', 'updated_by',
       'is_deleted', 'deleted_at', 'deleted_by'
     ]
+  },
+  M_PriceTypes: {
+    sheetName: 'PriceTypes',
+    headers: [
+      'price_type_id', 'code', 'label', 'sort_order',
+      'is_system', 'is_active',
+      'created_at', 'updated_at'
+    ]
+  },
+  M_CustomPrices: {
+    sheetName: 'CustomPrices',
+    headers: [
+      'custom_price_id', 'entity_type', 'entity_id', 'price_type_code',
+      'amount',
+      'created_at', 'updated_at'
+    ]
   }
 };
 
@@ -1671,6 +1687,110 @@ function migrateAddJobAdjustmentColumns() {
   }
 
   Logger.log('=== CR-091 マイグレーション完了（全DB処理済み） ===');
+}
+
+/**
+ * M_PriceTypes / M_CustomPrices テーブルのマイグレーション（冪等）
+ * GASエディタから実行: migratePriceTypeTables_()
+ *
+ * - シートが無ければ作成 + ヘッダー設定
+ * - シートが既に存在していれば欠落ヘッダーのみ補完
+ * - M_PriceTypes に初期8種（is_system=true）をseed（重複スキップ）
+ */
+function migratePriceTypeTables_() {
+  const ss = SpreadsheetApp.openById(getSpreadsheetId());
+  const now = new Date().toISOString();
+
+  // --- M_PriceTypes ---
+  const ptDef = TABLE_DEFINITIONS.M_PriceTypes;
+  let ptSheet = ss.getSheetByName(ptDef.sheetName);
+  if (!ptSheet) {
+    ptSheet = ss.insertSheet(ptDef.sheetName);
+    ptSheet.getRange(1, 1, 1, ptDef.headers.length).setValues([ptDef.headers]);
+    ptSheet.getRange(1, 1, 1, ptDef.headers.length).setBackground('#E8F4F8').setFontWeight('bold');
+    ptSheet.setFrozenRows(1);
+    Logger.log('✓ PriceTypes シート作成');
+  } else {
+    // ヘッダー補完
+    const existing = ptSheet.getRange(1, 1, 1, ptSheet.getLastColumn()).getValues()[0];
+    for (const h of ptDef.headers) {
+      if (!existing.includes(h)) {
+        const col = existing.length + 1;
+        ptSheet.getRange(1, col).setValue(h);
+        existing.push(h);
+        Logger.log('✓ PriceTypes ヘッダー補完: ' + h);
+      }
+    }
+  }
+
+  // 初期seed（is_system=true の8種）
+  const SEED_PRICE_TYPES = [
+    { code: 'basic',    label: '基本',        sort_order: 1 },
+    { code: 'halfday',  label: 'ハーフ',      sort_order: 2 },
+    { code: 'fullday',  label: '終日',        sort_order: 3 },
+    { code: 'night',    label: '夜勤',        sort_order: 4 },
+    { code: 'tobi',     label: '上棟鳶',      sort_order: 5 },
+    { code: 'age',      label: '上棟荷揚げ',  sort_order: 6 },
+    { code: 'tobiage',  label: '上棟鳶揚げ',  sort_order: 7 },
+    { code: 'holiday',  label: '休日',        sort_order: 8 }
+  ];
+
+  // 既存codeを取得（重複チェック用）
+  const ptHeaders = ptSheet.getRange(1, 1, 1, ptSheet.getLastColumn()).getValues()[0];
+  const codeCol = ptHeaders.indexOf('code');
+  const existingCodes = new Set();
+  if (ptSheet.getLastRow() > 1) {
+    const data = ptSheet.getRange(2, codeCol + 1, ptSheet.getLastRow() - 1, 1).getValues();
+    data.forEach(row => { if (row[0]) existingCodes.add(String(row[0])); });
+  }
+
+  const newRows = [];
+  for (const seed of SEED_PRICE_TYPES) {
+    if (existingCodes.has(seed.code)) continue;
+    const row = ptDef.headers.map(h => {
+      switch (h) {
+        case 'price_type_id': return Utilities.getUuid();
+        case 'code':          return seed.code;
+        case 'label':         return seed.label;
+        case 'sort_order':    return seed.sort_order;
+        case 'is_system':     return true;
+        case 'is_active':     return true;
+        case 'created_at':    return now;
+        case 'updated_at':    return now;
+        default:              return '';
+      }
+    });
+    newRows.push(row);
+  }
+  if (newRows.length > 0) {
+    ptSheet.getRange(ptSheet.getLastRow() + 1, 1, newRows.length, ptDef.headers.length).setValues(newRows);
+    Logger.log('✓ PriceTypes seed挿入: ' + newRows.length + '件');
+  } else {
+    Logger.log('✓ PriceTypes seed: 既に全件存在');
+  }
+
+  // --- M_CustomPrices ---
+  const cpDef = TABLE_DEFINITIONS.M_CustomPrices;
+  let cpSheet = ss.getSheetByName(cpDef.sheetName);
+  if (!cpSheet) {
+    cpSheet = ss.insertSheet(cpDef.sheetName);
+    cpSheet.getRange(1, 1, 1, cpDef.headers.length).setValues([cpDef.headers]);
+    cpSheet.getRange(1, 1, 1, cpDef.headers.length).setBackground('#E8F4F8').setFontWeight('bold');
+    cpSheet.setFrozenRows(1);
+    Logger.log('✓ CustomPrices シート作成');
+  } else {
+    const existing = cpSheet.getRange(1, 1, 1, cpSheet.getLastColumn()).getValues()[0];
+    for (const h of cpDef.headers) {
+      if (!existing.includes(h)) {
+        const col = existing.length + 1;
+        cpSheet.getRange(1, col).setValue(h);
+        existing.push(h);
+        Logger.log('✓ CustomPrices ヘッダー補完: ' + h);
+      }
+    }
+  }
+
+  Logger.log('=== M_PriceTypes / M_CustomPrices マイグレーション完了 ===');
 }
 
 /**
