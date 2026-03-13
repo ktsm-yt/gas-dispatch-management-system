@@ -310,8 +310,33 @@ const AssignmentService = {
       // ダッシュボードキャッシュ無効化
       JobService.invalidateDashboardCache(job.work_date);
 
+      // カスタム単価未登録チェック（非ブロッキング警告）
+      var warnings = [];
+      try {
+        var SYSTEM_UNITS = { basic:1, halfday:1, fullday:1, night:1, tobi:1, age:1, tobiage:1, holiday:1 };
+        var customPriceMap = MasterCache.getCustomPriceMap();
+        var priceTypeMap = MasterCache.getPriceTypeMap();
+        var checkedPairs = {};
+        updatedAssignments.forEach(function(a) {
+          if (!a.pay_unit || SYSTEM_UNITS[a.pay_unit] || a.status === 'CANCELLED') return;
+          var pairKey = a.staff_id + '|' + a.pay_unit;
+          if (checkedPairs[pairKey]) return;
+          checkedPairs[pairKey] = true;
+          var cpKey = 'staff|' + a.staff_id + '|' + a.pay_unit;
+          if (customPriceMap[cpKey] === undefined) {
+            var staffInfo = staffCache[a.staff_id];
+            var staffName = staffInfo ? (staffInfo.nickname || staffInfo.name) : '不明';
+            var typeInfo = priceTypeMap[a.pay_unit];
+            var typeLabel = typeInfo ? typeInfo.label : a.pay_unit;
+            warnings.push('スタッフ「' + staffName + '」に単価種別「' + typeLabel + '」の単価が未登録です（基本単価で計算されます）');
+          }
+        });
+      } catch (warnErr) {
+        Logger.log('Custom price warning check failed (non-critical): ' + warnErr);
+      }
+
       const hasChanges = results.inserted.length > 0 || results.updated.length > 0 || results.deleted.length > 0;
-      const response = buildSuccessResponse({
+      var responseData = {
         assignments: enrichedAssignments,
         inserted: results.inserted.length,
         updated: results.updated.length,
@@ -319,7 +344,11 @@ const AssignmentService = {
         job: updatedJob,
         slots: slots,
         slotStatus: slotStatus
-      }, requestId);
+      };
+      if (warnings.length > 0) {
+        responseData.warnings = warnings;
+      }
+      const response = buildSuccessResponse(responseData, requestId);
 
 
       // ロック解放を先行（以降はbest-effort処理のみ）
