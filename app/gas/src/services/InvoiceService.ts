@@ -1248,7 +1248,16 @@ const InvoiceService = {
       'holiday': '作業員（休日）'
     };
 
-    return itemNameMap[invoiceUnit] || '作業員';
+    if (itemNameMap[invoiceUnit]) return itemNameMap[invoiceUnit];
+
+    // カスタム単価種別: M_PriceTypes のラベルを使用
+    const priceTypeMap = MasterCache.getPriceTypeMap();
+    const priceType = priceTypeMap[invoiceUnit];
+    if (priceType && priceType.label) {
+      return '作業員（' + priceType.label + '）';
+    }
+
+    return '作業員';
   },
 
   /**

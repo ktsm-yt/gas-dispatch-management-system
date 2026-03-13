@@ -65,6 +65,30 @@ function normalizeUnit_(unit: string | null | undefined): string {
   return String(unit).toLowerCase().trim();
 }
 
+/** 単価コードの正規化（alias解決含む） */
+function normalizePayUnit_(unit: string): string {
+  const ALIASES: Record<string, string> = {
+    'half': 'halfday', 'am': 'halfday', 'pm': 'halfday', 'yakin': 'night'
+  };
+  const normalized = String(unit || '').toLowerCase().trim();
+  return ALIASES[normalized] || normalized;
+}
+
+/**
+ * カスタム単価をM_CustomPricesから取得（O(1)ルックアップ）
+ * @returns 金額 or null（未設定の場合）
+ */
+function getCustomPrice_(entityType: string, entityId: string, code: string): number | null {
+  const map = MasterCache.getCustomPriceMap();
+  const key = `${entityType}|${entityId}|${code}`;
+  const amount = map[key];
+  if (amount === undefined) {
+    Logger.log(`[CUSTOM_PRICE] Not found: ${key}`);
+    return null;
+  }
+  return amount;
+}
+
 /**
  * 配置の単価区分を解決する。
  * invoice_unit/pay_unit が未設定またはbasicの場合、job.pay_unit にフォールバック。
@@ -191,8 +215,10 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
       return customer.unit_price_night ?? 0;
     case 'holiday':
       return customer.unit_price_holiday ?? 0;
-    default:
-      return customer.unit_price_basic ?? 0;
+    default: {
+      const custom = getCustomPrice_('customer', customer.customer_id, normalizePayUnit_(normalizedType));
+      return custom ?? (customer.unit_price_basic ?? 0);
+    }
   }
 }
 
@@ -222,8 +248,10 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
       return staff.daily_rate_tobiage ?? Math.floor((staff.daily_rate_tobi || 0) * TOBIAGE_MULTIPLIER);
     case 'holiday':
       return staff.daily_rate_holiday ?? 0;
-    default:
-      return staff.daily_rate_basic ?? 0;
+    default: {
+      const custom = getCustomPrice_('staff', staff.staff_id, normalizePayUnit_(normalizedType));
+      return custom ?? (staff.daily_rate_basic ?? 0);
+    }
   }
 }
 
@@ -267,9 +295,15 @@ function getSubcontractorRateByUnit_(
     case 'holiday':
       rate = Number(subcontractor.holiday_rate ?? subcontractor.basic_rate) || 0;
       break;
-    default:
-      rate = Number(subcontractor.basic_rate ?? subcontractor.full_day_rate) || 0;
+    default: {
+      const custom = getCustomPrice_(
+        'subcontractor',
+        subcontractor.subcontractor_id || subcontractor.id,
+        normalizePayUnit_(normalizedUnit)
+      );
+      rate = custom ?? (Number(subcontractor.basic_rate ?? subcontractor.full_day_rate) || 0);
       break;
+    }
   }
 
   if (rate === 0) {
