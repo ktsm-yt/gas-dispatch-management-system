@@ -1063,11 +1063,10 @@ function cancelBulkExport(params: Record<string, unknown>) {
  * @param {string} invoiceId - 請求ID
  * @param {Object} headerData - ヘッダー更新データ { issue_date, due_date, notes }
  * @param {Object[]} linesData - 明細更新データ [{ line_id, item_name, time_note, site_name }]
- * @param {Object[]|undefined} adjustmentsData - 調整項目データ [{ adjustment_id?, item_name, amount }]
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unknown>, linesData: unknown[], adjustmentsData: unknown[] | undefined, expectedUpdatedAt: string) {
+function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unknown>, linesData: unknown[], expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -1096,44 +1095,8 @@ function updateInvoiceDetails(invoiceId: string, headerData: Record<string, unkn
       }
     }
 
-    // 調整項目のバリデーション（指定されている場合のみ）
-    if (adjustmentsData !== undefined) {
-      if (!Array.isArray(adjustmentsData)) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'adjustmentsData must be an array', {}, requestId);
-      }
-      if (adjustmentsData.length > 5) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整項目は最大5件までです', {}, requestId);
-      }
-      for (let i = 0; i < adjustmentsData.length; i++) {
-        const adj = adjustmentsData[i] as Record<string, unknown>;
-        // 品目名チェック
-        if (!adj.item_name || String(adj.item_name).trim() === '') {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名は必須です`, {}, requestId);
-        }
-        if (String(adj.item_name).length > 50) {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名は50文字以内です`, {}, requestId);
-        }
-        // 数式インジェクション防止（=, +, -, @, \t, \r）
-        const firstChar = String(adj.item_name).charAt(0);
-        if ('=+-@'.includes(firstChar) || firstChar === '\t' || firstChar === '\r') {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 品目名の先頭に特殊文字は使用できません`, {}, requestId);
-        }
-        // 金額チェック
-        const amount = Number(adj.amount);
-        if (!isFinite(amount) || !Number.isInteger(amount)) {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額は整数で入力してください`, {}, requestId);
-        }
-        if (amount < -9999999 || amount > 9999999) {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額は -9,999,999〜9,999,999 の範囲です`, {}, requestId);
-        }
-        if (amount === 0) {
-          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, `調整項目${i + 1}: 金額に0は指定できません`, {}, requestId);
-        }
-      }
-    }
-
     // Service呼び出し
-    const result = InvoiceService.updateDetails(invoiceId, headerData, linesData as Record<string, unknown>[], adjustmentsData as Record<string, unknown>[], expectedUpdatedAt);
+    const result = InvoiceService.updateDetails(invoiceId, headerData, linesData as Record<string, unknown>[], expectedUpdatedAt);
 
     if (!result.success) {
       const errorCode = result.error === 'CONFLICT_ERROR'

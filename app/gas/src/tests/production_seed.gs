@@ -763,7 +763,6 @@ function seedInvoicesAndPayoutsForArchive() {
   // bulk用配列
   const allLines = [];
   const allInvoices = [];
-  const allAdjustments = [];
   const allPayouts = [];
 
   // job_id → job のMap（O(1)ルックアップ用）
@@ -856,24 +855,6 @@ function seedInvoicesAndPayoutsForArchive() {
         is_deleted: false, deleted_at: '', deleted_by: ''
       });
 
-      if (Math.random() < 0.3) {
-        allAdjustments.push({
-          adjustment_id: `adj_${invoiceId}_01`, invoice_id: invoiceId,
-          item_name: _seedPick(['材料費追加', '追加人工', '残材処分費']),
-          amount: _seedPick([5000, 10000, 15000, 20000]), sort_order: 1, notes: '',
-          created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
-          is_deleted: false, deleted_at: '', deleted_by: ''
-        });
-        if (Math.random() < 0.5) {
-          allAdjustments.push({
-            adjustment_id: `adj_${invoiceId}_02`, invoice_id: invoiceId,
-            item_name: _seedPick(['早期支払値引', '安全協力会費控除', 'リピート割引']),
-            amount: _seedPick([-3000, -5000, -8000, -10000]), sort_order: 2, notes: '',
-            created_at: now, created_by: 'system', updated_at: now, updated_by: 'system',
-            is_deleted: false, deleted_at: '', deleted_by: ''
-          });
-        }
-      }
     }
 
     // スタッフ支払
@@ -947,13 +928,12 @@ function seedInvoicesAndPayoutsForArchive() {
   }
 
   // 一括書き込み
-  Logger.log(`\n書き込み中: 請求${allInvoices.length}件, 明細${allLines.length}行, 調整${allAdjustments.length}件, 支払${allPayouts.length}件`);
+  Logger.log(`\n書き込み中: 請求${allInvoices.length}件, 明細${allLines.length}行, 支払${allPayouts.length}件`);
   if (allInvoices.length > 0) insertRecords('T_Invoices', allInvoices);
   if (allLines.length > 0) insertRecords('T_InvoiceLines', allLines);
-  if (allAdjustments.length > 0) insertRecords('T_InvoiceAdjustments', allAdjustments);
   if (allPayouts.length > 0) insertRecords('T_Payouts', allPayouts);
 
-  Logger.log(`\n✓ 請求書: ${allInvoices.length}件, 明細: ${allLines.length}行, 調整: ${allAdjustments.length}件, 支払: ${allPayouts.length}件`);
+  Logger.log(`\n✓ 請求書: ${allInvoices.length}件, 明細: ${allLines.length}行, 支払: ${allPayouts.length}件`);
 }
 
 /** 税額計算ヘルパー */
