@@ -1461,7 +1461,7 @@
           rows.push('<tr style="color:var(--text-muted);"><td>諸経費</td><td>' + formatCurrency(_dailySalesData.expenseTotal) + '</td></tr>');
         }
         if (_dailySalesData.noDateAmount > 0) {
-          rows.push('<tr style="color:var(--text-muted);"><td>日付なし（その他）</td><td>' + formatCurrency(_dailySalesData.noDateAmount) + '</td></tr>');
+          rows.push('<tr style="color:var(--text-muted);"><td>調整額</td><td>' + formatCurrency(_dailySalesData.noDateAmount) + '</td></tr>');
         }
         var grandTotal = _dailySalesData.summary.totalAmount + _dailySalesData.expenseTotal + _dailySalesData.noDateAmount;
         rows.push('<tr class="daily-total-row"><td>合計（税込）</td><td>' + formatCurrency(grandTotal) + '</td></tr>');
