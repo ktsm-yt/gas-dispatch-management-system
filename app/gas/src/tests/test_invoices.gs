@@ -272,42 +272,25 @@ function testInvoiceCalculations() {
 function testInvoiceCalculateTotalsEdgeCases() {
   Logger.log('--- testInvoiceCalculateTotalsEdgeCases ---');
 
-  // 1. 複合ケース: 3作業行 + 1諸経費行 + 2調整(正/負)
+  // 1. 複合ケース: 3作業行 + 1諸経費行（調整項目機能は廃止済み）
   const lines1 = [
     { amount: 30000, item_name: '鳶工事' },
     { amount: 20000, item_name: '揚げ工事' },
     { amount: 10000, item_name: '荷揚げ' },
     { amount: 5000, item_name: '諸経費' }
   ];
-  const adjustments1 = [
-    { amount: 3000 },   // 正の調整
-    { amount: -8000 }   // 負の調整
-  ];
-  // workAmount=60000, expenseAmount=5000, adjustmentTotal=-5000
-  // taxable=60000+5000+(-5000)=60000, tax=floor(60000×0.10)=6000
-  // total=60000+6000=66000
-  const result1 = InvoiceService._calculateTotals(lines1, adjustments1, 0.10, 0, 'format1');
+  // workAmount=60000, expenseAmount=5000
+  // taxable=60000+5000=65000, tax=floor(65000×0.10)=6500
+  // total=65000+6500=71500
+  const result1 = InvoiceService._calculateTotals(lines1, 0.10, 0, 'format1');
   assertEqual(result1.subtotal, 60000, '複合: subtotal=workAmount=60000');
   assertEqual(result1.expenseAmount, 5000, '複合: expenseAmount=5000');
-  assertEqual(result1.adjustmentTotal, -5000, '複合: adjustmentTotal=3000+(-8000)=-5000');
-  assertEqual(result1.taxAmount, 6000, '複合: tax=floor(60000×0.10)=6000');
-  assertEqual(result1.totalAmount, 66000, '複合: total=60000+6000=66000');
+  assertEqual(result1.adjustmentTotal, 0, '複合: adjustmentTotal=0（廃止済み）');
+  assertEqual(result1.taxAmount, 6500, '複合: tax=floor(65000×0.10)=6500');
+  assertEqual(result1.totalAmount, 71500, '複合: total=65000+6500=71500');
   Logger.log('  複合ケース: OK');
 
-  // 2. 負の調整で合計がマイナス寄り: 調整合計 > 作業金額
-  const lines2 = [{ amount: 10000, item_name: '工事' }];
-  const adjustments2 = [{ amount: -15000 }];
-  // workAmount=10000, adjustmentTotal=-15000
-  // taxable=10000+0+(-15000)=-5000, tax=floor(-5000×0.10)=floor(-500)=-500
-  // total=-5000+(-500)=floor(-5500)=-5500
-  const result2 = InvoiceService._calculateTotals(lines2, adjustments2, 0.10, 0, 'format1');
-  assertEqual(result2.subtotal, 10000, 'マイナス寄り: subtotal=10000');
-  assertEqual(result2.adjustmentTotal, -15000, 'マイナス寄り: adjustmentTotal=-15000');
-  assertEqual(result2.taxAmount, -500, 'マイナス寄り: tax=floor(-500)=-500');
-  assertEqual(result2.totalAmount, -5500, 'マイナス寄り: total=-5500');
-  Logger.log('  マイナス寄り調整: OK');
-
-  // 3. roundモード
+  // 2. roundモード
   const lines3 = [{ amount: 10001, item_name: '工事' }];
   // tax = round(10001 * 0.10) = round(1000.1) = 1000
   const result3 = InvoiceService._calculateTotals(lines3, 0.10, 0, 'format1', 'round');

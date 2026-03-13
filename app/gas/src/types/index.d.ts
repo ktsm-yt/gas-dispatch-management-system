@@ -298,22 +298,6 @@ declare global {
     _archiveFiscalYear?: number;
   }
 
-  interface InvoiceAdjustmentRecord {
-    adjustment_id: string;
-    invoice_id: string;
-    item_name: string;
-    amount: number;
-    sort_order: number;
-    notes: string;
-    created_at: string;
-    created_by: string;
-    updated_at: string;
-    updated_by: string;
-    is_deleted: boolean;
-    deleted_at: string;
-    deleted_by: string;
-  }
-
   interface PaymentRecord {
     payment_id: string;
     invoice_id: string;

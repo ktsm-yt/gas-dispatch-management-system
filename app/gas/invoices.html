@@ -785,46 +785,6 @@
       font-size: 13px;
     }
 
-    /* Adjustment rows */
-    .adjustment-row {
-      display: grid;
-      grid-template-columns: 1fr 120px 40px;
-      gap: 8px;
-      align-items: center;
-      margin-bottom: 6px;
-    }
-    .adjustment-row input[type="text"],
-    .adjustment-row input[type="number"] {
-      padding: 6px 8px;
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-sm);
-      font-size: 12px;
-    }
-    .adjustment-row input:focus {
-      outline: none;
-      border-color: var(--color-secondary);
-      box-shadow: 0 0 0 2px rgba(19, 155, 196, 0.2);
-    }
-    .adjustment-row input[type="number"] {
-      text-align: right;
-      font-family: 'Menlo', 'Monaco', monospace;
-    }
-    .adjustment-remove-btn {
-      width: 28px; height: 28px;
-      border: none; background: transparent;
-      color: var(--text-muted); cursor: pointer;
-      font-size: 16px; border-radius: var(--radius-sm);
-    }
-    .adjustment-remove-btn:hover { background: #fee2e2; color: #DC3545; }
-    .adjustment-add-btn {
-      font-size: 12px; color: var(--color-secondary);
-      background: transparent; border: 1px dashed var(--color-secondary);
-      border-radius: var(--radius-sm); padding: 6px 12px;
-      cursor: pointer; margin-top: 4px;
-    }
-    .adjustment-add-btn:hover { background: rgba(19,155,196,0.05); }
-    .adjustment-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
     /* Totals preview */
     .totals-preview {
       background: var(--bg-card);
@@ -1442,7 +1402,7 @@
         <!-- 明細テーブル -->
         <div class="edit-section">
           <h4>■ 明細（テキストのみ編集可）</h4>
-          <p class="edit-hint">※金額・数量・単価は編集できません。金額の追加・値引きは下の「調整項目」で行えます。</p>
+          <p class="edit-hint">※金額・数量・単価は編集できません。</p>
           <div class="edit-lines-container">
             <table class="edit-lines-table">
               <thead>
@@ -1461,18 +1421,10 @@
           </div>
         </div>
 
-        <!-- 調整項目 -->
-        <div class="edit-section" id="adjustmentSection">
-          <h4>■ 調整項目（材料費・値引きなど）</h4>
-          <div id="adjustmentItemsContainer"></div>
-          <button type="button" class="adjustment-add-btn" id="addAdjustmentBtn" onclick="addAdjustmentRow()">+ 調整項目を追加</button>
-        </div>
-
         <!-- 合計プレビュー -->
         <div class="totals-preview" id="totalsPreview">
           <div class="totals-row"><span>作業費</span><span class="amount-value" id="previewSubtotal">-</span></div>
           <div class="totals-row"><span>諸経費</span><span class="amount-value" id="previewExpense">-</span></div>
-          <div class="totals-row" id="previewAdjustmentRow" style="display:none;"><span>調整合計</span><span class="amount-value" id="previewAdjustment">-</span></div>
           <div class="totals-row"><span>消費税</span><span class="amount-value" id="previewTax">-</span></div>
           <div class="totals-row total-line"><span>税込合計</span><span class="amount-value" id="previewTotal">-</span></div>
         </div>
@@ -4910,22 +4862,6 @@
       // アーカイブは明細編集不可
       renderEditLines(invoice.lines || [], isEditable && !isArchived);
 
-      var container = document.getElementById('adjustmentItemsContainer');
-      container.innerHTML = '';
-      var adjustments = invoice.adjustments || [];
-      adjustments.forEach(function(adj) {
-        addAdjustmentRow(adj.item_name, adj.amount, adj.adjustment_id);
-      });
-      // アーカイブは調整項目セクション表示（閲覧）だが追加・編集は不可
-      document.getElementById('adjustmentSection').style.display = (isEditable || isArchived) ? '' : 'none';
-      document.getElementById('addAdjustmentBtn').disabled = isArchived || adjustments.length >= 5;
-      if (isArchived) {
-        var adjInputs = document.querySelectorAll('#adjustmentItemsContainer input');
-        adjInputs.forEach(function(input) { input.disabled = true; });
-        var adjRemoveBtns = document.querySelectorAll('#adjustmentItemsContainer .adjustment-remove-btn');
-        adjRemoveBtns.forEach(function(btn) { btn.style.display = 'none'; });
-      }
-
       updateTotalsPreview();
     }
 
@@ -4937,16 +4873,12 @@
       tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--text-muted);">' +
         '<span class="spinner" style="display: inline-block; width: 16px; height: 16px; margin-right: 8px; vertical-align: middle;"></span>' +
         '明細を読み込み中...</td></tr>';
-      var container = document.getElementById('adjustmentItemsContainer');
-      container.innerHTML = '<div style="text-align: center; padding: 12px; color: var(--text-muted);">読み込み中...</div>';
 
       // 合計プレビューをリセット（前回の請求書データが残らないように）
       document.getElementById('previewSubtotal').textContent = '-';
       document.getElementById('previewExpense').textContent = '-';
       document.getElementById('previewTax').textContent = '-';
       document.getElementById('previewTotal').textContent = '-';
-      var adjRow = document.getElementById('previewAdjustmentRow');
-      if (adjRow) adjRow.style.display = 'none';
     }
 
     /**
@@ -5177,12 +5109,9 @@
           if (result.data && result.data.invoice) {
             updateInvoiceRow(result.data.invoice);
             // 詳細キャッシュを更新（getInvoice形式に正規化して保存）
-            // getInvoice: { invoice_id, lines, adjustments, customer, ... } (フラット)
-            // updateInvoiceDetails: { invoice: {...}, lines: [...], adjustments: [...] } (ネスト)
             var normalizedForCache = {
               ...result.data.invoice,
               lines: result.data.lines || currentEditInvoice.lines || [],
-              adjustments: result.data.adjustments || currentEditInvoice.adjustments || [],
               customer: currentEditInvoice.customer || null
             };
             cacheInvoiceDetail(result.data.invoice.invoice_id, normalizedForCache);
@@ -5190,7 +5119,6 @@
             document.getElementById('editUpdatedAt').value = result.data.invoice.updated_at || '';
             // currentEditInvoice を更新（合計プレビュー用）
             currentEditInvoice = { ...currentEditInvoice, ...result.data.invoice };
-            if (result.data.adjustments) currentEditInvoice.adjustments = result.data.adjustments;
             updateTotalsPreview();
             // クロスタブ同期
             BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
@@ -5209,60 +5137,7 @@
           console.error('updateInvoiceDetails error:', error);
           showToast('保存に失敗しました。しばらくしてから再度お試しください。', 'error');
         })
-        .updateInvoiceDetails(invoiceId, headerData, linesData, collectAdjustmentData(), expectedUpdatedAt);
-    }
-
-    // ========================================
-    // 調整項目関連関数
-    // ========================================
-
-    /**
-     * 調整行をDOMに追加
-     */
-    function addAdjustmentRow(itemName, amount, adjustmentId) {
-      const container = document.getElementById('adjustmentItemsContainer');
-      const count = container.querySelectorAll('.adjustment-row').length;
-      if (count >= 5) return;
-
-      const row = document.createElement('div');
-      row.className = 'adjustment-row';
-      row.dataset.adjustmentId = adjustmentId || '';
-      row.innerHTML =
-        '<input type="text" placeholder="品目名（例: 材料費）" maxlength="50" value="' + escapeHtml(itemName || '') + '" oninput="updateTotalsPreview()" />' +
-        '<input type="number" placeholder="金額" value="' + (amount || '') + '" oninput="updateTotalsPreview()" />' +
-        '<button type="button" class="adjustment-remove-btn" onclick="removeAdjustmentRow(this)" title="削除">&times;</button>';
-      container.appendChild(row);
-
-      // 追加ボタンの状態を更新
-      document.getElementById('addAdjustmentBtn').disabled = container.querySelectorAll('.adjustment-row').length >= 5;
-      updateTotalsPreview();
-    }
-
-    /**
-     * 調整行をDOMから削除
-     */
-    function removeAdjustmentRow(btn) {
-      btn.closest('.adjustment-row').remove();
-      document.getElementById('addAdjustmentBtn').disabled =
-        document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row').length >= 5;
-      updateTotalsPreview();
-    }
-
-    /**
-     * フォームから調整データを収集（空品目名・0金額はスキップ）
-     */
-    function collectAdjustmentData() {
-      const rows = document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row');
-      const data = [];
-      rows.forEach(function(row) {
-        const itemName = row.querySelector('input[type="text"]').value.trim();
-        const amount = parseInt(row.querySelector('input[type="number"]').value, 10);
-        if (!itemName || !amount || isNaN(amount)) return;
-        const entry = { item_name: itemName, amount: amount };
-        if (row.dataset.adjustmentId) entry.adjustment_id = row.dataset.adjustmentId;
-        data.push(entry);
-      });
-      return data;
+        .updateInvoiceDetails(invoiceId, headerData, linesData, expectedUpdatedAt);
     }
 
     /**
@@ -5275,14 +5150,8 @@
       // 明細からの金額
       const subtotal = Number(inv.subtotal) || 0;
       const expense = Number(inv.expense_amount) || 0;
-
-      // 調整項目の合計
-      const adjRows = document.getElementById('adjustmentItemsContainer').querySelectorAll('.adjustment-row');
-      let adjTotal = 0;
-      adjRows.forEach(function(row) {
-        const val = parseInt(row.querySelector('input[type="number"]').value, 10);
-        if (!isNaN(val)) adjTotal += val;
-      });
+      // レガシー互換: 過去請求書に残る adjustment_total を加味
+      const adjTotal = Number(inv.adjustment_total) || 0;
 
       // 税率（顧客設定から、デフォルト10%）
       // 注意: tax_rate はパーセント単位（10）で保存されているため、100で割って小数に変換
@@ -5295,16 +5164,6 @@
 
       document.getElementById('previewSubtotal').textContent = formatCurrency(subtotal);
       document.getElementById('previewExpense').textContent = formatCurrency(expense);
-
-      const adjRow = document.getElementById('previewAdjustmentRow');
-      const adjSpan = document.getElementById('previewAdjustment');
-      if (adjTotal !== 0) {
-        adjRow.style.display = '';
-        adjSpan.textContent = formatCurrency(adjTotal);
-        adjSpan.className = 'amount-value ' + (adjTotal > 0 ? 'amount-positive' : 'amount-negative');
-      } else {
-        adjRow.style.display = 'none';
-      }
 
       document.getElementById('previewTax').textContent = formatCurrency(taxAmount);
       const totalSpan = document.getElementById('previewTotal');
