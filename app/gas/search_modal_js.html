@@ -110,7 +110,7 @@
         archiveBadge = ' <span class="search-badge-archive">' + r._archiveFiscalYear + '年度</span>';
       }
 
-      html += '<tr>' +
+      html += '<tr data-job-id="' + escapeHtml(r.job_id) + '">' +
         '<td style="white-space:nowrap">' + escapeHtml(dateStr) + archiveBadge + '</td>' +
         '<td>' + escapeHtml(slotLabel) + '</td>' +
         '<td>' + siteName + '</td>' +
@@ -127,6 +127,19 @@
     }
 
     area.innerHTML = html;
+
+    // イベント委譲: 行クリックで案件詳細を開く
+    var tbody = area.querySelector('.search-results-table tbody');
+    if (tbody) {
+      tbody.addEventListener('click', function(e) {
+        var tr = e.target.closest('tr[data-job-id]');
+        if (!tr) return;
+        var jobId = tr.getAttribute('data-job-id');
+        if (!jobId) return;
+        closeSearchModal();
+        openJobModal(jobId);
+      });
+    }
   }
 
   function escapeHtml(str) {

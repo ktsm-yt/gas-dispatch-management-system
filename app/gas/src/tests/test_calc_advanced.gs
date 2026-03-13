@@ -417,14 +417,8 @@ function testInvoiceCalculateTotals() {
   assertEqual(result3.expenseAmount, 5000, 'atamagami: 明細の経費行優先');
   assertEqual(result3.subtotal, 100000, 'atamagami: subtotal=workAmountのみ');
 
-  // adjustment付き（5引数形式）
-  var lines4 = [{ amount: 50000, item_name: '工事' }];
-  var adjustments = [{ amount: -5000 }];
-  var result4 = InvoiceService._calculateTotals(lines4, adjustments, 0.10, 0, 'format1');
-  assertEqual(result4.adjustmentTotal, -5000, '調整: -5000');
-  // taxable = 50000 + 0 + (-5000) = 45000
-  assertEqual(result4.taxAmount, 4500, '調整後tax: 45000×10%');
-  assertEqual(result4.totalAmount, 49500, '調整後total: 45000+4500');
+  // adjustmentTotal は常に0（請求書レベル調整機能は廃止済み）
+  assertEqual(result3.adjustmentTotal, 0, '調整: 常に0');
 
   // ceil rounding mode
   var lines5 = [{ amount: 10001, item_name: '工事' }];

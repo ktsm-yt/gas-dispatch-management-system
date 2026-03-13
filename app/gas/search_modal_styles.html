@@ -70,6 +70,15 @@
   vertical-align: top;
 }
 
+.search-results-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.search-results-table tbody tr:hover {
+  background-color: var(--bg-hover, #f0f4ff);
+}
+
 .search-results-table tbody tr:last-child td {
   border-bottom: none;
 }
