@@ -1264,18 +1264,18 @@
       if (badgeCell && !badgeCell.querySelector('.status-badge.draft')) {
         badgeCell.innerHTML = '<span class="status-badge draft">下書き</span>';
       }
-      // 調整額・備考の表示セルを更新（列順: チェック, 名前, 配置数, 期間, 基本金額, 交通費, 調整額, 備考, ステータス, 操作）
+      // 調整額・備考の表示セルを更新（列順: チェック, 名前, 配置数, 期間, 基本金額, 人工割調整, 交通費, 調整額, 備考, ステータス, 操作）
       const cells = row.querySelectorAll('td');
-      // 調整額セル（7番目 = index 6）
-      if (cells[6]) {
+      // 調整額セル（8番目 = index 7）
+      if (cells[7]) {
         const adj = adjustment || 0;
-        cells[6].innerHTML = adj !== 0
+        cells[7].innerHTML = adj !== 0
           ? `<span style="color: ${adj > 0 ? 'var(--color-success)' : 'var(--color-danger)'}">${adj > 0 ? '+' : ''}${formatCurrency(adj).replace('¥', '')}</span>`
           : '-';
       }
-      // 備考セル（8番目 = index 7）
-      if (cells[7]) {
-        cells[7].textContent = notes || '-';
+      // 備考セル（9番目 = index 8）
+      if (cells[8]) {
+        cells[8].textContent = notes || '-';
       }
     }
 
@@ -1336,37 +1336,57 @@
 
       // Event delegation for row/action buttons
       document.addEventListener('click', function(e) {
-        const target = e.target.closest('button');
-        if (!target) return;
+        // ボタンのイベント委譲
+        const btn = e.target.closest('button');
+        if (btn) {
+          if (btn.classList.contains('btn-undo-sub-payout')) {
+            const payoutId = btn.dataset.payoutId;
+            const updatedAt = btn.dataset.updatedAt;
+            const targetName = btn.dataset.targetName;
+            undoSubcontractorPayoutConfirm(payoutId, updatedAt, targetName);
+            return;
+          }
 
-        if (target.classList.contains('btn-undo-sub-payout')) {
-          const payoutId = target.dataset.payoutId;
-          const updatedAt = target.dataset.updatedAt;
-          const targetName = target.dataset.targetName;
-          undoSubcontractorPayoutConfirm(payoutId, updatedAt, targetName);
+          if (btn.classList.contains('js-open-payout-modal')) {
+            e.stopPropagation();
+            const staffId = btn.dataset.staffId;
+            const staffName = btn.dataset.staffName || '';
+            const status = btn.dataset.status || 'unpaid';
+            const payoutId = btn.dataset.payoutId || null;
+            const updatedAt = btn.dataset.updatedAt || null;
+            openPayoutModal(staffId, staffName, { status, payoutId, updatedAt });
+            return;
+          }
+
+          if (btn.classList.contains('js-pay-confirmed')) {
+            payConfirmed(btn.dataset.payoutId, btn.dataset.updatedAt, btn.dataset.staffName || '');
+            return;
+          }
+
+          if (btn.classList.contains('js-undo-confirm')) {
+            undoConfirm(btn.dataset.payoutId, btn.dataset.updatedAt, btn.dataset.staffName || '');
+            return;
+          }
+
+          if (btn.classList.contains('js-undo-payout')) {
+            e.stopPropagation();
+            undoPayoutConfirm(btn.dataset.payoutId, btn.dataset.updatedAt, btn.dataset.targetName || '');
+            return;
+          }
+
           return;
         }
 
-        if (target.classList.contains('js-open-payout-modal')) {
-          const staffId = target.dataset.staffId;
-          const staffName = target.dataset.staffName || '';
-          const status = target.dataset.status || 'unpaid';
-          const payoutId = target.dataset.payoutId || null;
-          const updatedAt = target.dataset.updatedAt || null;
-          openPayoutModal(staffId, staffName, { status, payoutId, updatedAt });
+        // 履歴行クリック → 詳細モーダル（paid）
+        const row = e.target.closest('tr.js-history-row');
+        if (row) {
+          openPayoutModal(row.dataset.staffId, row.dataset.staffName || '', {
+            status: row.dataset.status || 'paid',
+            payoutId: row.dataset.payoutId || null,
+            updatedAt: row.dataset.updatedAt || null
+          });
           return;
         }
-
-        if (target.classList.contains('js-pay-confirmed')) {
-          payConfirmed(target.dataset.payoutId, target.dataset.updatedAt, target.dataset.staffName || '');
-          return;
-        }
-
-        if (target.classList.contains('js-undo-confirm')) {
-          undoConfirm(target.dataset.payoutId, target.dataset.updatedAt, target.dataset.staffName || '');
-          return;
-        }
-
       });
 
       // ★ SWR: タブ復帰時のrevalidate
@@ -2160,6 +2180,7 @@
         baseAmount: p.base_amount,
         transportAmount: p.transport_amount,
         adjustmentAmount: p.adjustment_amount || 0,
+        ninkuAdjustmentAmount: p.ninku_adjustment_amount || 0,
         notes: p.notes || '',
         payoutId: p.payout_id,
         updatedAt: p.updated_at,
@@ -2221,6 +2242,7 @@
               <th>配置数</th>
               <th>期間</th>
               <th>基本金額</th>
+              <th>人工割調整</th>
               <th>交通費</th>
               <th>調整額</th>
               <th>備考</th>
@@ -2294,6 +2316,7 @@
           <td>${s.unpaidCount}件</td>
           <td style="font-size:12px">${periodStart} ~ ${periodEnd}</td>
           <td class="amount">${formatCurrency(s.estimatedAmount)}</td>
+          <td class="amount">${s.ninkuAdjustmentAmount ? (s.ninkuAdjustmentAmount > 0 ? '+' : '') + formatCurrency(s.ninkuAdjustmentAmount).replace('¥', '') : '-'}</td>
           <td class="amount">${s.transportAmount ? formatCurrency(s.transportAmount) : '-'}</td>
           <td class="amount">${draftAdj !== 0 ? (draftAdj > 0 ? '+' : '') + formatCurrency(draftAdj).replace('¥', '') : '-'}</td>
           <td style="max-width: 150px; white-space: normal;">${escapeHtml(draftNotes) || '-'}</td>
@@ -2324,6 +2347,7 @@
           <td>${p.unpaidCount}件</td>
           <td style="font-size:12px">${periodStart} ~ ${periodEnd}</td>
           <td class="amount">${formatCurrency(p.estimatedAmount)}</td>
+          <td class="amount">${p.ninkuAdjustmentAmount ? (p.ninkuAdjustmentAmount > 0 ? '+' : '') + formatCurrency(p.ninkuAdjustmentAmount).replace('¥', '') : '-'}</td>
           <td class="amount">${p.transportAmount ? formatCurrency(p.transportAmount) : '-'}</td>
           <td class="amount">${adjustmentDisplay}</td>
           <td style="max-width: 150px; white-space: normal;">${escapeHtml(p.notes || '')}</td>
@@ -2509,6 +2533,8 @@
               <th style="white-space: nowrap;">期間</th>
               <th style="white-space: nowrap;">配置数</th>
               <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">人工割調整</th>
+              <th style="white-space: nowrap;">交通費</th>
               <th style="white-space: nowrap;">調整額</th>
               <th style="white-space: nowrap;">合計金額</th>
               <th style="white-space: nowrap;">ステータス</th>
@@ -2522,6 +2548,8 @@
       payouts.forEach(p => {
         const baseAmount = (p.base_amount || 0);
         const adjustmentAmount = p.adjustment_amount || 0;
+        const transportAmount = p.transport_amount || 0;
+        const ninkuAdj = p.ninku_adjustment_amount || 0;
         const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
         const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済み' : '下書き');
         html += `
@@ -2530,6 +2558,8 @@
             <td style="font-size:12px">${escapeHtml(p.period_start || '-')} ~ ${escapeHtml(p.period_end || '-')}</td>
             <td>${p.assignment_count}件</td>
             <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount">${ninkuAdj ? (ninkuAdj > 0 ? '+' : '') + formatCurrency(ninkuAdj).replace('¥', '') : '-'}</td>
+            <td class="amount">${transportAmount ? formatCurrency(transportAmount) : '-'}</td>
             <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
             <td class="amount">${formatCurrency(p.total_amount)}</td>
             <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
@@ -2654,32 +2684,44 @@
               <th style="white-space: nowrap;">支払日</th>
               <th style="white-space: nowrap;">配置数</th>
               <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">交通費</th>
               <th style="white-space: nowrap;">調整額</th>
               <th style="white-space: nowrap;">合計金額</th>
               <th style="white-space: nowrap;">ステータス</th>
               <th style="white-space: nowrap; width: 200px;">備考</th>
+              <th style="white-space: nowrap;">操作</th>
             </tr>
           </thead>
           <tbody>
       `;
 
       payouts.forEach(p => {
-        const baseAmount = (p.base_amount || 0);  // 交通費除外
+        const baseAmount = (p.base_amount || 0);
         const adjustmentAmount = p.adjustment_amount || 0;
+        const transportAmount = p.transport_amount || 0;
         const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
         const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済' : '下書き');
 
         html += `
           <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
-            <td>${p.target_name}</td>
+            <td>${escapeHtml(p.target_name)}</td>
             <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
             <td>${p.paid_date || '-'}</td>
             <td>${p.assignment_count}件</td>
             <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount">${transportAmount ? formatCurrency(transportAmount) : '-'}</td>
             <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
             <td class="amount">${formatCurrency(p.total_amount)}</td>
             <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-            <td style="white-space: normal; max-width: 200px;">${p.notes || ''}</td>
+            <td style="white-space: normal; max-width: 200px;">${escapeHtml(p.notes || '')}</td>
+            <td>
+              <button type="button" class="btn btn-secondary js-open-payout-modal"
+                data-staff-id="${escapeHtml(p.subcontractor_id || p.staff_id)}"
+                data-staff-name="${escapeHtml(p.target_name)}"
+                data-status="paid"
+                data-payout-id="${escapeHtml(p.payout_id)}"
+                data-updated-at="${escapeHtml(p.updated_at)}">詳細</button>
+            </td>
           </tr>
         `;
       });
@@ -2706,7 +2748,10 @@
               <th style="white-space: nowrap;">支払日</th>
               <th style="white-space: nowrap;">配置数</th>
               <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">人工割調整</th>
+              <th style="white-space: nowrap;">交通費</th>
               <th style="white-space: nowrap;">調整額</th>
+              <th style="white-space: nowrap;">源泉徴収</th>
               <th style="white-space: nowrap;">合計金額</th>
               <th style="white-space: nowrap; width: 200px;">備考</th>
               <th style="white-space: nowrap;">操作</th>
@@ -2716,20 +2761,27 @@
       `;
 
       payouts.forEach(p => {
-        const baseAmount = (p.base_amount || 0);  // 交通費除外
+        const baseAmount = (p.base_amount || 0);
         const adjustmentAmount = p.adjustment_amount || 0;
+        const transportAmount = p.transport_amount || 0;
+        const ninkuAdj = p.ninku_adjustment_amount || 0;
+        const taxAmount = p.tax_amount || 0;
         html += `
-          <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
-            <td>${p.target_name}</td>
+          <tr style="white-space: nowrap; cursor: pointer;" class="js-history-row" data-payout-id="${escapeHtml(p.payout_id)}" data-staff-id="${escapeHtml(p.staff_id)}" data-staff-name="${escapeHtml(p.target_name)}" data-status="paid" data-updated-at="${escapeHtml(p.updated_at)}">
+            <td>${escapeHtml(p.target_name)}</td>
             <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
             <td>${p.paid_date || '-'}</td>
             <td>${p.assignment_count}件</td>
             <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount">${ninkuAdj ? (ninkuAdj > 0 ? '+' : '') + formatCurrency(ninkuAdj).replace('¥', '') : '-'}</td>
+            <td class="amount">${transportAmount ? formatCurrency(transportAmount) : '-'}</td>
             <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+            <td class="amount">${taxAmount ? '-' + formatCurrency(taxAmount) : '-'}</td>
             <td class="amount">${formatCurrency(p.total_amount)}</td>
-            <td style="white-space: normal; max-width: 200px;">${p.notes || ''}</td>
-            <td>
-              <button class="btn btn-danger" onclick="undoPayoutConfirm('${p.payout_id}', '${p.updated_at}', '${p.target_name}')">取消</button>
+            <td style="white-space: normal; max-width: 200px;">${escapeHtml(p.notes || '')}</td>
+            <td style="white-space: nowrap;">
+              <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${escapeHtml(p.staff_id)}" data-staff-name="${escapeHtml(p.target_name)}" data-status="paid" data-payout-id="${escapeHtml(p.payout_id)}" data-updated-at="${escapeHtml(p.updated_at)}">詳細</button>
+              <button type="button" class="btn btn-danger js-undo-payout" data-payout-id="${escapeHtml(p.payout_id)}" data-updated-at="${escapeHtml(p.updated_at)}" data-target-name="${escapeHtml(p.target_name)}">取消</button>
             </td>
           </tr>
         `;
@@ -3138,7 +3190,10 @@
         unpaidCount: undone.assignment_count,
         periodStart: undone.period_start,
         periodEnd: undone.period_end,
-        estimatedAmount: (undone.base_amount || 0),  // 交通費除外
+        estimatedAmount: undone.total_amount || (undone.base_amount || 0),
+        baseAmount: undone.base_amount,
+        transportAmount: undone.transport_amount,
+        ninkuAdjustmentAmount: undone.ninku_adjustment_amount || 0,
         status: 'unpaid',
         rowId: `unpaid-${undone.staff_id}`
       };
@@ -3270,6 +3325,46 @@
       document.getElementById('modalPayBtn').style.display = 'none';
       document.getElementById('modalDetailExportBtn').style.display = 'none';
       document.getElementById('modalDraftSaveBtn').style.display = 'none';
+
+      // 支払済みの場合（read-only 閲覧）
+      if (status === 'paid' && payoutId) {
+        document.getElementById('payoutModalBody').innerHTML = '<div class="loading">読み込み中...</div>';
+        modal.classList.add('active');
+
+        let payoutResult = null;
+        let historyResult = null;
+        let completed = 0;
+
+        function checkAndRenderPaid() {
+          completed++;
+          if (completed === 2) {
+            if (modal.dataset.staffId !== staffId) return;
+            if (payoutResult && payoutResult.ok) {
+              modalUnpaidData = payoutResult.data;
+              modalHistoryData = historyResult?.ok ? historyResult.data.payouts : [];
+              if (payoutResult.data.updatedAt) {
+                modalPayoutUpdatedAt = payoutResult.data.updatedAt;
+              }
+              renderPayoutModal(payoutResult.data, modalHistoryData, { status: 'paid' });
+            } else {
+              document.getElementById('payoutModalBody').innerHTML =
+                `<div class="empty-state">${payoutResult?.error || 'エラーが発生しました'}</div>`;
+            }
+          }
+        }
+
+        google.script.run
+          .withSuccessHandler(result => { payoutResult = result; checkAndRenderPaid(); })
+          .withFailureHandler(err => { payoutResult = { ok: false, error: err.message }; checkAndRenderPaid(); })
+          .getPayoutDetails(payoutId, { include_assignments: false });
+
+        google.script.run
+          .withSuccessHandler(result => { historyResult = result; checkAndRenderPaid(); })
+          .withFailureHandler(err => { historyResult = { ok: false, data: { payouts: [] } }; checkAndRenderPaid(); })
+          .searchPayouts({ staff_id: staffId, status: 'paid', limit: 10 });
+
+        return;
+      }
 
       // 確認済みの場合
       if (status === 'confirmed' && payoutId) {
@@ -3492,7 +3587,7 @@
         wrapper.innerHTML = '<div class="empty-state">出勤現場がありません</div>';
         return;
       }
-      const isEditable = modalPayoutStatus !== 'confirmed';
+      const isEditable = modalPayoutStatus !== 'confirmed' && modalPayoutStatus !== 'paid';
       wrapper.innerHTML = buildAssignmentTableHtml(assignments, isEditable);
     }
 
@@ -3506,8 +3601,8 @@
       const wrapper = document.getElementById('modalAssignmentWrapper');
       if (!staffId || !wrapper) return;
 
-      // キャッシュがあれば即座に表示（確認済みはキャッシュしない）
-      if (modalPayoutStatus !== 'confirmed' && modalAssignmentCache.has(staffId)) {
+      // キャッシュがあれば即座に表示（確認済み/支払済はキャッシュしない）
+      if (modalPayoutStatus !== 'confirmed' && modalPayoutStatus !== 'paid' && modalAssignmentCache.has(staffId)) {
         modal.dataset.assignmentsLoaded = 'true';
         renderModalAssignments(modalAssignmentCache.get(staffId));
         return;
@@ -3516,8 +3611,8 @@
       modal.dataset.assignmentsLoading = 'true';
       wrapper.innerHTML = '<div class="loading">読み込み中...</div>';
 
-      // 確認済みの場合はgetPayoutDetailsを使用
-      if (modalPayoutStatus === 'confirmed' && modalPayoutId) {
+      // 確認済み/支払済の場合はgetPayoutDetailsを使用
+      if ((modalPayoutStatus === 'confirmed' || modalPayoutStatus === 'paid') && modalPayoutId) {
         google.script.run
           .withSuccessHandler(result => {
             if (modal.dataset.staffId !== staffId) return;
@@ -3588,7 +3683,7 @@
       } else {
         hidePayoutArchiveWarning();
       }
-      const disabledAttr = preview ? 'disabled' : '';
+      const disabledAttr = (preview || status === 'paid') ? 'disabled' : '';
       const baseText = (data.baseAmount === null || data.baseAmount === undefined) ? '-' : formatCurrency(data.baseAmount);
       const transportText = (data.transportAmount === null || data.transportAmount === undefined) ? '-' : formatCurrency(data.transportAmount);
       const totalText = (data.totalAmount === null || data.totalAmount === undefined) ? '-' : formatCurrency(data.totalAmount);
@@ -3604,19 +3699,23 @@
       }
 
       const payBtn = document.getElementById('modalPayBtn');
-      payBtn.style.display = '';
-      // プレビューモードでも必要データ（staffId, totalAmount, assignmentCount）があればボタンは有効化
-      // 確認/支払操作に必要なのはこれらのみ
-      payBtn.disabled = false;
+      const isPaid = status === 'paid';
+
+      // 支払済みの場合は支払ボタン非表示
+      if (isPaid) {
+        payBtn.style.display = 'none';
+      } else {
+        payBtn.style.display = '';
+        payBtn.disabled = false;
+      }
 
       // ステータスに応じたボタンテキストとアクションを設定
-      // 確認済みの場合、調整額・備考は既に確定しているので無効化
+      // 確認済み/支払済の場合、調整額・備考は既に確定しているので無効化
       const isConfirmed = status === 'confirmed';
-      const adjustmentDisabled = isConfirmed ? 'disabled' : disabledAttr;
+      const adjustmentDisabled = (isConfirmed || isPaid) ? 'disabled' : disabledAttr;
 
       // 明細出力ボタン: confirmed/paid の場合のみ表示
       const detailExportBtn = document.getElementById('modalDetailExportBtn');
-      const isPaid = status === 'paid';
       if (detailExportBtn) {
         detailExportBtn.style.display = (isConfirmed || isPaid) ? '' : 'none';
       }
@@ -3657,7 +3756,7 @@
       let assignmentListHtml = '';
       if (data.assignmentCount > 0) {
         const listBody = assignmentsLoaded
-          ? buildAssignmentTableHtml(data.assignments || [], !isConfirmed)
+          ? buildAssignmentTableHtml(data.assignments || [], !isConfirmed && !isPaid)
           : '<div class="empty-state">開いて読み込み</div>';
         assignmentListHtml = `
           <div class="assignment-list-section">
@@ -3714,7 +3813,7 @@
             <div style="display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center;">
               <div class="filter-group">
                 <label>支払日:</label>
-                <input type="date" id="modalPaidDate" value="${today}" ${disabledAttr} />
+                <input type="date" id="modalPaidDate" value="${(isPaid && data.paidDate && /^\d{4}-\d{2}-\d{2}$/.test(data.paidDate)) ? escapeHtml(data.paidDate) : today}" ${disabledAttr} />
               </div>
               <div class="filter-group">
                 <label>調整額:</label>
@@ -3779,8 +3878,8 @@
     function updateModalTotal() {
       if (!modalUnpaidData) return;
 
-      // 確認済みの場合、totalAmountは既に調整込みなので再計算しない
-      if (modalPayoutStatus === 'confirmed') {
+      // 確認済み/支払済の場合、totalAmountは既に調整込みなので再計算しない
+      if (modalPayoutStatus === 'confirmed' || modalPayoutStatus === 'paid') {
         document.getElementById('modalTotalAmount').textContent = formatCurrency(modalUnpaidData.totalAmount);
         return;
       }
@@ -4275,7 +4374,10 @@
                 <th style="white-space: nowrap;">支払日</th>
                 <th style="white-space: nowrap;">配置数</th>
                 <th style="white-space: nowrap;">基本金額</th>
+                <th style="white-space: nowrap;">人工割調整</th>
+                <th style="white-space: nowrap;">交通費</th>
                 <th style="white-space: nowrap;">調整額</th>
+                <th style="white-space: nowrap;">源泉徴収</th>
                 <th style="white-space: nowrap;">合計金額</th>
                 <th style="white-space: nowrap; width: 200px;">備考</th>
                 <th style="white-space: nowrap;">操作</th>
@@ -4288,22 +4390,35 @@
       }
 
       // 行を作成
-      const baseAmount = (payout.base_amount || 0);  // 交通費除外
+      const baseAmount = (payout.base_amount || 0);
       const adjustmentAmount = payout.adjustment_amount || 0;
+      const transportAmount = payout.transport_amount || 0;
+      const ninkuAdj = payout.ninku_adjustment_amount || 0;
+      const taxAmount = payout.tax_amount || 0;
       const tr = document.createElement('tr');
       tr.style.whiteSpace = 'nowrap';
+      tr.style.cursor = 'pointer';
+      tr.className = 'js-history-row';
       tr.dataset.payoutId = payout.payout_id;
+      tr.dataset.staffId = payout.staff_id;
+      tr.dataset.staffName = payout.target_name;
+      tr.dataset.status = 'paid';
+      tr.dataset.updatedAt = payout.updated_at;
       tr.innerHTML = `
-        <td>${payout.target_name || ''}</td>
+        <td>${escapeHtml(payout.target_name || '')}</td>
         <td style="font-size:12px">${payout.period_start || '-'} ~ ${payout.period_end || '-'}</td>
         <td>${payout.paid_date || '-'}</td>
         <td>${payout.assignment_count}件</td>
         <td class="amount">${formatCurrency(baseAmount)}</td>
+        <td class="amount">${ninkuAdj ? (ninkuAdj > 0 ? '+' : '') + formatCurrency(ninkuAdj).replace('¥', '') : '-'}</td>
+        <td class="amount">${transportAmount ? formatCurrency(transportAmount) : '-'}</td>
         <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+        <td class="amount">${taxAmount ? '-' + formatCurrency(taxAmount) : '-'}</td>
         <td class="amount">${formatCurrency(payout.total_amount)}</td>
-        <td style="white-space: normal; max-width: 200px;">${payout.notes || ''}</td>
-        <td>
-          <button class="btn btn-danger" onclick="undoPayoutConfirm('${payout.payout_id}', '${payout.updated_at}', '${payout.target_name}')">取消</button>
+        <td style="white-space: normal; max-width: 200px;">${escapeHtml(payout.notes || '')}</td>
+        <td style="white-space: nowrap;">
+          <button type="button" class="btn btn-secondary js-open-payout-modal" data-staff-id="${escapeHtml(payout.staff_id)}" data-staff-name="${escapeHtml(payout.target_name)}" data-status="paid" data-payout-id="${escapeHtml(payout.payout_id)}" data-updated-at="${escapeHtml(payout.updated_at)}">詳細</button>
+          <button type="button" class="btn btn-danger js-undo-payout" data-payout-id="${escapeHtml(payout.payout_id)}" data-updated-at="${escapeHtml(payout.updated_at)}" data-target-name="${escapeHtml(payout.target_name)}">取消</button>
         </td>
       `;
 
@@ -4361,7 +4476,10 @@
         periodStart: payout.period_start,
         periodEnd: payout.period_end,
         estimatedAmount: payout.total_amount,
+        baseAmount: payout.base_amount,
+        transportAmount: payout.transport_amount,
         adjustmentAmount: payout.adjustment_amount || 0,
+        ninkuAdjustmentAmount: payout.ninku_adjustment_amount || 0,
         notes: payout.notes || '',
         payoutId: payout.payout_id,
         updatedAt: payout.updated_at,
@@ -5380,31 +5498,48 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>外注先</th>
-              <th>期間</th>
-              <th>件数</th>
-              <th style="text-align: right;">金額</th>
-              <th>状態</th>
-              <th>支払日</th>
-              <th>操作</th>
+              <th style="white-space: nowrap;">外注先</th>
+              <th style="white-space: nowrap;">期間</th>
+              <th style="white-space: nowrap;">支払日</th>
+              <th style="white-space: nowrap;">配置数</th>
+              <th style="white-space: nowrap;">基本金額</th>
+              <th style="white-space: nowrap;">交通費</th>
+              <th style="white-space: nowrap;">調整額</th>
+              <th style="white-space: nowrap;">合計金額</th>
+              <th style="white-space: nowrap;">ステータス</th>
+              <th style="white-space: nowrap; width: 200px;">備考</th>
+              <th style="white-space: nowrap;">操作</th>
             </tr>
           </thead>
           <tbody>
       `;
 
       payouts.forEach(function(p) {
+        const baseAmount = p.base_amount || 0;
+        const adjustmentAmount = p.adjustment_amount || 0;
+        const transportAmount = p.transport_amount || 0;
         const statusClass = p.status === 'paid' ? 'paid' : (p.status === 'confirmed' ? 'confirmed' : 'draft');
         const statusLabel = p.status === 'paid' ? '支払済' : (p.status === 'confirmed' ? '確認済' : '下書き');
 
         html += `
-          <tr data-payout-id="${p.payout_id}">
+          <tr style="white-space: nowrap;" data-payout-id="${p.payout_id}">
             <td>${escapeHtml(p.target_name || '-')}</td>
-            <td>${formatDate(p.period_start)} 〜 ${formatDate(p.period_end)}</td>
+            <td style="font-size:12px">${p.period_start || '-'} ~ ${p.period_end || '-'}</td>
+            <td>${p.paid_date || '-'}</td>
             <td>${p.assignment_count}件</td>
-            <td class="amount">¥${formatNumber(p.total_amount)}</td>
+            <td class="amount">${formatCurrency(baseAmount)}</td>
+            <td class="amount">${transportAmount ? formatCurrency(transportAmount) : '-'}</td>
+            <td class="amount" style="color: ${adjustmentAmount !== 0 ? (adjustmentAmount > 0 ? 'var(--color-success)' : 'var(--color-danger)') : 'inherit'}">${adjustmentAmount !== 0 ? formatCurrency(Math.abs(adjustmentAmount)).replace('¥', '') : '-'}</td>
+            <td class="amount">${formatCurrency(p.total_amount)}</td>
             <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
-            <td>${p.paid_date ? formatDate(p.paid_date) : '-'}</td>
-            <td>
+            <td style="white-space: normal; max-width: 200px;">${escapeHtml(p.notes || '')}</td>
+            <td style="white-space: nowrap;">
+              <button type="button" class="btn btn-secondary js-open-payout-modal"
+                data-staff-id="${escapeHtml(p.subcontractor_id || p.staff_id)}"
+                data-staff-name="${escapeHtml(p.target_name || '')}"
+                data-status="paid"
+                data-payout-id="${escapeHtml(p.payout_id)}"
+                data-updated-at="${escapeHtml(p.updated_at)}">詳細</button>
               <button class="btn btn-danger btn-undo-sub-payout"
                 data-payout-id="${escapeHtml(p.payout_id)}"
                 data-updated-at="${escapeHtml(p.updated_at)}"
