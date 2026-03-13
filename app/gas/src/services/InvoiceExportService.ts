@@ -856,8 +856,7 @@ const InvoiceExportService = {
     );
 
     // P2-8: 明細データを2D配列として構築（バルク処理）
-    // 案件間の空行と日付+現場の重複表示抑制を維持
-    let prevDateSite = null;
+    // 案件間の空行と同一job内の続き行で日付・案件名を抑制
     let prevJobId = null;
     const rowsData = [];
 
@@ -869,31 +868,38 @@ const InvoiceExportService = {
         // 空行を追加（10列分の空文字列）
         rowsData.push(['', '', '', '', '', '', '', '', '', '']);
       }
+
+      // 同一job内の続き行では日付・案件名を省略
+      const isFirstLineForJob = (line.job_id !== prevJobId);
       prevJobId = line.job_id;
 
-      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
-      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
-      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
-      prevDateSite = currentDateSite;
-
       // 行データを構築（A〜J列、C・Eはスキップなので空文字）
+      const siteName = isFirstLineForJob ? String(line.site_name || '') : '';
       rowsData.push([
-        isFirstLineForDateSite ? (line.work_date || '') : '',  // A: 日付
-        isFirstLineForDateSite ? (line.site_name || '') : '',  // B: 案件名
-        '',                                                     // C: スキップ
-        line.item_name || '',                                   // D: 品目
-        '',                                                     // E: スキップ
-        this._formatTimeValue(line.time_note),                  // F: 時間/備考
-        line.quantity || 0,                                     // G: 数量
-        line.unit || '人',                                      // H: 単位
-        line.unit_price || 0,                                   // I: 単価
-        line.amount || 0                                        // J: 金額
+        isFirstLineForJob ? (line.work_date || '') : '',  // A: 日付
+        siteName,                                              // B: 案件名
+        '',                                                // C: スキップ
+        line.item_name || '',                              // D: 品目
+        '',                                                // E: スキップ
+        this._formatTimeValue(line.time_note),             // F: 時間/備考
+        line.quantity || 0,                                // G: 数量
+        line.unit || '人',                                 // H: 単位
+        line.unit_price || 0,                              // I: 単価
+        line.amount || 0                                   // J: 金額
       ]);
     }
 
     // 一括書き込み
     if (rowsData.length > 0) {
       sheet.getRange(startRow, 1, rowsData.length, 10).setValues(rowsData);
+      // 明細行のフォントサイズを8pxに設定
+      sheet.getRange(startRow, 1, rowsData.length, 10).setFontSize(8);
+      // B列（案件名）のテキスト折り返しを有効化
+      sheet.getRange(startRow, 2, rowsData.length, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+      // Excel出力時のみ行高を自動調整（PDFでは不要、WRAPで十分）
+      if (!opts.forPdf) {
+        sheet.autoResizeRows(startRow, rowsData.length);
+      }
     }
     const currentRow = startRow + rowsData.length;
 
@@ -1019,8 +1025,7 @@ const InvoiceExportService = {
     );
 
     // P2-8: 明細データを2D配列として構築（バルク処理）
-    // 案件間の空行と日付+現場の重複表示抑制を維持
-    let prevDateSite = null;
+    // 案件間の空行と同一job内の続き行で日付・案件名を抑制
     let prevJobId = null;
     const rowsData = [];
 
@@ -1032,31 +1037,38 @@ const InvoiceExportService = {
         // 空行を追加（10列分の空文字列）
         rowsData.push(['', '', '', '', '', '', '', '', '', '']);
       }
+
+      // 同一job内の続き行では日付・案件名を省略
+      const isFirstLineForJob = (line.job_id !== prevJobId);
       prevJobId = line.job_id;
 
-      // P2-8: 同じ日付+現場の続き行は日付・現場名を空にする
-      const currentDateSite = `${line.work_date || ''}_${line.site_name || ''}`;
-      const isFirstLineForDateSite = (currentDateSite !== prevDateSite);
-      prevDateSite = currentDateSite;
-
       // 行データを構築（A〜J列）
+      const siteName = isFirstLineForJob ? String(line.site_name || '') : '';
       rowsData.push([
-        isFirstLineForDateSite ? (line.work_date || '') : '',  // A: 日付
-        isFirstLineForDateSite ? (line.site_name || '') : '',  // B: 案件名
-        line.order_number || '',                                // C: 発注No
-        line.branch_office || '',                               // D: 営業所
-        line.item_name || '',                                   // E: 品目
-        this._formatTimeValue(line.time_note),                  // F: 時間/備考
-        line.quantity || 0,                                     // G: 数量
-        line.unit || '人',                                      // H: 単位
-        line.unit_price || 0,                                   // I: 単価
-        line.amount || 0                                        // J: 金額
+        isFirstLineForJob ? (line.work_date || '') : '',  // A: 日付
+        siteName,                                              // B: 案件名
+        line.order_number || '',                           // C: 発注No
+        line.branch_office || '',                          // D: 営業所
+        line.item_name || '',                              // E: 品目
+        this._formatTimeValue(line.time_note),             // F: 時間/備考
+        line.quantity || 0,                                // G: 数量
+        line.unit || '人',                                 // H: 単位
+        line.unit_price || 0,                              // I: 単価
+        line.amount || 0                                   // J: 金額
       ]);
     }
 
     // 一括書き込み
     if (rowsData.length > 0) {
       sheet.getRange(startRow, 1, rowsData.length, 10).setValues(rowsData);
+      // 明細行のフォントサイズを8pxに設定
+      sheet.getRange(startRow, 1, rowsData.length, 10).setFontSize(8);
+      // B列（案件名）のテキスト折り返しを有効化
+      sheet.getRange(startRow, 2, rowsData.length, 1).setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+      // Excel出力時のみ行高を自動調整（PDFでは不要、WRAPで十分）
+      if (!opts.forPdf) {
+        sheet.autoResizeRows(startRow, rowsData.length);
+      }
     }
     const currentRow = startRow + rowsData.length;
 
@@ -1862,6 +1874,11 @@ const InvoiceExportService = {
    * @param {Date|string|number|null} value - 時間値
    * @returns {string} 時間文字列または空文字
    */
+  _breakLongText: function(text: string, maxChars: number): string {
+    if (!text || text.length <= maxChars) return text;
+    return text.substring(0, maxChars) + '\n' + text.substring(maxChars);
+  },
+
   _formatTimeValue: function(value: unknown) {
     if (!value) return '';
 
