@@ -30,6 +30,12 @@
       </div>
       <button class="modal-close" onclick="closeAssignmentModal()">&times;</button>
     </div>
+    <!-- カスタム単価未登録警告バナー -->
+    <div id="custom-price-warning-banner" class="invoice-warning-banner" style="display: none;">
+      <span class="banner-icon">⚠️</span>
+      <span id="custom-price-warning-message"></span>
+      <button class="banner-close" onclick="document.getElementById('custom-price-warning-banner').style.display='none'">&times;</button>
+    </div>
     <!-- 請求集計済み警告バナー -->
     <div id="invoice-exists-banner" class="invoice-warning-banner" style="display: none;">
       <span class="banner-icon">⚠️</span>

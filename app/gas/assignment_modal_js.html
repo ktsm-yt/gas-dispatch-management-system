@@ -529,8 +529,10 @@ function resetAssignmentModalUI() {
   document.getElementById('modal-shortage-badge').style.display = 'none';
   document.getElementById('modal-shortage').textContent = '0';
 
-  // 請求書警告バナー
+  // 警告バナーをリセット
   hideInvoiceExistsBanner();
+  var cpBanner = document.getElementById('custom-price-warning-banner');
+  if (cpBanner) cpBanner.style.display = 'none';
 
   // スタッフリスト
   const staffListEl = document.getElementById('staff-list');
@@ -1893,6 +1895,18 @@ function doSaveAllChanges() {
 
         // 請求書存在チェック（案件担当への通知用）
         checkInvoiceExistsNotification();
+
+        // カスタム単価未登録警告（手動閉じバナー）
+        var warningBanner = document.getElementById('custom-price-warning-banner');
+        if (warningBanner) {
+          if (response.data.warnings && response.data.warnings.length > 0) {
+            var msgEl = document.getElementById('custom-price-warning-message');
+            msgEl.textContent = response.data.warnings.join(' / ');
+            warningBanner.style.display = '';
+          } else {
+            warningBanner.style.display = 'none';
+          }
+        }
       } else {
         showToast(response.error?.message || '保存に失敗しました', 'error');
         updateSaveButton();
