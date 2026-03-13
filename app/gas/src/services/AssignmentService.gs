@@ -33,10 +33,17 @@ const AssignmentService = {
       };
     });
 
-    return {
+    // カスタム単価未登録チェック（モーダル表示時に即座に警告）
+    var warnings = this._checkCustomPriceWarnings(assignments, staffCache);
+
+    var result = {
       job: job,
       assignments: enrichedAssignments
     };
+    if (warnings.length > 0) {
+      result.warnings = warnings;
+    }
+    return result;
   },
 
   /**
@@ -311,29 +318,7 @@ const AssignmentService = {
       JobService.invalidateDashboardCache(job.work_date);
 
       // カスタム単価未登録チェック（非ブロッキング警告）
-      var warnings = [];
-      try {
-        var SYSTEM_UNITS = { basic:1, halfday:1, fullday:1, night:1, tobi:1, age:1, tobiage:1, holiday:1 };
-        var customPriceMap = MasterCache.getCustomPriceMap();
-        var priceTypeMap = MasterCache.getPriceTypeMap();
-        var checkedPairs = {};
-        updatedAssignments.forEach(function(a) {
-          if (!a.pay_unit || SYSTEM_UNITS[a.pay_unit] || a.status === 'CANCELLED') return;
-          var pairKey = a.staff_id + '|' + a.pay_unit;
-          if (checkedPairs[pairKey]) return;
-          checkedPairs[pairKey] = true;
-          var cpKey = 'staff|' + a.staff_id + '|' + a.pay_unit;
-          if (customPriceMap[cpKey] === undefined) {
-            var staffInfo = staffCache[a.staff_id];
-            var staffName = staffInfo ? (staffInfo.nickname || staffInfo.name) : '不明';
-            var typeInfo = priceTypeMap[a.pay_unit];
-            var typeLabel = typeInfo ? typeInfo.label : a.pay_unit;
-            warnings.push('スタッフ「' + staffName + '」に単価種別「' + typeLabel + '」の単価が未登録です（基本単価で計算されます）');
-          }
-        });
-      } catch (warnErr) {
-        Logger.log('Custom price warning check failed (non-critical): ' + warnErr);
-      }
+      var warnings = this._checkCustomPriceWarnings(updatedAssignments, staffCache);
 
       const hasChanges = results.inserted.length > 0 || results.updated.length > 0 || results.deleted.length > 0;
       var responseData = {
@@ -585,6 +570,77 @@ const AssignmentService = {
       logErr('getStaffInfo', e);
       return null;
     }
+  },
+
+  /**
+   * カスタム単価未登録の警告のみ取得（軽量版 - enrichment不要）
+   * @param {string} jobId - 案件ID
+   * @returns {Object} { jobId, warnings: string[] }
+   */
+  getCustomPriceWarningsByJobId: function(jobId) {
+    var assignments = AssignmentRepository.findByJobId(jobId);
+    if (!assignments || assignments.length === 0) {
+      return { jobId: jobId, warnings: [] };
+    }
+    var staffCache = this._buildStaffCache();
+    return {
+      jobId: jobId,
+      warnings: this._checkCustomPriceWarnings(assignments, staffCache)
+    };
+  },
+
+  /**
+   * カスタム単価未登録チェック（非ブロッキング）
+   * @private
+   * @param {Object[]} assignments - 配置一覧
+   * @param {Object} staffCache - staff_idをキーとしたスタッフ情報マップ
+   * @returns {string[]} 警告メッセージの配列
+   */
+  _checkCustomPriceWarnings: function(assignments, staffCache) {
+    var warnings = [];
+    try {
+      var SYSTEM_UNITS = { basic:1, halfday:1, fullday:1, night:1, tobi:1, age:1, tobiage:1, holiday:1 };
+      var customPriceMap = MasterCache.getCustomPriceMap();
+      var priceTypeMap = MasterCache.getPriceTypeMap();
+      var checkedPairs = {};
+      assignments.forEach(function(a) {
+        if (!a.pay_unit || SYSTEM_UNITS[a.pay_unit] || a.status === 'CANCELLED') return;
+        var staffInfo = staffCache[a.staff_id];
+        var isSubcontract = staffInfo && (staffInfo.staff_type === 'subcontract' || Number(staffInfo.staff_type) === 5);
+
+        if (isSubcontract) {
+          // 外注スタッフ → 外注先マスタの単価でチェック
+          var subId = staffInfo.subcontractor_id;
+          var entityType = subId ? 'subcontractor' : 'staff';
+          var entityId = subId || a.staff_id;
+          var pairKey = entityType + '|' + entityId + '|' + a.pay_unit;
+          if (checkedPairs[pairKey]) return;
+          checkedPairs[pairKey] = true;
+          var cpKey = entityType + '|' + entityId + '|' + a.pay_unit;
+          if (customPriceMap[cpKey] === undefined) {
+            var staffName = staffInfo.nickname || staffInfo.name || '不明';
+            var typeInfo = priceTypeMap[a.pay_unit];
+            var typeLabel = typeInfo ? typeInfo.label : a.pay_unit;
+            warnings.push('外注先の単価種別「' + typeLabel + '」が未登録です（スタッフ「' + staffName + '」・外注先の基本単価で計算されます）');
+          }
+        } else {
+          // 通常スタッフ → スタッフ個人の単価でチェック
+          var pairKey = a.staff_id + '|' + a.pay_unit;
+          if (checkedPairs[pairKey]) return;
+          checkedPairs[pairKey] = true;
+          var cpKey = 'staff|' + a.staff_id + '|' + a.pay_unit;
+          if (customPriceMap[cpKey] === undefined) {
+            var staffName = staffInfo ? (staffInfo.nickname || staffInfo.name) : '不明';
+            var typeInfo = priceTypeMap[a.pay_unit];
+            var typeLabel = typeInfo ? typeInfo.label : a.pay_unit;
+            warnings.push('スタッフ「' + staffName + '」に単価種別「' + typeLabel + '」の単価が未登録です（基本単価で計算されます）');
+          }
+        }
+      });
+    } catch (warnErr) {
+      Logger.log('Custom price warning check failed (non-critical): ' + warnErr);
+    }
+    return warnings;
   },
 
   /**

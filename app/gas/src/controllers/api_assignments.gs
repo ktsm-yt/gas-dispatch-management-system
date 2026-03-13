@@ -818,3 +818,30 @@ function getDashboardAssignments(date) {
     );
   }
 }
+
+/**
+ * カスタム単価未登録の警告チェック（軽量RPC）
+ *
+ * @param {string} jobId - 案件ID
+ * @returns {Object} APIレスポンス { ok: true, data: { warnings: string[] } }
+ */
+function checkCustomPriceWarnings(jobId) {
+  var requestId = generateRequestId();
+  try {
+    var authResult = checkPermission(ROLES.STAFF);
+    if (!authResult.allowed) {
+      return buildErrorResponse(
+        ERROR_CODES.PERMISSION_DENIED,
+        authResult.message || '権限がありません',
+        {},
+        requestId
+      );
+    }
+    if (!jobId) return { ok: true, data: { warnings: [] } };
+    var warningData = AssignmentService.getCustomPriceWarningsByJobId(jobId);
+    return { ok: true, data: { warnings: warningData.warnings || [] } };
+  } catch (e) {
+    Logger.log('checkCustomPriceWarnings error: ' + e);
+    return { ok: true, data: { warnings: [] } };
+  }
+}

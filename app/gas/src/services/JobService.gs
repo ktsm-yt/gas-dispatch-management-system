@@ -44,12 +44,16 @@ const JobService = {
       slotStatus = SlotService.getSlotStatus(normalizedJobId);
     }
 
-    return {
+    var result = {
       job: jobWithCustomer,
       assignments: assignments,
       slots: slots,
       slotStatus: slotStatus
     };
+    if (assignmentsData.warnings && assignmentsData.warnings.length > 0) {
+      result.warnings = assignmentsData.warnings;
+    }
+    return result;
   },
 
   /**
