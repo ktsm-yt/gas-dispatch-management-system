@@ -1887,7 +1887,7 @@
               draftPayouts: unpaidData.draftPayouts || []
             });
           } else {
-            summaryDiv.innerHTML = `<div class="empty-state">${result.error}</div>`;
+            summaryDiv.innerHTML = `<div class="empty-state">${(result.error && result.error.message) || result.error || 'エラーが発生しました'}</div>`;
             clearSession();
           }
         })
@@ -2408,7 +2408,7 @@
             renderHistory(filtered);
           } else {
             document.getElementById('historyTable').innerHTML =
-              `<div class="empty-state">${result.error}</div>`;
+              `<div class="empty-state">${(result.error && result.error.message) || result.error || 'エラーが発生しました'}</div>`;
           }
         })
         .withFailureHandler(err => {
@@ -2587,7 +2587,7 @@
             );
             renderHistory(sorted);
           } else {
-            container.innerHTML = `<div class="empty-state">${result.error}</div>`;
+            container.innerHTML = `<div class="empty-state">${(result.error && result.error.message) || result.error || 'エラーが発生しました'}</div>`;
           }
         })
         .withFailureHandler(err => {
@@ -2627,7 +2627,7 @@
             );
             renderSubHistory(sorted);
           } else {
-            container.innerHTML = `<div class="empty-state">${result.error}</div>`;
+            container.innerHTML = `<div class="empty-state">${(result.error && result.error.message) || result.error || 'エラーが発生しました'}</div>`;
           }
         })
         .withFailureHandler(err => {
