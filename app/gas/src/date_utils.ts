@@ -290,6 +290,33 @@ function getFiscalYearRangeByEndMonth_(fiscalYear: number, fiscalMonthEnd: numbe
   };
 }
 
+/**
+ * 期数を算出（例: FY2026, 設立2014年 → 13期）
+ * ScriptProperty `COMPANY_FIRST_FISCAL_YEAR` が未設定の場合は fiscalYear をそのまま返す
+ */
+function getFiscalPeriodNumber_(fiscalYear: number): number {
+  try {
+    const firstYear = PropertiesService.getScriptProperties().getProperty('COMPANY_FIRST_FISCAL_YEAR');
+    if (firstYear && Number(firstYear) > 0) {
+      return fiscalYear - Number(firstYear) + 1;
+    }
+  } catch (_) { /* フォールバック */ }
+  return fiscalYear;
+}
+
+/**
+ * 期表記ラベルを生成（例: "13期3月"）
+ * @param fiscalYear - 年度（例: 2026）
+ * @param month - 月（1-12）省略時は期のみ（例: "13期"）
+ */
+function formatFiscalPeriodLabel_(fiscalYear: number, month?: number): string {
+  const period = getFiscalPeriodNumber_(fiscalYear);
+  if (month != null) {
+    return period + '期' + month + '月';
+  }
+  return period + '期';
+}
+
 /** 年度内の12ヶ月を [{year, month}] 配列で返す */
 function getFiscalMonths_(fiscalYear: number, fiscalMonthEnd: number): Array<{year: number; month: number}> {
   const startMonth = getFiscalStartMonth_(fiscalMonthEnd);

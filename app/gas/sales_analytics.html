@@ -437,6 +437,147 @@
       border-radius: var(--radius-sm);
       margin-bottom: var(--spacing-md);
     }
+
+    /* Tax Report Section */
+    .tax-report-section {
+      padding: var(--spacing-lg);
+      border-top: 2px solid var(--border-color);
+      margin-top: var(--spacing-lg);
+    }
+    .tax-report-section h3 {
+      margin-bottom: var(--spacing-md);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+    .tax-report-controls {
+      display: flex;
+      gap: var(--spacing-md);
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: var(--spacing-md);
+    }
+    .tax-report-controls .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .tax-report-controls .form-group label {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .tax-report-controls select {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      background: white;
+    }
+    .export-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--spacing-md);
+    }
+    .export-card {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+      background: var(--bg-card);
+    }
+    .export-card h4 {
+      font-size: 14px;
+      margin-bottom: var(--spacing-xs);
+    }
+    .export-card p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-sm);
+      line-height: 1.4;
+    }
+    .export-card .btn {
+      width: 100%;
+      padding: 6px 12px;
+      font-size: 13px;
+      border: none;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-weight: 500;
+      transition: background 0.15s;
+    }
+    .export-card .btn-export {
+      background: var(--color-primary);
+      color: white;
+    }
+    .export-card .btn-export:hover {
+      background: #0f2070;
+    }
+    .export-card .btn-export:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+    .export-card .month-select-row {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+      margin-bottom: var(--spacing-sm);
+    }
+    .export-card .month-select-row select {
+      flex: 1;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+    }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.8);
+      z-index: 10002;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+    .loading-overlay.active {
+      display: flex;
+    }
+    .loading-overlay .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border-color);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .loading-overlay .loading-text {
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      color: white;
+      font-size: 13px;
+      z-index: 10003;
+      animation: fadeInUp 0.3s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .toast.success { background: var(--color-success); }
+    .toast.error { background: var(--color-danger); }
+    .toast.info { background: var(--color-accent); }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 
@@ -579,6 +720,53 @@
         <canvas id="monthly-chart"></canvas>
       </div>
     </div>
+
+    <!-- 税理士レポート -->
+    <div class="tax-report-section">
+      <h3>税理士レポート</h3>
+      <div class="tax-report-controls">
+        <div class="form-group">
+          <label for="taxReportFiscalYear">年度</label>
+          <select id="taxReportFiscalYear"></select>
+        </div>
+        <a id="taxReportFolderLink" href="#" target="_blank" style="font-size: 12px; color: var(--color-accent); text-decoration: none; padding-bottom: 4px; display: none;">出力先フォルダを開く</a>
+      </div>
+      <div class="export-cards">
+        <!-- CR-100: 企業別売上（月別） -->
+        <div class="export-card">
+          <h4>企業別売上（月別）</h4>
+          <p>指定月の企業別・税込売上合計一覧。A4印刷用レイアウト。</p>
+          <div class="month-select-row">
+            <select id="taxReportMonth"></select>
+          </div>
+          <button class="btn btn-export" onclick="exportSalesMonthly()">エクスポート</button>
+        </div>
+        <!-- CR-100: 企業別売上（年度） -->
+        <div class="export-card">
+          <h4>企業別売上（年間）</h4>
+          <p>年度の企業別・月別売上クロス集計表（12ヶ月列）。</p>
+          <button class="btn btn-export" onclick="exportSalesYearly()">エクスポート</button>
+        </div>
+        <!-- CR-101: 区分別支払（月別） -->
+        <div class="export-card">
+          <h4>区分別支払（月別）</h4>
+          <p>スタッフ/外注別の月別支払一覧。源泉徴収・インボイス番号付き。2ファイル出力。</p>
+          <button class="btn btn-export" onclick="exportPayoutsByType()">エクスポート</button>
+        </div>
+        <!-- CR-102: 区分別支払（年間） -->
+        <div class="export-card">
+          <h4>区分別支払（年間）</h4>
+          <p>年間の人別支払合計一覧。スタッフ/外注別に出力。</p>
+          <button class="btn btn-export" onclick="exportPayoutsByStaff()">エクスポート</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="taxLoadingOverlay">
+    <div class="spinner"></div>
+    <div class="loading-text" id="taxLoadingText">処理中...</div>
   </div>
 
   <?!= include('confirmation_modal'); ?>
@@ -600,6 +788,7 @@
       initFilters();
       initCustomerFilter();
       loadData();
+      initTaxReportSection();
     });
 
     var _allCustomers = [];
@@ -1474,6 +1663,192 @@
           sortAsc: _dailyCustSortAsc, onSortClick: 'toggleDailyCustSort()'
         });
       }
+    }
+    // ========== 税理士レポート ==========
+
+    function initTaxReportSection() {
+      var fySelect = document.getElementById('taxReportFiscalYear');
+      var monthSelect = document.getElementById('taxReportMonth');
+      var now = new Date();
+      // 現在の年度を推定（3月始まり: 1-2月は前年度）
+      var currentFY = now.getMonth() < 2 ? now.getFullYear() - 1 : now.getFullYear();
+
+      // 年度セレクタ: 過去3年度
+      fySelect.innerHTML = '';
+      for (var y = currentFY; y >= currentFY - 2; y--) {
+        var opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = y + '年度';
+        fySelect.appendChild(opt);
+      }
+
+      // 月セレクタ: 1〜12月
+      monthSelect.innerHTML = '';
+      for (var m = 1; m <= 12; m++) {
+        var opt2 = document.createElement('option');
+        opt2.value = m;
+        opt2.textContent = m + '月';
+        if (m === now.getMonth() + 1) opt2.selected = true;
+        monthSelect.appendChild(opt2);
+      }
+
+      // 出力先フォルダリンク
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.ok && result.data.configured) {
+            var link = document.getElementById('taxReportFolderLink');
+            link.href = result.data.url;
+            link.style.display = 'inline';
+          }
+        })
+        .withFailureHandler(function() {})
+        .getTaxReportExportFolderUrl();
+    }
+
+    function _taxShowLoading(text) {
+      document.getElementById('taxLoadingText').textContent = text || '処理中...';
+      document.getElementById('taxLoadingOverlay').classList.add('active');
+    }
+
+    function _taxHideLoading() {
+      document.getElementById('taxLoadingOverlay').classList.remove('active');
+    }
+
+    function _taxShowToast(type, message) {
+      var toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(function() { toast.remove(); }, 3500);
+    }
+
+    function _taxGetFiscalYear() {
+      return Number(document.getElementById('taxReportFiscalYear').value);
+    }
+
+    /**
+     * エクスポート結果を処理 — 出力先フォルダを開く
+     * preOpenedTab: ユーザーアクション時に先に開いたタブ
+     */
+    function _taxOpenFileResult(result, preOpenedTab) {
+      if (!result.ok) {
+        if (preOpenedTab) preOpenedTab.close();
+        _taxShowToast('error', result.error ? result.error.message : 'エクスポートに失敗しました');
+        return;
+      }
+      var files = result.data.files || [];
+      var count = files.length;
+      if (count === 0) {
+        if (preOpenedTab) preOpenedTab.close();
+        _taxShowToast('info', '対象データがありませんでした');
+        return;
+      }
+      _taxShowToast('success', count + '件のファイルを出力しました');
+      // フォルダを開く（複数ファイルでも統一挙動）
+      var folderUrl = result.data.folderUrl;
+      if (preOpenedTab && folderUrl) {
+        preOpenedTab.location.href = folderUrl;
+      } else if (preOpenedTab) {
+        preOpenedTab.close();
+      }
+    }
+
+    function _taxHandleError(err, preOpenedTab) {
+      _taxHideLoading();
+      if (preOpenedTab) preOpenedTab.close();
+      _taxShowToast('error', 'エラー: ' + (err.message || '不明なエラー'));
+    }
+
+    /**
+     * 汎用エクスポート: チェック → 確認 → 実行
+     * @param label - 表示名（例: '企業別売上（3月）'）
+     * @param checkFn - チェックAPI呼び出し関数 function(runner)
+     * @param exportFn - エクスポートAPI呼び出し関数 function(runner, options)
+     */
+    function _taxExportWithCheck(label, checkFn, exportFn) {
+      _taxShowLoading('ファイル確認中...');
+      var runner = google.script.run
+        .withSuccessHandler(function(checkResult) {
+          _taxHideLoading();
+          // チェック結果を解析: 配列またはオブジェクト
+          var results = checkResult.ok ? checkResult.data : [];
+          if (!Array.isArray(results)) results = [results];
+          var hasExisting = results.some(function(r) { return r && r.exists; });
+
+          if (hasExisting) {
+            // 既存ファイルあり → 確認モーダル
+            ConfirmationModal.show({
+              type: 'warning',
+              title: '同名ファイルが存在します',
+              message: label + ' のファイルが既に出力先に存在します。\n上書きして再出力しますか？',
+              confirmText: '上書き',
+              cancelText: 'キャンセル',
+              onConfirm: function() { _taxDoExport(label, exportFn, { action: 'overwrite' }); }
+            });
+          } else {
+            // 既存なし → 直接実行
+            _taxDoExport(label, exportFn, {});
+          }
+        })
+        .withFailureHandler(function(err) {
+          _taxHideLoading();
+          // チェック失敗でも続行
+          console.warn('File check failed:', err);
+          _taxDoExport(label, exportFn, {});
+        });
+      checkFn(runner);
+    }
+
+    /**
+     * エクスポート実行（タブを開いて実行）
+     */
+    function _taxDoExport(label, exportFn, options) {
+      var preOpenedTab = window.open('about:blank', '_blank');
+      _taxShowLoading(label + ' を出力中...');
+      var runner = google.script.run
+        .withSuccessHandler(function(result) {
+          _taxHideLoading();
+          _taxOpenFileResult(result, preOpenedTab);
+        })
+        .withFailureHandler(function(err) { _taxHandleError(err, preOpenedTab); });
+      exportFn(runner, options);
+    }
+
+    function exportSalesMonthly() {
+      var fy = _taxGetFiscalYear();
+      var month = Number(document.getElementById('taxReportMonth').value);
+      _taxExportWithCheck(
+        '企業別売上（' + month + '月）',
+        function(r) { r.checkSalesMonthlyExportFile(fy, month); },
+        function(r, opts) { r.exportSalesByCustomerMonthly(fy, month, opts); }
+      );
+    }
+
+    function exportSalesYearly() {
+      var fy = _taxGetFiscalYear();
+      _taxExportWithCheck(
+        '企業別売上（年間）',
+        function(r) { r.checkSalesYearlyExportFile(fy); },
+        function(r, opts) { r.exportSalesByCustomerYearly(fy, opts); }
+      );
+    }
+
+    function exportPayoutsByType() {
+      var fy = _taxGetFiscalYear();
+      _taxExportWithCheck(
+        '区分別支払（月別）',
+        function(r) { r.checkPayoutsByTypeExportFiles(fy); },
+        function(r, opts) { r.exportPayoutsByType(fy, opts); }
+      );
+    }
+
+    function exportPayoutsByStaff() {
+      var fy = _taxGetFiscalYear();
+      _taxExportWithCheck(
+        '区分別支払（年間）',
+        function(r) { r.checkPayoutsByStaffExportFiles(fy); },
+        function(r, opts) { r.exportPayoutsByStaff(fy, opts); }
+      );
     }
   </script>
 </body>

@@ -169,6 +169,7 @@
             <th>会社名</th>
             <th>担当者名</th>
             <th>電話番号</th>
+            <th>インボイス番号</th>
             <th>備考</th>
             <th>状態</th>
           </tr>
@@ -207,6 +208,10 @@
           <div class="form-group">
             <label>備考</label>
             <textarea id="notes" rows="3"></textarea>
+          </div>
+          <div class="form-group">
+            <label>インボイス登録番号</label>
+            <input type="text" id="invoice-registration-number" placeholder="T1234567890123">
           </div>
           <div class="form-row-4">
             <div class="form-group">
@@ -279,9 +284,9 @@
     const SUBCONTRACTOR_CACHE_KEY = 'master_subcontractors';
 
     const SUBCONTRACTOR_SKELETON_ROWS = [
-      ['line-60', 'line-40', 'line-50', 'line-80', 'pill-40'],
-      ['line-50', 'line-30', 'line-40', 'line-60', 'pill-40'],
-      ['line-70', 'line-40', 'line-50', 'line-70', 'pill-40']
+      ['line-60', 'line-40', 'line-50', 'line-50', 'line-80', 'pill-40'],
+      ['line-50', 'line-30', 'line-40', 'line-50', 'line-60', 'pill-40'],
+      ['line-70', 'line-40', 'line-50', 'line-50', 'line-70', 'pill-40']
     ];
 
     let dataList = [];
@@ -358,7 +363,7 @@
       filteredList = dataList.filter(d => {
         if (!d.is_active) return false;
         if (!term) return true;
-        return [d.company_name, d.contact_name].filter(Boolean).join(' ').toLowerCase().includes(term);
+        return [d.company_name, d.contact_name, d.invoice_registration_number].filter(Boolean).join(' ').toLowerCase().includes(term);
       });
       renderTable();
     }
@@ -366,7 +371,7 @@
     function renderTable() {
       const tbody = document.getElementById('table-body');
       if (filteredList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">データがありません</div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">データがありません</div></td></tr>';
         return;
       }
       tbody.innerHTML = filteredList.map(d => `
@@ -374,6 +379,7 @@
           <td>${escapeHtml(d.company_name)}</td>
           <td>${escapeHtml(d.contact_name) || '-'}</td>
           <td>${escapeHtml(d.phone) || '-'}</td>
+          <td>${escapeHtml(d.invoice_registration_number) || '-'}</td>
           <td>${escapeHtml(d.notes) || '-'}</td>
           <td><span class="status-badge ${d.is_active ? 'status-active' : 'status-inactive'}">${d.is_active ? '有効' : '無効'}</span></td>
         </tr>
@@ -405,6 +411,7 @@
           document.getElementById('contact-name').value = currentRecord.contact_name || '';
           document.getElementById('phone').value = currentRecord.phone || '';
           document.getElementById('notes').value = currentRecord.notes || '';
+          document.getElementById('invoice-registration-number').value = currentRecord.invoice_registration_number || '';
           document.getElementById('basic-rate').value = currentRecord.basic_rate ?? '';
           document.getElementById('half-day-rate').value = currentRecord.half_day_rate ?? '';
           document.getElementById('full-day-rate').value = currentRecord.full_day_rate ?? '';
@@ -452,6 +459,7 @@
         contact_name: document.getElementById('contact-name').value,
         phone: document.getElementById('phone').value,
         notes: document.getElementById('notes').value,
+        invoice_registration_number: document.getElementById('invoice-registration-number').value,
         basic_rate: basicRate !== '' ? Number(basicRate) : null,
         half_day_rate: halfDayRate !== '' ? Number(halfDayRate) : null,
         full_day_rate: fullDayRate !== '' ? Number(fullDayRate) : null,

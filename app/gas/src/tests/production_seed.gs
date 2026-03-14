@@ -381,17 +381,17 @@ function seedSubcontractorData() {
   const subs = [
     {
       subcontractor_id: 'sub_001', company_name: '関東鳶工業', contact_name: '関東太郎',
-      phone: '03-9001-0001', notes: '',
+      phone: '03-9001-0001', notes: '', invoice_registration_number: 'T1234567890001',
       basic_rate: 15000, half_day_rate: 8000, full_day_rate: 15000
     },
     {
       subcontractor_id: 'sub_002', company_name: '東部足場サービス', contact_name: '東部次郎',
-      phone: '03-9002-0001', notes: '',
+      phone: '03-9002-0001', notes: '', invoice_registration_number: '',
       basic_rate: 14500, half_day_rate: 7500, full_day_rate: 14500
     },
     {
       subcontractor_id: 'sub_003', company_name: '横浜揚重', contact_name: '横浜三郎',
-      phone: '045-9003-0001', notes: '',
+      phone: '045-9003-0001', notes: '', invoice_registration_number: 'T9876543210001',
       basic_rate: 16000, half_day_rate: 9000, full_day_rate: 16000
     }
   ];
