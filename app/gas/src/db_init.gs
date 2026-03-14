@@ -68,6 +68,7 @@ const TABLE_DEFINITIONS = {
     sheetName: 'Subcontractors',
     headers: [
       'subcontractor_id', 'company_name', 'contact_name', 'phone', 'notes',
+      'invoice_registration_number',
       'basic_rate', 'half_day_rate', 'full_day_rate',
       'night_rate', 'tobi_rate', 'age_rate', 'tobiage_rate', 'holiday_rate',
       'folder_id', 'created_at', 'created_by', 'updated_at', 'updated_by',
@@ -1843,4 +1844,58 @@ function migrateAddStaffTransportColumn() {
   }
 
   Logger.log('=== CR-097 マイグレーション完了（全DB処理済み） ===');
+}
+
+/**
+ * M_Subcontractorsに invoice_registration_number カラムを追加（マイグレーション）
+ * notes の後（basic_rate の前）に挿入。冪等設計。
+ * GASエディタから手動実行: migrateAddSubcontractorInvoiceNumber()
+ */
+function migrateAddSubcontractorInvoiceNumber() {
+  const prop = PropertiesService.getScriptProperties();
+  const ids = [
+    prop.getProperty('SPREADSHEET_ID_DEV'),
+    prop.getProperty('SPREADSHEET_ID_PROD')
+  ].filter(Boolean);
+
+  if (ids.length === 0) {
+    Logger.log('✗ SPREADSHEET_ID が設定されていません');
+    return;
+  }
+
+  Logger.log('=== 外注先インボイス登録番号カラム追加マイグレーション ===\n');
+
+  for (const spreadsheetId of ids) {
+    Logger.log(`--- DB: ${spreadsheetId} ---`);
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = ss.getSheetByName('Subcontractors');
+
+    if (!sheet) {
+      Logger.log('✗ Subcontractorsシートが見つかりません（スキップ）');
+      continue;
+    }
+
+    const lastCol = sheet.getLastColumn();
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+
+    if (headers.includes('invoice_registration_number')) {
+      Logger.log('✓ invoice_registration_number カラムは既に存在します');
+      continue;
+    }
+
+    const notesIndex = headers.indexOf('notes');
+    if (notesIndex === -1) {
+      Logger.log('✗ notes カラムが見つかりません（スキップ）');
+      continue;
+    }
+
+    // notesの後に1列挿入（1-indexed）
+    sheet.insertColumnsAfter(notesIndex + 1, 1);
+    sheet.getRange(1, notesIndex + 2).setValue('invoice_registration_number');
+    sheet.getRange(1, 1, 1, sheet.getLastColumn()).setBackground('#E8F4F8').setFontWeight('bold');
+
+    Logger.log('✓ invoice_registration_number カラムを notes の後に追加しました');
+  }
+
+  Logger.log('\n=== マイグレーション完了 ===');
 }
