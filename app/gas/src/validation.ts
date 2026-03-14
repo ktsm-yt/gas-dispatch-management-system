@@ -511,15 +511,6 @@ const JOB_STATUS_LABELS: Record<string, string> = {
   'problem': '問題あり'
 };
 
-const TIME_SLOT_LABELS: Record<string, string> = {
-  'jotou': '上棟',
-  'shuujitsu': '終日',
-  'am': 'AM',
-  'pm': 'PM',
-  'yakin': '夜勤',
-  'mitei': '未定'
-};
-
 // ============================================
 // ステータス関連ユーティリティ
 // ============================================
