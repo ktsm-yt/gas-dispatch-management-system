@@ -10,7 +10,8 @@
  *   ├── /出力/
  *   │   ├── /請求書/             (生成された請求書 PDF)  → INVOICE_EXPORT_FOLDER_ID
  *   │   ├── /支払明細/           (支払明細 PDF/Excel)    → PAYOUT_EXPORT_FOLDER_ID
- *   │   └── /作業員名簿/         (作業員名簿 PDF/Excel)  → WORKER_ROSTER_FOLDER_ID
+ *   │   ├── /作業員名簿/         (作業員名簿 PDF/Excel)  → WORKER_ROSTER_FOLDER_ID
+ *   │   └── /税理士レポート/     (税理士向けExcel)       → TAX_REPORT_EXPORT_FOLDER_ID
  *   ├── /顧客/                   (顧客別フォルダ)        → CUSTOMER_FOLDERS_PARENT_ID
  *   ├── /アーカイブ/             (年度アーカイブ)        → ARCHIVE_FOLDER_ID
  *   └── /ドキュメント/
@@ -29,6 +30,7 @@ const FOLDER_STRUCTURE = {
     '出力/請求書',
     '出力/支払明細',
     '出力/作業員名簿',
+    '出力/税理士レポート',
     '顧客',  // 顧客専用フォルダの親（会社別フォルダはここに作成）
     'アーカイブ',
     'ドキュメント',
@@ -70,6 +72,7 @@ function initDriveFolders() {
       '出力/請求書': 'INVOICE_EXPORT_FOLDER_ID',
       '出力/支払明細': 'PAYOUT_EXPORT_FOLDER_ID',
       '出力/作業員名簿': 'WORKER_ROSTER_FOLDER_ID',
+      '出力/税理士レポート': 'TAX_REPORT_EXPORT_FOLDER_ID',
       'アーカイブ': 'ARCHIVE_FOLDER_ID',
     };
 
