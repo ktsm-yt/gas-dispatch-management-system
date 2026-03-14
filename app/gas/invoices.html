@@ -1581,7 +1581,7 @@
           </div>
         </div>
         <p style="color: #666; font-size: 13px; margin-top: 8px;">
-          選択した年月の全請求書データをExcel形式でエクスポートします。
+          確定済み（送付済・入金済・未回収）の請求データをExcel形式でエクスポートします。
         </p>
       </div>
       <div class="modal-footer">
@@ -3584,6 +3584,7 @@
 
     // エクスポート待機状態を保持
     let pendingExport = null;
+    let pendingBillingExport = null; // 集計エクスポート用
 
     function exportPdf(invoiceId) {
       exportInvoice(invoiceId, 'pdf', { includeCoverPage: false });
@@ -3793,20 +3794,31 @@
     function closeFileOverwriteModal() {
       document.getElementById('fileOverwriteModal').classList.remove('active');
       pendingExport = null;
+      pendingBillingExport = null;
       processPendingInvalidation();
     }
 
     function confirmOverwrite() {
+      if (pendingBillingExport) {
+        const { ym } = pendingBillingExport;
+        closeFileOverwriteModal();
+        doBillingExport(ym, { action: 'overwrite' }, null);
+        return;
+      }
       if (!pendingExport) return;
-      // closeFileOverwriteModal() で pendingExport = null になるので先に値を保存
       const { invoiceId, mode, options } = pendingExport;
       closeFileOverwriteModal();
       executeInvoiceExport(invoiceId, mode, { ...options, action: 'overwrite' });
     }
 
     function confirmRename() {
+      if (pendingBillingExport) {
+        const { ym } = pendingBillingExport;
+        closeFileOverwriteModal();
+        doBillingExport(ym, { action: 'rename' }, null);
+        return;
+      }
       if (!pendingExport) return;
-      // closeFileOverwriteModal() で pendingExport = null になるので先に値を保存
       const { invoiceId, mode, options } = pendingExport;
       closeFileOverwriteModal();
       executeInvoiceExport(invoiceId, mode, { ...options, action: 'rename' });
@@ -4418,14 +4430,42 @@
         return;
       }
 
+      // ポップアップブロック回避: ユーザーアクション時に先にタブを開く
+      const preOpenedTab = window.open('about:blank', '_blank');
+
       closeBillingExportModal();
 
-      const label = '集計データ';
+      // まず同名ファイルチェック
+      showLoading('ファイル確認中...');
+      google.script.run
+        .withSuccessHandler(function (result) {
+          hideLoading();
+          if (result.ok && result.data.exists) {
+            // ファイルが存在 → 先に開いたタブを閉じて確認モーダルへ
+            if (preOpenedTab) preOpenedTab.close();
+            pendingBillingExport = { ym: ym, existingFile: result.data.existingFile };
+            showFileOverwriteModal(result.data.existingFile);
+          } else {
+            // ファイルが存在しない → 直接エクスポート実行
+            doBillingExport(ym, {}, preOpenedTab);
+          }
+        })
+        .withFailureHandler(function (err) {
+          hideLoading();
+          // チェックに失敗しても続行
+          console.warn('Billing file check failed, proceeding with export:', err);
+          doBillingExport(ym, {}, preOpenedTab);
+        })
+        .checkBillingExportFile(ym);
+    }
 
-      // 新しいタブを先に開く（ポップアップブロック対策）
-      const newTab = window.open('about:blank', '_blank');
+    function doBillingExport(ym, options, preOpenedTab) {
+      var label = '集計データ';
+
+      // 先に開いたタブがあればそれを使用、なければ新規作成
+      var newTab = preOpenedTab || window.open('about:blank', '_blank');
       if (newTab) {
-        const loadingHtml = '<!DOCTYPE html>' +
+        var loadingHtml = '<!DOCTYPE html>' +
           '<html>' +
           '<head>' +
           '<title>' + label + 'を生成中...</title>' +
@@ -4453,14 +4493,13 @@
         .withSuccessHandler(function (result) {
           hideLoading();
           if (result.ok) {
-            const url = result.data.url;
+            var url = result.data.url;
+            var count = result.data.recordCount || 0;
             if (url && newTab) {
-              // 正常ケース: 新しいタブでURLを開く
               newTab.location.href = url;
-              showToast(label + 'をエクスポートしました', 'success');
+              showToast(label + 'をエクスポートしました（' + count + '件）', 'success');
             } else if (url && !newTab) {
-              // ポップアップブロック時: リンクを表示
-              showToast(label + 'をエクスポートしました。ポップアップがブロックされた可能性があります。', 'success');
+              showToast(label + 'をエクスポートしました（' + count + '件）。ポップアップがブロックされた可能性があります。', 'success');
               showFileLink(url, label);
             } else {
               if (newTab) newTab.close();
@@ -4476,7 +4515,7 @@
           if (newTab) newTab.close();
           handleError(error);
         })
-        .exportBillingData(ym, 'xlsx');
+        .exportBillingData(ym, 'xlsx', options);
     }
 
     // Utility functions
