@@ -141,6 +141,15 @@ const AssignmentService = {
         const jobForUnit = slotsForJob.length === 0 ? JobRepository.findById(jobId) : null;
 
         for (const assignment of changes.upserts) {
+          // 更新時: フロントエンドがslot_idを送らなかった場合、既存レコードから復元
+          // （再保存時にフォームがリセットされてslot_idが欠落するバグへの安全装置）
+          if (!assignment.slot_id && assignment.assignment_id) {
+            const existing = existingByIdMap.get(assignment.assignment_id);
+            if (existing && existing.slot_id) {
+              assignment.slot_id = existing.slot_id;
+            }
+          }
+
           // slot_id検証とpay_unit同期
           if (assignment.slot_id) {
             // スロットが指定されている場合、メモリ上のMapで O(1) 検証

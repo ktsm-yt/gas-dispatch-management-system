@@ -1390,6 +1390,19 @@ var _defaultPayUnitLabels = {
   tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ', holiday: '休日'
 };
 
+// システム定義コードがマップに必ず含まれることを保証
+function _ensureSystemDefaults(map) {
+  if (!map || typeof map !== 'object') map = {};
+  var codes = Object.keys(_defaultPayUnitLabels);
+  for (var i = 0; i < codes.length; i++) {
+    var code = codes[i];
+    if (!map[code]) {
+      map[code] = { label: _defaultPayUnitLabels[code], sort_order: i + 1, is_system: true, is_active: true };
+    }
+  }
+  return map;
+}
+
 function buildPayUnitOptions_(selectedValue) {
   var map = _jobModalPriceTypeMap || _defaultPayUnitLabels;
   var html = '';
@@ -1407,7 +1420,7 @@ function buildPayUnitOptions_(selectedValue) {
     var labelText = typeof map[code] === 'object' ? map[code].label : map[code];
     var option = document.createElement('option');
     option.value = code;
-    if (code === selectedValue) option.selected = true;
+    if (code === selectedValue) option.setAttribute('selected', 'selected');
     option.textContent = labelText;
     html += option.outerHTML;
   });
@@ -1417,7 +1430,7 @@ function buildPayUnitOptions_(selectedValue) {
 function initJobModalPriceTypes_() {
   var cached = sessionStorage.getItem('_priceTypeLabelMap');
   if (cached) {
-    try { _jobModalPriceTypeMap = JSON.parse(cached); } catch(e) { /* ignore */ }
+    try { _jobModalPriceTypeMap = _ensureSystemDefaults(JSON.parse(cached)); } catch(e) { /* ignore */ }
   }
   if (_jobModalPriceTypeMap) {
     populateJobPayUnitSelect_();
@@ -1427,8 +1440,14 @@ function initJobModalPriceTypes_() {
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok && res.data) {
-        _jobModalPriceTypeMap = res.data;
-        sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(res.data));
+        _jobModalPriceTypeMap = _ensureSystemDefaults(res.data);
+        sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(_jobModalPriceTypeMap));
+        populateJobPayUnitSelect_();
+      }
+    })
+    .withFailureHandler(function() {
+      if (!_jobModalPriceTypeMap) {
+        _jobModalPriceTypeMap = _ensureSystemDefaults({});
         populateJobPayUnitSelect_();
       }
     })
@@ -1445,9 +1464,10 @@ function populateJobPayUnitSelect_() {
   // slot行の単価selectも再構築
   var slotSelects = document.querySelectorAll('#slots-table-body .slot-pay-unit');
   slotSelects.forEach(function(sel) {
-    var slotVal = sel.value || 'basic';
+    var prev = sel.value;
+    var slotVal = prev || 'basic';
     sel.innerHTML = buildPayUnitOptions_(slotVal);
-    if (slotVal) sel.value = slotVal;
+    sel.value = slotVal;
   });
 }
 
