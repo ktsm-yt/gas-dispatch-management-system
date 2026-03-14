@@ -1,9 +1,9 @@
 /**
- * CR-101: 区分別支払エクスポート
+ * CR-101/103: 区分別支払エクスポート
  *
- * スタッフ/外注を別々にExcel出力
- * スタッフ: 名前 / 月別基本金額（税込） / 月別源泉徴収 / 年間合計
- * 外注: 名前 / 月別基本金額（税込） / インボイス番号 / 年間合計
+ * staff_type別に分割してExcel出力:
+ * - スタッフファイル: 自社(regular) + 学生(student) → シート分け
+ * - 外注ファイル: 外注(subcontract) + 親方(sole_proprietor) → 親方は外注の後ろにconcat
  */
 
 interface PayoutByTypeExportResult {
@@ -41,23 +41,27 @@ const PayoutByTypeExportService = {
     const staffPayouts = allPayouts.filter(function(p) { return p.payout_type === 'STAFF'; });
     const subPayouts = allPayouts.filter(function(p) { return p.payout_type === 'SUBCONTRACTOR'; });
 
+    // staff_typeで3分割
+    const split = this._splitByStaffType(staffPayouts, staffMap);
+
     const files: ExcelExportFileResult[] = [];
     const folder = ExcelExportUtil.getOutputFolder_(TAX_REPORT_FOLDER_KEY, '税理士レポート');
     const yearFolder = ExcelExportUtil.getOrCreateSubfolder_(folder, fiscalYear + '年度');
 
-    // スタッフ別月別（源泉徴収付き）
-    if (staffPayouts.length > 0) {
+    // スタッフ別月別（regular+student統合、源泉徴収付き）
+    const staffForExport = split.regular.concat(split.student);
+    if (staffForExport.length > 0) {
       const result = this._exportStaff(
-        staffPayouts, staffMap, months,
+        staffForExport, staffMap, months,
         yearFolder, fiscalYear, periodNumber, options
       );
       files.push(result);
     }
 
-    // 外注別月別（インボイス番号付き）
-    if (subPayouts.length > 0) {
+    // 外注別月別（外注+親方、インボイス番号付き）
+    if (subPayouts.length > 0 || split.soleProprietor.length > 0) {
       const result = this._exportSubcontractor(
-        subPayouts, subMap, months,
+        subPayouts, split.soleProprietor, staffMap, subMap, months,
         yearFolder, fiscalYear, periodNumber, options
       );
       files.push(result);
@@ -91,7 +95,8 @@ const PayoutByTypeExportService = {
   },
 
   /**
-   * スタッフ用Excel出力（2シート構成: 基本金額 / 源泉徴収）
+   * スタッフ用Excel出力（2シート: 基本金額 / 源泉徴収）
+   * regular + student を統合して出力
    */
   _exportStaff: function(
     payouts: PayoutRecord[],
@@ -199,11 +204,13 @@ const PayoutByTypeExportService = {
   },
 
   /**
-   * 外注用Excel出力
-   * 列: No. | 氏名 | インボイス番号 | 月1〜月12(基本金額) | 年間合計
+   * 外注用Excel出力（外注企業 + 親方を1シートにconcat）
+   * 列: No. | 外注先名 | インボイス番号 | 月1〜月12(基本金額) | 年間合計
    */
   _exportSubcontractor: function(
-    payouts: PayoutRecord[],
+    subPayouts: PayoutRecord[],
+    soleProprietorPayouts: PayoutRecord[],
+    staffMap: Record<string, Record<string, unknown>>,
     subMap: Record<string, Record<string, unknown>>,
     months: Array<{year: number; month: number}>,
     folder: GoogleAppsScript.Drive.Folder,
@@ -218,7 +225,15 @@ const PayoutByTypeExportService = {
       const sheet = ss.getActiveSheet();
       sheet.setName('外注別支払');
 
-      const byPerson = this._aggregateByPersonMonth(payouts, 'SUBCONTRACTOR', {}, subMap, months);
+      // 外注企業の集計
+      const bySub = subPayouts.length > 0
+        ? this._aggregateByPersonMonth(subPayouts, 'SUBCONTRACTOR', {}, subMap, months)
+        : {};
+
+      // 親方の集計（type='STAFF'として名前解決、staffMapを使用）
+      const bySole = soleProprietorPayouts.length > 0
+        ? this._aggregateByPersonMonth(soleProprietorPayouts, 'STAFF', staffMap, {}, months)
+        : {};
 
       const monthHeaders = months.map(function(m) {
         return formatFiscalPeriodLabel_(fiscalYear, m.month);
@@ -232,15 +247,16 @@ const PayoutByTypeExportService = {
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       ExcelExportUtil.styleHeaderRow_(sheet, headers.length);
 
-      const personIds = Object.keys(byPerson).sort(function(a, b) {
-        return byPerson[a].name.localeCompare(byPerson[b].name, 'ja');
+      // 外注企業行（ソート順: 名前）
+      const subIds = Object.keys(bySub).sort(function(a, b) {
+        return bySub[a].name.localeCompare(bySub[b].name, 'ja');
       });
 
-      const rows = personIds.map(function(personId, idx) {
-        const p = byPerson[personId];
+      const subRows = subIds.map(function(personId) {
+        const p = bySub[personId];
         const sub = subMap[personId];
         const invoiceNum = sub ? ((sub.invoice_registration_number as string) || '') : '';
-        const row: unknown[] = [idx + 1, p.name, invoiceNum];
+        const row: unknown[] = [0, p.name, invoiceNum];
         let yearTotal = 0;
         for (let i = 0; i < 12; i++) {
           row.push(p.monthlyBase[i]);
@@ -250,25 +266,48 @@ const PayoutByTypeExportService = {
         return row;
       });
 
-      if (rows.length > 0) {
-        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+      // 親方行（ソート順: 名前、インボイス番号は空）
+      const soleIds = Object.keys(bySole).sort(function(a, b) {
+        return bySole[a].name.localeCompare(bySole[b].name, 'ja');
+      });
+
+      const soleRows = soleIds.map(function(personId) {
+        const p = bySole[personId];
+        const row: unknown[] = [0, p.name, ''];
+        let yearTotal = 0;
+        for (let i = 0; i < 12; i++) {
+          row.push(p.monthlyBase[i]);
+          yearTotal += p.monthlyBase[i];
+        }
+        row.push(yearTotal);
+        return row;
+      });
+
+      // 外注が上、親方が下の並び順で結合
+      const allRows = subRows.concat(soleRows);
+      const allPersonIds = subIds.concat(soleIds);
+      const allByPerson = Object.assign({}, bySub, bySole);
+
+      // No.を振り直し
+      allRows.forEach(function(row, idx) { row[0] = idx + 1; });
+
+      if (allRows.length > 0) {
+        sheet.getRange(2, 1, allRows.length, headers.length).setValues(allRows);
         const currencyCols: number[] = [];
         for (let c = 4; c <= headers.length; c++) currencyCols.push(c);
-        ExcelExportUtil.formatCurrencyColumns_(sheet, currencyCols, 2, rows.length);
+        ExcelExportUtil.formatCurrencyColumns_(sheet, currencyCols, 2, allRows.length);
       }
 
       // 合計行
-      const totalRow = rows.length + 2;
+      const totalRow = allRows.length + 2;
       const totalRowData: unknown[] = ['', '合計', ''];
+      let grandTotal = 0;
       for (let i = 0; i < 12; i++) {
         let colTotal = 0;
-        personIds.forEach(function(id) { colTotal += byPerson[id].monthlyBase[i]; });
+        allPersonIds.forEach(function(id) { colTotal += allByPerson[id].monthlyBase[i]; });
         totalRowData.push(colTotal);
+        grandTotal += colTotal;
       }
-      let grandTotal = 0;
-      personIds.forEach(function(id) {
-        for (let i = 0; i < 12; i++) grandTotal += byPerson[id].monthlyBase[i];
-      });
       totalRowData.push(grandTotal);
 
       sheet.getRange(totalRow, 1, 1, headers.length).setValues([totalRowData]);
@@ -340,6 +379,37 @@ const PayoutByTypeExportService = {
     });
 
     return result;
+  },
+
+  /**
+   * staff_typeでpayoutsを3分割（regular/student/soleProprietor）
+   * staff_type未設定 → regularフォールバック + 警告ログ
+   */
+  _splitByStaffType: function(
+    payouts: PayoutRecord[],
+    staffMap: Record<string, Record<string, unknown>>
+  ): { regular: PayoutRecord[]; student: PayoutRecord[]; soleProprietor: PayoutRecord[] } {
+    const regular: PayoutRecord[] = [];
+    const student: PayoutRecord[] = [];
+    const soleProprietor: PayoutRecord[] = [];
+
+    payouts.forEach(function(p) {
+      const staff = staffMap[p.staff_id || ''];
+      const staffType = staff ? ((staff.staff_type as string) || '') : '';
+
+      if (staffType === 'student') {
+        student.push(p);
+      } else if (staffType === 'sole_proprietor') {
+        soleProprietor.push(p);
+      } else {
+        if (!staffType && staff) {
+          Logger.log('WARNING: staff_type未設定 → regularとして処理: staff_id=' + p.staff_id);
+        }
+        regular.push(p);
+      }
+    });
+
+    return { regular: regular, student: student, soleProprietor: soleProprietor };
   },
 
   /**
