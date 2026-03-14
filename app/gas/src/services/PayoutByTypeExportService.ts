@@ -304,7 +304,7 @@ const PayoutByTypeExportService = {
     subMap: Record<string, Record<string, unknown>>,
     months: Array<{year: number; month: number}>
   ): Record<string, { name: string; monthlyBase: number[]; monthlyTax: number[] }> {
-    const self = this;
+    const svc = PayoutByTypeExportService;
     const result: Record<string, { name: string; monthlyBase: number[]; monthlyTax: number[] }> = {};
 
     payouts.forEach(function(p) {
@@ -319,7 +319,7 @@ const PayoutByTypeExportService = {
         const sub = subMap[personId];
         personName = sub ? ((sub.company_name as string) || (sub.name as string) || personId) : (personId || '不明');
       }
-      if (!personId) return; // IDなしレコードはスキップ
+      if (!personId) return;
 
       if (!result[personId]) {
         result[personId] = {
@@ -329,9 +329,9 @@ const PayoutByTypeExportService = {
         };
       }
 
-      const ym = self._getYearMonth(p.paid_date);
+      const ym = svc._getYearMonth(p.paid_date);
       if (ym) {
-        const idx = self._findMonthIndex(months, ym.year, ym.month);
+        const idx = svc._findMonthIndex(months, ym.year, ym.month);
         if (idx >= 0) {
           result[personId].monthlyBase[idx] += p.total_amount || 0;
           result[personId].monthlyTax[idx] += p.tax_amount || 0;
