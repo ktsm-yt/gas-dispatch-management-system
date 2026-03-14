@@ -24,16 +24,16 @@ interface PayoutDetailExistingFileResult {
 }
 
 const PAY_UNIT_LABEL_MAP: Record<string, string> = {
-  basic: '式', tobi: '式', age: '式', tobiage: '式', holiday: '休日',
-  half: '半日', halfday: '半日', fullday: '終日', night: '夜勤',
-  jotou: '式', shuujitsu: '終日', am: '半日', pm: '半日', yakin: '夜勤'
+  basic: '基本', tobi: '上棟鳶', age: '上棟荷揚げ', tobiage: '上棟鳶揚げ', holiday: '休日',
+  half: '半日', halfday: 'ハーフ', fullday: '終日', night: '夜勤',
+  jotou: '上棟', shuujitsu: '終日', am: 'AM', pm: 'PM', yakin: '夜勤'
 };
 
 /** カスタム単価種別を含む動的ラベル取得 */
 function getPayUnitLabel_(payUnit: string): string {
   if (PAY_UNIT_LABEL_MAP[payUnit]) return PAY_UNIT_LABEL_MAP[payUnit];
-  // カスタム単価種別はデフォルト「式」
-  return '式';
+  // カスタム単価種別はデフォルト「基本」
+  return '基本';
 }
 
 const PayoutDetailExportService = {
