@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>配置管理システム 操作マニュアル v2.2 | {{COMPANY_NAME_SHORT}}</title>
+<title>配置管理システム 操作マニュアル v3.0 | {{COMPANY_NAME_SHORT}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -72,7 +72,7 @@ tr:hover td{background:var(--td-hover)}
 .steps li{counter-increment:step;padding:.5rem 0 .5rem 2.5rem;position:relative}
 .steps li::before{content:counter(step);position:absolute;left:0;top:.4rem;width:1.75rem;height:1.75rem;background:var(--primary);color:#fff;border-radius:50%;text-align:center;line-height:1.75rem;font-size:.8rem;font-weight:700}
 /* Folder */
-.folder-tree{background:var(--folder-bg);color:var(--folder-color);padding:1.25rem 1.5rem;border-radius:8px;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.6;margin:1rem 0 1.5rem;overflow-x:auto}
+.folder-tree{background:var(--folder-bg);color:var(--folder-color);padding:1.25rem 1.5rem;border-radius:8px;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.6;margin:1rem 0 1.5rem;overflow-x:auto;white-space:pre}
 /* FAQ */
 .faq-item{margin-bottom:1.25rem}
 .faq-q{font-weight:700;color:var(--primary);margin-bottom:.25rem}
@@ -114,7 +114,7 @@ tr:hover td{background:var(--td-hover)}
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
     <h1>配置管理システム<br>操作マニュアル</h1>
-    <div class="version">v2.2 — {{COMPANY_NAME_SHORT}}</div>
+    <div class="version">v3.0 — {{COMPANY_NAME_SHORT}}</div>
   </div>
   <div class="sidebar-tabs">
     <div class="sidebar-tab active" data-tab="tab1">案件・配置</div>
@@ -125,7 +125,7 @@ tr:hover td{background:var(--td-hover)}
     <div class="theme-toggle-track"><div class="theme-toggle-thumb"></div></div>
     <span id="themeLabel">ダークモード</span>
   </div>
-  <div class="sidebar-footer">&copy; 株式会社{{COMPANY_NAME_SHORT}}<br>最終更新: 2026-02-27</div>
+  <div class="sidebar-footer">&copy; 株式会社{{COMPANY_NAME_SHORT}}<br>最終更新: 2026-03-14</div>
 </aside>
 
 <div class="layout">
@@ -135,8 +135,8 @@ tr:hover td{background:var(--td-hover)}
   <h1>配置管理システム 操作マニュアル</h1>
   <div class="subtitle">株式会社{{COMPANY_NAME_SHORT}} 業務支援システム</div>
   <div class="cover-meta">
-    <span>Version 2.2</span>
-    <span>最終更新: 2026-02-27</span>
+    <span>Version 3.0</span>
+    <span>最終更新: 2026-03-14</span>
     <span>対象: 管理者・現場担当者</span>
   </div>
 </div>
@@ -176,7 +176,7 @@ tr:hover td{background:var(--td-hover)}
   <tr><td><strong>請求</strong></td><td>請求管理画面（タブ2で詳しく説明）</td></tr>
   <tr><td><strong>支払</strong></td><td>支払管理画面（タブ2で詳しく説明）</td></tr>
   <tr><td><strong>売上分析</strong></td><td>売上・粗利益の分析ダッシュボード</td></tr>
-  <tr><td><strong>設定</strong></td><td>顧客・スタッフ・外注先・交通費・自社情報（ドロップダウンメニュー）</td></tr>
+  <tr><td><strong>設定</strong></td><td>顧客・スタッフ・外注先・交通費・自社情報・単価種別（ドロップダウンメニュー）</td></tr>
 </table>
 <div class="callout tip">
   <div class="callout-title">💡 別タブで開く</div>
@@ -274,7 +274,29 @@ tr:hover td{background:var(--td-hover)}
   <li><strong>鉛筆アイコンをクリック:</strong> 案件編集モーダルを開く</li>
 </ul>
 
-<h3 id="t1-3-5">3.5 その他の機能</h3>
+<h3 id="t1-3-5">3.5 横断検索</h3>
+<p>ダッシュボード上部の「<strong>🔍</strong>」ボタンをクリックすると、案件検索モーダルが開きます。日付を横断して案件を検索できます。</p>
+<h4>検索方法</h4>
+<ul>
+  <li><strong>検索対象の切替:</strong> 「現場名」と「スタッフ名」をトグルで切り替えて検索</li>
+  <li>検索テキストを入力 → 「<strong>検索</strong>」ボタンまたはEnterキーで実行</li>
+</ul>
+<h4>検索結果テーブル</h4>
+<table>
+  <tr><th>列</th><th>説明</th></tr>
+  <tr><td>日付</td><td>案件の作業日</td></tr>
+  <tr><td>時間帯</td><td>時間区分（上棟/終日/AM/PM/夜勤/未定）</td></tr>
+  <tr><td>現場名</td><td>案件の現場名</td></tr>
+  <tr><td>得意先</td><td>顧客名</td></tr>
+  <tr><td>スタッフ</td><td>配置済みスタッフ</td></tr>
+  <tr><td>ステータス</td><td>案件のステータス</td></tr>
+</table>
+<ul>
+  <li>検索結果は最大<strong>50件</strong>まで表示されます</li>
+  <li>結果の行をクリックすると、該当案件の<strong>編集モーダル</strong>が開きます</li>
+</ul>
+
+<h3 id="t1-3-6">3.6 その他の機能</h3>
 <ul>
   <li><strong>フローティング「＋」ボタン:</strong> 画面右下に固定表示。クリックで新規案件の登録</li>
   <li><strong>自動更新:</strong> 30秒ごとに最新データを自動取得。別タブでの変更もリアルタイムに反映されます</li>
@@ -312,7 +334,7 @@ tr:hover td{background:var(--td-hover)}
 <table>
   <tr><th>項目</th><th>説明</th></tr>
   <tr><td>必要人数</td><td>この案件に必要な人数</td></tr>
-  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ／休日</td></tr>
 </table>
 
 <h3 id="t1-4-4">4.4 人員枠設定（詳細モード）</h3>
@@ -320,7 +342,7 @@ tr:hover td{background:var(--td-hover)}
 <table>
   <tr><th>項目</th><th>説明</th></tr>
   <tr><td>時間区分</td><td>上棟／終日／AM／PM／夜勤／未定</td></tr>
-  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜勤／上棟鳶／上棟荷揚げ／上棟鳶揚げ／休日</td></tr>
   <tr><td>人数</td><td>枠ごとの必要人数</td></tr>
   <tr><td>備考</td><td>枠ごとの注意事項</td></tr>
 </table>
@@ -336,6 +358,8 @@ tr:hover td{background:var(--td-hover)}
   <li>営業所</li>
   <li>物件コード</li>
   <li>担当工事課</li>
+  <li><strong>調整額</strong> — 正の値で追加料金、負の値で値引きとして請求書に反映されます</li>
+  <li><strong>調整メモ</strong> — 調整額の理由を記入（請求書の明細に表示されます。顧客に見える情報のため、内部メモや個人情報は記載しないでください）</li>
 </ul>
 
 <h3 id="t1-4-6">4.6 連続登録（保存して次へ）</h3>
@@ -385,12 +409,16 @@ tr:hover td{background:var(--td-hover)}
   <div class="callout-title">⚠️ 重複配置の警告</div>
   同日の別案件に既に配置されているスタッフには警告マークが表示されます。配置は可能ですが、確認してください。
 </div>
+<div class="callout danger">
+  <div class="callout-title">⚠️ カスタム単価未登録の警告</div>
+  カスタム単価区分が設定されている案件で、配置対象スタッフにその単価が未登録の場合、赤色の警告バナーが表示されます。スタッフマスタで該当の単価を設定してから配置してください。
+</div>
 
 <h3 id="t1-5-4">5.4 右パネル（一括配置設定）</h3>
 <table>
   <tr><th>項目</th><th>説明</th></tr>
   <tr><td>配置枠</td><td>詳細モード案件のみ表示。選択した枠に応じて単価区分が自動反映されます</td></tr>
-  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜間／上棟鳶／上棟荷揚げ／上棟鳶揚げ</td></tr>
+  <tr><td>単価区分</td><td>基本／ハーフ／終日／夜間／上棟鳶／上棟荷揚げ／上棟鳶揚げ／休日</td></tr>
   <tr><td>交通費エリア</td><td>ドロップダウンから選択（交通費マスタで設定したエリア）</td></tr>
   <tr><td>交通費（円）</td><td>金額を直接入力（エリア選択で自動入力も可）</td></tr>
   <tr><td>諸経費備考（駅名）</td><td>最寄り駅などの補足情報</td></tr>
@@ -447,7 +475,7 @@ tr:hover td{background:var(--td-hover)}
   <tr><th>セクション</th><th>項目</th></tr>
   <tr><td><strong>基本情報</strong></td><td>会社名 / 支店・営業所名 / 部署名 / 担当者名 / 敬称（様/御中/殿/なし）</td></tr>
   <tr><td><strong>連絡先</strong></td><td>郵便番号 / 住所 / 電話番号 / FAX / メール</td></tr>
-  <tr><td><strong>単価設定（税抜）</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ（各請求単価）</td></tr>
+  <tr><td><strong>単価設定（税抜）</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ / 休日（各請求単価）</td></tr>
   <tr><td><strong>請求設定</strong></td><td>締め日 / 支払月 / 支払日 / 請求書書式 / 消費税率 / 税端数処理 / 交通費請求 / 荷主名 / 顧客コード / インボイス番号</td></tr>
   <tr><td><strong>その他</strong></td><td>状態（有効/無効）/ Driveフォルダ / 備考</td></tr>
 </table>
@@ -487,7 +515,8 @@ tr:hover td{background:var(--td-hover)}
   <tr><th>セクション</th><th>項目</th></tr>
   <tr><td><strong>基本情報</strong></td><td>氏名 / 氏名カナ / 通称 / 種別 / 外注先（外注選択時）/ スキル（タグ入力＋プリセット）</td></tr>
   <tr><td><strong>連絡先</strong></td><td>電話番号 / LINE ID / 郵便番号 / 住所 / 緊急連絡先（氏名/住所/電話）</td></tr>
-  <tr><td><strong>日給設定</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ（各単価）</td></tr>
+  <tr><td><strong>日給設定</strong></td><td>基本 / ハーフ / 終日 / 夜間 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ / 休日（各単価）</td></tr>
+  <tr><td><strong>カスタム日当</strong></td><td>単価種別マスタで追加したカスタム単価の日当を設定するセクション。該当する単価種別がある場合のみ表示されます</td></tr>
   <tr><td><strong>個人情報</strong></td><td>生年月日 / 性別 / 血液型 / バイク保有 / 雇入日 / 職種</td></tr>
   <tr><td><strong>資格・保険</strong></td><td>技能者ID(CCUS) / 雇用保険番号 / 健康保険番号 / 年金 / 建退共 / 中退共</td></tr>
   <tr><td><strong>口座情報</strong></td><td>銀行名 / 支店名 / 口座種別 / 口座番号（マスク表示）/ 口座名義</td></tr>
@@ -496,9 +525,14 @@ tr:hover td{background:var(--td-hover)}
 
 <h3 id="t1-7-3">7.3 外注先マスタ</h3>
 <h4>一覧の列</h4>
-<p>会社名 / 担当者名 / 電話番号 / 備考 / 状態</p>
+<p>会社名 / 担当者名 / 電話番号 / インボイス番号 / 備考 / 状態</p>
 <h4>編集項目</h4>
-<p>会社名 / 担当者名 / 電話番号 / 備考 / 基本単価 / ハーフ単価 / 終日単価 / 状態（有効/無効）</p>
+<table>
+  <tr><th>セクション</th><th>項目</th></tr>
+  <tr><td><strong>基本情報</strong></td><td>会社名 / 担当者名 / 電話番号 / インボイス登録番号 / 備考</td></tr>
+  <tr><td><strong>単価設定</strong></td><td>基本 / ハーフ / 終日 / 夜勤 / 上棟鳶 / 上棟荷揚げ / 上棟鳶揚げ / 休日 / カスタム単価</td></tr>
+  <tr><td><strong>その他</strong></td><td>状態（有効/無効）</td></tr>
+</table>
 
 <h3 id="t1-7-4">7.4 交通費マスタ</h3>
 <h4>一覧の列</h4>
@@ -520,6 +554,28 @@ tr:hover td{background:var(--td-hover)}
   <li>一覧行クリックで編集モーダルを開く</li>
   <li>不要なデータは「削除」または状態を「無効」に設定</li>
 </ul>
+
+<h3 id="t1-7-7">7.7 単価種別マスタ</h3>
+<p>設定メニューの「<strong>単価種別</strong>」から、システムで使用する単価区分を管理します。</p>
+<h4>一覧の列</h4>
+<table>
+  <tr><th>列</th><th>説明</th></tr>
+  <tr><td>コード</td><td>単価種別の識別コード</td></tr>
+  <tr><td>表示名</td><td>画面に表示される名称</td></tr>
+  <tr><td>種別</td><td><span class="badge badge-blue">システム</span>（既定）/ <span class="badge badge-green">カスタム</span>（追加）</td></tr>
+  <tr><td>状態</td><td><span class="badge badge-green">有効</span> / <span class="badge badge-gray">無効</span></td></tr>
+  <tr><td>並び順</td><td>選択リストでの表示順</td></tr>
+  <tr><td>操作</td><td>編集・無効化（システム種別は削除不可）</td></tr>
+</table>
+<h4>新規追加</h4>
+<ul>
+  <li><strong>コード:</strong> 英小文字・数字・アンダースコアのみ使用可能（例: <code>holiday_special</code>）</li>
+  <li><strong>表示名:</strong> 画面に表示する日本語名</li>
+</ul>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 金額の設定</div>
+  単価種別マスタでは金額は設定しません。金額は顧客マスタ（請求単価）・スタッフマスタ（日給）・外注先マスタ（支払単価）の各編集画面で個別に設定してください。
+</div>
 
 <!-- ===== 8. FAQ ===== -->
 <h2 id="t1-8">8. よくある質問（FAQ）</h2>
@@ -584,7 +640,6 @@ tr:hover td{background:var(--td-hover)}
 <ul>
   <li>請求管理（請求書の集計／編集／帳票出力）</li>
   <li>請求書の一括出力・URL共有</li>
-  <li>請求データの集計エクスポート</li>
   <li>支払管理（スタッフ向け）</li>
   <li>外注費管理</li>
   <li>売上分析</li>
@@ -652,11 +707,6 @@ tr:hover td{background:var(--td-hover)}
   <li><strong>+ 請求集計:</strong> 個別の請求書集計モーダル</li>
   <li><strong>一括集計:</strong> 全顧客の一括集計モーダル</li>
 </ul>
-<h4>上部アクション（右側）</h4>
-<ul>
-  <li><strong>集計エクスポート:</strong> 集計データをExcel形式で出力</li>
-  <li><strong>📁 出力先:</strong> エクスポートフォルダを開く</li>
-</ul>
 <h4>検索フィルタ</h4>
 <table>
   <tr><th>項目</th><th>説明</th></tr>
@@ -678,7 +728,7 @@ tr:hover td{background:var(--td-hover)}
   <tr><th>列</th><th>説明</th></tr>
   <tr><td>チェックボックス</td><td>一括操作の対象選択</td></tr>
   <tr><td>⚠️</td><td>配置変更の検知アイコン</td></tr>
-  <tr><td>請求番号</td><td>請求書の番号</td></tr>
+  <tr><td>請求番号</td><td>請求書の番号（顧客コードベースの形式。例: <code>2601_001</code>）</td></tr>
   <tr><td>顧客名</td><td>請求先の会社名</td></tr>
   <tr><td>請求年月</td><td>対象の年月</td></tr>
   <tr><td>発行日</td><td>請求書の発行日</td></tr>
@@ -905,7 +955,14 @@ tr:hover td{background:var(--td-hover)}
   <li><strong>スタッフ支払</strong>タブ（本章で説明）</li>
   <li><strong>外注費管理</strong>タブ（次章で説明）</li>
 </ul>
-<p>各タブの上部に「集計エクスポート」「📁 出力先」ボタンがあります。</p>
+<h4>上部アクション</h4>
+<ul>
+  <li><strong>集計エクスポート:</strong> 支払集計データをExcel形式で出力</li>
+  <li><strong>📁 出力先:</strong> エクスポートフォルダを開く</li>
+</ul>
+
+<h4>スタッフ選択</h4>
+<p>オートコンプリート方式のテキスト入力で対象スタッフを選択します。未入力（プレースホルダー「全て」）の場合は全スタッフが対象になります。</p>
 
 <h4>ビュー切替</h4>
 <p>スタッフ支払タブでは2つのビューを切り替えられます：</p>
@@ -918,6 +975,11 @@ tr:hover td{background:var(--td-hover)}
 <ol class="steps">
   <li>「<strong>スタッフ</strong>」から対象スタッフを選択（全スタッフ or 個別）</li>
   <li>「<strong>締日</strong>」を入力</li>
+  <li>必要に応じて「<strong>ステータス</strong>」で絞り込み:
+    <span class="badge badge-green">確認済み</span>
+    <span class="badge badge-orange">下書き</span>
+    <span class="badge badge-gray">全て</span>
+  </li>
   <li>「<strong>集計</strong>」をクリック</li>
 </ol>
 <div class="callout tip">
@@ -933,6 +995,18 @@ tr:hover td{background:var(--td-hover)}
   <span class="badge badge-gray">未払に戻す</span>
 </p>
 
+<h4>下書きステータス</h4>
+<p><span class="badge badge-orange">下書き</span> — 未払詳細モーダルで調整額や備考を入力して保存すると、自動的に「下書き」ステータスになります。</p>
+<ol class="steps">
+  <li>未払集計の一覧からスタッフ行をクリック → 詳細モーダルを開く</li>
+  <li>調整額・備考を入力</li>
+  <li>「<strong>保存</strong>」をクリック → ステータスが<span class="badge badge-orange">下書き</span>に変更されます</li>
+</ol>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 下書きの用途</div>
+  下書きは、支払内容を事前に確認・調整するための中間ステータスです。内容が確定したら「確認済みにする」で確定させてください。
+</div>
+
 <h3 id="t2-5-5">5.5 未払詳細</h3>
 <ol class="steps">
   <li>一覧のスタッフ行をクリック</li>
@@ -945,6 +1019,9 @@ tr:hover td{background:var(--td-hover)}
 </div>
 <p>詳細モーダルからは「<strong>明細出力</strong>」ボタンで個別の明細を出力することもできます。</p>
 
+<h4>支払済み詳細の閲覧</h4>
+<p>支払済みのスタッフ行をクリックすると、読み取り専用の詳細モーダルが開きます。内容は編集できませんが、明細の確認と「<strong>明細出力</strong>」ボタンでの出力が可能です。</p>
+
 <h4>人工割調整について</h4>
 <div class="callout warning">
   <div class="callout-title">⚠️ 人工割調整</div>
@@ -953,6 +1030,10 @@ tr:hover td{background:var(--td-hover)}
 
 <h3 id="t2-5-6">5.6 支払履歴ビュー</h3>
 <p>ビュー切替で「支払履歴」を選択し、期間（開始日〜終了日）を指定して検索します。過去の支払記録を一覧で確認できます。</p>
+<ul>
+  <li>支払履歴の行をクリックすると、支払済み詳細モーダルが開きます（読み取り専用）</li>
+  <li>明細の確認と「<strong>明細出力</strong>」ボタンでの出力が可能です</li>
+</ul>
 
 <h3 id="t2-5-7">5.7 振込集計エクスポート</h3>
 <ol class="steps">
@@ -1003,6 +1084,8 @@ tr:hover td{background:var(--td-hover)}
   <li>期間を切り替えて比較する</li>
   <li>顧客別の売上を確認する</li>
   <li>グラフで推移を視覚的に把握する</li>
+  <li>日別の売上集計を確認する</li>
+  <li>税理士向けレポートをエクスポートする</li>
 </ul>
 
 <h3 id="t2-7-2">7.2 フィルタ</h3>
@@ -1023,7 +1106,7 @@ tr:hover td{background:var(--td-hover)}
   <tr><td><strong>売上（税込）</strong></td><td>請求書の合計金額</td><td>案件数</td></tr>
   <tr><td><strong>支払総額</strong></td><td>スタッフ・外注への支払合計</td><td>配置数</td></tr>
   <tr><td><strong>粗利益</strong></td><td>売上 − 支払総額</td><td>粗利率</td></tr>
-  <tr><td><strong>交通費</strong></td><td>交通費の合計</td><td>—</td></tr>
+  <tr><td><strong>諸経費</strong></td><td>交通費等の経費合計</td><td>—</td></tr>
 </table>
 
 <h3 id="t2-7-4">7.4 グラフ</h3>
@@ -1035,7 +1118,26 @@ tr:hover td{background:var(--td-hover)}
 </ul>
 
 <h3 id="t2-7-5">7.5 月別詳細テーブル</h3>
-<p>年月 / 案件数 / 配置数 / 売上（税込）/ 支払 / 交通費 / 粗利益 / 粗利率 / 状態（<span class="badge badge-green">確定</span> or <span class="badge badge-gray">暫定</span>）</p>
+<p>3つのタブで構成されます。</p>
+
+<h4>月別タブ（既存）</h4>
+<p>年月 / 案件数 / 配置数 / 売上（税込）/ 支払 / 諸経費 / 粗利益 / 粗利率 / 状態（<span class="badge badge-green">確定</span> or <span class="badge badge-gray">暫定</span>）</p>
+<div class="callout info">
+  <div class="callout-title">ℹ️ 概算含バッジ</div>
+  支払に未確定の概算額が含まれる月には <span class="badge badge-orange">概算含</span> バッジが表示されます。実際の支払額が確定するまでの暫定値であることを示しています。
+</div>
+
+<h4>企業別タブ</h4>
+<table>
+  <tr><th>列</th><th>説明</th></tr>
+  <tr><td>順位</td><td>売上順の順位</td></tr>
+  <tr><td>企業名</td><td>顧客名</td></tr>
+  <tr><td>売上（税込）</td><td>該当期間の税込売上合計</td></tr>
+  <tr><td>構成比</td><td>全体売上に対する割合</td></tr>
+</table>
+
+<h4>年次比較タブ</h4>
+<p>顧客ごとに年度をまたいだ売上をクロス集計します。諸経費のサブ表示も含まれます。</p>
 
 <h3 id="t2-7-6">7.6 アクション</h3>
 <ul>
@@ -1045,6 +1147,36 @@ tr:hover td{background:var(--td-hover)}
 <div class="callout warning">
   <div class="callout-title">⚠️ 確定済みの月</div>
   「確定」済みの月は再計算できません。修正が必要な場合は管理者にお問い合わせください。
+</div>
+
+<h3 id="t2-7-7">7.7 日別売上集計</h3>
+<p>期間を指定して日別の売上を集計・表示します。</p>
+<ul>
+  <li><strong>期間指定:</strong> 開始日〜終了日で期間を指定</li>
+  <li><strong>タブ切替:</strong> 日別集計 / 顧客別集計の2つのビュー</li>
+</ul>
+
+<h3 id="t2-7-8">7.8 税理士レポート</h3>
+<p>年度を選択して、税理士向けのエクスポートデータを出力します。</p>
+<h4>エクスポートカード（4種類）</h4>
+<table>
+  <tr><th>#</th><th>レポート</th><th>内容</th></tr>
+  <tr><td>1</td><td><strong>企業別売上（月別）</strong></td><td>選択した月の顧客別売上データ。月選択プルダウン付き</td></tr>
+  <tr><td>2</td><td><strong>企業別売上（年間）</strong></td><td>年間通しての顧客別売上データ</td></tr>
+  <tr><td>3</td><td><strong>区分別支払（月別）</strong></td><td>選択した月のスタッフ/外注別支払データ。スタッフファイルと外注ファイルの2ファイルに自動分割</td></tr>
+  <tr><td>4</td><td><strong>区分別支払（年間）</strong></td><td>年間通してのスタッフ/外注別支払データ</td></tr>
+</table>
+<div class="callout warning">
+  <div class="callout-title">⚠️ 同名ファイルの上書き</div>
+  出力先フォルダに同名のファイルが既に存在する場合、上書き確認ダイアログが表示されます。
+</div>
+<div class="callout tip">
+  <div class="callout-title">💡 出力先フォルダ</div>
+  各エクスポートカードの下部にあるフォルダリンクから、出力先のGoogle Driveフォルダを直接開けます。
+</div>
+<div class="callout warning">
+  <div class="callout-title">⚠️ データの取り扱い</div>
+  エクスポートファイルには給与・支払情報が含まれます。出力先フォルダの共有設定を適切に管理し、権限のある担当者のみがアクセスできるようにしてください。不要になったファイルは速やかに削除してください。
 </div>
 
 <!-- ===== 8. FAQ ===== -->
