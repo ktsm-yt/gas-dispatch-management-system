@@ -659,12 +659,57 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
 }
 
 /**
+ * 集計エクスポート時の同名ファイル存在チェック
+ * @param {string} ym - 対象年月（YYYY-MM形式）
+ * @returns {Object} APIレスポンス { exists: boolean, existingFile?: { id, name, url, modifiedDate } }
+ */
+function checkBillingExportFile(ym: string) {
+  const requestId = generateRequestId();
+
+  try {
+    const authResult = checkPermission(ROLES.MANAGER);
+    if (!authResult.allowed) {
+      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
+      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'ym must be in YYYY-MM format', {}, requestId);
+    }
+
+    const folder = InvoiceExportService._getOutputFolder({});
+    const fileName = `請求データ_${ym}.xlsx`;
+    const files = folder.getFilesByName(fileName);
+
+    if (files.hasNext()) {
+      const file = files.next();
+      return buildSuccessResponse({
+        exists: true,
+        existingFile: {
+          id: file.getId(),
+          name: file.getName(),
+          url: file.getUrl(),
+          modifiedDate: file.getLastUpdated().toISOString()
+        }
+      }, requestId);
+    }
+
+    return buildSuccessResponse({ exists: false }, requestId);
+
+  } catch (error: unknown) {
+    Logger.log(`checkBillingExportFile error: ${(error instanceof Error) ? error.message : String(error)}`);
+    return buildSuccessResponse({ exists: false }, requestId);
+  }
+}
+
+/**
  * 請求データをエクスポート（集計データ）
+ * 確定済みステータス（sent/paid/unpaid）の請求書のみ対象
  * @param {string} ym - 対象年月（YYYY-MM形式）
  * @param {string} format - 出力形式（xlsx）
- * @returns {Object} APIレスポンス { fileId, url }
+ * @param {Object} options - オプション（action: 'overwrite'|'rename' で重複ファイル処理を指定）
+ * @returns {Object} APIレスポンス { fileId, url, recordCount }
  */
-function exportBillingData(ym: string, format: string = 'xlsx') {
+function exportBillingData(ym: string, format: string = 'xlsx', options: { action?: string } = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -693,10 +738,21 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
     const [year, month] = ym.split('-').map(Number);
 
     // 対象期間の請求書を取得
-    const invoices = InvoiceService.search({
+    const allInvoices = InvoiceService.search({
       billing_year: year,
       billing_month: month
     });
+
+    // 確定済みステータスのみ（送付済・入金済・未回収）
+    const confirmedStatuses = ['sent', 'paid', 'unpaid'];
+    const invoices = allInvoices.filter(inv => confirmedStatuses.includes(inv.status));
+
+    // ステータス日本語変換
+    const statusLabels: Record<string, string> = {
+      sent: '送付済',
+      paid: '入金済',
+      unpaid: '未回収'
+    };
 
     // 集計データを作成
     const data = invoices.map(inv => ({
@@ -709,7 +765,7 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
       諸経費: inv.expense_amount,
       消費税: inv.tax_amount,
       合計: inv.total_amount,
-      ステータス: inv.status,
+      ステータス: statusLabels[inv.status] || inv.status,
       書式: inv.invoice_format
     }));
 
@@ -736,11 +792,28 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
     const response = UrlFetchApp.fetch(url, {
       headers: { 'Authorization': 'Bearer ' + token }
     });
+
+    // ファイル名を生成
+    const addTimestamp = options.action === 'rename';
+    const timestamp = addTimestamp
+      ? '_' + Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyyMMdd')
+      : '';
+    const fileName = `請求データ_${ym}${timestamp}.xlsx`;
+
     const blob = response.getBlob();
-    blob.setName(`請求データ_${ym}.xlsx`);
+    blob.setName(fileName);
 
     // エクスポートフォルダを取得
     const folder = InvoiceExportService._getOutputFolder({});
+
+    // 上書きの場合、既存ファイルをゴミ箱へ
+    if (options.action === 'overwrite') {
+      const baseName = `請求データ_${ym}.xlsx`;
+      const existingFiles = folder.getFilesByName(baseName);
+      while (existingFiles.hasNext()) {
+        existingFiles.next().setTrashed(true);
+      }
+    }
 
     // ファイルを保存
     const file = folder.createFile(blob);
@@ -750,7 +823,8 @@ function exportBillingData(ym: string, format: string = 'xlsx') {
 
     return buildSuccessResponse({
       fileId: file.getId(),
-      url: file.getUrl()
+      url: file.getUrl(),
+      recordCount: data.length
     }, requestId);
 
   } catch (error: unknown) {
