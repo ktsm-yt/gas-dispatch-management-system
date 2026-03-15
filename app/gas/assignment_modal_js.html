@@ -490,13 +490,18 @@ function getWorkDetailLabel(workDetail, otherText) {
  * 新しいフィールド追加時はここに追記すること
  */
 /**
- * スロットなし案件の場合、job.pay_unit を単価区分のデフォルトに設定
+ * 単価区分のデフォルトを設定
+ * スロットあり → 未選択（スロット選択で自動連動）
+ * スロットなし → job.pay_unit
  */
 function setDefaultInvoiceUnit(job, slots) {
-  if (slots && slots.length > 0) return;
   const el = document.getElementById('form-invoice-unit');
   if (!el || !job) return;
-  el.value = job.pay_unit || 'halfday';
+  if (slots && slots.length > 0) {
+    el.value = '';
+  } else {
+    el.value = job.pay_unit || 'halfday';
+  }
 }
 
 function resetAssignmentModalUI() {
@@ -556,8 +561,8 @@ function resetAssignmentModalUI() {
   document.getElementById('staff-type-filter').value = '';
 
   // 配置フォーム
-  // デフォルトはhalfday（job読み込み後にsetDefaultInvoiceUnitで再設定される）
-  document.getElementById('form-invoice-unit').value = 'halfday';
+  // デフォルトは未選択（job読み込み後にsetDefaultInvoiceUnitで再設定される）
+  document.getElementById('form-invoice-unit').value = '';
   document.getElementById('form-transport-area').value = '';
   document.getElementById('form-transport-amount').value = '';
   document.getElementById('form-transport-station').value = '';
@@ -1807,6 +1812,7 @@ function doSaveAllChanges() {
 
   const slotId = document.getElementById('form-slot-id')?.value || '';
   const invoiceUnit = document.getElementById('form-invoice-unit').value;
+
   const transportArea = document.getElementById('form-transport-area').value;
   const transportAmount = document.getElementById('form-transport-amount').value;
   const transportStation = document.getElementById('form-transport-station').value;
@@ -1814,11 +1820,22 @@ function doSaveAllChanges() {
   const assignmentRole = document.getElementById('form-assignment-role').value;
   const isLeader = document.getElementById('form-is-leader').checked;
 
-  // Build assignment map
+  // Build assignment maps (staff_id → assignment_id, assignment_id → assignment)
   const assignmentMap = {};
+  const assignmentById = new Map();
   assignmentModalState.assignments.filter(a => a.status !== 'CANCELLED').forEach(a => {
     assignmentMap[a.staff_id] = a.assignment_id;
+    assignmentById.set(a.assignment_id, a);
   });
+
+  // 新規配置がある場合、単価区分が未選択ならエラー（既存更新のみなら不要）
+  const hasNewAssignment = selectedIds.some(id => !assignmentMap[id]);
+  if (hasNewAssignment && !invoiceUnit) {
+    assignmentModalState.isSaving = false;
+    updateSaveButton();
+    showToast('単価区分を選択してください（枠を選択すると自動設定されます）', 'error');
+    return;
+  }
 
   // Build upserts
   // Note: pay_unit, wage_rate, invoice_rate はバックエンドで自動設定
@@ -1844,13 +1861,36 @@ function doSaveAllChanges() {
 
     if (assignmentMap[staffId]) {
       data.assignment_id = assignmentMap[staffId];
-    }
+      const existingAssignment = assignmentById.get(assignmentMap[staffId]);
 
-    // P2-8: 交通費関連フィールド（空値・0も明示的に送信してクリア可能に）
-    data.transport_area = transportArea || '';
-    data.transport_amount = transportAmount !== '' ? Number(transportAmount) : '';
-    data.transport_station = transportStation || '';
-    data.transport_has_bus = transportHasBus;
+      // 既存アサインのslot_idを引き継ぐ（フォームリセットによる上書き防止）
+      // フォームでslot_idが未選択の場合のみ、既存レコードの値を復元
+      if (!slotId && existingAssignment?.slot_id) {
+        data.slot_id = existingAssignment.slot_id;
+      }
+
+      // 交通費: テキスト系フィールドが全て空なら既存データを保持（上書き防止）
+      // ※ transportHasBus(boolean)は判定から除外 — falseは有効な更新値
+      if (!transportArea && !transportAmount && !transportStation) {
+        if (existingAssignment) {
+          data.transport_area = existingAssignment.transport_area ?? '';
+          data.transport_amount = existingAssignment.transport_amount ?? '';
+          data.transport_station = existingAssignment.transport_station ?? '';
+          data.transport_has_bus = existingAssignment.transport_has_bus ?? false;
+        }
+      } else {
+        data.transport_area = transportArea || '';
+        data.transport_amount = transportAmount !== '' ? Number(transportAmount) : '';
+        data.transport_station = transportStation || '';
+        data.transport_has_bus = transportHasBus;
+      }
+    } else {
+      // 新規配置: フォームの値をそのまま使用
+      data.transport_area = transportArea || '';
+      data.transport_amount = transportAmount !== '' ? Number(transportAmount) : '';
+      data.transport_station = transportStation || '';
+      data.transport_has_bus = transportHasBus;
+    }
 
     return data;
   });
@@ -2527,7 +2567,7 @@ var _priceTypeLabelMapCache = null;
 function initPriceTypeSelects_() {
   var cached = sessionStorage.getItem('_priceTypeLabelMap');
   if (cached) {
-    try { _priceTypeLabelMapCache = JSON.parse(cached); } catch(e) { /* ignore */ }
+    try { _priceTypeLabelMapCache = _ensureSystemDefaults(JSON.parse(cached)); } catch(e) { /* ignore */ }
   }
   if (_priceTypeLabelMapCache) {
     populatePriceTypeSelects_(_priceTypeLabelMapCache);
@@ -2537,9 +2577,15 @@ function initPriceTypeSelects_() {
   google.script.run
     .withSuccessHandler(function(res) {
       if (res && res.ok && res.data) {
-        _priceTypeLabelMapCache = res.data;
-        sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(res.data));
-        populatePriceTypeSelects_(res.data);
+        _priceTypeLabelMapCache = _ensureSystemDefaults(res.data);
+        sessionStorage.setItem('_priceTypeLabelMap', JSON.stringify(_priceTypeLabelMapCache));
+        populatePriceTypeSelects_(_priceTypeLabelMapCache);
+      }
+    })
+    .withFailureHandler(function() {
+      if (!_priceTypeLabelMapCache) {
+        _priceTypeLabelMapCache = _ensureSystemDefaults({});
+        populatePriceTypeSelects_(_priceTypeLabelMapCache);
       }
     })
     .getPriceTypeLabelMap();
@@ -2557,6 +2603,13 @@ function populatePriceTypeSelects_(labelMap) {
     if (!select) return;
     var currentVal = select.value;
     select.innerHTML = '';
+
+    // プレースホルダー（スロット選択前の未選択状態用）
+    var placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '(枠を選択)';
+    placeholder.disabled = true;
+    select.appendChild(placeholder);
 
     // 標準グループ
     var stdGroup = document.createElement('optgroup');
