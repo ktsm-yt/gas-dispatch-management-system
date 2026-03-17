@@ -215,7 +215,8 @@ function resetDriveFolders() {
 
 /**
  * 開発用フォルダ構成を初期化（一括）
- * createDevDatabase() の後に実行してください
+ * ※ 新規セットアップの場合は setupAll()（setup.gs）を推奨
+ * この関数は後方互換のために残しています
  */
 function initDevEnvironment() {
   try {
