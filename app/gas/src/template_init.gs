@@ -242,9 +242,11 @@ function registerTemplateIds() {
   };
 
   for (const [key, value] of Object.entries(templateIds)) {
-    if (value && !value.startsWith('xxxx')) {
+    if (value && !value.startsWith('xxxx') && !value.startsWith('YOUR_')) {
       prop.setProperty(key, value);
       Logger.log(`✓ ${key} を登録しました`);
+    } else {
+      Logger.log(`⚠ ${key} はプレースホルダーのためスキップ: ${value}`);
     }
   }
 

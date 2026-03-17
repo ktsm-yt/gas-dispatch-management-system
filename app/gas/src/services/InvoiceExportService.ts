@@ -41,7 +41,7 @@ const InvoiceExportService = {
         `2. [スクリプトプロパティ] に以下を追加:\n` +
         `   - プロパティ名: ${templateKey}\n` +
         `   - 値: GoogleスプレッドシートのテンプレートファイルID\n` +
-        `または setInvoiceTemplateIds() 関数を実行してください。`
+        `または registerTemplateIds() 関数を実行してください。`
       );
     }
 
@@ -75,7 +75,7 @@ const InvoiceExportService = {
           `2. [スクリプトプロパティ] に以下を追加:\n` +
           `   - プロパティ名: ${templateKey}\n` +
           `   - 値: GoogleスプレッドシートのテンプレートファイルID\n` +
-          `または setInvoiceTemplateIds() 関数を実行してください。`
+          `または registerTemplateIds() 関数を実行してください。`
       };
     }
 
