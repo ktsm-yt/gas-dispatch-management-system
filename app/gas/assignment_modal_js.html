@@ -499,8 +499,10 @@ function setDefaultInvoiceUnit(job, slots) {
   if (!el || !job) return;
   if (slots && slots.length > 0) {
     el.value = '';
+    el.disabled = false;
   } else {
     el.value = job.pay_unit || 'halfday';
+    el.disabled = true;
   }
 }
 
