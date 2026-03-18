@@ -25,6 +25,17 @@ interface BulkStatusUpdateResult {
   invoices: InvoiceRecord[];
 }
 
+interface BulkFileIdUpdateItem {
+  invoiceId: string;
+  fileIds: Record<string, string>;
+}
+
+interface BulkFileIdUpdateResult {
+  updated: number;
+  notFound: string[];
+  deleted: string[];
+}
+
 interface FindByPeriodOptions {
   includeArchive?: boolean;
   status?: string;
@@ -594,6 +605,89 @@ const InvoiceRepository = {
     };
 
     return this.update(updateData, current.updated_at);
+  },
+
+  /**
+   * fileIdを一括更新（一括出力バッチ最適化用）
+   * bulkSoftDelete/bulkUpdateStatus と同じパターン: 全件1回読み→メモリ更新→1回書き
+   * 楽観ロック不要 — 同一セッション内で自身が生成したfileIdを書き込むだけ（単一ユーザー運用前提）
+   */
+  bulkUpdateFileIds: function(items: BulkFileIdUpdateItem[]): BulkFileIdUpdateResult {
+    if (!items || items.length === 0) {
+      return { updated: 0, notFound: [], deleted: [] };
+    }
+
+    const sheet = getSheet(this.TABLE_NAME);
+    const headers = getHeaders(sheet);
+    const lastRow = sheet.getLastRow();
+
+    if (lastRow <= 1) {
+      return { updated: 0, notFound: items.map(i => i.invoiceId), deleted: [] };
+    }
+
+    const dataRange = sheet.getRange(2, 1, lastRow - 1, headers.length);
+    const allData = dataRange.getValues();
+
+    const invoiceIdCol = headers.indexOf('invoice_id');
+    const isDeletedCol = headers.indexOf('is_deleted');
+    const updatedAtCol = headers.indexOf('updated_at');
+
+    if (invoiceIdCol === -1) {
+      throw new Error('[bulkUpdateFileIds] SCHEMA_ERROR: invoice_id カラムが見つかりません');
+    }
+
+    // items から Map を構築
+    const updateMap = new Map<string, Record<string, string>>();
+    for (const item of items) {
+      updateMap.set(item.invoiceId, item.fileIds);
+    }
+
+    const now = getCurrentTimestamp();
+    let updated = 0;
+    const deleted: string[] = [];
+    let hasChanges = false;
+
+    for (let i = 0; i < allData.length; i++) {
+      const row = allData[i];
+      const id = String(row[invoiceIdCol]);
+
+      if (!updateMap.has(id)) continue;
+
+      // 削除済みチェック
+      if (isDeletedCol !== -1 && row[isDeletedCol] === true) {
+        deleted.push(id);
+        updateMap.delete(id);
+        continue;
+      }
+
+      // fileId カラムを更新
+      const fileIds = updateMap.get(id)!;
+      for (const [field, value] of Object.entries(fileIds)) {
+        const colIdx = headers.indexOf(field);
+        if (colIdx !== -1) {
+          row[colIdx] = value;
+        }
+      }
+
+      // updated_at を更新
+      if (updatedAtCol !== -1) {
+        row[updatedAtCol] = now;
+      }
+
+      updated++;
+      hasChanges = true;
+      updateMap.delete(id);
+    }
+
+    if (hasChanges) {
+      dataRange.setValues(allData);
+      invalidateExecutionCache(this.TABLE_NAME);
+    }
+
+    // updateMap に残っているものは NOT_FOUND
+    const notFound = Array.from(updateMap.keys());
+
+    return { updated, notFound, deleted };
   },
 
   getMaxUpdatedAt: function(year: number, month: number): string | null {
