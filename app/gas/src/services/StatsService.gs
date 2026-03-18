@@ -854,6 +854,8 @@ const StatsService = {
    */
   _aggregateInvoices: function(year, month) {
     const invoices = InvoiceRepository.findByPeriod(year, month);
+    var custMaps = this._buildCustomerMaps();
+    var deletedCustomerIds = custMaps.deletedIds;
 
     const result = {
       work_amount: 0,      // 作業費（subtotal - expense_amount）
@@ -866,6 +868,7 @@ const StatsService = {
 
     for (const inv of invoices) {
       if (inv.is_deleted) continue;
+      if (deletedCustomerIds[String(inv.customer_id)]) continue;
 
       const subtotal = Number(inv.subtotal) || 0;
       const expense = Number(inv.expense_amount) || 0;

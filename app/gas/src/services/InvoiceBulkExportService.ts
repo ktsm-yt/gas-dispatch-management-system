@@ -42,6 +42,10 @@ const InvoiceBulkExportService = {
     const lock = LockService.getUserLock();
     let lockAcquired = false;
 
+    // バッチ最適化バッファ（catchブロックからもアクセスするためtryの外で宣言）
+    const fileIdUpdateBuffer: Array<{ invoiceId: string; fileIds: Record<string, string> }> = [];
+    const deferredTrashIds: string[] = [];
+
     try {
       // 排他制御を取得（3秒待機）
       if (!lock.tryLock(3000)) {
@@ -88,12 +92,28 @@ const InvoiceBulkExportService = {
       // 会社情報を1回だけ取得（日本語ヘッダーマッピング対応）
       const company = InvoiceExportService._getCompanyInfo();
 
+      // ============================
+      // バッチ最適化: バッファ初期化
+      // ============================
+      const folderCache = new Map<string, GoogleAppsScript.Drive.Folder>();
+
+      // fileId 列名を確定（pdf / pdf_cover はどちらも pdf_file_id）
+      const targetFileIdField = params.exportMode === 'excel' ? 'excel_file_id' : 'pdf_file_id';
+
       // バッチ処理（1件ずつ処理）
       while (progress.processedCount < progress.totalCount) {
         // 5分経過チェック
         const elapsed = Date.now() - startTime;
         if (elapsed > this.TIMEOUT_MS) {
-          // タイムアウト前にURL共有の権限設定をバッチ適用
+          // タイムアウト前にバッファをフラッシュ（データロス防止）
+          if (fileIdUpdateBuffer.length > 0) {
+            const bulkResult = InvoiceRepository.bulkUpdateFileIds(fileIdUpdateBuffer);
+            this._logBulkUpdateResult(bulkResult, 'タイムアウト');
+            fileIdUpdateBuffer.length = 0;
+          }
+          this._flushDeferredTrash(deferredTrashIds);
+
+          // URL共有の権限設定をバッチ適用
           if (params.enableUrlSharing && results.length > 0) {
             this._applyUrlSharingBatch(results);
           }
@@ -108,14 +128,24 @@ const InvoiceBulkExportService = {
           };
         }
 
-        // 1件処理
+        // 1件処理（folderCache, deferTrashing, skipFileIdUpdate を options に渡す）
         const invoiceId = progress.invoiceIds[progress.processedCount];
-        const exportResult = this._exportOneWithPreload(invoiceId, progress, params, preloadedData, company);
+        const exportResult = this._exportOneWithPreload(invoiceId, progress, params, preloadedData, company,
+          { folderCache, deferTrashing: deferredTrashIds, skipFileIdUpdate: true });
 
         // 結果を記録（メモリ上のみ）
         if (exportResult.success) {
           results.push(exportResult.result as Record<string, unknown>);
           progress.successCount++;
+
+          // fileIdバッファに追加
+          const result = exportResult.result as Record<string, unknown>;
+          if (result.fileId) {
+            fileIdUpdateBuffer.push({
+              invoiceId: String(result.invoiceId),
+              fileIds: { [targetFileIdField]: String(result.fileId) }
+            });
+          }
         } else {
           errors.push(exportResult.error as Record<string, unknown>);
           progress.errorCount++;
@@ -130,11 +160,21 @@ const InvoiceBulkExportService = {
 
         progress.processedCount++;
 
-        // 10件ごとに進捗を保存（クラッシュ対策）
+        // 10件ごとに一時ファイル削除 + 進捗保存（クラッシュ対策）
+        // fileIdバッファは完了時/タイムアウト時にまとめてflush（全件read/write のコスト回避）
         if (progress.processedCount % 10 === 0) {
+          this._flushDeferredTrash(deferredTrashIds);
           this.saveProgress(exportKey, progress);
         }
       }
+
+      // 残りのfileIdバッファをフラッシュ
+      if (fileIdUpdateBuffer.length > 0) {
+        const bulkResult = InvoiceRepository.bulkUpdateFileIds(fileIdUpdateBuffer);
+        this._logBulkUpdateResult(bulkResult, '完了');
+        fileIdUpdateBuffer.length = 0;
+      }
+      this._flushDeferredTrash(deferredTrashIds);
 
       // 完了 - URL共有が有効な場合、まとめて権限設定（Drive API v3）
       if (params.enableUrlSharing) {
@@ -144,6 +184,8 @@ const InvoiceBulkExportService = {
       this.clearProgress(exportKey);
       Logger.log(`[BulkExport] 完了: ${results.length} 件成功, ${errors.length} 件エラー`);
 
+      Logger.log(`[TIMING][executeBulkExport] TOTAL: ${Date.now() - _execStart}ms`);
+
       return {
         success: true,
         results: results,
@@ -152,6 +194,18 @@ const InvoiceBulkExportService = {
       };
 
     } catch (error: unknown) {
+      // best-effort: バッファに残った fileId 更新と一時ファイル削除を試行
+      try {
+        if (fileIdUpdateBuffer && fileIdUpdateBuffer.length > 0) {
+          InvoiceRepository.bulkUpdateFileIds(fileIdUpdateBuffer);
+        }
+        if (deferredTrashIds && deferredTrashIds.length > 0) {
+          this._flushDeferredTrash(deferredTrashIds);
+        }
+      } catch (flushError) {
+        Logger.log(`[BulkExport] 例外時flush失敗: ${flushError}`);
+      }
+
       const msg = error instanceof Error ? error.message : String(error);
       Logger.log(`[BulkExport] エラー: ${msg}`);
       return {
@@ -357,7 +411,7 @@ const InvoiceBulkExportService = {
    * @param {Object} company - 会社情報
    * @returns {Object} { success: boolean, result?: {...}, error?: {...} }
    */
-  _exportOneWithPreload: function(invoiceId: string, progress: Record<string, unknown>, params: Record<string, unknown>, preloadedData: Record<string, unknown>, company: Record<string, unknown>) {
+  _exportOneWithPreload: function(invoiceId: string, progress: Record<string, unknown>, params: Record<string, unknown>, preloadedData: Record<string, unknown>, company: Record<string, unknown>, batchOptions?: Record<string, unknown>) {
     const modeConfig = this.MODES[progress.exportMode as keyof typeof this.MODES];
     if (!modeConfig) {
       return {
@@ -372,7 +426,8 @@ const InvoiceBulkExportService = {
 
     const exportOptions = Object.assign(
       { action: 'overwrite', company: company },
-      modeConfig.options
+      modeConfig.options,
+      batchOptions || {}
     );
 
     try {
@@ -692,5 +747,40 @@ const InvoiceBulkExportService = {
     const key = this._generateKey(params);
     this.clearProgress(key);
     return { cancelled: true };
+  },
+
+  /**
+   * 遅延削除バッファ内の一時ファイルをまとめてゴミ箱に移動
+   * 1件ずつtry-catchで保護し、失敗してもスキップして続行
+   * @private
+   */
+  /**
+   * bulkUpdateFileIds の結果をログ出力
+   * @private
+   */
+  _logBulkUpdateResult: function(result: { updated: number; notFound: string[]; deleted: string[] }, phase: string) {
+    Logger.log(`[BulkExport] fileId一括更新(${phase}): ${result.updated}件更新`);
+    if (result.notFound.length > 0) {
+      Logger.log(`[BulkExport] fileId更新 notFound: ${result.notFound.join(', ')}`);
+    }
+    if (result.deleted.length > 0) {
+      Logger.log(`[BulkExport] fileId更新 deleted(スキップ): ${result.deleted.join(', ')}`);
+    }
+  },
+
+  _flushDeferredTrash: function(ids: string[]) {
+    if (ids.length === 0) return;
+    const startTime = Date.now();
+    let errorCount = 0;
+    for (const fileId of ids) {
+      try {
+        DriveApp.getFileById(fileId).setTrashed(true);
+      } catch (e) {
+        errorCount++;
+        Logger.log(`[BulkExport] 一時ファイル削除スキップ: ${fileId}`);
+      }
+    }
+    Logger.log(`[BulkExport] 一時ファイル削除: ${ids.length}件, エラー${errorCount}件, ${Date.now() - startTime}ms`);
+    ids.length = 0;
   }
 };

@@ -312,8 +312,8 @@ const InvoiceExportService = {
       timings.exportPdf = Date.now();
       Logger.log(`[TIMING] PDF export: ${timings.exportPdf - timings.createSheet}ms`);
 
-      // 出力先フォルダを取得
-      const folder = this._getOutputFolder(customer);
+      // 出力先フォルダを取得（folderCacheがあればキャッシュ利用）
+      const folder = this._getOutputFolder(customer, options.folderCache as Map<string, GoogleAppsScript.Drive.Folder> | undefined);
       timings.getFolder = Date.now();
       Logger.log(`[TIMING] getOutputFolder: ${timings.getFolder - timings.exportPdf}ms`);
 
@@ -338,15 +338,22 @@ const InvoiceExportService = {
       timings.createFile = Date.now();
       Logger.log(`[TIMING] createFile: ${timings.createFile - timings.deleteExisting}ms`);
 
-      // 一時スプレッドシートを削除
+      // 一時スプレッドシートを削除（deferTrashing指定時は遅延削除）
       if (!options.keepSheet) {
-        DriveApp.getFileById(spreadsheet!.getId()).setTrashed(true);
+        const tempFileId = spreadsheet!.getId();
+        if (options.deferTrashing && Array.isArray(options.deferTrashing)) {
+          (options.deferTrashing as string[]).push(tempFileId);
+        } else {
+          DriveApp.getFileById(tempFileId).setTrashed(true);
+        }
       }
       timings.cleanup = Date.now();
       Logger.log(`[TIMING] cleanup temp sheet: ${timings.cleanup - timings.createFile}ms`);
 
-      // 請求書のファイルIDを更新
-      InvoiceRepository.updateFileIds(String(invoice.invoice_id), { pdf_file_id: file.getId() });
+      // 請求書のファイルIDを更新（skipFileIdUpdate時はバッチ側で一括更新）
+      if (!options.skipFileIdUpdate) {
+        InvoiceRepository.updateFileIds(String(invoice.invoice_id), { pdf_file_id: file.getId() });
+      }
       timings.updateDb = Date.now();
       Logger.log(`[TIMING] updateFileIds: ${timings.updateDb - timings.cleanup}ms`);
       Logger.log(`[TIMING] exportToPdf TOTAL: ${timings.updateDb - timings.start}ms`);
@@ -395,8 +402,8 @@ const InvoiceExportService = {
       // Excelに変換
       const xlsxBlob = this._exportSpreadsheetToXlsx(spreadsheet!.getId());
 
-      // 出力先フォルダを取得
-      const folder = this._getOutputFolder(customer);
+      // 出力先フォルダを取得（folderCacheがあればキャッシュ利用）
+      const folder = this._getOutputFolder(customer, options.folderCache as Map<string, GoogleAppsScript.Drive.Folder> | undefined);
 
       // ファイル名を生成（renameの場合はタイムスタンプ付き、頭紙付きの場合は区別）
       const addTimestamp = options.action === 'rename';
@@ -415,13 +422,20 @@ const InvoiceExportService = {
       // 出力先フォルダに保存
       const file = folder.createFile(xlsxBlob);
 
-      // 一時スプレッドシートを削除
+      // 一時スプレッドシートを削除（deferTrashing指定時は遅延削除）
       if (!options.keepSheet) {
-        DriveApp.getFileById(spreadsheet!.getId()).setTrashed(true);
+        const tempFileId = spreadsheet!.getId();
+        if (options.deferTrashing && Array.isArray(options.deferTrashing)) {
+          (options.deferTrashing as string[]).push(tempFileId);
+        } else {
+          DriveApp.getFileById(tempFileId).setTrashed(true);
+        }
       }
 
-      // 請求書のファイルIDを更新
-      InvoiceRepository.updateFileIds(String(invoice.invoice_id), { excel_file_id: file.getId() });
+      // 請求書のファイルIDを更新（skipFileIdUpdate時はバッチ側で一括更新）
+      if (!options.skipFileIdUpdate) {
+        InvoiceRepository.updateFileIds(String(invoice.invoice_id), { excel_file_id: file.getId() });
+      }
 
       const result: Record<string, unknown> = {
         success: true,
@@ -1749,13 +1763,23 @@ const InvoiceExportService = {
    * @param {Object} customer - 顧客データ（folder_idを持つ可能性あり）
    * @returns {GoogleAppsScript.Drive.Folder} フォルダ
    */
-  _getOutputFolder: function(customer: Record<string, unknown>) {
+  _getOutputFolder: function(customer: Record<string, unknown>, folderCache?: Map<string, GoogleAppsScript.Drive.Folder>) {
+    // キャッシュキー: folder_id > customer_id > __default__
+    const cacheKey = String(customer?.folder_id || customer?.customer_id || '__default__');
+
+    // キャッシュヒット時はDrive APIをスキップ
+    if (folderCache && folderCache.has(cacheKey)) {
+      return folderCache.get(cacheKey)!;
+    }
+
+    let folder: GoogleAppsScript.Drive.Folder | undefined;
+
     // 顧客専用フォルダがあればその配下の「請求書」フォルダを使用
     if (customer && customer.folder_id) {
       try {
         const invoiceFolder = CustomerFolderService.getInvoiceFolder(customer);
         if (invoiceFolder) {
-          return invoiceFolder;
+          folder = invoiceFolder;
         }
       } catch (e: unknown) {
         Logger.log(`顧客フォルダ取得エラー: ${((e instanceof Error) ? e.message : String(e))}`);
@@ -1763,7 +1787,7 @@ const InvoiceExportService = {
     }
 
     // folder_id 未設定の場合、自動作成を試みる
-    if (customer && customer.customer_id && !customer.folder_id) {
+    if (!folder && customer && customer.customer_id && !customer.folder_id) {
       try {
         const folderResult = CustomerFolderService.createCustomerFolder(customer);
         if (folderResult.folderId) {
@@ -1772,8 +1796,7 @@ const InvoiceExportService = {
             folderResult.folderId
           );
           Logger.log(`請求書出力時に顧客フォルダを自動作成: ${customer.company_name}`);
-          // 請求書サブフォルダを返す
-          return DriveApp.getFolderById(folderResult.invoiceFolderId);
+          folder = DriveApp.getFolderById(folderResult.invoiceFolderId);
         }
       } catch (e: unknown) {
         Logger.log(`フォルダ自動作成に失敗: ${((e instanceof Error) ? e.message : String(e))}`);
@@ -1781,24 +1804,35 @@ const InvoiceExportService = {
     }
 
     // デフォルトの出力先フォルダ（ScriptPropertiesから取得）
-    const props = PropertiesService.getScriptProperties();
-    const folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
+    if (!folder) {
+      const props = PropertiesService.getScriptProperties();
+      const folderId = props.getProperty(this.INVOICE_EXPORT_FOLDER_KEY);
 
-    if (folderId) {
-      try {
-        return DriveApp.getFolderById(folderId);
-      } catch (e: unknown) {
-        throw new Error(
-          `請求書エクスポートフォルダにアクセスできません（ID: ${folderId}）。\n` +
-          `フォルダが削除されたか、アクセス権限がない可能性があります。`
-        );
+      if (folderId) {
+        try {
+          folder = DriveApp.getFolderById(folderId);
+        } catch (e: unknown) {
+          throw new Error(
+            `請求書エクスポートフォルダにアクセスできません（ID: ${folderId}）。\n` +
+            `フォルダが削除されたか、アクセス権限がない可能性があります。`
+          );
+        }
       }
     }
 
-    throw new Error(
-      `INVOICE_EXPORT_FOLDER_ID が未設定です。\n` +
-      `GASエディタで setInvoiceExportFolderId() を実行してください。`
-    );
+    if (!folder) {
+      throw new Error(
+        `INVOICE_EXPORT_FOLDER_ID が未設定です。\n` +
+        `GASエディタで setInvoiceExportFolderId() を実行してください。`
+      );
+    }
+
+    // キャッシュに保存
+    if (folderCache) {
+      folderCache.set(cacheKey, folder);
+    }
+
+    return folder;
   },
 
   /**
