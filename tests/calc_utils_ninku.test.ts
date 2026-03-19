@@ -5,29 +5,10 @@
  */
 
 import { describe, it, expect } from 'vitest';
-
-// calc_utils.ts からの関数を再現（GASはexportなし・結合ビルドのため直接import不可）
-// 本体と同一ロジックであることを保証するため、関数シグネチャ・実装を完全一致させる
-
-function calculateNinkuCoefficient_(
-  requiredCount: number | null | undefined,
-  actualCount: number | null | undefined
-): number {
-  const required = Number(requiredCount) || 0;
-  const actual = Number(actualCount) || 0;
-  if (required <= 0 || actual <= 0) return 1.0;
-  if (required === actual) return 1.0;
-  return Math.floor((required / actual) * 10) / 10;
-}
-
-function calculateNinkuAdjustment_(
-  baseWage: number,
-  coefficient: number
-): number {
-  if (coefficient === 1.0) return 0;
-  const adjustedWage = Math.floor(baseWage * coefficient);
-  return adjustedWage - baseWage;
-}
+import {
+  calculateNinkuCoefficient_,
+  calculateNinkuAdjustment_,
+} from '../app/gas/src/calc_utils';
 
 // ============================================
 // calculateNinkuCoefficient_
@@ -126,18 +107,17 @@ describe('calculateNinkuAdjustment_', () => {
   it('丸め順序: 各ステップでfloor（中間値を持ち越さない）', () => {
     const wage = 15123;
     const coefficient = 0.7;
-    const adjustedWage = Math.floor(wage * coefficient); // floor(10586.1) = 10586
-    expect(adjustedWage).toBe(10586);
+    // floor(15123 * 0.7) = floor(10586.1) = 10586
     expect(calculateNinkuAdjustment_(wage, coefficient)).toBe(10586 - 15123);
   });
 });
 
 // ============================================
-// 統合シナリオ（係数→調整額→源泉の一貫性）
+// 統合シナリオ（係数→調整額の一貫性）
 // ============================================
 
 describe('統合シナリオ', () => {
-  it('テスト2: 過剰配置 required=3, actual=4, wage=15000', () => {
+  it('過剰配置 required=3, actual=4, wage=15000', () => {
     const coeff = calculateNinkuCoefficient_(3, 4);
     expect(coeff).toBe(0.7);
     const adj = calculateNinkuAdjustment_(15000, coeff);
@@ -145,7 +125,7 @@ describe('統合シナリオ', () => {
     expect(15000 + adj).toBe(10500);
   });
 
-  it('テスト5: 不足配置 required=4, actual=3, wage=15000', () => {
+  it('不足配置 required=4, actual=3, wage=15000', () => {
     const coeff = calculateNinkuCoefficient_(4, 3);
     expect(coeff).toBe(1.3);
     const adj = calculateNinkuAdjustment_(15000, coeff);
@@ -153,22 +133,18 @@ describe('統合シナリオ', () => {
     expect(15000 + adj).toBe(19500);
   });
 
-  it('テスト8: 源泉徴収は係数適用後の金額に日額テーブル参照', () => {
+  it('源泉徴収は係数適用後の金額に日額テーブル参照', () => {
     const coeff = calculateNinkuCoefficient_(3, 4);
     const wage = 15000;
     const adjustedWage = wage + calculateNinkuAdjustment_(wage, coeff);
     expect(adjustedWage).toBe(10500);
-    // 日額テーブル: 10500~10600 → 320円（旧: 10.21%=1072円）
-    // NOTE: lookupDailyWithholdingTax はGASグローバル関数のため、
-    // このテストでは人工割計算の正確性のみを検証
   });
 
-  it('テスト7: 外注混在 2 STAFF + 1 SUBCONTRACT, required=2 → actual=2, coeff=1.0', () => {
-    // SUBCONTRACTはactualに含めない → actual=2
+  it('外注混在 2 STAFF + 1 SUBCONTRACT, required=2 → actual=2, coeff=1.0', () => {
     expect(calculateNinkuCoefficient_(2, 2)).toBe(1.0);
   });
 
-  it('テスト1: 過不足なし required=3, actual=3 → 金額変わらず', () => {
+  it('過不足なし required=3, actual=3 → 金額変わらず', () => {
     const coeff = calculateNinkuCoefficient_(3, 3);
     expect(coeff).toBe(1.0);
     expect(calculateNinkuAdjustment_(15000, coeff)).toBe(0);

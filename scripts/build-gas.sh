@@ -4,6 +4,7 @@ set -e
 GAS_DIR="app/gas"
 DIST_DIR="$GAS_DIR/dist"
 APPSSCRIPT="$GAS_DIR/appsscript.json"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ── OAuthスコープ検証 ──────────────────────────────
 # リベース等でoauthScopesが消えると、デプロイ後に権限エラーが発生し
@@ -48,17 +49,18 @@ fi
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR/src"
 
-# 1. TypeScriptをビルド（.tsファイルが存在する場合のみ）
+# 1. TypeScriptをビルド（export strip付き）
+# ソースに Vitest 用 export を追加しているため、with-stripped-exports.sh で
+# 一時的に除去してからビルドする。
 TS_COUNT=$(find "$GAS_DIR/src" -name "*.ts" ! -name "*.d.ts" ! -path "*/tests/*" | wc -l | tr -d ' ')
 if [ "$TS_COUNT" -gt 0 ]; then
-  echo "Building $TS_COUNT TypeScript files..."
-  npx tsc -p "$GAS_DIR/tsconfig.build.json"
+  echo "Building $TS_COUNT TypeScript files (with export strip)..."
+  bash "$SCRIPT_DIR/with-stripped-exports.sh" npx tsc -p "$GAS_DIR/tsconfig.build.json"
 else
   echo "No .ts files found, skipping TypeScript build"
 fi
 
 # 1.5. Dead function check (warning only)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ -f "$SCRIPT_DIR/check-dead-functions.sh" ]; then
   bash "$SCRIPT_DIR/check-dead-functions.sh" "$GAS_DIR/src" || true
 fi

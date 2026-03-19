@@ -10,7 +10,7 @@
  */
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const WITHHOLDING_TAX_TABLE_R7: readonly [number, number][] = [
+export const WITHHOLDING_TAX_TABLE_R7: readonly [number, number][] = [
   [0, 0],
   [2900, 5],
   [2950, 5],
@@ -234,7 +234,7 @@ const WITHHOLDING_TAX_TABLE_R7: readonly [number, number][] = [
  * [下限額, 基点税額, 超過分に対する税率]
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const WITHHOLDING_TAX_PROGRESSIVE_R7: readonly [number, number, number][] = [
+export const WITHHOLDING_TAX_PROGRESSIVE_R7: readonly [number, number, number][] = [
   [24000, 2305, 0.2042],
   [26000, 2715, 0.23483],
   [32000, 4125, 0.33693],
@@ -251,7 +251,7 @@ const WITHHOLDING_TAX_PROGRESSIVE_R7: readonly [number, number, number][] = [
  * @returns 源泉徴収税額（円、端数切り捨て）
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-function lookupDailyWithholdingTax(dailyAmount: number): number {
+export function lookupDailyWithholdingTax(dailyAmount: number): number {
   if (dailyAmount <= 0) return 0;
 
   // 24,000円超: 累進計算式

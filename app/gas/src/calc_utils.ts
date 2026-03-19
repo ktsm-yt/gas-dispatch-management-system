@@ -60,13 +60,13 @@ function normalizeTaxRate_(taxRate: number | string | null | undefined): number 
   return rate >= 1 ? rate / 100 : rate;
 }
 
-function normalizeUnit_(unit: string | null | undefined): string {
+export function normalizeUnit_(unit: string | null | undefined): string {
   if (!unit) return '';
   return String(unit).toLowerCase().trim();
 }
 
 /** 単価コードの正規化（alias解決含む） */
-function normalizePayUnit_(unit: string): string {
+export function normalizePayUnit_(unit: string): string {
   const ALIASES: Record<string, string> = {
     'half': 'halfday', 'am': 'halfday', 'pm': 'halfday', 'yakin': 'night'
   };
@@ -78,7 +78,7 @@ function normalizePayUnit_(unit: string): string {
  * カスタム単価をM_CustomPricesから取得（O(1)ルックアップ）
  * @returns 金額 or null（未設定の場合）
  */
-function getCustomPrice_(entityType: string, entityId: string, code: string): number | null {
+export function getCustomPrice_(entityType: string, entityId: string, code: string): number | null {
   const map = MasterCache.getCustomPriceMap();
   const key = `${entityType}|${entityId}|${code}`;
   const amount = map[key];
@@ -94,7 +94,7 @@ function getCustomPrice_(entityType: string, entityId: string, code: string): nu
  * invoice_unit/pay_unit が未設定またはbasicの場合、job.pay_unit にフォールバック。
  * job.pay_unit も未設定なら basic のまま返す。
  */
-function resolveEffectiveUnit_(
+export function resolveEffectiveUnit_(
   unitFromAssignment: string | null | undefined,
   job: { pay_unit?: unknown } | null | undefined
 ): string {
@@ -189,7 +189,7 @@ function calculateExpense_(
 // 単価計算
 // ============================================
 
-function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string): number {
+export function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string): number {
   if (!customer) return 0;
 
   const normalizedType = String(jobType || '').toLowerCase().trim();
@@ -222,7 +222,7 @@ function getUnitPriceByJobType_(customer: Record<string, any>, jobType: string):
   }
 }
 
-function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): number {
+export function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): number {
   if (!staff) return 0;
 
   const normalizedType = String(jobType || '').toLowerCase().trim();
@@ -259,7 +259,7 @@ function getDailyRateByJobType_(staff: Record<string, any>, jobType: string): nu
  * 外注先マスタの単価区分に基づく単価を取得する。
  * フォールバック: basic_rate → full_day_rate → 0
  */
-function getSubcontractorRateByUnit_(
+export function getSubcontractorRateByUnit_(
   subcontractor: Record<string, any>,
   unit: string
 ): number {
@@ -457,7 +457,7 @@ function formatCurrency_(amount: number | null | undefined): string {
  * - required > actual → 係数 > 1.0（不足配置 → 割増）
  * - required < actual → 係数 < 1.0（過剰配置 → 割引）
  */
-function calculateNinkuCoefficient_(
+export function calculateNinkuCoefficient_(
   requiredCount: number | null | undefined,
   actualCount: number | null | undefined
 ): number {
@@ -474,7 +474,7 @@ function calculateNinkuCoefficient_(
  * 人工割による支払調整額を計算する。
  * adjustmentAmount = wage × coefficient - wage（係数適用後の差分）
  */
-function calculateNinkuAdjustment_(
+export function calculateNinkuAdjustment_(
   baseWage: number,
   coefficient: number
 ): number {

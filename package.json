@@ -1,6 +1,6 @@
 {
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.19.0"
   },
   "scripts": {
     "env:init": "node tools/init-env.js",
@@ -15,9 +15,11 @@
     "gas:push": "npm run build && cd app/gas && npx clasp push",
     "gas:status": "bash scripts/clasp-env-status.sh",
     "gas:deploy": "bash scripts/deploy-prod.sh",
-    "typecheck": "tsc -p app/gas/tsconfig.json --noEmit",
+    "typecheck": "bash scripts/with-stripped-exports.sh npx tsc -p app/gas/tsconfig.json --noEmit",
     "lint": "eslint app/gas/src/ --ext .js,.gs,.ts",
     "lint:fix": "eslint app/gas/src/ --ext .js,.gs,.ts --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint"
   },
   "devDependencies": {
@@ -28,6 +30,7 @@
     "eslint": "8.56.0",
     "tsx": "^4.21.0",
     "typescript": "5.3.3",
+    "vitest": "3.2.1",
     "xlsx": "^0.18.5"
   }
 }
