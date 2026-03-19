@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": []
+  },
+  "include": [
+    "../app/gas/src/calc_utils.ts",
+    "../app/gas/src/date_utils.ts",
+    "../app/gas/src/services/WithholdingTaxTable.ts",
+    "./**/*.ts"
+  ]
+}
