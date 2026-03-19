@@ -952,11 +952,12 @@ function testSaveInvoice() {
 
 /**
  * 一括請求生成テスト
+ * 先月分の既存請求書を削除してから再生成し、実際の生成パフォーマンスを計測する。
+ * 請求番号は顧客コードベース（YYMM_code）のため、再生成で同一番号が復元される。
  */
 function testBulkGenerateInvoices() {
   const testName = 'bulkGenerateInvoices';
   const threshold = PERF_TEST_CONFIG.THRESHOLDS.bulkGenerateInvoices;
-  const createdIds = [];
 
   const customers = getAllRecords('M_Customers').filter(c => !c.is_deleted);
   if (customers.length < 2) {
@@ -964,36 +965,45 @@ function testBulkGenerateInvoices() {
     return { name: testName, passed: true, skipped: true };
   }
 
-  const now = new Date();
-  const targetMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-  const targetYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-
-  try {
-    const start = Date.now();
-    try {
-      const result = InvoiceService.bulkGenerate(targetYear, targetMonth, { overwrite: false, limit: 5 });
-      if (result && result.success) {
-        for (const inv of result.success) {
-          if (inv.invoiceId) createdIds.push(inv.invoiceId);
-        }
-      }
-    } catch (e) {
-      console.log(`⚠️ ${testName}: SKIPPED - bulkGenerate失敗: ${e.message}`);
-      return { name: testName, passed: true, skipped: true };
-    }
-    const elapsed = Date.now() - start;
-
-    const passed = elapsed <= threshold;
-    console.log(`${passed ? '✅' : '❌'} ${testName}: ${elapsed}ms (閾値: ${threshold}ms, 生成: ${createdIds.length}件)`);
-    return { name: testName, avg: elapsed, threshold, passed, count: createdIds.length };
-  } finally {
-    for (const id of createdIds) {
-      try {
-        InvoiceLineRepository.deleteByInvoiceId(id);
-        InvoiceRepository.softDelete(id);
-      } catch (e) { console.log(`cleanup失敗: ${id}`); }
-    }
+  // 配置データが存在する月を特定（直近の案件から逆算）
+  const recentJobs = getAllRecords('T_Jobs').filter(j => j.work_date);
+  if (recentJobs.length === 0) {
+    console.log(`⚠️ ${testName}: SKIPPED - 案件データなし`);
+    return { name: testName, passed: true, skipped: true };
   }
+
+  // 配置数が最も多い年月を選択
+  const monthCounts = {};
+  for (const job of recentJobs) {
+    const d = new Date(job.work_date);
+    const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+    monthCounts[key] = (monthCounts[key] || 0) + 1;
+  }
+  const bestMonth = Object.entries(monthCounts).sort((a, b) => b[1] - a[1])[0];
+  const [targetYear, targetMonth] = bestMonth[0].split('-').map(Number);
+  console.log(`[${testName}] 対象: ${targetYear}年${targetMonth}月（案件${bestMonth[1]}件）`);
+
+  // overwrite: true で既存請求書を削除→再生成（同一請求番号が復元される）
+  const start = Date.now();
+  let generatedCount = 0;
+  try {
+    const result = InvoiceService.bulkGenerate(targetYear, targetMonth, { overwrite: true, limit: 10 });
+    if (result && result.success) {
+      generatedCount = result.success.length;
+    }
+    const skippedNoData = result && result.skippedNoData ? result.skippedNoData.length : 0;
+    const skippedExisting = result && result.skippedExisting ? result.skippedExisting.length : 0;
+    console.log(`[${testName}] 生成: ${generatedCount}件, スキップ(データなし): ${skippedNoData}件, スキップ(既存): ${skippedExisting}件`);
+  } catch (e) {
+    console.log(`⚠️ ${testName}: bulkGenerate失敗: ${e.message}`);
+    return { name: testName, passed: false, error: e.message };
+  }
+  const elapsed = Date.now() - start;
+
+  const passed = elapsed <= threshold;
+  const perInvoice = generatedCount > 0 ? Math.round(elapsed / generatedCount) : 0;
+  console.log(`${passed ? '✅' : '❌'} ${testName}: ${elapsed}ms (閾値: ${threshold}ms, 生成: ${generatedCount}件, ${perInvoice}ms/件)`);
+  return { name: testName, avg: elapsed, threshold, passed, count: generatedCount, perInvoice };
 }
 
 // ============================================================
@@ -1241,4 +1251,18 @@ function runPerfSubset(label, testFns) {
   const skippedPart = results.skipped ? `, ${results.skipped} skipped` : '';
   console.log(`\n結果: ${results.passed} passed, ${results.failed} failed${skippedPart}`);
   return results;
+}
+
+/**
+ * 請求系パフォーマンステスト（GASエディタから直接実行用）
+ */
+function runPerfInvoices() {
+  return runPerfSubset('invoices', [testSearchInvoices, testInvoiceCalculateTotals, testGenerateInvoice, testSaveInvoice, testBulkGenerateInvoices]);
+}
+
+/**
+ * 支払系パフォーマンステスト（GASエディタから直接実行用）
+ */
+function runPerfPayouts() {
+  return runPerfSubset('payouts', [testCalculatePayout, testSearchPayouts, testGetUnpaidStaffList, testConfirmPayout, testMarkAsPaid]);
 }
