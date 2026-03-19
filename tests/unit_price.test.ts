@@ -281,7 +281,7 @@ describe('getSubcontractorRateByUnit_', () => {
     expect(getSubcontractorRateByUnit_(s, 'half')).toBe(13000);
   });
 
-  it('rate=0 → 0（warnMissingRate_ 呼び出し、例外なし）', () => {
+  it('rate=0 → 0を返し例外なし', () => {
     const s = { subcontractor_id: 'SUB002', basic_rate: 0 };
     expect(getSubcontractorRateByUnit_(s, 'half')).toBe(0);
   });

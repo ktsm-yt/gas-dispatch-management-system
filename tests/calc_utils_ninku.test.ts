@@ -133,14 +133,14 @@ describe('統合シナリオ', () => {
     expect(15000 + adj).toBe(19500);
   });
 
-  it('源泉徴収は係数適用後の金額に日額テーブル参照', () => {
+  it('係数適用後の調整済み日額が正しく計算される', () => {
     const coeff = calculateNinkuCoefficient_(3, 4);
     const wage = 15000;
     const adjustedWage = wage + calculateNinkuAdjustment_(wage, coeff);
     expect(adjustedWage).toBe(10500);
   });
 
-  it('外注混在 2 STAFF + 1 SUBCONTRACT, required=2 → actual=2, coeff=1.0', () => {
+  it('required=actual → coeff=1.0（配置人数一致）', () => {
     expect(calculateNinkuCoefficient_(2, 2)).toBe(1.0);
   });
 
