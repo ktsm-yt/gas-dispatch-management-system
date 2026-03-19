@@ -5,7 +5,7 @@
 // 基本的な日付操作
 // ============================================
 
-function parseDate_(dateStr: string | null | undefined): Date | null {
+export function parseDate_(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
   const parts = dateStr.split('-');
   return new Date(
@@ -15,7 +15,7 @@ function parseDate_(dateStr: string | null | undefined): Date | null {
   );
 }
 
-function formatDate_(date: Date | null | undefined): string | null {
+export function formatDate_(date: Date | null | undefined): string | null {
   if (!date) return null;
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -27,13 +27,13 @@ function formatDate_(date: Date | null | undefined): string | null {
 // 日付演算
 // ============================================
 
-function addDays_(date: Date | string, days: number): Date {
+export function addDays_(date: Date | string, days: number): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   d.setDate(d.getDate() + days);
   return d;
 }
 
-function addMonths_(date: Date | string, months: number): Date {
+export function addMonths_(date: Date | string, months: number): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   const originalDay = d.getDate();
 
@@ -46,18 +46,18 @@ function addMonths_(date: Date | string, months: number): Date {
   return d;
 }
 
-function diffDays_(startDate: Date | string, endDate: Date | string): number {
+export function diffDays_(startDate: Date | string, endDate: Date | string): number {
   const start = typeof startDate === 'string' ? parseDate_(startDate)! : startDate;
   const end = typeof endDate === 'string' ? parseDate_(endDate)! : endDate;
   const diffTime = end.getTime() - start.getTime();
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
-function getLastDayOfMonth_(year: number, month: number): number {
+export function getLastDayOfMonth_(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function getEndOfMonth_(date: Date | string): Date {
+export function getEndOfMonth_(date: Date | string): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   return new Date(d.getFullYear(), d.getMonth() + 1, 0);
 }
@@ -66,7 +66,7 @@ function getEndOfMonth_(date: Date | string): Date {
 // 締め日・支払日計算
 // ============================================
 
-function calculateClosingPeriod_(
+export function calculateClosingPeriod_(
   year: number,
   month: number,
   closingDay: number
@@ -96,7 +96,7 @@ function calculateClosingPeriod_(
   };
 }
 
-function calculatePaymentDate_(
+export function calculatePaymentDate_(
   year: number,
   month: number,
   _closingDay: number,
@@ -121,7 +121,7 @@ function calculatePaymentDate_(
 // 稼働日数計算
 // ============================================
 
-function getJapaneseHolidays_(year: number): Set<string> {
+export function getJapaneseHolidays_(year: number): Set<string> {
   const holidays = new Set<string>();
 
   holidays.add(`${year}-01-01`);
@@ -148,7 +148,7 @@ function getJapaneseHolidays_(year: number): Set<string> {
   return holidays;
 }
 
-function getNthDayOfWeek_(year: number, month: number, dayOfWeek: number, n: number): string | null {
+export function getNthDayOfWeek_(year: number, month: number, dayOfWeek: number, n: number): string | null {
   const firstDay = new Date(year, month - 1, 1);
   const firstDayOfWeek = firstDay.getDay();
 
@@ -159,7 +159,7 @@ function getNthDayOfWeek_(year: number, month: number, dayOfWeek: number, n: num
   return formatDate_(new Date(year, month - 1, day));
 }
 
-function isBusinessDay_(date: Date | string, holidays: Set<string>): boolean {
+export function isBusinessDay_(date: Date | string, holidays: Set<string>): boolean {
   const d = typeof date === 'string' ? parseDate_(date)! : date;
   const dayOfWeek = d.getDay();
 
@@ -174,7 +174,7 @@ function isBusinessDay_(date: Date | string, holidays: Set<string>): boolean {
   return true;
 }
 
-function countBusinessDays_(startDate: string, endDate: string, excludeHolidays: boolean = true): number {
+export function countBusinessDays_(startDate: string, endDate: string, excludeHolidays: boolean = true): number {
   const start = parseDate_(startDate);
   const end = parseDate_(endDate);
 
@@ -203,7 +203,7 @@ function countBusinessDays_(startDate: string, endDate: string, excludeHolidays:
   return count;
 }
 
-function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = true): Date {
+export function getNextBusinessDay_(date: Date | string, excludeHolidays: boolean = true): Date {
   const d = typeof date === 'string' ? parseDate_(date)! : new Date(date);
   let year = d.getFullYear();
   const holidays = excludeHolidays ? getJapaneseHolidays_(year) : new Set<string>();
@@ -251,12 +251,12 @@ function _getFiscalMonthEndFromMaster_(): number {
 }
 
 /** 決算月から年度開始月を算出（例: 決算2月→開始3月） */
-function getFiscalStartMonth_(fiscalMonthEnd: number): number {
+export function getFiscalStartMonth_(fiscalMonthEnd: number): number {
   return fiscalMonthEnd === 12 ? 1 : fiscalMonthEnd + 1;
 }
 
 /** 日付と決算月から年度を計算 */
-function getFiscalYearByEndMonth_(date: Date | string, fiscalMonthEnd: number): number {
+export function getFiscalYearByEndMonth_(date: Date | string, fiscalMonthEnd: number): number {
   const d = typeof date === 'string' ? parseDate_(date)! : date;
   const month = d.getMonth() + 1;
   const year = d.getFullYear();
@@ -267,7 +267,7 @@ function getFiscalYearByEndMonth_(date: Date | string, fiscalMonthEnd: number): 
 }
 
 /** 年度と決算月から年度の開始日・終了日を計算 */
-function getFiscalYearRangeByEndMonth_(fiscalYear: number, fiscalMonthEnd: number): { startDate: string; endDate: string } {
+export function getFiscalYearRangeByEndMonth_(fiscalYear: number, fiscalMonthEnd: number): { startDate: string; endDate: string } {
   const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
 
   let startYear: number, endYear: number;
@@ -318,7 +318,7 @@ function formatFiscalPeriodLabel_(fiscalYear: number, month?: number): string {
 }
 
 /** 年度内の12ヶ月を [{year, month}] 配列で返す */
-function getFiscalMonths_(fiscalYear: number, fiscalMonthEnd: number): Array<{year: number; month: number}> {
+export function getFiscalMonths_(fiscalYear: number, fiscalMonthEnd: number): Array<{year: number; month: number}> {
   const startMonth = getFiscalStartMonth_(fiscalMonthEnd);
   const months: Array<{year: number; month: number}> = [];
 
