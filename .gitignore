@@ -65,6 +65,9 @@ secrets.*
 .claude/
 .github/settings.local.json
 
+# Coverage
+coverage/
+
 # E2E test (auth state, screenshots, Playwright cache)
 e2e/auth/
 e2e/screenshots/
