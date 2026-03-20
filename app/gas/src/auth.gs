@@ -215,27 +215,6 @@ function requirePermission(requiredRole) {
 }
 
 /**
- * 管理者権限チェック
- */
-function requireAdmin() {
-  return requirePermission(ROLES.ADMIN);
-}
-
-/**
- * マネージャー以上の権限チェック
- */
-function requireManager() {
-  return requirePermission(ROLES.MANAGER);
-}
-
-/**
- * スタッフ以上の権限チェック（ログイン必須）
- */
-function requireStaff() {
-  return requirePermission(ROLES.STAFF);
-}
-
-/**
  * 認証・認可の初期設定を行う
  * ScriptProperties に管理者・マネージャーのメールアドレスを設定
  */
