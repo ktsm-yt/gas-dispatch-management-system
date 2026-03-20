@@ -436,7 +436,7 @@ export const PayoutService = {
       };
     }
 
-    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const paidDate = options.paid_date || getServerDate();
 
     const updateData: Partial<PayoutRecord> & Record<string, unknown> & { payout_id: string } = {
       payout_id: payoutId,
@@ -508,7 +508,7 @@ export const PayoutService = {
     const totalAmount = calc.totalAmount + adjustmentAmount;
 
     // 3. 支払日を決定
-    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const paidDate = options.paid_date || getServerDate();
 
     // 4. 支払いレコード作成（直接 paid ステータスで保存）
     const payout = PayoutRepository.insert({
@@ -941,7 +941,7 @@ export const PayoutService = {
       };
     }
 
-    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const paidDate = options.paid_date || getServerDate();
 
     // バルク更新を使用（シートI/Oを1回に集約）
     const result = PayoutRepository.bulkUpdateStatus(payoutIds, 'paid', {
@@ -988,7 +988,7 @@ export const PayoutService = {
     let success = 0;
     let failed = 0;
 
-    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const paidDate = options.paid_date || getServerDate();
     const adjustments = options.adjustments || {};
 
     for (const staffId of staffIds) {
@@ -1090,7 +1090,7 @@ export const PayoutService = {
         _archiveFiscalYear: current._archiveFiscalYear
       };
       if (status === 'paid') {
-        updateData.paid_date = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+        updateData.paid_date = getServerDate();
       }
       return PayoutRepository.update(updateData, expectedUpdatedAt);
     }
@@ -2036,7 +2036,7 @@ export const PayoutService = {
 
     const adjustmentAmount = options.adjustment_amount || 0;
     const totalAmount = calc.totalAmount + adjustmentAmount;
-    const paidDate = options.paid_date || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+    const paidDate = options.paid_date || getServerDate();
 
     const payout = PayoutRepository.insert({
       payout_type: 'SUBCONTRACTOR',
