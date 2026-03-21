@@ -1440,20 +1440,27 @@
         confirmText: '再計算',
         cancelText: 'キャンセル',
         onConfirm: function() {
+          // ボタン即disable + テキスト変更（連打防止 + フィードバック）
+          var btn = document.querySelector('.toolbar-actions .btn-secondary');
+          var originalText = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = '再計算中...';
+
           google.script.run
             .withSuccessHandler(function(result) {
+              btn.disabled = false;
+              btn.textContent = originalText;
               if (result.ok) {
-                // 再計算後はキャッシュを無効化してから再読み込み
+                // 全キャッシュクリア + 年次データ無効化
                 PageCache.clearByPrefix('sales_analytics');
-                ConfirmationModal.show({
-                  type: 'info',
-                  title: '完了',
-                  message: '統計を再計算しました',
-                  confirmText: 'OK',
-                  cancelText: '閉じる',
-                  onConfirm: function() { loadData(); },
-                  onCancel: function() { loadData(); }
-                });
+                _yearlyData = null;
+                _yearlyLoading = false;
+                // 即リロード（完了モーダルなし）
+                loadData();
+                // 年次タブがアクティブなら再取得
+                if (_statsActiveTab === 'yearly') {
+                  switchStatsTab('yearly');
+                }
               } else {
                 ConfirmationModal.show({
                   type: 'danger',
@@ -1464,7 +1471,11 @@
                 });
               }
             })
-            .withFailureHandler(handleError)
+            .withFailureHandler(function(error) {
+              btn.disabled = false;
+              btn.textContent = originalText;
+              handleError(error);
+            })
             .recalculateMonthlyStats(year, month);
         }
       });

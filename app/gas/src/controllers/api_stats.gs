@@ -176,6 +176,13 @@ function recalculateMonthlyStats(year, month) {
       return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
     }
 
+    // 年次顧客統計のサーバーキャッシュを無効化（再計算でデータが変わるため）
+    try {
+      CacheService.getScriptCache().remove('yearly_customer_stats_v2');
+    } catch (cacheError) {
+      Logger.log('recalculateMonthlyStats: yearly cache invalidation failed: ' + cacheError);
+    }
+
     return buildSuccessResponse({
       stats: result.stats,
       created: result.created

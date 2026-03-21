@@ -194,3 +194,39 @@ function releaseLock(lock) {
     }
   }
 }
+
+/**
+ * スクリプトロック付きで関数を実行
+ * ロック取得失敗時は BUSY_ERROR レスポンスを返す。
+ * ビジネスロジックのエラーは呼び出し元に再throw。
+ * @param {Function} fn - ロック取得後に実行する関数
+ * @param {Object} [options]
+ * @param {number} [options.waitMs=5000] - ロック待機時間（ミリ秒）
+ * @param {string} [options.requestId] - リクエストID
+ * @param {string} [options.busyMessage] - ロック失敗時のエラーメッセージ
+ * @param {Object} [options.busyDetails] - ロック失敗時のdetails
+ * @returns {*} fn の戻り値、またはロック失敗時のエラーレスポンス
+ */
+function withScriptLock(fn, options) {
+  var waitMs = (options && options.waitMs) || 5000;
+  var requestId = (options && options.requestId) || generateRequestId();
+  var busyMessage = (options && options.busyMessage) || '別の処理が実行中です。しばらく待ってから再度お試しください。';
+  var busyDetails = (options && options.busyDetails) || {};
+  var lock = LockService.getScriptLock();
+  var lockAcquired = false;
+
+  try {
+    lock.waitLock(waitMs);
+    lockAcquired = true;
+    return fn();
+  } catch (e) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, busyMessage, busyDetails, requestId);
+    }
+    throw e;
+  } finally {
+    if (lockAcquired) {
+      try { lock.releaseLock(); } catch (_) {}
+    }
+  }
+}

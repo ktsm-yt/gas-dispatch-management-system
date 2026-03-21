@@ -74,49 +74,36 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
   // 年月を分解
   const [year, month] = ym.split('-').map(Number);
 
-  // 排他制御: 同時実行による二重作成を防止
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = InvoiceService.generate(customerId, year, month, options);
 
-    const result = InvoiceService.generate(customerId, year, month, options);
-
-    if (!result.success) {
-      const errorCode = result.error === 'INVOICE_ALREADY_EXISTS'
-        ? ERROR_CODES.CONFLICT_ERROR
-        : ERROR_CODES.VALIDATION_ERROR;
-      const errorMessages: Record<string, string> = {
-        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
-        'INVOICE_ALREADY_EXISTS': '既に請求書が存在します',
-        'CUSTOMER_NOT_FOUND': '顧客が見つかりません'
-      };
-      const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
-      return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
-    }
-
-    try {
-      if (year && month) {
-        StatsService.updateMonthlyStats(year, month);
+      if (!result.success) {
+        const errorCode = result.error === 'INVOICE_ALREADY_EXISTS'
+          ? ERROR_CODES.CONFLICT_ERROR
+          : ERROR_CODES.VALIDATION_ERROR;
+        const errorMessages: Record<string, string> = {
+          'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
+          'INVOICE_ALREADY_EXISTS': '既に請求書が存在します',
+          'CUSTOMER_NOT_FOUND': '顧客が見つかりません'
+        };
+        const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
+        return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
       }
-    } catch (statsError: unknown) {
-      Logger.log(`generateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
-    }
 
-    return buildSuccessResponse(result, requestId);
+      try {
+        if (year && month) {
+          StatsService.updateMonthlyStats(year, month);
+        }
+      } catch (statsError: unknown) {
+        Logger.log(`generateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+      }
 
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     Logger.log(`generateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -144,22 +131,9 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
     // 年月を分解
     const [year, month] = ym.split('-').map(Number);
 
-    // 排他制御: 同時実行を防止
-    const lock = LockService.getScriptLock();
-    if (!lock.tryLock(5000)) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '一括集計が別の端末で実行中です。しばらく待ってから再度お試しください。',
-        { error: 'ALREADY_RUNNING' },
-        requestId
-      );
-    }
-
-    try {
-      // Service呼び出し
+    return withScriptLock(() => {
       const result = InvoiceService.bulkGenerate(year, month, options || {});
 
-      // 月次統計を自動更新（失敗してもメイン処理には影響しない）
       try {
         if (year && month) {
           StatsService.updateMonthlyStats(year, month);
@@ -169,9 +143,12 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
       }
 
       return buildSuccessResponse(result, requestId);
-    } finally {
-      lock.releaseLock();
-    }
+    }, {
+      waitMs: 5000,
+      requestId,
+      busyMessage: '一括集計が別の端末で実行中です。しばらく待ってから再度お試しください。',
+      busyDetails: { error: 'ALREADY_RUNNING' }
+    });
 
   } catch (error: unknown) {
     Logger.log(`bulkGenerateInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
@@ -635,65 +612,53 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
   }
 
-  // 排他制御: delete→create の非アトミック操作を保護
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
-
-    if (expectedUpdatedAt) {
-      const current = InvoiceRepository.findById(invoiceId);
-      if (current && current.updated_at !== expectedUpdatedAt) {
-        return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーが変更しました。画面を更新してください', {}, requestId);
+    return withScriptLock(() => {
+      // expectedUpdatedAt 確認はロック内（楽観ロック＝DB読み取り）
+      if (expectedUpdatedAt) {
+        const current = InvoiceRepository.findById(invoiceId);
+        if (current && current.updated_at !== expectedUpdatedAt) {
+          return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーが変更しました。画面を更新してください', {}, requestId);
+        }
       }
-    }
 
-    const result = InvoiceService.regenerate(invoiceId);
+      const result = InvoiceService.regenerate(invoiceId);
 
-    if (!result.success) {
-      const errorCode = result.error === 'NOT_FOUND'
-        ? ERROR_CODES.NOT_FOUND
-        : result.error === 'CONFLICT_ERROR'
-        ? ERROR_CODES.CONFLICT_ERROR
-        : ERROR_CODES.VALIDATION_ERROR;
-      const errorMessages: Record<string, string> = {
-        'NOT_FOUND': '請求書が見つかりません',
-        'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再集計できません',
-        'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再集計できません',
-        'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
-        'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください',
-        'CANNOT_DELETE_SENT_INVOICE': '送付済みの請求書は再集計できません',
-        'DELETE_FAILED': '請求書の再集計に失敗しました'
-      };
-      const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
-      return buildErrorResponse(errorCode, message, {}, requestId);
-    }
-
-    try {
-      const rYear = Number(result.invoice?.billing_year);
-      const rMonth = Number(result.invoice?.billing_month);
-      if (rYear && rMonth) {
-        StatsService.updateMonthlyStats(rYear, rMonth);
+      if (!result.success) {
+        const errorCode = result.error === 'NOT_FOUND'
+          ? ERROR_CODES.NOT_FOUND
+          : result.error === 'CONFLICT_ERROR'
+          ? ERROR_CODES.CONFLICT_ERROR
+          : ERROR_CODES.VALIDATION_ERROR;
+        const errorMessages: Record<string, string> = {
+          'NOT_FOUND': '請求書が見つかりません',
+          'CANNOT_REGENERATE_ISSUED_INVOICE': '送付済みの請求書は再集計できません',
+          'CANNOT_REGENERATE_SENT_INVOICE': '送付済みの請求書は再集計できません',
+          'NO_ASSIGNMENTS_FOUND': '該当期間の配置データがありません',
+          'CONFLICT_ERROR': '他のユーザーが変更しました。画面を更新してください',
+          'CANNOT_DELETE_SENT_INVOICE': '送付済みの請求書は再集計できません',
+          'DELETE_FAILED': '請求書の再集計に失敗しました'
+        };
+        const message = (result.error && errorMessages[result.error]) || result.error || 'エラーが発生しました';
+        return buildErrorResponse(errorCode, message, {}, requestId);
       }
-    } catch (statsError: unknown) {
-      Logger.log(`regenerateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
-    }
 
-    return buildSuccessResponse(result, requestId);
+      try {
+        const rYear = Number(result.invoice?.billing_year);
+        const rMonth = Number(result.invoice?.billing_month);
+        if (rYear && rMonth) {
+          StatsService.updateMonthlyStats(rYear, rMonth);
+        }
+      } catch (statsError: unknown) {
+        Logger.log(`regenerateInvoice: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+      }
 
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     Logger.log(`regenerateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-      }
-    }
+  }
 }
 
 /**
