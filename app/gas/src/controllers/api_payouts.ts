@@ -442,36 +442,46 @@ function markAsPaid(staffId: string, endDate: string, options: { adjustment_amou
 function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_date?: string; adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
+  // 認可チェック・入力検証はロック取得前に実行（ロック保持時間を最小化）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
-    // 入力検証
-    if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // paid_dateの検証（指定された場合）
-    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // Service呼び出し
     const result = PayoutService.bulkMarkAsPaid(staffIds, endDate, options);
 
     _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('bulkMarkAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -864,31 +874,41 @@ function confirmPayout(staffId: string, endDate: string, options: { adjustment_a
 function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
-    // 入力検証
-    if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // Service呼び出し
     const result = PayoutService.bulkConfirmPayouts(staffIds, endDate, options);
 
     _refreshStatsForPayoutMonth(endDate);
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('bulkConfirmPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -958,40 +978,43 @@ function payConfirmedPayout(payoutId: string, options: { paid_date?: string; exp
 function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; expectedUpdatedAtMap?: Record<string, string> } = {}): unknown {
   const requestId = generateRequestId();
 
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!payoutIds || !Array.isArray(payoutIds) || payoutIds.length === 0) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutIds array is required', {}, requestId);
+  }
+
+  if (!options.expectedUpdatedAtMap || typeof options.expectedUpdatedAtMap !== 'object') {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'expectedUpdatedAtMap is required', {}, requestId);
+  }
+
+  const missingExpectedUpdatedAt = payoutIds.filter(function(payoutId) {
+    return !options.expectedUpdatedAtMap || !options.expectedUpdatedAtMap[payoutId];
+  });
+  if (missingExpectedUpdatedAt.length > 0) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'expectedUpdatedAtMap must include all payoutIds',
+      { missingPayoutIds: missingExpectedUpdatedAt },
+      requestId
+    );
+  }
+
+  if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
-    // 入力検証
-    if (!payoutIds || !Array.isArray(payoutIds) || payoutIds.length === 0) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'payoutIds array is required', {}, requestId);
-    }
-
-    if (!options.expectedUpdatedAtMap || typeof options.expectedUpdatedAtMap !== 'object') {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'expectedUpdatedAtMap is required', {}, requestId);
-    }
-
-    const missingExpectedUpdatedAt = payoutIds.filter(function(payoutId) {
-      return !options.expectedUpdatedAtMap || !options.expectedUpdatedAtMap[payoutId];
-    });
-    if (missingExpectedUpdatedAt.length > 0) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'expectedUpdatedAtMap must include all payoutIds',
-        { missingPayoutIds: missingExpectedUpdatedAt },
-        requestId
-      );
-    }
-
-    // paid_dateのフォーマット検証
-    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // paid_dateの業務整合性検証（各payoutに対して検証）
+    // paid_dateの業務整合性検証（DB読み取りを含むためロック内で実行）
     if (options.paid_date) {
       const validationErrors: { payoutId: string; error: string }[] = [];
       for (const payoutId of payoutIds) {
@@ -1023,8 +1046,15 @@ function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; ex
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('bulkPayConfirmed', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -1413,19 +1443,25 @@ function getUnpaidSubcontractorList(endDate: string): unknown {
 function confirmSubcontractorPayout(subcontractorId: string, endDate: string, options: { adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
 
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!subcontractorId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
-
-    if (!subcontractorId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
     const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
@@ -1437,8 +1473,15 @@ function confirmSubcontractorPayout(subcontractorId: string, endDate: string, op
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('confirmSubcontractorPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -1452,23 +1495,29 @@ function confirmSubcontractorPayout(subcontractorId: string, endDate: string, op
 function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string, options: { paid_date?: string; adjustment_amount?: number; notes?: string } = {}): unknown {
   const requestId = generateRequestId();
 
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!subcontractorId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
-
-    if (!subcontractorId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'subcontractorId is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
     const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
@@ -1480,8 +1529,15 @@ function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string,
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     logErr('markSubcontractorPayoutAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
