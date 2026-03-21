@@ -68,7 +68,7 @@ interface UpdateDetailsResult {
 interface RegenerateResult extends InvoiceGenerateResult {
 }
 
-const InvoiceService = {
+export const InvoiceService = {
   /**
    * 請求集計（generate）- 配置データから自動作成
    */
