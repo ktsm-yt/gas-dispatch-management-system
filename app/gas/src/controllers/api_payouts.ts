@@ -382,53 +382,43 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
  */
 function markAsPaid(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; paid_date?: string } = {}): unknown {
   const requestId = generateRequestId();
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
+
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  // 入力検証
+  if (!staffId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
+
+  // paid_dateの検証（指定された場合）
+  if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
+  }
 
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      // Service呼び出し
+      const result = PayoutService.markAsPaid(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
 
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+      if (!result.success) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
+      }
 
-    // 入力検証
-    if (!staffId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // paid_dateの検証（指定された場合）
-    if (options.paid_date && !/^\d{4}-\d{2}-\d{2}$/.test(options.paid_date)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // Service呼び出し
-    const result = PayoutService.markAsPaid(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
-
-    if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
-    }
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('markAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -460,28 +450,17 @@ function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_dat
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
   }
 
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = PayoutService.bulkMarkAsPaid(staffIds, endDate, options);
 
-    const result = PayoutService.bulkMarkAsPaid(staffIds, endDate, options);
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('bulkMarkAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -687,47 +666,37 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
  */
 function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
+
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!staffId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
 
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = PayoutService.saveDraft(staffId, endDate, options) as { success: boolean; error?: string };
 
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+      if (!result.success) {
+        const errorCode = result.error === 'CONFLICT_ERROR'
+          ? ERROR_CODES.CONFLICT_ERROR
+          : ERROR_CODES.VALIDATION_ERROR;
+        return buildErrorResponse(errorCode, result.error || 'Unknown error', {}, requestId);
+      }
 
-    if (!staffId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    const result = PayoutService.saveDraft(staffId, endDate, options) as { success: boolean; error?: string };
-
-    if (!result.success) {
-      const errorCode = result.error === 'CONFLICT_ERROR'
-        ? ERROR_CODES.CONFLICT_ERROR
-        : ERROR_CODES.VALIDATION_ERROR;
-      return buildErrorResponse(errorCode, result.error || 'Unknown error', {}, requestId);
-    }
-
-    return buildSuccessResponse(result, requestId);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('saveDraftPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -740,71 +709,61 @@ function saveDraftPayout(staffId: string, endDate: string, options: { adjustment
  */
 function bulkSaveDraftPayouts(staffIds: string[], endDate: string, adjustments: Record<string, { adjustment_amount?: number; notes?: string }> = {}): unknown {
   const requestId = generateRequestId();
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
+
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
 
   try {
-    lock.waitLock(10000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const results: { staffId: string; success: boolean; payout?: unknown; error?: string }[] = [];
+      let successCount = 0;
+      let failedCount = 0;
 
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+      for (const staffId of staffIds) {
+        const opts = adjustments[staffId] || {};
+        const result = PayoutService.saveDraft(staffId, endDate, {
+          adjustment_amount: opts.adjustment_amount || 0,
+          notes: opts.notes || ''
+        });
 
-    if (!staffIds || !Array.isArray(staffIds) || staffIds.length === 0) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffIds array is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    const results: { staffId: string; success: boolean; payout?: unknown; error?: string }[] = [];
-    let successCount = 0;
-    let failedCount = 0;
-
-    for (const staffId of staffIds) {
-      const opts = adjustments[staffId] || {};
-      const result = PayoutService.saveDraft(staffId, endDate, {
-        adjustment_amount: opts.adjustment_amount || 0,
-        notes: opts.notes || ''
-      });
-
-      if (result.success) {
-        successCount++;
-        results.push({ staffId, success: true, payout: result.payout });
-      } else {
-        failedCount++;
-        results.push({ staffId, success: false, error: result.error });
+        if (result.success) {
+          successCount++;
+          results.push({ staffId, success: true, payout: result.payout });
+        } else {
+          failedCount++;
+          results.push({ staffId, success: false, error: result.error });
+        }
       }
-    }
 
-    if (failedCount > 0) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSINESS_ERROR,
-        `下書き保存で一部失敗しました (${successCount}/${staffIds.length} 件成功)`,
-        { success: successCount, failed: failedCount, results: results },
-        requestId
-      );
-    }
+      if (failedCount > 0) {
+        return buildErrorResponse(
+          ERROR_CODES.BUSINESS_ERROR,
+          `下書き保存で一部失敗しました (${successCount}/${staffIds.length} 件成功)`,
+          { success: successCount, failed: failedCount, results: results },
+          requestId
+        );
+      }
 
-    return buildSuccessResponse({
-      success: successCount,
-      failed: failedCount,
-      results: results
-    }, requestId);
+      return buildSuccessResponse({
+        success: successCount,
+        failed: failedCount,
+        results: results
+      }, requestId);
+    }, { waitMs: 10000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('bulkSaveDraftPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -819,48 +778,38 @@ function bulkSaveDraftPayouts(staffIds: string[], endDate: string, adjustments: 
  */
 function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
+
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  // 入力検証
+  if (!staffId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
+  }
+
+  if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
+  }
 
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      // Service呼び出し
+      const result = PayoutService.confirmPayout(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
 
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+      if (!result.success) {
+        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
+      }
 
-    // 入力検証
-    if (!staffId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'staffId is required', {}, requestId);
-    }
-
-    if (!endDate || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
-    }
-
-    // Service呼び出し
-    const result = PayoutService.confirmPayout(staffId, endDate, options) as { success: boolean; error?: string; message?: string };
-
-    if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
-    }
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('confirmPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -887,28 +836,17 @@ function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adju
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
   }
 
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = PayoutService.bulkConfirmPayouts(staffIds, endDate, options);
 
-    const result = PayoutService.bulkConfirmPayouts(staffIds, endDate, options);
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('bulkConfirmPayouts', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -1007,54 +945,43 @@ function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; ex
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
   }
 
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
-
-    // paid_dateの業務整合性検証（DB読み取りを含むためロック内で実行）
-    if (options.paid_date) {
-      const validationErrors: { payoutId: string; error: string }[] = [];
-      for (const payoutId of payoutIds) {
-        const validationResult = _validatePaidDate(payoutId, options.paid_date);
-        if (!validationResult.valid) {
-          validationErrors.push({
-            payoutId: payoutId,
-            error: validationResult.error || 'Validation failed'
-          });
+    return withScriptLock(() => {
+      // paid_dateの業務整合性検証（DB読み取りを含むためロック内で実行）
+      if (options.paid_date) {
+        const validationErrors: { payoutId: string; error: string }[] = [];
+        for (const payoutId of payoutIds) {
+          const validationResult = _validatePaidDate(payoutId, options.paid_date);
+          if (!validationResult.valid) {
+            validationErrors.push({
+              payoutId: payoutId,
+              error: validationResult.error || 'Validation failed'
+            });
+          }
+        }
+        // 検証エラーがあれば処理を中断
+        if (validationErrors.length > 0) {
+          return buildErrorResponse(
+            ERROR_CODES.VALIDATION_ERROR,
+            'paid_date validation failed for some payouts',
+            { validationErrors: validationErrors },
+            requestId
+          );
         }
       }
-      // 検証エラーがあれば処理を中断
-      if (validationErrors.length > 0) {
-        return buildErrorResponse(
-          ERROR_CODES.VALIDATION_ERROR,
-          'paid_date validation failed for some payouts',
-          { validationErrors: validationErrors },
-          requestId
-        );
-      }
-    }
 
-    // Service呼び出し（楽観ロックを伝播）
-    const result = PayoutService.bulkPayConfirmed(payoutIds, {
-      paid_date: options.paid_date,
-      expectedUpdatedAtMap: options.expectedUpdatedAtMap
-    });
+      // Service呼び出し（楽観ロックを伝播）
+      const result = PayoutService.bulkPayConfirmed(payoutIds, {
+        paid_date: options.paid_date,
+        expectedUpdatedAtMap: options.expectedUpdatedAtMap
+      });
 
-    return buildSuccessResponse(result, requestId);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('bulkPayConfirmed', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -1456,32 +1383,21 @@ function confirmSubcontractorPayout(subcontractorId: string, endDate: string, op
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'endDate must be in YYYY-MM-DD format', {}, requestId);
   }
 
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
-    const result = PayoutService.confirmPayoutForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
+      if (!result.success) {
+        return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
+      }
 
-    if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
-    }
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('confirmSubcontractorPayout', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
@@ -1512,32 +1428,21 @@ function markSubcontractorPayoutAsPaid(subcontractorId: string, endDate: string,
     return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'paid_date must be in YYYY-MM-DD format', {}, requestId);
   }
 
-  const lock = LockService.getScriptLock();
-  let lockAcquired = false;
-
   try {
-    lock.waitLock(5000);
-    lockAcquired = true;
+    return withScriptLock(() => {
+      const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
 
-    const result = PayoutService.markAsPaidForSubcontractor(subcontractorId, endDate, options) as { success: boolean; error?: string; message?: string };
+      if (!result.success) {
+        return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
+      }
 
-    if (!result.success) {
-      return buildErrorResponse(ERROR_CODES.BUSINESS_ERROR, result.error || 'Unknown error', { message: result.message }, requestId);
-    }
-
-    _refreshStatsForPayoutMonth(endDate);
-    return buildSuccessResponse(result, requestId);
+      _refreshStatsForPayoutMonth(endDate);
+      return buildSuccessResponse(result, requestId);
+    }, { waitMs: 5000, requestId });
 
   } catch (error: unknown) {
-    if (!lockAcquired) {
-      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
-    }
     logErr('markSubcontractorPayoutAsPaid', error, requestId);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  } finally {
-    if (lockAcquired) {
-      lock.releaseLock();
-    }
   }
 }
 
