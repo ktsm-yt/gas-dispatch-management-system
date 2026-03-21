@@ -2811,6 +2811,7 @@
       const btn = document.getElementById('confirmModalBtn');
       btn.textContent = btnText;
       btn.className = 'btn ' + btnClass;
+      btn.disabled = false;
       pendingConfirmAction = action;
       document.getElementById('confirmModal').classList.add('active');
     }
@@ -2821,6 +2822,9 @@
     }
 
     function executeConfirmAction() {
+      // ダブルクリック防止: ボタンを即座に無効化
+      const btn = document.getElementById('confirmModalBtn');
+      if (btn) { btn.disabled = true; }
       if (pendingConfirmAction) {
         pendingConfirmAction();
       }
