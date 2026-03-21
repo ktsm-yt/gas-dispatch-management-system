@@ -80,21 +80,21 @@ export function recalculateMonthlyStats_impl(year: any, month: any): any {
  * @returns APIレスポンス
  */
 export function getYearlyCustomerStats_impl(): any {
-  var requestId = generateRequestId();
+  const requestId = generateRequestId();
 
   try {
-    var authResult = checkPermission(ROLES.STAFF);
+    const authResult = checkPermission(ROLES.STAFF);
     if (!authResult.allowed) {
       return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
     }
 
-    var cacheKey = 'yearly_customer_stats_v2';
-    var cached = CacheService.getScriptCache().get(cacheKey);
+    const cacheKey = 'yearly_customer_stats_v2';
+    const cached = CacheService.getScriptCache().get(cacheKey);
     if (cached) {
       return buildSuccessResponse(JSON.parse(cached), requestId);
     }
 
-    var result = StatsService._aggregateByCustomerYearly(5);
+    const result = StatsService._aggregateByCustomerYearly(5);
 
     // CacheService最大100KB、最大6時間（21600秒）
     try {
@@ -106,7 +106,7 @@ export function getYearlyCustomerStats_impl(): any {
     return buildSuccessResponse(result, requestId);
 
   } catch (error) {
-    var errMsg = error instanceof Error ? error.message : String(error);
+    const errMsg = error instanceof Error ? error.message : String(error);
     Logger.log('getYearlyCustomerStats error: ' + errMsg);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
   }
