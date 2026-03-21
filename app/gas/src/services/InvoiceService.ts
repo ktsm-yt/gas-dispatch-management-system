@@ -529,12 +529,13 @@ const InvoiceService = {
       const jobsByCustomer = this._groupBy(allJobs, 'customer_id');
       const assignmentsByJob = this._groupBy(allAssignments, 'job_id');
 
-      // 既存請求書のインデックス
-      const existingInvoiceIndex: Record<string, Record<string, unknown>> = {};
+      // 既存請求書のインデックス（同一キーに複数件ある場合に備え配列で保持）
+      const existingInvoiceIndex: Record<string, Record<string, unknown>[]> = {};
       for (const inv of allInvoices) {
         if (!inv.is_deleted) {
           const key = `${inv.customer_id}_${inv.billing_year}_${inv.billing_month}`;
-          existingInvoiceIndex[key] = inv;
+          if (!existingInvoiceIndex[key]) existingInvoiceIndex[key] = [];
+          existingInvoiceIndex[key].push(inv);
         }
       }
 
@@ -545,9 +546,11 @@ const InvoiceService = {
         const toDeleteInvoiceIds: string[] = [];
         for (const customer of customers) {
           const existingKey = `${customer.customer_id}_${year}_${month}`;
-          const existing = existingInvoiceIndex[existingKey];
-          if (existing) {
-            toDeleteInvoiceIds.push(existing.invoice_id as string);
+          const existingList = existingInvoiceIndex[existingKey];
+          if (existingList && existingList.length > 0) {
+            for (const inv of existingList) {
+              toDeleteInvoiceIds.push(inv.invoice_id as string);
+            }
             delete existingInvoiceIndex[existingKey];
           }
         }
@@ -571,9 +574,9 @@ const InvoiceService = {
         try {
           // 既存チェック
           const existingKey = `${customerId}_${year}_${month}`;
-          const existing = existingInvoiceIndex[existingKey];
+          const existingList = existingInvoiceIndex[existingKey];
 
-          if (existing) {
+          if (existingList && existingList.length > 0) {
             results.skippedExisting.push({ customerId, companyName });
             continue;
           }

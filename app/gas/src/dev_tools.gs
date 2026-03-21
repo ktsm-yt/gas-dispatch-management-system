@@ -138,6 +138,154 @@ function clearMasterCache() {
 }
 
 /**
+ * 重複請求書の修復（べき等）
+ * 同一 customer_id + billing_year + billing_month で複数の非削除レコードがある場合、
+ * 最新の1件を残し、残りを soft delete する。
+ *
+ * @param {boolean} dryRun - true: ログ出力のみ（変更なし）, false: 実際に修正
+ * @returns {Object} { duplicateGroups, toDelete, deleted, manualReview }
+ */
+function fixDuplicateInvoices(dryRun) {
+  if (dryRun === undefined) dryRun = true;
+
+  var env = getEnv();
+  Logger.log('=== fixDuplicateInvoices ===');
+  Logger.log('ENV: ' + env);
+  Logger.log('dryRun: ' + dryRun);
+  Logger.log('scriptId: ' + ScriptApp.getScriptId());
+
+  // 1. 全非削除レコードを取得
+  var allInvoices = getAllRecords('T_Invoices', { includeDeleted: false });
+  Logger.log('Total active invoices: ' + allInvoices.length);
+
+  // 2. customer_id + billing_year + billing_month でグループ化
+  var groups = {};
+  for (var i = 0; i < allInvoices.length; i++) {
+    var inv = allInvoices[i];
+    var key = inv.customer_id + '_' + inv.billing_year + '_' + inv.billing_month;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(inv);
+  }
+
+  // 3. 重複グループ（2件以上）を抽出
+  var duplicateGroups = [];
+  var keys = Object.keys(groups);
+  for (var k = 0; k < keys.length; k++) {
+    if (groups[keys[k]].length >= 2) {
+      duplicateGroups.push({ key: keys[k], invoices: groups[keys[k]] });
+    }
+  }
+  Logger.log('Duplicate groups: ' + duplicateGroups.length);
+
+  if (duplicateGroups.length === 0) {
+    Logger.log('No duplicates found. Nothing to do.');
+    return { duplicateGroups: 0, toDelete: 0, deleted: 0, manualReview: 0 };
+  }
+
+  // 4. Payment に紐づく invoice_id を事前チェック
+  var allPayments = getAllRecords('T_Payments', { includeDeleted: false });
+  var paymentInvoiceIds = {};
+  for (var p = 0; p < allPayments.length; p++) {
+    if (allPayments[p].invoice_id) {
+      paymentInvoiceIds[allPayments[p].invoice_id] = true;
+    }
+  }
+
+  // 5. 各グループで保持対象を決定
+  var ACTIVE_STATUSES = { sent: true, paid: true, unpaid: true };
+  var autoDeleteIds = [];
+  var manualReviewList = [];
+
+  for (var g = 0; g < duplicateGroups.length; g++) {
+    var group = duplicateGroups[g];
+    var invoices = group.invoices.slice();
+
+    // ソート: 業務優先度で保持対象を決定
+    invoices.sort(function(a, b) {
+      // 優先1: アクティブステータス (sent/paid/unpaid)
+      var aActive = ACTIVE_STATUSES[a.status] ? 1 : 0;
+      var bActive = ACTIVE_STATUSES[b.status] ? 1 : 0;
+      if (bActive !== aActive) return bActive - aActive;
+
+      // 優先2: ファイル出力済み
+      var aFile = (a.pdf_file_id || a.excel_file_id) ? 1 : 0;
+      var bFile = (b.pdf_file_id || b.excel_file_id) ? 1 : 0;
+      if (bFile !== aFile) return bFile - aFile;
+
+      // 優先3: updated_at 降順
+      var aTime = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      var bTime = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      if (bTime !== aTime) return bTime - aTime;
+
+      // 優先4: created_at 降順
+      var aCtime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      var bCtime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bCtime - aCtime;
+    });
+
+    var keep = invoices[0];
+    var toDelete = invoices.slice(1);
+
+    Logger.log('--- Group: ' + group.key + ' (' + invoices.length + ' records) ---');
+    Logger.log('  KEEP: ' + keep.invoice_id + ' status=' + keep.status + ' pdf=' + (keep.pdf_file_id || 'none') + ' updated=' + keep.updated_at);
+
+    for (var d = 0; d < toDelete.length; d++) {
+      var del = toDelete[d];
+      var hasActiveStatus = !!ACTIVE_STATUSES[del.status];
+      var hasFile = !!(del.pdf_file_id || del.excel_file_id);
+      var hasPayment = !!paymentInvoiceIds[del.invoice_id];
+
+      // 安全フィルタ: アクティブステータス / ファイルID / Payment紐づきは手動確認
+      if (hasActiveStatus || hasFile || hasPayment) {
+        manualReviewList.push({
+          invoiceId: del.invoice_id,
+          customerId: del.customer_id,
+          status: del.status,
+          hasFile: hasFile,
+          hasPayment: hasPayment,
+          reason: (hasActiveStatus ? 'ACTIVE_STATUS ' : '') + (hasFile ? 'HAS_FILE ' : '') + (hasPayment ? 'HAS_PAYMENT' : '')
+        });
+        Logger.log('  MANUAL_REVIEW: ' + del.invoice_id + ' status=' + del.status + ' pdf=' + (del.pdf_file_id || 'none') + ' reason=' + manualReviewList[manualReviewList.length - 1].reason);
+      } else {
+        autoDeleteIds.push(del.invoice_id);
+        Logger.log('  AUTO_DELETE: ' + del.invoice_id + ' status=' + del.status + ' pdf=' + (del.pdf_file_id || 'none'));
+      }
+    }
+  }
+
+  Logger.log('=== Summary ===');
+  Logger.log('Duplicate groups: ' + duplicateGroups.length);
+  Logger.log('Auto-delete candidates: ' + autoDeleteIds.length);
+  Logger.log('Manual review required: ' + manualReviewList.length);
+
+  // 6. dryRun でなければ実行
+  var deleted = 0;
+  if (!dryRun && autoDeleteIds.length > 0) {
+    // InvoiceLines も同時に soft delete
+    var lineResult = InvoiceLineRepository.bulkDeleteByInvoiceIds(autoDeleteIds);
+    Logger.log('InvoiceLines deleted: ' + lineResult.deleted);
+
+    var invResult = InvoiceRepository.bulkSoftDelete(autoDeleteIds);
+    deleted = invResult.deleted;
+    Logger.log('Invoices deleted: ' + deleted);
+  } else if (!dryRun) {
+    Logger.log('No auto-deletable candidates. Only manual review items exist.');
+  } else {
+    Logger.log('DRY RUN — no changes made. Run fixDuplicateInvoices(false) to execute.');
+  }
+
+  var result = {
+    duplicateGroups: duplicateGroups.length,
+    toDelete: autoDeleteIds.length,
+    deleted: deleted,
+    manualReview: manualReviewList.length,
+    manualReviewList: manualReviewList
+  };
+  Logger.log('Result: ' + JSON.stringify(result));
+  return result;
+}
+
+/**
  * InvoiceLine の work_date 欠落をバックフィル
  * _generateLines のグルーピングバグで空になった行を job_id から自動修復
  * 実行後、関数を削除すること
