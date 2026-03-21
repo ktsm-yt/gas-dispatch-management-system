@@ -38,7 +38,7 @@ function getCustomers(): ApiResponse {
  * @param {Object} options - オプション
  * @returns {Object} APIレスポンス
  */
-function generateInvoice(customerId: string, ym: string, options: Record<string, unknown> = {}) {
+export function generateInvoice(customerId: string, ym: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   // 認可チェック（manager以上）
@@ -113,7 +113,7 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
  * @param {Object} options - オプション { overwrite: false }
  * @returns {Object} APIレスポンス { success, skippedNoData, skippedExisting, failed }
  */
-function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {}) {
+export function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
   try {
@@ -257,7 +257,7 @@ function getInvoice(invoiceId: string): ApiResponse {
  * @param {string} expectedUpdatedAt - 期待するupdated_at
  * @returns {Object} APIレスポンス
  */
-function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expectedUpdatedAt: string) {
+export function saveInvoice(invoice: Record<string, unknown>, lines: unknown[], expectedUpdatedAt: string) {
   const requestId = generateRequestId();
 
   try {
@@ -598,7 +598,7 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
  * @param {string} invoiceId - 請求ID
  * @returns {Object} APIレスポンス
  */
-function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
+export function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
   const requestId = generateRequestId();
 
   // 認可チェック（manager以上）

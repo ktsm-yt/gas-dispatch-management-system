@@ -12,6 +12,11 @@
     "../app/gas/src/calc_utils.ts",
     "../app/gas/src/date_utils.ts",
     "../app/gas/src/services/WithholdingTaxTable.ts",
+    "../app/gas/src/controllers/api_payouts.ts",
+    "../app/gas/src/controllers/api_invoices.ts",
+    "../app/gas/src/controllers/api_stats_testable.ts",
+    "../app/gas/src/services/PayoutService.ts",
+    "../app/gas/src/services/InvoiceService.ts",
     "./**/*.ts"
   ]
 }

@@ -10,7 +10,7 @@
  * endDate (YYYY-MM-DD) から年月を抽出して StatsService.updateMonthlyStats を呼ぶ
  * 失敗しても payout 操作自体には影響しない
  */
-function _refreshStatsForPayoutMonth(endDate: string): void {
+export function _refreshStatsForPayoutMonth(endDate: string): void {
   try {
     const parts = endDate.split('-');
     const year = Number(parts[0]);
@@ -380,7 +380,7 @@ function getUnpaidStaffListDelta(endDate: string, lastSyncTimestamp: string): un
  * @param options - オプション { adjustment_amount, notes, paid_date }
  * @returns APIレスポンス
  */
-function markAsPaid(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; paid_date?: string } = {}): unknown {
+export function markAsPaid(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; paid_date?: string } = {}): unknown {
   const requestId = generateRequestId();
 
   // 認可チェック（manager以上）
@@ -429,7 +429,7 @@ function markAsPaid(staffId: string, endDate: string, options: { adjustment_amou
  * @param options - オプション { paid_date, adjustments: { [staffId]: { adjustment_amount, notes } } }
  * @returns APIレスポンス
  */
-function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_date?: string; adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
+export function bulkMarkAsPaid(staffIds: string[], endDate: string, options: { paid_date?: string; adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
   // 認可チェック・入力検証はロック取得前に実行（ロック保持時間を最小化）
@@ -664,7 +664,7 @@ function savePayout(payout: Partial<PayoutRecord>, expectedUpdatedAt: string): u
  * @param options - オプション { adjustment_amount, notes }
  * @returns APIレスポンス
  */
-function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
+export function saveDraftPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
 
   const authResult = checkPermission(ROLES.MANAGER);
@@ -776,7 +776,7 @@ function bulkSaveDraftPayouts(staffIds: string[], endDate: string, adjustments: 
  * @param options - オプション { adjustment_amount, notes }
  * @returns APIレスポンス
  */
-function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
+export function confirmPayout(staffId: string, endDate: string, options: { adjustment_amount?: number; notes?: string; assignmentTransports?: Array<{ assignment_id: string; staff_transport: number }> } = {}): unknown {
   const requestId = generateRequestId();
 
   // 認可チェック（manager以上）
@@ -820,7 +820,7 @@ function confirmPayout(staffId: string, endDate: string, options: { adjustment_a
  * @param options - オプション { adjustments: { [staffId]: { adjustment_amount, notes } } }
  * @returns APIレスポンス
  */
-function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
+export function bulkConfirmPayouts(staffIds: string[], endDate: string, options: { adjustments?: Record<string, { adjustment_amount?: number; notes?: string }> } = {}): unknown {
   const requestId = generateRequestId();
 
   const authResult = checkPermission(ROLES.MANAGER);
@@ -913,7 +913,7 @@ function payConfirmedPayout(payoutId: string, options: { paid_date?: string; exp
  * @param options - オプション { paid_date, expectedUpdatedAtMap }
  * @returns APIレスポンス
  */
-function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; expectedUpdatedAtMap?: Record<string, string> } = {}): unknown {
+export function bulkPayConfirmed(payoutIds: string[], options: { paid_date?: string; expectedUpdatedAtMap?: Record<string, string> } = {}): unknown {
   const requestId = generateRequestId();
 
   const authResult = checkPermission(ROLES.MANAGER);

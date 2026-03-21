@@ -69,7 +69,7 @@ interface PreCalculatedStaffData {
   periodEnd: string;
 }
 
-const PayoutService = {
+export const PayoutService = {
 
   /**
    * スタッフの未払い配置を取得
