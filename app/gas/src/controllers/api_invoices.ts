@@ -41,41 +41,47 @@ function getCustomers(): ApiResponse {
 function generateInvoice(customerId: string, ym: string, options: Record<string, unknown> = {}) {
   const requestId = generateRequestId();
 
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(
+      ERROR_CODES.PERMISSION_DENIED,
+      authResult.message,
+      {},
+      requestId
+    );
+  }
+
+  // 入力検証
+  if (!customerId) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'customerId is required',
+      {},
+      requestId
+    );
+  }
+
+  if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'ym must be in YYYY-MM format',
+      {},
+      requestId
+    );
+  }
+
+  // 年月を分解
+  const [year, month] = ym.split('-').map(Number);
+
+  // 排他制御: 同時実行による二重作成を防止
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
-    // 入力検証
-    if (!customerId) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'customerId is required',
-        {},
-        requestId
-      );
-    }
-
-    if (!ym || !/^\d{4}-\d{2}$/.test(ym)) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'ym must be in YYYY-MM format',
-        {},
-        requestId
-      );
-    }
-
-    // 年月を分解
-    const [year, month] = ym.split('-').map(Number);
-
-    // Service呼び出し
     const result = InvoiceService.generate(customerId, year, month, options);
 
     if (!result.success) {
@@ -91,7 +97,6 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
       return buildErrorResponse(errorCode, message, { existingInvoice: result.existingInvoice }, requestId);
     }
 
-    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
     try {
       if (year && month) {
         StatsService.updateMonthlyStats(year, month);
@@ -103,8 +108,15 @@ function generateInvoice(customerId: string, ym: string, options: Record<string,
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     Logger.log(`generateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+    }
   }
 }
 
@@ -132,19 +144,34 @@ function bulkGenerateInvoices(ym: string, options: Record<string, unknown> = {})
     // 年月を分解
     const [year, month] = ym.split('-').map(Number);
 
-    // Service呼び出し
-    const result = InvoiceService.bulkGenerate(year, month, options || {});
-
-    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
-    try {
-      if (year && month) {
-        StatsService.updateMonthlyStats(year, month);
-      }
-    } catch (statsError: unknown) {
-      Logger.log(`bulkGenerateInvoices: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+    // 排他制御: 同時実行を防止
+    const lock = LockService.getScriptLock();
+    if (!lock.tryLock(5000)) {
+      return buildErrorResponse(
+        ERROR_CODES.BUSY_ERROR,
+        '一括集計が別の端末で実行中です。しばらく待ってから再度お試しください。',
+        { error: 'ALREADY_RUNNING' },
+        requestId
+      );
     }
 
-    return buildSuccessResponse(result, requestId);
+    try {
+      // Service呼び出し
+      const result = InvoiceService.bulkGenerate(year, month, options || {});
+
+      // 月次統計を自動更新（失敗してもメイン処理には影響しない）
+      try {
+        if (year && month) {
+          StatsService.updateMonthlyStats(year, month);
+        }
+      } catch (statsError: unknown) {
+        Logger.log(`bulkGenerateInvoices: T_MonthlyStats auto-update failed: ${(statsError instanceof Error) ? statsError.message : String(statsError)}`);
+      }
+
+      return buildSuccessResponse(result, requestId);
+    } finally {
+      lock.releaseLock();
+    }
 
   } catch (error: unknown) {
     Logger.log(`bulkGenerateInvoices error: ${(error instanceof Error) ? error.message : String(error)}`);
@@ -597,19 +624,25 @@ function deleteInvoice(invoiceId: string, expectedUpdatedAt: string) {
 function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
   const requestId = generateRequestId();
 
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
+    return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+  }
+
+  // 入力検証
+  if (!invoiceId) {
+    return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
+  }
+
+  // 排他制御: delete→create の非アトミック操作を保護
+  const lock = LockService.getScriptLock();
+  let lockAcquired = false;
+
   try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
-    }
+    lock.waitLock(5000);
+    lockAcquired = true;
 
-    // 入力検証
-    if (!invoiceId) {
-      return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'invoiceId is required', {}, requestId);
-    }
-
-    // 楽観ロック検証（expectedUpdatedAt指定時のみ）
     if (expectedUpdatedAt) {
       const current = InvoiceRepository.findById(invoiceId);
       if (current && current.updated_at !== expectedUpdatedAt) {
@@ -617,7 +650,6 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
       }
     }
 
-    // Service呼び出し
     const result = InvoiceService.regenerate(invoiceId);
 
     if (!result.success) {
@@ -639,7 +671,6 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
       return buildErrorResponse(errorCode, message, {}, requestId);
     }
 
-    // 月次統計を自動更新（失敗してもメイン処理には影響しない）
     try {
       const rYear = Number(result.invoice?.billing_year);
       const rMonth = Number(result.invoice?.billing_month);
@@ -653,9 +684,16 @@ function regenerateInvoice(invoiceId: string, expectedUpdatedAt?: string) {
     return buildSuccessResponse(result, requestId);
 
   } catch (error: unknown) {
+    if (!lockAcquired) {
+      return buildErrorResponse(ERROR_CODES.BUSY_ERROR, '別の処理が実行中です。しばらく待ってから再度お試しください。', {}, requestId);
+    }
     Logger.log(`regenerateInvoice error: ${(error instanceof Error) ? error.message : String(error)}`);
     return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
-  }
+  } finally {
+    if (lockAcquired) {
+      lock.releaseLock();
+      }
+    }
 }
 
 /**
