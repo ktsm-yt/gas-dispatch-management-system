@@ -74,24 +74,6 @@ function findById(sheet, idColumn, id) {
 }
 
 /**
- * 条件でレコードを検索
- * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
- * @param {Object} conditions - 検索条件
- * @param {Object} options - オプション
- * @returns {Object[]} マッチしたレコード配列
- */
-function findByConditions(sheet, conditions, options = {}) {
-  const rows = getAllRows(sheet, options);
-
-  return rows.filter(row => {
-    return Object.entries(conditions).every(([key, value]) => {
-      if (value === undefined || value === null) return true;
-      return row[key] === value;
-    });
-  });
-}
-
-/**
  * 新規レコードを挿入
  * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet
  * @param {Object} data - 挿入するデータ

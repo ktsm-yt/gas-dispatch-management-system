@@ -220,50 +220,6 @@ function getDiff(before, after) {
 }
 
 /**
- * オブジェクトから指定フィールドのみ抽出
- * @param {Object} obj - 元オブジェクト
- * @param {string[]} fields - 抽出するフィールド名の配列
- * @returns {Object} 抽出したオブジェクト
- */
-function pick(obj, fields) {
-  const result = {};
-  for (const field of fields) {
-    if (field in obj) {
-      result[field] = obj[field];
-    }
-  }
-  return result;
-}
-
-/**
- * オブジェクトから指定フィールドを除外
- * @param {Object} obj - 元オブジェクト
- * @param {string[]} fields - 除外するフィールド名の配列
- * @returns {Object} 除外後のオブジェクト
- */
-function omit(obj, fields) {
-  const result = { ...obj };
-  for (const field of fields) {
-    delete result[field];
-  }
-  return result;
-}
-
-/**
- * 安全なJSON解析
- * @param {string} jsonStr - JSON文字列
- * @param {*} defaultValue - パース失敗時のデフォルト値
- * @returns {*} パース結果またはデフォルト値
- */
-function safeJsonParse(jsonStr, defaultValue) {
-  try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    return defaultValue;
-  }
-}
-
-/**
  * マスターデータキャッシュ
  *
  * 2層キャッシュ構造:

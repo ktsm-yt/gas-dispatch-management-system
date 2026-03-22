@@ -300,14 +300,7 @@ const PayoutExportService = {
    * @returns xlsxのBlob
    */
   _exportToXlsx: function(spreadsheetId: string): GoogleAppsScript.Base.Blob {
-    const url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx';
-    const token = ScriptApp.getOAuthToken();
-    const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    return response.getBlob().setContentType(
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
+    return ExcelExportUtil.exportToXlsx_(spreadsheetId);
   },
 
   /**
@@ -321,24 +314,7 @@ const PayoutExportService = {
    * @returns 出力先フォルダ
    */
   _getOutputFolder: function(): GoogleAppsScript.Drive.Folder {
-    const props = PropertiesService.getScriptProperties();
-    const folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
-
-    if (!folderId) {
-      throw new Error(
-        'PAYOUT_EXPORT_FOLDER_ID が未設定です。\n' +
-        'GASエディタで setPayoutExportFolderId("フォルダID") を実行してください。'
-      );
-    }
-
-    try {
-      return DriveApp.getFolderById(folderId);
-    } catch (e) {
-      throw new Error(
-        '支払いエクスポートフォルダにアクセスできません（ID: ' + folderId + '）。\n' +
-        'フォルダが削除されたか、アクセス権限がない可能性があります。'
-      );
-    }
+    return ExcelExportUtil.getOutputFolder_(this.PAYOUT_EXPORT_FOLDER_KEY, '支払いエクスポート');
   },
 
   /**
@@ -346,32 +322,7 @@ const PayoutExportService = {
    * @returns フォルダステータス
    */
   getExportFolderStatus: function(): ExportFolderStatus {
-    const props = PropertiesService.getScriptProperties();
-    const folderId = props.getProperty(this.PAYOUT_EXPORT_FOLDER_KEY);
-
-    if (!folderId) {
-      return {
-        configured: false,
-        setupGuide: 'GASエディタで setPayoutExportFolderId("フォルダID") を実行してください。'
-      };
-    }
-
-    try {
-      const folder = DriveApp.getFolderById(folderId);
-      return {
-        configured: true,
-        folderId: folderId,
-        folderName: folder.getName(),
-        url: 'https://drive.google.com/drive/folders/' + folderId
-      };
-    } catch (e) {
-      return {
-        configured: false,
-        folderId: folderId,
-        error: 'フォルダにアクセスできません',
-        setupGuide: 'setPayoutExportFolderId("フォルダID") を再実行してフォルダIDを更新してください。'
-      };
-    }
+    return ExcelExportUtil.getExportFolderStatus_(this.PAYOUT_EXPORT_FOLDER_KEY);
   }
 };
 

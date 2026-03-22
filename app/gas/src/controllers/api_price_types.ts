@@ -60,7 +60,7 @@ function savePriceType(
 /**
  * 単価種別を削除（非アクティブ化）
  */
-function deletePriceType(id: string) {
+function deletePriceType(id: string, expectedUpdatedAt: string) {
   const requestId = Utilities.getUuid();
   try {
     const authResult = checkPermission(ROLES.MANAGER);
@@ -70,6 +70,14 @@ function deletePriceType(id: string) {
 
     if (!id) {
       return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, 'IDは必須です', {}, requestId);
+    }
+
+    // 楽観ロック
+    if (expectedUpdatedAt) {
+      const existing = PriceTypeRepository._findByIdDirect(id);
+      if (existing && existing.updated_at && String(existing.updated_at) !== String(expectedUpdatedAt)) {
+        return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーによる変更が検出されました。画面を再読み込みしてください。', {}, requestId);
+      }
     }
 
     const result = PriceTypeRepository.delete(id);
@@ -137,12 +145,20 @@ function upsertCustomPrice(entityType: string, entityId: string, code: string, a
 /**
  * カスタム単価を削除
  */
-function deleteCustomPrice(entityType: string, entityId: string, code: string) {
+function deleteCustomPrice(entityType: string, entityId: string, code: string, expectedUpdatedAt?: string) {
   const requestId = Utilities.getUuid();
   try {
     const authResult = checkPermission(ROLES.MANAGER);
     if (!authResult.allowed) {
       return buildErrorResponse(ERROR_CODES.PERMISSION_DENIED, authResult.message, {}, requestId);
+    }
+
+    // 楽観ロック
+    if (expectedUpdatedAt) {
+      const existing = CustomPriceRepository.findByEntityAndCode(entityType, entityId, code);
+      if (existing && existing.updated_at && String(existing.updated_at) !== String(expectedUpdatedAt)) {
+        return buildErrorResponse(ERROR_CODES.CONFLICT_ERROR, '他のユーザーによる変更が検出されました。画面を再読み込みしてください。', {}, requestId);
+      }
     }
 
     const result = CustomPriceRepository.deleteByEntity(entityType, entityId, code);

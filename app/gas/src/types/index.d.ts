@@ -503,4 +503,7 @@ declare global {
   function listTransportFees(): { ok: boolean; data?: { items: Record<string, unknown>[] } } | Record<string, unknown>[];
   function getCompany(): Record<string, unknown> | null;
 
+  // === ユーティリティ関数（utils.gs） ===
+  function getServerDate(): string;
+
 }

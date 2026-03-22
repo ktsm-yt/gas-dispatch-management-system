@@ -24,8 +24,13 @@ const ExcelExportUtil = {
     const url = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?format=xlsx';
     const token = ScriptApp.getOAuthToken();
     const response = UrlFetchApp.fetch(url, {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      muteHttpExceptions: true
     });
+    const statusCode = response.getResponseCode();
+    if (statusCode !== 200) {
+      throw new Error('Excel export failed: HTTP ' + statusCode);
+    }
     return response.getBlob().setContentType(
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
