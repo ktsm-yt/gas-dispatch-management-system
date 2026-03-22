@@ -2340,10 +2340,30 @@
     }
 
     function refreshInvoicesOnVisible() {
-      // キャッシュクリアせずバックグラウンド更新のみ（ローディングモーダルを出さない）
-      // Note: invoices.length チェックを除去 — 検索結果0件の月でもスロットルを効かせる
+      // モーダル中に溜まったpending syncをバックグラウンドで処理
+      var hadPendingInvoices = pendingSync.invoices;
+      var hadPendingCustomers = pendingSync.customers;
+
+      if (hadPendingInvoices) {
+        pendingSync.invoices = false;
+        invalidateDetailCache();
+      }
+      if (hadPendingCustomers) {
+        pendingSync.customers = false;
+        PageCache.clear(INVOICES_CUSTOMERS_KEY);
+        customersLoaded = false;
+        refreshCustomersInBackground(true);
+      }
+
+      if (hadPendingInvoices && currentInvoiceQuery) {
+        var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
+        refreshInvoicesInBackground(cacheKey, currentInvoiceQuery);
+        fetchChangeFlagsInBackground(false);
+        return; // バックグラウンド更新開始済み、スロットル付きリフレッシュは不要
+      }
+
+      // 既存ロジック（5分スロットル付きバックグラウンド更新）
       if (currentInvoiceQuery) {
-        // 5分以内に取得済みならスキップ（単一ユーザー運用のため頻繁な再取得不要）
         if (Date.now() - lastInvoiceFetchTime < 300000) return;
         var cacheKey = PageCache.makeKey('invoices_list', currentInvoiceQuery);
         refreshInvoicesInBackground(cacheKey, currentInvoiceQuery);
@@ -4773,6 +4793,7 @@
     // ========================================
 
     let currentEditInvoice = null;
+    let editModalSnapshot = null; // dirty check用の初期値スナップショット
 
     // ========== モーダル高速化: キャッシュ・競合制御 ==========
     let editModalRequestToken = 0;           // requestToken（非同期競合防止）
@@ -4935,6 +4956,28 @@
     }
 
     /**
+     * 編集モーダルの現在値をスナップショットとして取得
+     */
+    function captureEditSnapshot() {
+      var header = {
+        issue_date: document.getElementById('editIssueDate').value,
+        due_date: document.getElementById('editDueDate').value,
+        notes: document.getElementById('editNotes').value
+      };
+      var lines = [];
+      var rows = document.getElementById('editLinesBody').querySelectorAll('tr[data-line-id]');
+      rows.forEach(function(row, index) {
+        lines.push({
+          line_id: row.getAttribute('data-line-id'),
+          site_name: (row.querySelector('input[name="site_name_' + index + '"]') || {}).value || '',
+          item_name: (row.querySelector('input[name="item_name_' + index + '"]') || {}).value || '',
+          time_note: (row.querySelector('input[name="time_note_' + index + '"]') || {}).value || ''
+        });
+      });
+      return { header: header, lines: lines };
+    }
+
+    /**
      * 明細セクションをスケルトン表示
      */
     function showEditDetailSkeleton() {
@@ -4984,6 +5027,7 @@
         currentEditInvoice = invoice;
         isEditable = renderEditModalHeader(invoice);
         renderEditModalDetail(invoice, isEditable);
+        editModalSnapshot = captureEditSnapshot();
         if (!summary) { hideLoading(); document.getElementById('editModal').classList.add('active'); }
 
         // バックグラウンド更新（SWR）: キャッシュのみ更新、UIには反映しない
@@ -5012,6 +5056,7 @@
         currentEditInvoice = invoice;
         isEditable = renderEditModalHeader(invoice);
         renderEditModalDetail(invoice, isEditable);
+        editModalSnapshot = captureEditSnapshot();
 
         // アーカイブデータの場合は警告バナーを表示
         if (invoice._archived) {
@@ -5035,7 +5080,6 @@
       document.getElementById('editModal').classList.remove('active');
       currentEditInvoice = null;
       hideInvoiceArchiveWarning();
-      processPendingInvalidation();
     }
 
     /**
@@ -5146,6 +5190,16 @@
         });
       });
 
+      // Dirty check: 変更なければAPI呼び出しをスキップ
+      if (editModalSnapshot) {
+        var current = captureEditSnapshot();
+        if (JSON.stringify(current) === JSON.stringify(editModalSnapshot)) {
+          showToast('変更はありません', 'info');
+          document.getElementById('unsavedWarning').style.display = 'none';
+          return;
+        }
+      }
+
       // 保存ボタンをスピナー状態に
       var saveBtn = document.getElementById('editSaveBtn');
       var saveBtnOriginal = saveBtn.textContent;
@@ -5192,6 +5246,8 @@
             // クロスタブ同期
             BroadcastSync.broadcast(invoiceSyncChannel, 'INVOICE_UPDATED', { invoice: result.data.invoice });
           }
+          // スナップショット更新（連続保存で再度dirty checkが効くように）
+          editModalSnapshot = captureEditSnapshot();
           // 未保存警告を消す
           document.getElementById('unsavedWarning').style.display = 'none';
           // モーダルは閉じず、出力を促す
