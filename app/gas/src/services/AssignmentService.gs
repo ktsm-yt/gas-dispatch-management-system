@@ -58,321 +58,305 @@ const AssignmentService = {
   saveAssignments: function(jobId, changes, expectedUpdatedAt) {
     const requestId = generateRequestId();
 
-    // ロック取得
-    let lock = acquireLock(3000);
-    if (!lock) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '現在混み合っています。しばらく待ってから再度お試しください。',
-        {},
-        requestId
-      );
-    }
+    return withScriptLock((ctx) => {
+      try {
+        // 案件の存在確認と楽観ロックチェック
+        const job = JobRepository.findById(jobId);
+        if (!job) {
+          return buildErrorResponse(
+            ERROR_CODES.NOT_FOUND,
+            '案件が見つかりません',
+            { jobId: jobId },
+            requestId
+          );
+        }
 
-    try {
+        // 楽観ロックチェック: 単一ユーザー運用のため無効化
+        // 配置保存で案件のupdated_atが変わり、次回保存で自己競合する構造的問題があるため
+        // if (!checkOptimisticLock(job, expectedUpdatedAt)) { ... }
 
-      // 案件の存在確認と楽観ロックチェック
-      const job = JobRepository.findById(jobId);
-      if (!job) {
+
+        // 既存配置を1回だけ読み込み、重複チェック用Map + ID逆引きMapを構築
+        const existingAssignments = AssignmentRepository.findByJobId(jobId);
+        const existingStaffMap = new Map();
+        const existingByIdMap = new Map();
+        existingAssignments.forEach(a => {
+          existingByIdMap.set(a.assignment_id, a);
+          if (a.status !== 'CANCELLED') {
+            existingStaffMap.set(a.staff_id, a.assignment_id);
+          }
+        });
+
+        const results = {
+          inserted: [],
+          updated: [],
+          deleted: []
+        };
+
+        const auditLogs = [];
+        const toInsert = [];
+        const toUpdate = [];
+        const pendingStaffIds = new Set();
+
+
+        // 削除処理（一括）
+        if (changes.deletes && changes.deletes.length > 0) {
+          const deleteResult = AssignmentRepository.bulkSoftDelete(changes.deletes);
+          if (deleteResult.deleted > 0) {
+            for (const result of deleteResult.results) {
+              results.deleted.push(result.assignmentId);
+              auditLogs.push({
+                action: 'DELETE',
+                table_name: 'T_JobAssignments',
+                record_id: result.assignmentId,
+                before: result.before,
+                after: result.after
+              });
+              // 削除されたスタッフをMapから除去（同一リクエスト内で再追加を許可）
+              if (result.before?.staff_id) {
+                existingStaffMap.delete(result.before.staff_id);
+              }
+            }
+          }
+        }
+
+
+        // 追加/更新処理
+        if (changes.upserts && changes.upserts.length > 0) {
+          // スロットMapを事前構築（N回のシート読みを1回に削減）
+          const slotsForJob = SlotRepository.findByJobId(jobId);
+          const slotMap = new Map(slotsForJob.map(s => [s.slot_id, s]));
+          // スロットなし案件のpay_unit補正用（ループ外で1回だけ取得）
+          const jobForUnit = slotsForJob.length === 0 ? JobRepository.findById(jobId) : null;
+
+          for (const assignment of changes.upserts) {
+            // 更新時: フロントエンドがslot_idを送らなかった場合、既存レコードから復元
+            // （再保存時にフォームがリセットされてslot_idが欠落するバグへの安全装置）
+            if (!assignment.slot_id && assignment.assignment_id) {
+              const existing = existingByIdMap.get(assignment.assignment_id);
+              if (existing && existing.slot_id) {
+                assignment.slot_id = existing.slot_id;
+              }
+            }
+
+            // slot_id検証とpay_unit同期
+            if (assignment.slot_id) {
+              // スロットが指定されている場合、メモリ上のMapで O(1) 検証
+              const slot = slotMap.get(assignment.slot_id);
+
+              if (!slot) {
+                // スロットが存在しない
+                Logger.log(`Warning: slot_id ${assignment.slot_id} not found for assignment`);
+                continue; // この配置をスキップ
+              }
+
+              if (slot.job_id !== jobId) {
+                // スロットが別の案件に属している - セキュリティリスク
+                Logger.log(`Error: slot_id ${assignment.slot_id} belongs to job ${slot.job_id}, not ${jobId}`);
+                continue; // この配置をスキップ
+              }
+
+              // スロットのpay_unitで上書き（データ整合性）
+              assignment.invoice_unit = slot.slot_pay_unit;
+              assignment.pay_unit = slot.slot_pay_unit;
+            } else {
+              // スロット指定なし - 従来通りinvoice_unitを使用
+              // invoice_unit を小文字に正規化（UI互換性のため）
+              if (assignment.invoice_unit) {
+                assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
+              }
+
+              // スロットなし + invoice_unit未指定またはbasicの場合、job.pay_unitから自動設定
+              if ((!assignment.invoice_unit || assignment.invoice_unit === 'basic') &&
+                  jobForUnit && jobForUnit.pay_unit && jobForUnit.pay_unit !== 'basic') {
+                assignment.invoice_unit = jobForUnit.pay_unit;
+              }
+
+              // pay_unit = invoice_unit で強制同期（搾取防止）
+              // 請求区分と給与区分は常に一致させる
+              assignment.pay_unit = assignment.invoice_unit;
+            }
+
+            // 単価オーバーライドは無効化（常にマスタ参照）
+            // 調整が必要な場合は支払画面/請求画面の調整額を使用
+            assignment.wage_rate = null;
+            assignment.invoice_rate = null;
+
+            // バリデーション
+            const validation = this._validateAssignment(assignment);
+            if (!validation.valid) {
+              continue; // スキップまたはエラーを蓄積
+            }
+
+            // 交通費の自動計算
+            const processedAssignment = this._processTransportFee(assignment);
+
+            if (processedAssignment.assignment_id) {
+              // 更新対象を収集（メモリ上のMapで O(1) ルックアップ、シート再読み不要）
+              const existing = existingByIdMap.get(processedAssignment.assignment_id);
+              if (existing) {
+                toUpdate.push(processedAssignment);
+              }
+            } else {
+              // 新規作成
+              // 重複チェック
+              const effectiveStatus = processedAssignment.status || 'ASSIGNED';
+              if (effectiveStatus !== 'CANCELLED' && pendingStaffIds.has(processedAssignment.staff_id)) {
+                continue; // 同一リクエスト内の重複はスキップ
+              }
+
+              if (existingStaffMap.has(processedAssignment.staff_id)) {
+                continue; // 重複はスキップ（Mapルックアップ、DBアクセス不要）
+              }
+
+              processedAssignment.job_id = jobId;
+              toInsert.push(processedAssignment);
+              if (effectiveStatus !== 'CANCELLED') {
+                pendingStaffIds.add(processedAssignment.staff_id);
+              }
+            }
+          }
+        }
+
+
+        // 追加処理（一括挿入）
+        if (toInsert.length > 0) {
+          const insertedAssignments = AssignmentRepository.bulkInsert(toInsert);
+          results.inserted.push(...insertedAssignments);
+          for (const newAssignment of insertedAssignments) {
+            auditLogs.push({
+              action: 'CREATE',
+              table_name: 'T_JobAssignments',
+              record_id: newAssignment.assignment_id,
+              before: null,
+              after: newAssignment
+            });
+          }
+        }
+
+        // 更新処理（一括更新）
+        if (toUpdate.length > 0) {
+          const updateResult = AssignmentRepository.bulkUpdate(toUpdate);
+          if (updateResult.updated > 0) {
+            for (const result of updateResult.results) {
+              results.updated.push(result.after);
+              auditLogs.push({
+                action: 'UPDATE',
+                table_name: 'T_JobAssignments',
+                record_id: result.assignmentId,
+                before: result.before,
+                after: result.after
+              });
+            }
+          }
+        }
+
+
+        // 案件のupdated_atを更新（配置変更検知用）
+        const jobUpdateResult = JobRepository.update(
+          { job_id: jobId },
+          expectedUpdatedAt
+        );
+
+        // 更新後の配置一覧をメモリ上で再構成（シート再読み不要、-2秒）
+        const deletedIdSet = new Set(results.deleted);
+        const updatedMap = new Map(results.updated.map(a => [a.assignment_id, a]));
+        const updatedAssignments = existingAssignments
+          .filter(a => !deletedIdSet.has(a.assignment_id) && !a.is_deleted)
+          .map(a => updatedMap.get(a.assignment_id) || a)
+          .concat(results.inserted);
+        const activeCount = updatedAssignments.filter(a => a.status !== 'CANCELLED').length;
+
+
+        // 案件のステータス更新 → 更新後にfindByIdでレスポンス用の最終updated_atを取得
+        const jobForStatus = JobRepository.findById(jobId);
+        const statusBefore = jobForStatus.status;
+        this._updateJobStatus(jobId, { job: jobForStatus, assignedCount: activeCount });
+        // _updateJobStatus がステータス変更した場合、updated_at が再更新されるため
+        // レスポンス用には最終状態を取得（findByIdは_normalizeRecordでDate→String正規化済み）
+        const updatedJob = (jobForStatus.status !== statusBefore)
+          ? JobRepository.findById(jobId)
+          : jobForStatus;
+
+
+        // 監査ログの記録
+        if (auditLogs.length > 0) {
+          logBatch(auditLogs);
+        }
+
+
+        // スタッフ情報を付加
+        const staffCache = this._buildStaffCache();
+        const enrichedAssignments = updatedAssignments.map(a => {
+          const staff = staffCache[a.staff_id];
+          return {
+            ...a,
+            staff_name: staff ? staff.name : '（削除済み）',
+            staff_nickname: staff ? (staff.nickname || '') : '',
+            staff_phone: staff ? staff.phone : ''
+          };
+        });
+
+
+        // スロット情報を取得（1回だけ）
+        const slotsData = SlotService.getSlotsByJobId(jobId);
+        const slots = slotsData.slots || [];
+
+        // スロット充足状況を取得（プリロードデータで再取得を省略）
+        let slotStatus = null;
+        if (slots.length > 0) {
+          slotStatus = SlotService.getSlotStatus(jobId, {
+            slots: slots,
+            assignments: updatedAssignments
+          });
+        }
+
+
+        // ダッシュボードキャッシュ無効化
+        JobService.invalidateDashboardCache(job.work_date);
+
+        // カスタム単価未登録チェック（非ブロッキング警告）
+        var warnings = this._checkCustomPriceWarnings(updatedAssignments, staffCache);
+
+        const hasChanges = results.inserted.length > 0 || results.updated.length > 0 || results.deleted.length > 0;
+        var responseData = {
+          assignments: enrichedAssignments,
+          inserted: results.inserted.length,
+          updated: results.updated.length,
+          deleted: results.deleted.length,
+          job: updatedJob,
+          slots: slots,
+          slotStatus: slotStatus
+        };
+        if (warnings.length > 0) {
+          responseData.warnings = warnings;
+        }
+        const response = buildSuccessResponse(responseData, requestId);
+
+        // ロック早期解放（以降はbest-effort処理のみ）
+        ctx.release();
+
+        // 逆引き+フラグ更新（非同期トリガーで実行、レスポンスを5.9秒短縮）
+        if (hasChanges) {
+          try {
+            this._deferMarkAffectedInvoices(jobId);
+          } catch (flagError) {
+            Logger.log('Deferred invoice flag setup failed (non-critical): ' + flagError);
+          }
+        }
+
+        return response;
+
+      } catch (e) {
+        logErr('saveAssignments', e);
         return buildErrorResponse(
-          ERROR_CODES.NOT_FOUND,
-          '案件が見つかりません',
-          { jobId: jobId },
+          ERROR_CODES.SYSTEM_ERROR,
+          'システムエラーが発生しました',
+          { message: e.message },
           requestId
         );
       }
-
-      // 楽観ロックチェック: 単一ユーザー運用のため無効化
-      // 配置保存で案件のupdated_atが変わり、次回保存で自己競合する構造的問題があるため
-      // if (!checkOptimisticLock(job, expectedUpdatedAt)) { ... }
-
-
-      // 既存配置を1回だけ読み込み、重複チェック用Map + ID逆引きMapを構築
-      const existingAssignments = AssignmentRepository.findByJobId(jobId);
-      const existingStaffMap = new Map();
-      const existingByIdMap = new Map();
-      existingAssignments.forEach(a => {
-        existingByIdMap.set(a.assignment_id, a);
-        if (a.status !== 'CANCELLED') {
-          existingStaffMap.set(a.staff_id, a.assignment_id);
-        }
-      });
-
-      const results = {
-        inserted: [],
-        updated: [],
-        deleted: []
-      };
-
-      const auditLogs = [];
-      const toInsert = [];
-      const toUpdate = [];
-      const pendingStaffIds = new Set();
-
-
-      // 削除処理（一括）
-      if (changes.deletes && changes.deletes.length > 0) {
-        const deleteResult = AssignmentRepository.bulkSoftDelete(changes.deletes);
-        if (deleteResult.deleted > 0) {
-          for (const result of deleteResult.results) {
-            results.deleted.push(result.assignmentId);
-            auditLogs.push({
-              action: 'DELETE',
-              table_name: 'T_JobAssignments',
-              record_id: result.assignmentId,
-              before: result.before,
-              after: result.after
-            });
-            // 削除されたスタッフをMapから除去（同一リクエスト内で再追加を許可）
-            if (result.before?.staff_id) {
-              existingStaffMap.delete(result.before.staff_id);
-            }
-          }
-        }
-      }
-
-
-      // 追加/更新処理
-      if (changes.upserts && changes.upserts.length > 0) {
-        // スロットMapを事前構築（N回のシート読みを1回に削減）
-        const slotsForJob = SlotRepository.findByJobId(jobId);
-        const slotMap = new Map(slotsForJob.map(s => [s.slot_id, s]));
-        // スロットなし案件のpay_unit補正用（ループ外で1回だけ取得）
-        const jobForUnit = slotsForJob.length === 0 ? JobRepository.findById(jobId) : null;
-
-        for (const assignment of changes.upserts) {
-          // 更新時: フロントエンドがslot_idを送らなかった場合、既存レコードから復元
-          // （再保存時にフォームがリセットされてslot_idが欠落するバグへの安全装置）
-          if (!assignment.slot_id && assignment.assignment_id) {
-            const existing = existingByIdMap.get(assignment.assignment_id);
-            if (existing && existing.slot_id) {
-              assignment.slot_id = existing.slot_id;
-            }
-          }
-
-          // slot_id検証とpay_unit同期
-          if (assignment.slot_id) {
-            // スロットが指定されている場合、メモリ上のMapで O(1) 検証
-            const slot = slotMap.get(assignment.slot_id);
-
-            if (!slot) {
-              // スロットが存在しない
-              Logger.log(`Warning: slot_id ${assignment.slot_id} not found for assignment`);
-              continue; // この配置をスキップ
-            }
-
-            if (slot.job_id !== jobId) {
-              // スロットが別の案件に属している - セキュリティリスク
-              Logger.log(`Error: slot_id ${assignment.slot_id} belongs to job ${slot.job_id}, not ${jobId}`);
-              continue; // この配置をスキップ
-            }
-
-            // スロットのpay_unitで上書き（データ整合性）
-            assignment.invoice_unit = slot.slot_pay_unit;
-            assignment.pay_unit = slot.slot_pay_unit;
-          } else {
-            // スロット指定なし - 従来通りinvoice_unitを使用
-            // invoice_unit を小文字に正規化（UI互換性のため）
-            if (assignment.invoice_unit) {
-              assignment.invoice_unit = String(assignment.invoice_unit).toLowerCase().trim();
-            }
-
-            // スロットなし + invoice_unit未指定またはbasicの場合、job.pay_unitから自動設定
-            if ((!assignment.invoice_unit || assignment.invoice_unit === 'basic') &&
-                jobForUnit && jobForUnit.pay_unit && jobForUnit.pay_unit !== 'basic') {
-              assignment.invoice_unit = jobForUnit.pay_unit;
-            }
-
-            // pay_unit = invoice_unit で強制同期（搾取防止）
-            // 請求区分と給与区分は常に一致させる
-            assignment.pay_unit = assignment.invoice_unit;
-          }
-
-          // 単価オーバーライドは無効化（常にマスタ参照）
-          // 調整が必要な場合は支払画面/請求画面の調整額を使用
-          assignment.wage_rate = null;
-          assignment.invoice_rate = null;
-
-          // バリデーション
-          const validation = this._validateAssignment(assignment);
-          if (!validation.valid) {
-            continue; // スキップまたはエラーを蓄積
-          }
-
-          // 交通費の自動計算
-          const processedAssignment = this._processTransportFee(assignment);
-
-          if (processedAssignment.assignment_id) {
-            // 更新対象を収集（メモリ上のMapで O(1) ルックアップ、シート再読み不要）
-            const existing = existingByIdMap.get(processedAssignment.assignment_id);
-            if (existing) {
-              toUpdate.push(processedAssignment);
-            }
-          } else {
-            // 新規作成
-            // 重複チェック
-            const effectiveStatus = processedAssignment.status || 'ASSIGNED';
-            if (effectiveStatus !== 'CANCELLED' && pendingStaffIds.has(processedAssignment.staff_id)) {
-              continue; // 同一リクエスト内の重複はスキップ
-            }
-
-            if (existingStaffMap.has(processedAssignment.staff_id)) {
-              continue; // 重複はスキップ（Mapルックアップ、DBアクセス不要）
-            }
-
-            processedAssignment.job_id = jobId;
-            toInsert.push(processedAssignment);
-            if (effectiveStatus !== 'CANCELLED') {
-              pendingStaffIds.add(processedAssignment.staff_id);
-            }
-          }
-        }
-      }
-
-
-      // 追加処理（一括挿入）
-      if (toInsert.length > 0) {
-        const insertedAssignments = AssignmentRepository.bulkInsert(toInsert);
-        results.inserted.push(...insertedAssignments);
-        for (const newAssignment of insertedAssignments) {
-          auditLogs.push({
-            action: 'CREATE',
-            table_name: 'T_JobAssignments',
-            record_id: newAssignment.assignment_id,
-            before: null,
-            after: newAssignment
-          });
-        }
-      }
-
-      // 更新処理（一括更新）
-      if (toUpdate.length > 0) {
-        const updateResult = AssignmentRepository.bulkUpdate(toUpdate);
-        if (updateResult.updated > 0) {
-          for (const result of updateResult.results) {
-            results.updated.push(result.after);
-            auditLogs.push({
-              action: 'UPDATE',
-              table_name: 'T_JobAssignments',
-              record_id: result.assignmentId,
-              before: result.before,
-              after: result.after
-            });
-          }
-        }
-      }
-
-
-      // 案件のupdated_atを更新（配置変更検知用）
-      const jobUpdateResult = JobRepository.update(
-        { job_id: jobId },
-        expectedUpdatedAt
-      );
-
-      // 更新後の配置一覧をメモリ上で再構成（シート再読み不要、-2秒）
-      const deletedIdSet = new Set(results.deleted);
-      const updatedMap = new Map(results.updated.map(a => [a.assignment_id, a]));
-      const updatedAssignments = existingAssignments
-        .filter(a => !deletedIdSet.has(a.assignment_id) && !a.is_deleted)
-        .map(a => updatedMap.get(a.assignment_id) || a)
-        .concat(results.inserted);
-      const activeCount = updatedAssignments.filter(a => a.status !== 'CANCELLED').length;
-
-
-      // 案件のステータス更新 → 更新後にfindByIdでレスポンス用の最終updated_atを取得
-      const jobForStatus = JobRepository.findById(jobId);
-      const statusBefore = jobForStatus.status;
-      this._updateJobStatus(jobId, { job: jobForStatus, assignedCount: activeCount });
-      // _updateJobStatus がステータス変更した場合、updated_at が再更新されるため
-      // レスポンス用には最終状態を取得（findByIdは_normalizeRecordでDate→String正規化済み）
-      const updatedJob = (jobForStatus.status !== statusBefore)
-        ? JobRepository.findById(jobId)
-        : jobForStatus;
-
-
-      // 監査ログの記録
-      if (auditLogs.length > 0) {
-        logBatch(auditLogs);
-      }
-
-
-      // スタッフ情報を付加
-      const staffCache = this._buildStaffCache();
-      const enrichedAssignments = updatedAssignments.map(a => {
-        const staff = staffCache[a.staff_id];
-        return {
-          ...a,
-          staff_name: staff ? staff.name : '（削除済み）',
-          staff_nickname: staff ? (staff.nickname || '') : '',
-          staff_phone: staff ? staff.phone : ''
-        };
-      });
-
-
-      // スロット情報を取得（1回だけ）
-      const slotsData = SlotService.getSlotsByJobId(jobId);
-      const slots = slotsData.slots || [];
-
-      // スロット充足状況を取得（プリロードデータで再取得を省略）
-      let slotStatus = null;
-      if (slots.length > 0) {
-        slotStatus = SlotService.getSlotStatus(jobId, {
-          slots: slots,
-          assignments: updatedAssignments
-        });
-      }
-
-
-      // ダッシュボードキャッシュ無効化
-      JobService.invalidateDashboardCache(job.work_date);
-
-      // カスタム単価未登録チェック（非ブロッキング警告）
-      var warnings = this._checkCustomPriceWarnings(updatedAssignments, staffCache);
-
-      const hasChanges = results.inserted.length > 0 || results.updated.length > 0 || results.deleted.length > 0;
-      var responseData = {
-        assignments: enrichedAssignments,
-        inserted: results.inserted.length,
-        updated: results.updated.length,
-        deleted: results.deleted.length,
-        job: updatedJob,
-        slots: slots,
-        slotStatus: slotStatus
-      };
-      if (warnings.length > 0) {
-        responseData.warnings = warnings;
-      }
-      const response = buildSuccessResponse(responseData, requestId);
-
-
-      // ロック解放を先行（以降はbest-effort処理のみ）
-      releaseLock(lock);
-      lock = null; // finallyでの二重解放を防止
-
-      // 逆引き+フラグ更新（非同期トリガーで実行、レスポンスを5.9秒短縮）
-      if (hasChanges) {
-        try {
-          this._deferMarkAffectedInvoices(jobId);
-        } catch (flagError) {
-          Logger.log('Deferred invoice flag setup failed (non-critical): ' + flagError);
-        }
-      }
-
-
-      return response;
-
-    } catch (e) {
-      logErr('saveAssignments', e);
-      return buildErrorResponse(
-        ERROR_CODES.SYSTEM_ERROR,
-        'システムエラーが発生しました',
-        { message: e.message },
-        requestId
-      );
-    } finally {
-      // ロックが既に解放済みの場合は何もしない（releaseLockは二重解放安全）
-      releaseLock(lock);
-    }
+    }, { waitMs: 3000, requestId: requestId });
   },
 
   /**

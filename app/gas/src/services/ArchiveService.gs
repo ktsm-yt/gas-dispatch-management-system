@@ -53,6 +53,8 @@ const ArchiveService = {
    * @returns {Object} 実行結果
    */
   executeYearlyArchive(fiscalYear = null) {
+    // NOTE: withScriptLock不使用 — トリガー実行用でbuildErrorResponse形式ではなく
+    // { success, error } 形式を返す。10秒待機 + ALREADY_RUNNING は専用動作。
     const lock = LockService.getScriptLock();
 
     try {

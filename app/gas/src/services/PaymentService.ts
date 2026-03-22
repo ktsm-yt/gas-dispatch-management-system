@@ -47,6 +47,8 @@ const PaymentService = {
    */
   recordPayment: function(invoiceId: string, paymentData: PaymentInput, expectedUpdatedAt: string): PaymentServiceResult {
     // 1. LockService で排他制御
+    // NOTE: withScriptLock不使用 — サービス層で { success, error: 'LOCK_TIMEOUT' } 形式を返し、
+    // コントローラ（api_payments.ts）がERROR_CODES.BUSY_ERRORに変換する2層設計のため。
     const lock = LockService.getScriptLock();
     try {
       const acquired = lock.tryLock(10000); // 10秒待機
