@@ -25,7 +25,7 @@ function _normalizeTime(timeValue: unknown): string {
   if (timeValue instanceof Date) {
     if (isNaN(timeValue.getTime())) return '';
     // GASのDateはJST(UTC+9)基準だがgetTime()はUTCミリ秒を返すため補正が必要
-    // このプロジェクトはJST固定運用（ad-stage.jp / ktsm.dev@gmail.com）
+    // このプロジェクトはJST固定運用
     const EXCEL_EPOCH_MS = Date.UTC(1899, 11, 30); // 1899-12-30 UTC
     const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
     const totalMinutes = Math.round((timeValue.getTime() - EXCEL_EPOCH_MS + JST_OFFSET_MS) / 60000);
