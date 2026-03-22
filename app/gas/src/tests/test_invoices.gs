@@ -778,6 +778,100 @@ function testFormat3Export() {
 }
 
 /**
+ * FORMAT3 大量明細テスト（17行境界フォーマット崩れ回帰テスト）
+ * GASエディタから直接実行: testFormat3BulkLines()
+ *
+ * テンプレートxlsxはrow3-17にのみデータ行スタイルがあるため、
+ * 18行目以降でフォーマット（カンマ区切り・日付・罫線・背景色）が
+ * 崩れないことを確認する回帰テスト。
+ * 25件の明細を生成し、17→18行の境界を含むExcel/PDFを出力する。
+ */
+function testFormat3BulkLines() {
+  Logger.log('=== FORMAT3 Bulk Lines Test (17行境界回帰) ===');
+
+  var testCustomerId = 'test_format3_bulk_' + Date.now();
+
+  var testInvoice = InvoiceRepository.insert({
+    customer_id: testCustomerId,
+    billing_year: 2026,
+    billing_month: 3,
+    subtotal: 0,
+    tax_amount: 0,
+    total_amount: 0,
+    invoice_format: 'format3',
+    status: 'unsent'
+  });
+  Logger.log('✓ 請求書作成: ' + testInvoice.invoice_id);
+
+  // 25件の明細データ（境界の17行を超えることを保証）
+  var divisions = ['埼玉中央工事課', '千葉西工事課', '東京西工事課', '北関東工事課', '東京東工事課'];
+  var supervisors = ['山田', '二宮', '橘高', '室井', '堀口', '中島', '渡邊', '小菅', '海妻', '遠藤'];
+  var items = ['作業員（ハーフ）', '作業員（上棟荷揚げ）', '作業員（終日）'];
+  var amounts = [13000, 26000, 36000, 54000, 72000];
+  var testLines = [];
+  var subtotal = 0;
+
+  for (var i = 0; i < 25; i++) {
+    var day = (i % 28) + 1;
+    var dateStr = '2026-03-' + (day < 10 ? '0' + day : day);
+    var amount = amounts[i % amounts.length];
+    subtotal += amount;
+    testLines.push({
+      invoice_id: testInvoice.invoice_id,
+      construction_div: divisions[i % divisions.length],
+      supervisor_name: supervisors[i % supervisors.length],
+      property_code: i % 4 === 0 ? '' : 'P' + String(100 + i),  // 一部空のproperty_code
+      site_name: '現場' + (i + 1) + '-1',
+      work_date: dateStr,
+      item_name: items[i % items.length],
+      quantity: 1,
+      unit: '人',
+      unit_price: amount,
+      amount: i === 24 ? -26000 : amount  // 最終行は調整（負の金額）
+    });
+  }
+
+  for (var j = 0; j < testLines.length; j++) {
+    InvoiceLineRepository.insert(testLines[j]);
+  }
+  Logger.log('✓ 明細追加: ' + testLines.length + '件（17行境界超え確認用）');
+
+  // Excel出力
+  var excelResult = InvoiceExportService.export(testInvoice.invoice_id, 'excel');
+  if (excelResult.success) {
+    Logger.log('✓ Excel出力成功: ' + excelResult.url);
+  } else {
+    Logger.log('✗ Excel出力失敗: ' + excelResult.error);
+    return excelResult;
+  }
+
+  // PDF出力
+  var pdfResult = InvoiceExportService.exportToPdf(
+    { invoice_id: testInvoice.invoice_id, invoice_number: testInvoice.invoice_number || 'test', invoice_format: 'format3', billing_year: 2026, billing_month: 3 },
+    testLines,
+    { company_name: 'テスト顧客（様式3）', tax_rate: 0.1, tax_rounding_mode: 'round', customer_id: testCustomerId },
+    {},
+    {}
+  );
+  if (pdfResult.success) {
+    Logger.log('✓ PDF出力成功: ' + pdfResult.url);
+  } else {
+    Logger.log('✗ PDF出力失敗: ' + JSON.stringify(pdfResult));
+  }
+
+  Logger.log('');
+  Logger.log('確認ポイント:');
+  Logger.log('  1. 行17-20の金額にカンマ区切りがあること（13,000 etc）');
+  Logger.log('  2. 全行の日付が yyyy/m/d 形式で統一されていること');
+  Logger.log('  3. 行18以降も罫線・背景色・フォントが維持されていること');
+  Logger.log('  4. 最終行（25行目）の負の金額 -26,000 が正しく表示されること');
+  Logger.log('  5. property_code が空の行でもレイアウトが崩れないこと');
+  Logger.log('=== Test Complete ===');
+
+  return { success: true, excelResult: excelResult, pdfResult: pdfResult };
+}
+
+/**
  * FORMAT1/FORMAT2 大量明細テスト（列配置・合計行確認用）
  * GASエディタから直接実行: testFormat1And2BulkLines()
  *
