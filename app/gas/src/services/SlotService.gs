@@ -33,116 +33,103 @@ const SlotService = {
     var skipLock = options && options.skipLock;
     var requestId = generateRequestId();
 
-    var lock = null;
-    if (!skipLock) {
-      lock = acquireLock(3000);
-      if (!lock) {
-        return buildErrorResponse(
-          ERROR_CODES.BUSY_ERROR,
-          '現在混み合っています。しばらく待ってから再度お試しください。',
-          {},
-          requestId
+    return withScriptLock(() => {
+      try {
+        // 案件の存在確認
+        var job = JobRepository.findById(jobId);
+        if (!job) {
+          return buildErrorResponse(
+            ERROR_CODES.NOT_FOUND,
+            '案件が見つかりません',
+            { jobId: jobId },
+            requestId
+          );
+        }
+
+        // 楽観ロックチェック（案件のupdated_atで判定）
+        if (expectedUpdatedAt && job.updated_at !== expectedUpdatedAt) {
+          return buildErrorResponse(
+            ERROR_CODES.CONFLICT_ERROR,
+            '他のユーザーが変更を行いました。画面を更新してください。',
+            {
+              expectedUpdatedAt: expectedUpdatedAt,
+              currentUpdatedAt: job.updated_at
+            },
+            requestId
+          );
+        }
+
+        // 削除予定の枠に配置が紐づいていないかチェック
+        var deleteCheck = this._checkSlotsCanBeDeleted(jobId, slots);
+        if (!deleteCheck.canDelete) {
+          return buildErrorResponse(
+            ERROR_CODES.VALIDATION_ERROR,
+            deleteCheck.error,
+            { conflictingSlots: deleteCheck.conflictingSlots },
+            requestId
+          );
+        }
+
+        // 枠を一括更新
+        var result = SlotRepository.bulkUpdateForJob(jobId, slots, expectedUpdatedAt);
+
+        if (!result.success && result.errors.length > 0) {
+          return buildErrorResponse(
+            ERROR_CODES.VALIDATION_ERROR,
+            '一部の枠の保存に失敗しました',
+            { errors: result.errors },
+            requestId
+          );
+        }
+
+        // bulkUpdateForJobの結果からtotalCountを計算（DB再読み込み不要）
+        // 重複slot_idがあれば最後の値を採用（防御的デデュプ）
+        var slotMap = {};
+        var merged = result.created.concat(result.updated);
+        for (var i = 0; i < merged.length; i++) {
+          slotMap[merged[i].slot_id] = merged[i];
+        }
+        var allSlots = Object.keys(slotMap).map(function(k) { return slotMap[k]; });
+        var totalCount = allSlots.reduce(function(sum, s) { return sum + (Number(s.slot_count) || 0); }, 0);
+
+        var jobUpdateResult = JobRepository.update(
+          { job_id: jobId, required_count: totalCount },
+          job.updated_at
         );
-      }
-    }
+        var updatedJob = (jobUpdateResult && jobUpdateResult.job) || job;
 
-    try {
-      // 案件の存在確認
-      var job = JobRepository.findById(jobId);
-      if (!job) {
-        return buildErrorResponse(
-          ERROR_CODES.NOT_FOUND,
-          '案件が見つかりません',
-          { jobId: jobId },
-          requestId
-        );
-      }
-
-      // 楽観ロックチェック（案件のupdated_atで判定）
-      if (expectedUpdatedAt && job.updated_at !== expectedUpdatedAt) {
-        return buildErrorResponse(
-          ERROR_CODES.CONFLICT_ERROR,
-          '他のユーザーが変更を行いました。画面を更新してください。',
-          {
-            expectedUpdatedAt: expectedUpdatedAt,
-            currentUpdatedAt: job.updated_at
-          },
-          requestId
-        );
-      }
-
-      // 削除予定の枠に配置が紐づいていないかチェック
-      var deleteCheck = this._checkSlotsCanBeDeleted(jobId, slots);
-      if (!deleteCheck.canDelete) {
-        return buildErrorResponse(
-          ERROR_CODES.VALIDATION_ERROR,
-          deleteCheck.error,
-          { conflictingSlots: deleteCheck.conflictingSlots },
-          requestId
-        );
-      }
-
-      // 枠を一括更新
-      var result = SlotRepository.bulkUpdateForJob(jobId, slots, expectedUpdatedAt);
-
-      if (!result.success && result.errors.length > 0) {
-        return buildErrorResponse(
-          ERROR_CODES.VALIDATION_ERROR,
-          '一部の枠の保存に失敗しました',
-          { errors: result.errors },
-          requestId
-        );
-      }
-
-      // bulkUpdateForJobの結果からtotalCountを計算（DB再読み込み不要）
-      // 重複slot_idがあれば最後の値を採用（防御的デデュプ）
-      var slotMap = {};
-      var merged = result.created.concat(result.updated);
-      for (var i = 0; i < merged.length; i++) {
-        slotMap[merged[i].slot_id] = merged[i];
-      }
-      var allSlots = Object.keys(slotMap).map(function(k) { return slotMap[k]; });
-      var totalCount = allSlots.reduce(function(sum, s) { return sum + (Number(s.slot_count) || 0); }, 0);
-
-      var jobUpdateResult = JobRepository.update(
-        { job_id: jobId, required_count: totalCount },
-        job.updated_at
-      );
-      var updatedJob = (jobUpdateResult && jobUpdateResult.job) || job;
-
-      // 監査ログ
-      logToAudit('SLOT_UPDATE', 'T_JobSlots', jobId, null, {
-        created: result.created.length,
-        updated: result.updated.length,
-        deleted: result.deleted.length
-      });
-
-      // bulkUpdateForJobの結果をそのまま返却（DB再読み込み不要）
-      // sort_order順にソート
-      allSlots.sort(function(a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
-
-      return buildSuccessResponse({
-        slots: allSlots,
-        totalCount: totalCount,
-        job: updatedJob,
-        changes: {
+        // 監査ログ
+        logToAudit('SLOT_UPDATE', 'T_JobSlots', jobId, null, {
           created: result.created.length,
           updated: result.updated.length,
           deleted: result.deleted.length
-        }
-      }, requestId);
+        });
 
-    } catch (e) {
-      logErr('saveSlots', e);
-      return buildErrorResponse(
-        ERROR_CODES.SYSTEM_ERROR,
-        'システムエラーが発生しました',
-        { message: e.message },
-        requestId
-      );
-    } finally {
-      if (lock) releaseLock(lock);
-    }
+        // bulkUpdateForJobの結果をそのまま返却（DB再読み込み不要）
+        // sort_order順にソート
+        allSlots.sort(function(a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+
+        return buildSuccessResponse({
+          slots: allSlots,
+          totalCount: totalCount,
+          job: updatedJob,
+          changes: {
+            created: result.created.length,
+            updated: result.updated.length,
+            deleted: result.deleted.length
+          }
+        }, requestId);
+
+      } catch (e) {
+        logErr('saveSlots', e);
+        return buildErrorResponse(
+          ERROR_CODES.SYSTEM_ERROR,
+          'システムエラーが発生しました',
+          { message: e.message },
+          requestId
+        );
+      }
+    }, { waitMs: 3000, skipLock: skipLock, requestId: requestId });
   },
 
   /**
