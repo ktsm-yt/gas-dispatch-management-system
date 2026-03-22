@@ -70,7 +70,7 @@ declare global {
   function requirePermission(requiredRole: string): { allowed: boolean; message: string };
   function logErr(context: string, error: unknown, requestId?: string): void;
   function getCurrentUserEmail(): string;
-  function withScriptLock<T>(fn: () => T, options?: { waitMs?: number; requestId?: string; busyMessage?: string; busyDetails?: unknown }): T;
+  function withScriptLock<T>(fn: (ctx: { release: () => void }) => T, options?: { waitMs?: number; requestId?: string; busyMessage?: string; busyDetails?: unknown; skipLock?: boolean }): T;
 
   // === UI関連（ui_jobs.ts） ===
   interface PageConfig {

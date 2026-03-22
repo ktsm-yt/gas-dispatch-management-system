@@ -62,8 +62,11 @@ globalThis.PropertiesService = {
 (globalThis as any).logErr = vi.fn();
 
 // === withScriptLock (matching repository.gs implementation) ===
-// Default: pass-through (calls fn). Override per-test for lock failure.
-(globalThis as any).withScriptLock = vi.fn((fn: () => unknown, _options?: unknown) => fn());
+// Default: pass-through (calls fn with ctx). Override per-test for lock failure.
+(globalThis as any).withScriptLock = vi.fn(
+  (fn: (ctx: { release: () => void }) => unknown, _options?: unknown) =>
+    fn({ release: vi.fn() })
+);
 
 // === Services (stubbed, spied on in individual tests) ===
 (globalThis as any).StatsService = {

@@ -37,7 +37,7 @@ function resetMocks() {
   );
 
   // Default: pass-through lock
-  (globalThis as any).withScriptLock = vi.fn((fn: () => unknown, _opts?: unknown) => fn());
+  (globalThis as any).withScriptLock = vi.fn((fn: (ctx: { release: () => void }) => unknown, _opts?: unknown) => fn({ release: vi.fn() }));
 
   (globalThis as any).InvoiceService = {
     generate: vi.fn(() => ({ success: true, invoice: {}, lines: [] })),

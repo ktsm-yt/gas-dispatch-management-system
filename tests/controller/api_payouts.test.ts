@@ -16,7 +16,7 @@ function resetMocks() {
 
   (globalThis as any).checkPermission.mockReturnValue({ allowed: true, message: 'OK' });
   (globalThis as any).generateRequestId.mockReturnValue('test-req-id');
-  (globalThis as any).withScriptLock.mockImplementation((fn: () => unknown) => fn());
+  (globalThis as any).withScriptLock.mockImplementation((fn: (ctx: { release: () => void }) => unknown) => fn({ release: vi.fn() }));
 
   (globalThis as any).buildSuccessResponse.mockImplementation((data: unknown, reqId?: string) => ({
     ok: true,
