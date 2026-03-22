@@ -314,6 +314,15 @@ function getAuthInfo() {
 }
 
 /**
+ * マネージャー以上の権限を要求するショートカット
+ * master_service.gs のマスタデータ操作で使用
+ * @throws {Error} 権限がない場合
+ */
+function requireManager() {
+  requirePermission(ROLES.MANAGER);
+}
+
+/**
  * 認証テスト
  */
 function testAuth() {

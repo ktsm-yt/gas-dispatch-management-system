@@ -218,6 +218,32 @@ function createFormat3Template() {
 }
 
 /**
+ * 様式3テンプレートのページ設定を横向き(A4)に変更（1回だけ実行）
+ * GASのSpreadsheet APIにはページ方向設定メソッドがないため、
+ * テンプレートURLを表示して手動変更を案内する。
+ * 変更後は makeCopy() で作成される全コピーが横向きを継承する。
+ */
+function fixFormat3TemplateLandscape() {
+  var prop = PropertiesService.getScriptProperties();
+  var templateId = prop.getProperty('TEMPLATE_FORMAT3_ID');
+  if (!templateId) {
+    Logger.log('✗ TEMPLATE_FORMAT3_ID が未設定です');
+    return;
+  }
+
+  var ss = SpreadsheetApp.openById(templateId);
+  Logger.log('=== 様式3テンプレート ページ設定変更 ===');
+  Logger.log('テンプレートURL: ' + ss.getUrl());
+  Logger.log('');
+  Logger.log('手動操作:');
+  Logger.log('  1. 上記URLを開く');
+  Logger.log('  2. ファイル > ページ設定');
+  Logger.log('  3. 印刷の向き → 横');
+  Logger.log('  4. 用紙サイズ → A4');
+  Logger.log('  5. OK → 保存');
+}
+
+/**
  * テンプレートIDを ScriptProperties に登録
  * 手動でアップロードしたテンプレートのIDを登録する場合に使用
  */
