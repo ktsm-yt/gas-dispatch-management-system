@@ -1154,13 +1154,17 @@ const InvoiceExportService = {
     // 明細データを2D配列として構築（バルク処理）
     const rowsData = lines.map((line, i) => {
       const taxIncluded = calculateTaxIncluded_(Number(line.amount || 0), taxRate, taxRoundingMode);
+      // 施工日: ISO文字列のままだとGASがテキストセルとして扱うため、Date型に変換
+      const workDate = line.work_date
+        ? parseDate_(String(line.work_date).replace(/\//g, '-')) ?? line.work_date
+        : '';
       return [
         i + 1,                          // A: № (連番)
         line.construction_div || '',    // B: 担当工事課
-        line.supervisor_name || '',     // C: 担当監督名
+        String(line.supervisor_name || '').replace(/[\s\u3000]*[(（]?\d{2,4}[-ー]\d{2,4}[-ー]\d{3,4}[)）]?/g, '').trim(),  // C: 担当監督名（電話番号除去）
         line.property_code || '',       // D: 物件コード
         line.site_name || '',           // E: 現場名
-        line.work_date || '',           // F: 施工日
+        workDate,                       // F: 施工日（Date型）
         line.item_name || '',           // G: 内容
         line.amount || 0,               // H: 金額（税抜）
         taxIncluded                     // I: 金額（税込）
@@ -1169,6 +1173,25 @@ const InvoiceExportService = {
 
     // 一括書き込み
     sheet.getRange(startRow, 1, rowsData.length, 9).setValues(rowsData);
+
+    // テンプレートのデータ行（row3）のフォーマットを全データ行に複製
+    // テンプレートxlsxはrow3-17にのみスタイルがあり、それ以降は欠落するため、
+    // row3の罫線・配置・フォント・背景色・数値書式を全行に展開する
+    if (rowsData.length > 1) {
+      sheet.getRange(startRow, 1, 1, 9)
+        .copyFormatToRange(sheet, 1, 9, startRow + 1, startRow + rowsData.length - 1);
+    }
+
+    // 補助: 数値・日付フォーマットを明示適用（xlsx由来テンプレートで書式が不完全な場合の保険）
+    sheet.getRange(startRow, 8, rowsData.length, 2).setNumberFormat('#,##0');
+    sheet.getRange(startRow, 6, rowsData.length, 1).setNumberFormat('yyyy/m/d');
+
+    // 列幅調整: A4横向き（約1200px）に合わせて配分
+    // A:№, B:担当工事課, C:担当監督名, D:物件コード, E:現場名, F:施工日, G:内容, H:金額税抜, I:金額税込
+    const columnWidths = [40, 120, 120, 110, 350, 90, 160, 100, 100];
+    for (let i = 0; i < columnWidths.length; i++) {
+      sheet.setColumnWidth(i + 1, columnWidths[i]);
+    }
   },
 
   /**
@@ -1664,16 +1687,18 @@ const InvoiceExportService = {
    */
   _exportSheetToPdf: function(spreadsheetId: string, sheetId: string | number, options: Record<string, unknown> = {}) {
     const isLandscape = options.landscape === true;
+    // scale: 1=通常100%, 2=幅に合わせる, 3=高さに合わせる, 4=ページに合わせる
+    const scale = isLandscape ? 2 : 3;  // 横向き時は幅に合わせる、縦向き時は従来通り
     const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/export?` +
       `format=pdf` +
       `&gid=${sheetId}` +
       `&portrait=${!isLandscape}` +
       `&size=A4` +
-      `&scale=3` + // 複数ページ対応（フォントサイズ維持）
-      `&top_margin=0` +
-      `&bottom_margin=0` +
-      `&left_margin=0.1` +
-      `&right_margin=0` +
+      `&scale=${scale}` +
+      `&top_margin=0.2` +
+      `&bottom_margin=0.2` +
+      `&left_margin=0.2` +
+      `&right_margin=0.2` +
       `&sheetnames=false` +
       `&printtitle=false` +
       `&pagenumbers=false` +
