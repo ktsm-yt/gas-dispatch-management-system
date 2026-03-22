@@ -59,16 +59,9 @@ const ID_COLUMNS = {
  */
 function saveMasterRecord(sheetName, idColumn, tableName, data, expectedUpdatedAt, validation) {
   const requestId = generateRequestId();
+  const isNew = !data[idColumn];
 
-  try {
-    const isNew = !data[idColumn];
-
-    // ロック取得
-    const lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。しばらく待ってから再試行してください。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       const sheet = getSheetDirect(sheetName);
       const now = getCurrentTimestamp();
@@ -153,15 +146,11 @@ function saveMasterRecord(sheetName, idColumn, tableName, data, expectedUpdatedA
 
         return successResponse(result, requestId);
       }
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log(`saveMasterRecord error: ${error.message}`);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-
-  } catch (error) {
-    Logger.log(`saveMasterRecord error: ${error.message}`);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 /**
@@ -176,12 +165,7 @@ function saveMasterRecord(sheetName, idColumn, tableName, data, expectedUpdatedA
 function deleteMasterRecord(sheetName, idColumn, tableName, id, expectedUpdatedAt) {
   const requestId = generateRequestId();
 
-  try {
-    const lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。しばらく待ってから再試行してください。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       const sheet = getSheetDirect(sheetName);
       const existing = findById(sheet, idColumn, id);
@@ -208,15 +192,11 @@ function deleteMasterRecord(sheetName, idColumn, tableName, id, expectedUpdatedA
       logDelete(tableName, id, existing);
 
       return successResponse({ deleted: true, id: id }, requestId);
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log(`deleteMasterRecord error: ${error.message}`);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-
-  } catch (error) {
-    Logger.log(`deleteMasterRecord error: ${error.message}`);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 /**
@@ -781,17 +761,12 @@ function saveTransportFee(transportFee) {
   requireManager();
   const requestId = generateRequestId();
 
-  try {
-    const validationResult = validateTransportFee(transportFee);
-    if (!validationResult.valid) {
-      return errorResponse('VALIDATION_ERROR', validationResult.message, validationResult.details, requestId);
-    }
+  const validationResult = validateTransportFee(transportFee);
+  if (!validationResult.valid) {
+    return errorResponse('VALIDATION_ERROR', validationResult.message, validationResult.details, requestId);
+  }
 
-    const lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       const sheet = getSheetDirect(SHEET_NAMES.TRANSPORT_FEE);
       const existing = findById(sheet, ID_COLUMNS.TRANSPORT_FEE, transportFee.area_code);
@@ -810,15 +785,11 @@ function saveTransportFee(transportFee) {
       MasterCache.invalidateTransportFees();
 
       return successResponse(transportFee, requestId);
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log(`saveTransportFee error: ${error.message}`);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-
-  } catch (error) {
-    Logger.log(`saveTransportFee error: ${error.message}`);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 /**
@@ -863,12 +834,7 @@ function deleteTransportFee(areaCode) {
   requireManager();
   const requestId = generateRequestId();
 
-  try {
-    const lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       const sheet = getSheetDirect(SHEET_NAMES.TRANSPORT_FEE);
       const existing = findById(sheet, ID_COLUMNS.TRANSPORT_FEE, areaCode);
@@ -885,15 +851,11 @@ function deleteTransportFee(areaCode) {
       MasterCache.invalidateTransportFees();
 
       return successResponse({ deleted: true, areaCode: areaCode }, requestId);
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log(`deleteTransportFee error: ${error.message}`);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-
-  } catch (error) {
-    Logger.log(`deleteTransportFee error: ${error.message}`);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 // ========================================
@@ -931,17 +893,12 @@ function saveCompany(company) {
   requireManager();
   const requestId = generateRequestId();
 
-  try {
-    const validationResult = validateCompany(company);
-    if (!validationResult.valid) {
-      return errorResponse('VALIDATION_ERROR', validationResult.message, validationResult.details, requestId);
-    }
+  const validationResult = validateCompany(company);
+  if (!validationResult.valid) {
+    return errorResponse('VALIDATION_ERROR', validationResult.message, validationResult.details, requestId);
+  }
 
-    const lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       const sheet = getSheetDirect(SHEET_NAMES.COMPANY);
       const rows = getAllRows(sheet, { includeDeleted: true });
@@ -975,15 +932,11 @@ function saveCompany(company) {
       MasterCache.invalidateCompany();
 
       return successResponse(result, requestId);
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log(`saveCompany error: ${error.message}`);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-
-  } catch (error) {
-    Logger.log(`saveCompany error: ${error.message}`);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 /**
@@ -1122,12 +1075,7 @@ function reorderWorkDetails(orderedIds, expectedUpdatedAts) {
   requireManager();
   var requestId = generateRequestId();
 
-  try {
-    var lock = acquireLock();
-    if (!lock) {
-      return errorResponse('BUSY_ERROR', '処理が混み合っています。', {}, requestId);
-    }
-
+  return withScriptLock(function() {
     try {
       var sheet = getSheetDirect(SHEET_NAMES.WORK_DETAILS);
       var rows = getAllRows(sheet, { includeDeleted: false });
@@ -1163,12 +1111,9 @@ function reorderWorkDetails(orderedIds, expectedUpdatedAts) {
       MasterCache.invalidateWorkDetails();
       invalidateExecutionCache('M_WorkDetails');
       return successResponse({ reordered: true }, requestId);
-
-    } finally {
-      lock.releaseLock();
+    } catch (error) {
+      Logger.log('reorderWorkDetails error: ' + error.message);
+      return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
     }
-  } catch (error) {
-    Logger.log('reorderWorkDetails error: ' + error.message);
-    return errorResponse('SYSTEM_ERROR', error.message, {}, requestId);
-  }
+  }, { waitMs: 3000, requestId: requestId });
 }

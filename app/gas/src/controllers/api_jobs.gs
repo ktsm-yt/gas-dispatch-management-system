@@ -261,127 +261,108 @@ function getJobForEdit(jobId) {
  */
 function saveJob(job, expectedUpdatedAt, slots) {
   const requestId = generateRequestId();
-  let lock = null;
 
-  try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
-
-    // 入力検証
-    if (!job || typeof job !== 'object') {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'job object is required',
-        {},
-        requestId
-      );
-    }
-
-    // ロック取得
-    lock = acquireLock(3000);
-    if (!lock) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '他のユーザーが編集中です。しばらく待ってから再度お試しください。',
-        {},
-        requestId
-      );
-    }
-
-    // CR-091: 調整額バリデーション
-    if (job.adjustment_amount !== undefined && job.adjustment_amount !== null && job.adjustment_amount !== '') {
-      const adjAmount = Number(job.adjustment_amount);
-      if (!Number.isInteger(adjAmount)) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は整数で入力してください', {}, requestId);
-      }
-      if (adjAmount < -9999999 || adjAmount > 9999999) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は±9,999,999以内で入力してください', {}, requestId);
-      }
-      job.adjustment_amount = adjAmount;
-    }
-    if (job.adjustment_note && typeof job.adjustment_note === 'string') {
-      if (job.adjustment_note.length > 50) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモは50文字以内で入力してください', {}, requestId);
-      }
-      if (/^[=+\-@]/.test(job.adjustment_note)) {
-        return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモの先頭に =, +, -, @ は使用できません', {}, requestId);
-      }
-    }
-
-    // テキストフィールド正規化（全角→半角等）
-    ['site_name', 'site_address', 'notes', 'supervisor_name'].forEach(function(field) {
-      if (job[field] && typeof job[field] === 'string') {
-        job[field] = normalizeInput(job[field]);
-      }
-    });
-
-    // アーカイブフラグ補完（UIからは_archivedが送られないため、DBから取得して付与）
-    if (job.job_id && !job._archived) {
-      const current = JobRepository.findById(job.job_id);
-      if (current && current._archived) {
-        job._archived = current._archived;
-        job._archiveFiscalYear = current._archiveFiscalYear;
-      }
-    }
-
-    // Service呼び出し（枠データも渡す）
-    Logger.log('saveJob: job data = ' + JSON.stringify(job));
-    Logger.log('saveJob: slots data = ' + JSON.stringify(slots));
-    const result = JobService.save(job, expectedUpdatedAt, slots);
-    Logger.log('saveJob: result = ' + JSON.stringify(result));
-
-    if (!result.success) {
-      // エラーコード変換
-      let errorCode = ERROR_CODES.SYSTEM_ERROR;
-      let message = result.error;
-
-      if (result.error === 'VALIDATION_ERROR') {
-        errorCode = ERROR_CODES.VALIDATION_ERROR;
-        // 詳細なバリデーションエラーメッセージを返す
-        message = result.details?.message || 'Validation failed';
-        Logger.log('saveJob: validation error details = ' + JSON.stringify(result.details));
-      } else if (result.error === 'CONFLICT_ERROR') {
-        errorCode = ERROR_CODES.CONFLICT_ERROR;
-        message = '他のユーザーによって更新されています。画面を再読み込みしてください。';
-      } else if (result.error === 'NOT_FOUND') {
-        errorCode = ERROR_CODES.NOT_FOUND;
-        message = '案件が見つかりません';
-      }
-
-      return buildErrorResponse(
-        errorCode,
-        message,
-        result.details || { currentUpdatedAt: result.currentUpdatedAt },
-        requestId
-      );
-    }
-
-    return buildSuccessResponse({
-      job: result.job,
-      slots: result.slots || []
-    }, requestId);
-
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    Logger.log(`saveJob error: ${errMsg}`);
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
     return buildErrorResponse(
-      ERROR_CODES.SYSTEM_ERROR,
-      'システムエラーが発生しました',
+      ERROR_CODES.PERMISSION_DENIED,
+      authResult.message,
       {},
       requestId
     );
-
-  } finally {
-    releaseLock(lock);
   }
+
+  // 入力検証
+  if (!job || typeof job !== 'object') {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'job object is required',
+      {},
+      requestId
+    );
+  }
+
+  return withScriptLock(function() {
+    try {
+      // CR-091: 調整額バリデーション
+      if (job.adjustment_amount !== undefined && job.adjustment_amount !== null && job.adjustment_amount !== '') {
+        const adjAmount = Number(job.adjustment_amount);
+        if (!Number.isInteger(adjAmount)) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は整数で入力してください', {}, requestId);
+        }
+        if (adjAmount < -9999999 || adjAmount > 9999999) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整額は±9,999,999以内で入力してください', {}, requestId);
+        }
+        job.adjustment_amount = adjAmount;
+      }
+      if (job.adjustment_note && typeof job.adjustment_note === 'string') {
+        if (job.adjustment_note.length > 50) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモは50文字以内で入力してください', {}, requestId);
+        }
+        if (/^[=+\-@]/.test(job.adjustment_note)) {
+          return buildErrorResponse(ERROR_CODES.VALIDATION_ERROR, '調整メモの先頭に =, +, -, @ は使用できません', {}, requestId);
+        }
+      }
+
+      // テキストフィールド正規化（全角→半角等）
+      ['site_name', 'site_address', 'notes', 'supervisor_name'].forEach(function(field) {
+        if (job[field] && typeof job[field] === 'string') {
+          job[field] = normalizeInput(job[field]);
+        }
+      });
+
+      // アーカイブフラグ補完（UIからは_archivedが送られないため、DBから取得して付与）
+      if (job.job_id && !job._archived) {
+        const current = JobRepository.findById(job.job_id);
+        if (current && current._archived) {
+          job._archived = current._archived;
+          job._archiveFiscalYear = current._archiveFiscalYear;
+        }
+      }
+
+      // Service呼び出し（枠データも渡す）
+      Logger.log('saveJob: job data = ' + JSON.stringify(job));
+      Logger.log('saveJob: slots data = ' + JSON.stringify(slots));
+      const result = JobService.save(job, expectedUpdatedAt, slots);
+      Logger.log('saveJob: result = ' + JSON.stringify(result));
+
+      if (!result.success) {
+        // エラーコード変換
+        let errorCode = ERROR_CODES.SYSTEM_ERROR;
+        let message = result.error;
+
+        if (result.error === 'VALIDATION_ERROR') {
+          errorCode = ERROR_CODES.VALIDATION_ERROR;
+          // 詳細なバリデーションエラーメッセージを返す
+          message = result.details?.message || 'Validation failed';
+          Logger.log('saveJob: validation error details = ' + JSON.stringify(result.details));
+        } else if (result.error === 'CONFLICT_ERROR') {
+          errorCode = ERROR_CODES.CONFLICT_ERROR;
+          message = '他のユーザーによって更新されています。画面を再読み込みしてください。';
+        } else if (result.error === 'NOT_FOUND') {
+          errorCode = ERROR_CODES.NOT_FOUND;
+          message = '案件が見つかりません';
+        }
+
+        return buildErrorResponse(
+          errorCode,
+          message,
+          result.details || { currentUpdatedAt: result.currentUpdatedAt },
+          requestId
+        );
+      }
+
+      return buildSuccessResponse({
+        job: result.job,
+        slots: result.slots || []
+      }, requestId);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      Logger.log(`saveJob error: ${errMsg}`);
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+    }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 /**
@@ -399,203 +380,165 @@ function saveJob(job, expectedUpdatedAt, slots) {
  */
 function deleteJob(jobId, expectedUpdatedAt) {
   const requestId = generateRequestId();
-  let lock = null;
 
-  try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
-
-    // 入力検証
-    if (!jobId) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'jobId is required',
-        {},
-        requestId
-      );
-    }
-
-    if (!expectedUpdatedAt) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'expectedUpdatedAt は必須です',
-        { field: 'expectedUpdatedAt' },
-        requestId
-      );
-    }
-
-    // ロック取得
-    lock = acquireLock(3000);
-    if (!lock) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '他のユーザーが編集中です。しばらく待ってから再度お試しください。',
-        {},
-        requestId
-      );
-    }
-
-    // 案件を取得
-    const sheet = getSheetDirect('Jobs');
-    const existing = findById(sheet, 'job_id', jobId);
-
-    if (!existing) {
-      return buildErrorResponse(
-        ERROR_CODES.NOT_FOUND,
-        '案件が見つかりません',
-        { jobId: jobId },
-        requestId
-      );
-    }
-
-    if (existing.is_deleted) {
-      return buildErrorResponse(
-        ERROR_CODES.NOT_FOUND,
-        '案件は既に削除されています',
-        { jobId: jobId },
-        requestId
-      );
-    }
-
-    // 楽観ロックチェック
-    if (!checkOptimisticLock(existing, expectedUpdatedAt)) {
-      return buildErrorResponse(
-        ERROR_CODES.CONFLICT_ERROR,
-        '他のユーザーによって更新されています。画面を再読み込みしてください。',
-        {
-          currentUpdatedAt: existing.updated_at,
-          expectedUpdatedAt: expectedUpdatedAt
-        },
-        requestId
-      );
-    }
-
-    // 関連する配置データの存在チェック（Repositoryを使用）
-    const relatedAssignments = AssignmentRepository.findByJobId(jobId);
-
-    if (relatedAssignments.length > 0) {
-      return buildErrorResponse(
-        ERROR_CODES.HAS_DEPENDENCIES,
-        `この案件には${relatedAssignments.length}件の配置データが存在するため削除できません。先に配置を削除してください。`,
-        { assignmentCount: relatedAssignments.length },
-        requestId
-      );
-    }
-
-    // 論理削除実行
-    const user = getCurrentUserEmail();
-    softDeleteRow(sheet, existing._rowIndex, user);
-
-    // 監査ログ
-    logDelete('T_Jobs', jobId, existing);
-
-    return buildSuccessResponse({ deleted: true, jobId: jobId }, requestId);
-
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    Logger.log(`deleteJob error: ${errMsg}`);
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
     return buildErrorResponse(
-      ERROR_CODES.SYSTEM_ERROR,
-      'システムエラーが発生しました',
+      ERROR_CODES.PERMISSION_DENIED,
+      authResult.message,
       {},
       requestId
     );
-
-  } finally {
-    releaseLock(lock);
   }
+
+  // 入力検証
+  if (!jobId) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'jobId is required',
+      {},
+      requestId
+    );
+  }
+
+  if (!expectedUpdatedAt) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'expectedUpdatedAt は必須です',
+      { field: 'expectedUpdatedAt' },
+      requestId
+    );
+  }
+
+  return withScriptLock(function() {
+    try {
+      // 案件を取得
+      const sheet = getSheetDirect('Jobs');
+      const existing = findById(sheet, 'job_id', jobId);
+
+      if (!existing) {
+        return buildErrorResponse(
+          ERROR_CODES.NOT_FOUND,
+          '案件が見つかりません',
+          { jobId: jobId },
+          requestId
+        );
+      }
+
+      if (existing.is_deleted) {
+        return buildErrorResponse(
+          ERROR_CODES.NOT_FOUND,
+          '案件は既に削除されています',
+          { jobId: jobId },
+          requestId
+        );
+      }
+
+      // 楽観ロックチェック
+      if (!checkOptimisticLock(existing, expectedUpdatedAt)) {
+        return buildErrorResponse(
+          ERROR_CODES.CONFLICT_ERROR,
+          '他のユーザーによって更新されています。画面を再読み込みしてください。',
+          {
+            currentUpdatedAt: existing.updated_at,
+            expectedUpdatedAt: expectedUpdatedAt
+          },
+          requestId
+        );
+      }
+
+      // 関連する配置データの存在チェック（Repositoryを使用）
+      const relatedAssignments = AssignmentRepository.findByJobId(jobId);
+
+      if (relatedAssignments.length > 0) {
+        return buildErrorResponse(
+          ERROR_CODES.HAS_DEPENDENCIES,
+          `この案件には${relatedAssignments.length}件の配置データが存在するため削除できません。先に配置を削除してください。`,
+          { assignmentCount: relatedAssignments.length },
+          requestId
+        );
+      }
+
+      // 論理削除実行
+      const user = getCurrentUserEmail();
+      softDeleteRow(sheet, existing._rowIndex, user);
+
+      // 監査ログ
+      logDelete('T_Jobs', jobId, existing);
+
+      return buildSuccessResponse({ deleted: true, jobId: jobId }, requestId);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      Logger.log(`deleteJob error: ${errMsg}`);
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+    }
+  }, { waitMs: 3000, requestId: requestId });
 }
 
 function updateJobStatus(jobId, status, expectedUpdatedAt) {
   const requestId = generateRequestId();
-  let lock = null;
 
-  try {
-    // 認可チェック（manager以上）
-    const authResult = checkPermission(ROLES.MANAGER);
-    if (!authResult.allowed) {
-      return buildErrorResponse(
-        ERROR_CODES.PERMISSION_DENIED,
-        authResult.message,
-        {},
-        requestId
-      );
-    }
-
-    // 入力検証
-    if (!jobId || !status) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'jobId and status are required',
-        {},
-        requestId
-      );
-    }
-
-    // ステータス値のホワイトリスト検証（validation.ts の JOB_STATUSES を使用）
-    var validJobStatuses = Object.values(JOB_STATUSES);
-    if (!validJobStatuses.includes(status)) {
-      return buildErrorResponse(
-        ERROR_CODES.VALIDATION_ERROR,
-        'Invalid status: ' + status,
-        {},
-        requestId
-      );
-    }
-
-    // ロック取得
-    lock = acquireLock(3000);
-    if (!lock) {
-      return buildErrorResponse(
-        ERROR_CODES.BUSY_ERROR,
-        '他のユーザーが編集中です',
-        {},
-        requestId
-      );
-    }
-
-    // Service呼び出し
-    const result = JobService.updateStatus(jobId, status, expectedUpdatedAt);
-
-    if (!result.success) {
-      let errorCode = ERROR_CODES.SYSTEM_ERROR;
-      if (result.error === 'VALIDATION_ERROR') {
-        errorCode = ERROR_CODES.VALIDATION_ERROR;
-      } else if (result.error === 'CONFLICT_ERROR') {
-        errorCode = ERROR_CODES.CONFLICT_ERROR;
-      } else if (result.error === 'NOT_FOUND') {
-        errorCode = ERROR_CODES.NOT_FOUND;
-      }
-
-      return buildErrorResponse(
-        errorCode,
-        result.error,
-        result.details || {},
-        requestId
-      );
-    }
-
-    return buildSuccessResponse({ job: result.job }, requestId);
-
-  } catch (error) {
-    const errMsg = error instanceof Error ? error.message : String(error);
-    Logger.log(`updateJobStatus error: ${errMsg}`);
+  // 認可チェック（manager以上）
+  const authResult = checkPermission(ROLES.MANAGER);
+  if (!authResult.allowed) {
     return buildErrorResponse(
-      ERROR_CODES.SYSTEM_ERROR,
-      'システムエラーが発生しました',
+      ERROR_CODES.PERMISSION_DENIED,
+      authResult.message,
       {},
       requestId
     );
-
-  } finally {
-    releaseLock(lock);
   }
+
+  // 入力検証
+  if (!jobId || !status) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'jobId and status are required',
+      {},
+      requestId
+    );
+  }
+
+  // ステータス値のホワイトリスト検証（validation.ts の JOB_STATUSES を使用）
+  var validJobStatuses = Object.values(JOB_STATUSES);
+  if (!validJobStatuses.includes(status)) {
+    return buildErrorResponse(
+      ERROR_CODES.VALIDATION_ERROR,
+      'Invalid status: ' + status,
+      {},
+      requestId
+    );
+  }
+
+  return withScriptLock(function() {
+    try {
+      // Service呼び出し
+      const result = JobService.updateStatus(jobId, status, expectedUpdatedAt);
+
+      if (!result.success) {
+        let errorCode = ERROR_CODES.SYSTEM_ERROR;
+        if (result.error === 'VALIDATION_ERROR') {
+          errorCode = ERROR_CODES.VALIDATION_ERROR;
+        } else if (result.error === 'CONFLICT_ERROR') {
+          errorCode = ERROR_CODES.CONFLICT_ERROR;
+        } else if (result.error === 'NOT_FOUND') {
+          errorCode = ERROR_CODES.NOT_FOUND;
+        }
+
+        return buildErrorResponse(
+          errorCode,
+          result.error,
+          result.details || {},
+          requestId
+        );
+      }
+
+      return buildSuccessResponse({ job: result.job }, requestId);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      Logger.log(`updateJobStatus error: ${errMsg}`);
+      return buildErrorResponse(ERROR_CODES.SYSTEM_ERROR, 'システムエラーが発生しました', {}, requestId);
+    }
+  }, { waitMs: 3000, requestId: requestId });
 }
